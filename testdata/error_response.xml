@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<exc:ExceptionText xmlns:exc="http://www.sap.com/adt/exception">
+  <exc:message>Object not found</exc:message>
+</exc:ExceptionText>
