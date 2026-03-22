@@ -193,6 +193,137 @@ func TestGetSourceToolError(t *testing.T) {
 	}
 }
 
+func TestActivateObjectTool(t *testing.T) {
+	mock := &mockClient{
+		activateFn: func(ctx context.Context, uri string) (*adt.ActivationResult, error) {
+			if uri != "/sap/bc/adt/programs/programs/ZTEST" {
+				t.Errorf("unexpected uri: %q", uri)
+			}
+			return &adt.ActivationResult{Success: true, Messages: []adt.ActivationMessage{}}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "activate_object", map[string]interface{}{
+		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+}
+
+func TestActivateObjectToolError(t *testing.T) {
+	mock := &mockClient{
+		activateFn: func(ctx context.Context, uri string) (*adt.ActivationResult, error) {
+			return nil, &adt.ADTError{StatusCode: 500, Message: "Activation failed"}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "activate_object", map[string]interface{}{
+		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true")
+	}
+}
+
+func TestSearchObjectsTool(t *testing.T) {
+	mock := &mockClient{
+		searchFn: func(ctx context.Context, q, objType string, n int) ([]adt.ObjectInfo, error) {
+			if q != "ZREPORT*" {
+				t.Errorf("unexpected query: %q", q)
+			}
+			if n != 50 {
+				t.Errorf("unexpected max_results: %d", n)
+			}
+			return []adt.ObjectInfo{{Name: "ZREPORT", Type: "PROG/P"}}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "search_objects", map[string]interface{}{
+		"query": "ZREPORT*",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+}
+
+func TestSearchObjectsToolWithType(t *testing.T) {
+	var gotType string
+	mock := &mockClient{
+		searchFn: func(ctx context.Context, q, objType string, n int) ([]adt.ObjectInfo, error) {
+			gotType = objType
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "search_objects", map[string]interface{}{
+		"query":       "Z*",
+		"object_type": "PROG/P",
+		"max_results": float64(10),
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+	if gotType != "PROG/P" {
+		t.Errorf("object_type: got %q", gotType)
+	}
+}
+
+func TestGetTransportRequestsTool(t *testing.T) {
+	mock := &mockClient{
+		getTransportFn: func(ctx context.Context, user, status string) ([]adt.TransportRequest, error) {
+			if status != "D" {
+				t.Errorf("unexpected status: %q", status)
+			}
+			return []adt.TransportRequest{{Number: "DEVK900123", Status: "D"}}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_transport_requests", map[string]interface{}{
+		"status": "D",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+}
+
+func TestGetTransportRequestsToolError(t *testing.T) {
+	mock := &mockClient{
+		getTransportFn: func(ctx context.Context, user, status string) ([]adt.TransportRequest, error) {
+			return nil, &adt.ADTError{StatusCode: 403, Message: "Forbidden"}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_transport_requests", map[string]interface{}{})
+	if !result.IsError {
+		t.Fatal("expected IsError=true")
+	}
+}
+
+func TestAddToTransportTool(t *testing.T) {
+	var gotURI, gotTransport string
+	mock := &mockClient{
+		addTransportFn: func(ctx context.Context, uri, transport string) error {
+			gotURI, gotTransport = uri, transport
+			return nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "add_to_transport", map[string]interface{}{
+		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+		"transport":  "DEVK900123",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+	if gotURI != "/sap/bc/adt/programs/programs/ZTEST" {
+		t.Errorf("object_uri: got %q", gotURI)
+	}
+	if gotTransport != "DEVK900123" {
+		t.Errorf("transport: got %q", gotTransport)
+	}
+}
+
 func TestSetSourceTool(t *testing.T) {
 	var gotURI, gotSource, gotETag string
 	mock := &mockClient{
