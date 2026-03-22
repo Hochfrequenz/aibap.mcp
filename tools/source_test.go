@@ -1,0 +1,224 @@
+package tools_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"testing"
+
+	"github.com/dachner/sapadt-mcp/adt"
+	"github.com/dachner/sapadt-mcp/tools"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+)
+
+// mockClient is a test double for adt.Client.
+type mockClient struct {
+	getSourceFn     func(ctx context.Context, uri string) (*adt.SourceResult, error)
+	setSourceFn     func(ctx context.Context, uri, source, etag string) error
+	activateFn      func(ctx context.Context, uri string) (*adt.ActivationResult, error)
+	searchFn        func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
+	whereUsedFn     func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
+	browsePackageFn func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
+	getObjectFn     func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
+	syntaxCheckFn   func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
+	runTestsFn      func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
+	getTransportFn  func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
+	addTransportFn  func(ctx context.Context, uri, transport string) error
+}
+
+func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
+	if m.getSourceFn != nil {
+		return m.getSourceFn(ctx, uri)
+	}
+	return &adt.SourceResult{}, nil
+}
+func (m *mockClient) SetSource(ctx context.Context, uri, source, etag string) error {
+	if m.setSourceFn != nil {
+		return m.setSourceFn(ctx, uri, source, etag)
+	}
+	return nil
+}
+func (m *mockClient) ActivateObject(ctx context.Context, uri string) (*adt.ActivationResult, error) {
+	if m.activateFn != nil {
+		return m.activateFn(ctx, uri)
+	}
+	return &adt.ActivationResult{Success: true}, nil
+}
+func (m *mockClient) SearchObjects(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error) {
+	if m.searchFn != nil {
+		return m.searchFn(ctx, q, t, n)
+	}
+	return nil, nil
+}
+func (m *mockClient) WhereUsed(ctx context.Context, uri string) ([]adt.ObjectInfo, error) {
+	if m.whereUsedFn != nil {
+		return m.whereUsedFn(ctx, uri)
+	}
+	return nil, nil
+}
+func (m *mockClient) BrowsePackage(ctx context.Context, pkg string) ([]adt.ObjectInfo, error) {
+	if m.browsePackageFn != nil {
+		return m.browsePackageFn(ctx, pkg)
+	}
+	return nil, nil
+}
+func (m *mockClient) GetObjectInfo(ctx context.Context, uri string) (*adt.ObjectInfo, error) {
+	if m.getObjectFn != nil {
+		return m.getObjectFn(ctx, uri)
+	}
+	return &adt.ObjectInfo{}, nil
+}
+func (m *mockClient) SyntaxCheck(ctx context.Context, uri string) ([]adt.SyntaxMessage, error) {
+	if m.syntaxCheckFn != nil {
+		return m.syntaxCheckFn(ctx, uri)
+	}
+	return nil, nil
+}
+func (m *mockClient) RunUnitTests(ctx context.Context, uri string, timeout int) (*adt.TestResult, error) {
+	if m.runTestsFn != nil {
+		return m.runTestsFn(ctx, uri, timeout)
+	}
+	return &adt.TestResult{}, nil
+}
+func (m *mockClient) GetTransportRequests(ctx context.Context, user, status string) ([]adt.TransportRequest, error) {
+	if m.getTransportFn != nil {
+		return m.getTransportFn(ctx, user, status)
+	}
+	return nil, nil
+}
+func (m *mockClient) AddToTransport(ctx context.Context, uri, transport string) error {
+	if m.addTransportFn != nil {
+		return m.addTransportFn(ctx, uri, transport)
+	}
+	return nil
+}
+
+func newTestServer(client adt.Client) *server.MCPServer {
+	s := server.NewMCPServer("test", "0.0.1")
+	tools.RegisterAll(s, client)
+	return s
+}
+
+// callTool invokes a tool via HandleMessage using JSON-RPC protocol.
+func callTool(t *testing.T, s *server.MCPServer, toolName string, args map[string]interface{}) *mcp.CallToolResult {
+	t.Helper()
+
+	argsJSON, err := json.Marshal(args)
+	if err != nil {
+		t.Fatalf("marshal args: %v", err)
+	}
+
+	msg := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":%q,"arguments":%s}}`,
+		toolName, string(argsJSON))
+
+	resp := s.HandleMessage(context.Background(), []byte(msg))
+
+	respBytes, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+
+	var envelope struct {
+		Result *mcp.CallToolResult `json:"result"`
+		Error  *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(respBytes, &envelope); err != nil {
+		t.Fatalf("unmarshal response envelope: %v\nraw: %s", err, string(respBytes))
+	}
+	if envelope.Error != nil {
+		t.Fatalf("JSON-RPC error calling %q: code=%d msg=%s", toolName, envelope.Error.Code, envelope.Error.Message)
+	}
+	if envelope.Result == nil {
+		t.Fatalf("nil result for tool %q\nraw: %s", toolName, string(respBytes))
+	}
+	return envelope.Result
+}
+
+func TestGetSourceTool(t *testing.T) {
+	mock := &mockClient{
+		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
+			if uri != "/sap/bc/adt/programs/programs/ZTEST" {
+				t.Errorf("unexpected uri: %q", uri)
+			}
+			return &adt.SourceResult{Source: "REPORT ZTEST.", ETag: `"abc123"`}, nil
+		},
+	}
+	s := newTestServer(mock)
+
+	result := callTool(t, s, "get_source", map[string]interface{}{
+		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+	})
+
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+	// Find text content and parse JSON
+	var text string
+	for _, c := range result.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			text = tc.Text
+			break
+		}
+	}
+	var resp map[string]string
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		t.Fatalf("parsing response JSON: %v\ntext: %q", err, text)
+	}
+	if resp["source"] != "REPORT ZTEST." {
+		t.Errorf("source: got %q", resp["source"])
+	}
+	if resp["etag"] != `"abc123"` {
+		t.Errorf("etag: got %q", resp["etag"])
+	}
+}
+
+func TestGetSourceToolError(t *testing.T) {
+	mock := &mockClient{
+		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
+			return nil, &adt.ADTError{StatusCode: 404, Message: "Object not found"}
+		},
+	}
+	s := newTestServer(mock)
+
+	result := callTool(t, s, "get_source", map[string]interface{}{
+		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+	})
+
+	if !result.IsError {
+		t.Fatal("expected IsError=true")
+	}
+}
+
+func TestSetSourceTool(t *testing.T) {
+	var gotURI, gotSource, gotETag string
+	mock := &mockClient{
+		setSourceFn: func(ctx context.Context, uri, source, etag string) error {
+			gotURI, gotSource, gotETag = uri, source, etag
+			return nil
+		},
+	}
+	s := newTestServer(mock)
+
+	result := callTool(t, s, "set_source", map[string]interface{}{
+		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+		"source":     "REPORT ZTEST.\nNEW.",
+		"etag":       `"abc123"`,
+	})
+
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+	if gotURI != "/sap/bc/adt/programs/programs/ZTEST" {
+		t.Errorf("uri: got %q", gotURI)
+	}
+	if gotSource != "REPORT ZTEST.\nNEW." {
+		t.Errorf("source: got %q", gotSource)
+	}
+	if gotETag != `"abc123"` {
+		t.Errorf("etag: got %q", gotETag)
+	}
+}

@@ -1,0 +1,66 @@
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/dachner/sapadt-mcp/adt"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+)
+
+func registerSourceTools(s *server.MCPServer, client adt.Client) {
+	s.AddTool(mcp.NewTool("get_source",
+		mcp.WithDescription("Read ABAP source code from SAP. Returns source text and ETag for optimistic locking."),
+		mcp.WithString("object_uri",
+			mcp.Required(),
+			mcp.Description("ADT object URI, e.g. /sap/bc/adt/programs/programs/ZREPORT"),
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		uri := req.GetString("object_uri", "")
+		result, err := client.GetSource(ctx, uri)
+		if err != nil {
+			return errorResult(err), nil
+		}
+		out, _ := json.Marshal(map[string]string{
+			"source": result.Source,
+			"etag":   result.ETag,
+		})
+		return mcp.NewToolResultText(string(out)), nil
+	})
+
+	s.AddTool(mcp.NewTool("set_source",
+		mcp.WithDescription("Write ABAP source code to SAP. Requires the ETag returned by get_source to prevent lost updates."),
+		mcp.WithString("object_uri",
+			mcp.Required(),
+			mcp.Description("ADT object URI"),
+		),
+		mcp.WithString("source",
+			mcp.Required(),
+			mcp.Description("New ABAP source code"),
+		),
+		mcp.WithString("etag",
+			mcp.Required(),
+			mcp.Description("ETag value from get_source, passed verbatim including quotes"),
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		uri := req.GetString("object_uri", "")
+		source := req.GetString("source", "")
+		etag := req.GetString("etag", "")
+		if err := client.SetSource(ctx, uri, source, etag); err != nil {
+			return errorResult(err), nil
+		}
+		return mcp.NewToolResultText("Source updated successfully"), nil
+	})
+}
+
+// errorResult converts an error to an MCP error result with the SAP error message.
+func errorResult(err error) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{
+			mcp.NewTextContent(fmt.Sprintf("Error: %s", err.Error())),
+		},
+	}
+}
