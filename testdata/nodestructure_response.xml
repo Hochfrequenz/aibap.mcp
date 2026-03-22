@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/ZREPORT" adtcore:type="PROG/P" adtcore:name="ZREPORT" adtcore:description="My Report" adtcore:packageName="ZPACKAGE"/>
+  <adtcore:objectReference adtcore:uri="/sap/bc/adt/classes/classes/ZCL_FOO" adtcore:type="CLAS/OC" adtcore:name="ZCL_FOO" adtcore:description="My Class" adtcore:packageName="ZPACKAGE"/>
+</adtcore:objectReferences>
