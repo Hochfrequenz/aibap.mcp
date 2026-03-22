@@ -2,10 +2,6 @@ package adt
 
 import "context"
 
-func (c *httpClient) RunUnitTests(_ context.Context, _ string, _ int) (*TestResult, error) {
-	return nil, nil
-}
-
 func (c *httpClient) GetTransportRequests(_ context.Context, _, _ string) ([]TransportRequest, error) {
 	return nil, nil
 }

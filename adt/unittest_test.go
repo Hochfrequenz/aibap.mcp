@@ -1,0 +1,56 @@
+package adt_test
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/dachner/sapadt-mcp/adt"
+	"github.com/dachner/sapadt-mcp/config"
+)
+
+func TestRunUnitTests(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sap/bc/adt/compatibility/product" {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path == "/sap/bc/adt/abapunit/testruns" {
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`<?xml version="1.0"?>
+<aunit:runResult xmlns:aunit="http://www.sap.com/adt/aunit" xmlns:adtcore="http://www.sap.com/adt/core">
+  <program adtcore:uri="/sap/bc/adt/classes/classes/ZCL_TEST" adtcore:name="ZCL_TEST">
+    <testClass adtcore:name="ZCL_TEST" aunit:testCount="2" aunit:errorCount="0" aunit:failureCount="1">
+      <testMethod adtcore:name="TEST_PASS" aunit:executionTime="0.001"><alerts/></testMethod>
+      <testMethod adtcore:name="TEST_FAIL" aunit:executionTime="0.002">
+        <alerts><alert aunit:type="failedAssertion" aunit:severity="critical"><title>Assertion failed</title></alert></alerts>
+      </testMethod>
+    </testClass>
+  </program>
+</aunit:runResult>`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{SAP: config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}}
+	client := adt.NewClient(cfg)
+
+	result, err := client.RunUnitTests(context.Background(), "/sap/bc/adt/classes/classes/ZCL_TEST", 30)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Passed != 1 {
+		t.Errorf("passed: got %d, want 1", result.Passed)
+	}
+	if result.Failed != 1 {
+		t.Errorf("failed: got %d, want 1", result.Failed)
+	}
+	if len(result.TestCases) != 2 {
+		t.Fatalf("expected 2 test cases, got %d", len(result.TestCases))
+	}
+}
