@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<chkl:messages xmlns:chkl="http://www.sap.com/adt/checklist" xmlns:adtcore="http://www.sap.com/adt/core">
+  <chkl:message adtcore:uri="/sap/bc/adt/programs/programs/ZTEST" chkl:type="E">
+    <chkl:shortTextElements>
+      <chkl:shortText>Syntax error in line 5</chkl:shortText>
+    </chkl:shortTextElements>
+  </chkl:message>
+</chkl:messages>
