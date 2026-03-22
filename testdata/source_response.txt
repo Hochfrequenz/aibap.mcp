@@ -1,0 +1,2 @@
+REPORT ZTEST.
+WRITE 'Hello World'.
