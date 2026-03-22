@@ -1,3 +1,3 @@
 module github.com/dachner/sapadt-mcp
 
-go 1.26.1
+go 1.23.0
