@@ -1,0 +1,6 @@
+sap:
+  host: "https://your-sap-system:8000"
+  client: "100"
+  user: "DEVELOPER"
+  password: ""
+  tls_skip_verify: false
