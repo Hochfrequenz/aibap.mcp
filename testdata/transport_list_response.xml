@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<tm:root xmlns:tm="http://www.sap.com/cts/transport">
+  <tm:workbenchRequests>
+    <tm:workbenchRequest tm:number="DEVK900123" tm:owner="DEVELOPER" tm:shortDescription="Feature transport" tm:status="D"/>
+    <tm:workbenchRequest tm:number="DEVK900124" tm:owner="DEVELOPER" tm:shortDescription="Released transport" tm:status="L"/>
+  </tm:workbenchRequests>
+</tm:root>
