@@ -1,0 +1,5 @@
+config.yaml
+sapadt-mcp
+sapadt-mcp.exe
+dist/
+.worktrees/
