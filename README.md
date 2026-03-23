@@ -38,6 +38,7 @@ SAP ADT REST API  (/sap/bc/adt/...)
 | `run_unit_tests` | Run ABAP Unit Tests |
 | `get_transport_requests` | List open or released transport requests |
 | `add_to_transport` | Assign an object to a transport request |
+| `select_system` | Switch the active SAP system | `system` | display string |
 
 ## Requirements
 
@@ -68,26 +69,45 @@ cp config.yaml.example config.yaml
 ```
 
 ```yaml
-sap:
-  host: "https://your-sap-system:8000"
-  client: "100"
-  user: "YOUR_USER"
-  password: "YOUR_PASSWORD"
-  tls_skip_verify: false   # set true for self-signed certificates (dev systems)
+default_system: dev
+
+systems:
+  dev:
+    host: "https://your-dev-system:8000"
+    client: "100"
+    user: "YOUR_USER"
+    password: "YOUR_PASSWORD"
+    tls_skip_verify: false
+  prod:
+    host: "https://your-prod-system:8000"
+    client: "200"
+    user: "YOUR_USER"
+    password: "YOUR_PASSWORD"
 ```
 
 Alternatively, configure via environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `SAP_HOST` | SAP system URL, e.g. `https://my-system:8000` |
-| `SAP_CLIENT` | SAP client/mandant, e.g. `100` |
-| `SAP_USER` | SAP username |
-| `SAP_PASSWORD` | SAP password |
-| `SAP_TLS_SKIP_VERIFY` | Set `true` to skip TLS verification |
 | `SAP_CONFIG_FILE` | Path to config.yaml (default: `./config.yaml`) |
 
-Environment variables take precedence over the config file.
+### Migrating from v0.x
+
+The `sap:` config key has been replaced with `systems:`. Wrap your existing config:
+
+```yaml
+# Old format:
+sap:
+  host: "..."
+  client: "100"
+
+# New format:
+default_system: default
+systems:
+  default:
+    host: "..."
+    client: "100"
+```
 
 ## Usage with Claude
 
