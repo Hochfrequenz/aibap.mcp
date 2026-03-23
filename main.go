@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dachner/mcp-server-abap/adt"
-	"github.com/dachner/mcp-server-abap/cmd"
-	"github.com/dachner/mcp-server-abap/config"
-	"github.com/dachner/mcp-server-abap/tools"
+	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/mcp-server-abap/cmd"
+	"github.com/Hochfrequenz/mcp-server-abap/config"
+	"github.com/Hochfrequenz/mcp-server-abap/tools"
 	"github.com/mark3labs/mcp-go/server"
 )
 

@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/dachner/mcp-server-abap/auth"
-	"github.com/dachner/mcp-server-abap/config"
+	"github.com/Hochfrequenz/mcp-server-abap/auth"
+	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
 // openBrowserFn is the function used to open a URL in the user's browser.

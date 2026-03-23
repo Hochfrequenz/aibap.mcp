@@ -3,7 +3,7 @@ package tools
 import (
 	"context"
 
-	"github.com/dachner/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )

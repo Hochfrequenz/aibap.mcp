@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/dachner/mcp-server-abap/adt"
-	"github.com/dachner/mcp-server-abap/config"
+	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
 const csrfEndpoint = "/sap/bc/adt/discovery"

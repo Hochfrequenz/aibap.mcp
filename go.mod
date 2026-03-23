@@ -1,4 +1,4 @@
-module github.com/dachner/mcp-server-abap
+module github.com/Hochfrequenz/mcp-server-abap
 
 go 1.26
 

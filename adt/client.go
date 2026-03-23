@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dachner/mcp-server-abap/config"
+	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
 // Client defines all SAP ADT operations exposed as MCP tools.

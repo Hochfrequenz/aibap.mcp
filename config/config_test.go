@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dachner/mcp-server-abap/config"
+	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
 func writeConfig(t *testing.T, content string) string {

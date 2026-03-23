@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dachner/mcp-server-abap/auth"
-	"github.com/dachner/mcp-server-abap/config"
+	"github.com/Hochfrequenz/mcp-server-abap/auth"
+	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
 // ClientRegistry holds multiple named ADT clients and tracks which is active.

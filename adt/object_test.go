@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dachner/mcp-server-abap/adt"
-	"github.com/dachner/mcp-server-abap/config"
+	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
 func TestCreateObjectProgram(t *testing.T) {

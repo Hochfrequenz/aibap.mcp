@@ -12,7 +12,8 @@
       "Bash(go doc:*)",
       "Bash(find C:/Users/dachner/dev/sapadt.mcp/.worktrees/implement -name *.go -path */mark3labs/mcp-go/*)",
       "Bash(ls -lh C:/Users/dachner/dev/sapadt.mcp/.worktrees/implement/sapadt-mcp*)",
-      "Bash(go vet:*)"
+      "Bash(go vet:*)",
+      "Bash(gh pr:*)"
     ]
   }
 }

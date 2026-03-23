@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dachner/mcp-server-abap/adt"
-	"github.com/dachner/mcp-server-abap/tools"
+	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/mcp-server-abap/tools"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
