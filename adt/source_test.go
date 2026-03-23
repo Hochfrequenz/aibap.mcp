@@ -15,14 +15,14 @@ func TestGetSource(t *testing.T) {
 		if r.URL.Path == "/sap/bc/adt/programs/programs/ZTEST/source/main" {
 			w.Header().Set("ETag", `"etag-abc123"`)
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("REPORT ZTEST.\nWRITE 'Hello'."))
+			_, _ = w.Write([]byte("REPORT ZTEST.\nWRITE 'Hello'."))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
 
-	cfg := &config.Config{SAP: config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}}
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.GetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
@@ -41,7 +41,7 @@ func TestSetSource(t *testing.T) {
 	var gotMethod, gotIfMatch, gotBody string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/compatibility/product" {
+		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -50,7 +50,7 @@ func TestSetSource(t *testing.T) {
 			gotMethod = r.Method
 			gotIfMatch = r.Header.Get("If-Match")
 			body := make([]byte, r.ContentLength)
-			r.Body.Read(body)
+			_, _ = r.Body.Read(body)
 			gotBody = string(body)
 			w.WriteHeader(http.StatusOK)
 			return
@@ -59,7 +59,7 @@ func TestSetSource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := &config.Config{SAP: config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}}
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.\nNEW CODE.", `"etag-abc123"`)

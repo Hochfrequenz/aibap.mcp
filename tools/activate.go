@@ -12,12 +12,12 @@ import (
 func registerActivateTools(s *server.MCPServer, client adt.Client) {
 	s.AddTool(mcp.NewTool("activate_object",
 		mcp.WithDescription("Activate an ABAP object in SAP. Returns success status and any activation messages."),
-		mcp.WithString("object_uri",
+		mcp.WithString(paramObjectURI,
 			mcp.Required(),
-			mcp.Description("ADT object URI"),
+			mcp.Description(descADTObjectURI),
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString("object_uri", "")
+		uri := req.GetString(paramObjectURI, "")
 		result, err := client.ActivateObject(ctx, uri)
 		if err != nil {
 			return errorResult(err), nil

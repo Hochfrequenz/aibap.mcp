@@ -33,14 +33,14 @@ func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]Synta
 		"/sap/bc/adt/checkruns?"+params.Encode(),
 		strings.NewReader(""),
 		map[string]string{
-			"Content-Type": "application/xml",
-			"Accept":       "application/xml",
+			"Content-Type": contentTypeXML,
+			"Accept":       contentTypeXML,
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("SyntaxCheck: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}

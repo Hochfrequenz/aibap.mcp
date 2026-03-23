@@ -29,9 +29,9 @@ func registerSearchTools(s *server.MCPServer, client adt.Client) {
 
 	s.AddTool(mcp.NewTool("where_used",
 		mcp.WithDescription("Find all ABAP objects that use the given object."),
-		mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT object URI")),
+		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString("object_uri", "")
+		uri := req.GetString(paramObjectURI, "")
 		results, err := client.WhereUsed(ctx, uri)
 		if err != nil {
 			return errorResult(err), nil

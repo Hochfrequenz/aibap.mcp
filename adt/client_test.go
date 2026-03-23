@@ -11,14 +11,14 @@ import (
 	"github.com/dachner/mcp-server-abap/config"
 )
 
-func newTestConfig(host string) *config.Config {
-	return &config.Config{
-		SAP: config.SAPConfig{
-			Host:     host,
-			Client:   "100",
-			User:     "TESTUSER",
-			Password: "testpass",
-		},
+const csrfEndpoint = "/sap/bc/adt/discovery"
+
+func newTestConfig(host string) config.SAPConfig {
+	return config.SAPConfig{
+		Host:     host,
+		Client:   "100",
+		User:     "TESTUSER",
+		Password: "testpass",
 	}
 }
 
@@ -27,7 +27,7 @@ func TestCSRFTokenFetchedOnFirstMutate(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/sap/bc/adt/discovery":
+		case csrfEndpoint:
 			csrfFetched.Store(true)
 			w.Header().Set("X-CSRF-Token", "test-csrf-token")
 			w.Header().Set("Set-Cookie", "sap-session=abc123; Path=/")
@@ -57,7 +57,7 @@ func TestCSRFTokenRefreshedOn403(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "refreshed-token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -87,7 +87,7 @@ func TestReauthOn401(t *testing.T) {
 	var authAttempts atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -112,14 +112,14 @@ func TestReauthOn401(t *testing.T) {
 
 func TestADTErrorParsed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`<?xml version="1.0"?><exc:ExceptionText xmlns:exc="http://www.sap.com/adt/exception"><exc:message>Object not found</exc:message></exc:ExceptionText>`))
+		_, _ = w.Write([]byte(`<?xml version="1.0"?><exc:ExceptionText xmlns:exc="http://www.sap.com/adt/exception"><exc:message>Object not found</exc:message></exc:ExceptionText>`))
 	}))
 	defer srv.Close()
 

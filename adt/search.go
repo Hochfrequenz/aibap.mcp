@@ -29,13 +29,7 @@ func parseObjectReferences(data []byte) ([]ObjectInfo, error) {
 	}
 	result := make([]ObjectInfo, len(refs.References))
 	for i, r := range refs.References {
-		result[i] = ObjectInfo{
-			URI:         r.URI,
-			Type:        r.Type,
-			Name:        r.Name,
-			Description: r.Description,
-			PackageName: r.PackageName,
-		}
+		result[i] = ObjectInfo(r)
 	}
 	return result, nil
 }
@@ -52,11 +46,11 @@ func (c *httpClient) SearchObjects(ctx context.Context, query, objectType string
 	}
 	path := "/sap/bc/adt/repository/informationsystem/search?" + params.Encode()
 
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": contentTypeXML})
 	if err != nil {
 		return nil, fmt.Errorf("SearchObjects: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}
@@ -70,11 +64,11 @@ func (c *httpClient) WhereUsed(ctx context.Context, objectURI string) ([]ObjectI
 	params.Set("adtObjectUri", objectURI)
 	path := "/sap/bc/adt/repository/informationsystem/usageReferences?" + params.Encode()
 
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": contentTypeXML})
 	if err != nil {
 		return nil, fmt.Errorf("WhereUsed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}

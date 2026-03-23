@@ -12,7 +12,7 @@ import (
 
 func TestRunUnitTests(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/compatibility/product" {
+		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -20,7 +20,7 @@ func TestRunUnitTests(t *testing.T) {
 		if r.URL.Path == "/sap/bc/adt/abapunit/testruns" {
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<?xml version="1.0"?>
+			_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <aunit:runResult xmlns:aunit="http://www.sap.com/adt/aunit" xmlns:adtcore="http://www.sap.com/adt/core">
   <program adtcore:uri="/sap/bc/adt/classes/classes/ZCL_TEST" adtcore:name="ZCL_TEST">
     <testClass adtcore:name="ZCL_TEST" aunit:testCount="2" aunit:errorCount="0" aunit:failureCount="1">
@@ -37,7 +37,7 @@ func TestRunUnitTests(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := &config.Config{SAP: config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}}
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.RunUnitTests(context.Background(), "/sap/bc/adt/classes/classes/ZCL_TEST", 30)

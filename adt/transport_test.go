@@ -18,7 +18,7 @@ func TestGetTransportRequests(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<?xml version="1.0"?>
+		_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <tm:root xmlns:tm="http://www.sap.com/cts/transport">
   <tm:workbenchRequests>
     <tm:workbenchRequest tm:number="DEVK900123" tm:owner="DEVELOPER" tm:shortDescription="Feature transport" tm:status="D"/>
@@ -27,7 +27,7 @@ func TestGetTransportRequests(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := &config.Config{SAP: config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}}
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	transports, err := client.GetTransportRequests(context.Background(), "", "D")
@@ -48,7 +48,7 @@ func TestGetTransportRequests(t *testing.T) {
 func TestAddToTransport(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/compatibility/product" {
+		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -58,7 +58,7 @@ func TestAddToTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := &config.Config{SAP: config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}}
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.AddToTransport(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "DEVK900123")

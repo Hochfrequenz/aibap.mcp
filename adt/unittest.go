@@ -11,10 +11,10 @@ import (
 )
 
 type xmlUnitTestRunRequest struct {
-	XMLName xml.Name           `xml:"aunit:run"`
-	NS      string             `xml:"xmlns:aunit,attr"`
-	NSCore  string             `xml:"xmlns:adtcore,attr"`
-	Timeout int                `xml:"adtcore:timeout,attr"`
+	XMLName xml.Name `xml:"aunit:run"`
+	NS      string   `xml:"xmlns:aunit,attr"`
+	NSCore  string   `xml:"xmlns:adtcore,attr"`
+	Timeout int      `xml:"adtcore:timeout,attr"`
 	Objects []xmlUnitTestObject
 }
 
@@ -56,7 +56,7 @@ func (c *httpClient) RunUnitTests(ctx context.Context, objectURI string, timeout
 
 	body, err := xml.Marshal(xmlUnitTestRunRequest{
 		NS:      "http://www.sap.com/adt/aunit",
-		NSCore:  "http://www.sap.com/adt/core",
+		NSCore:  nsADTCore,
 		Timeout: timeoutSeconds * 1000,
 		Objects: []xmlUnitTestObject{{URI: objectURI}},
 	})
@@ -68,14 +68,14 @@ func (c *httpClient) RunUnitTests(ctx context.Context, objectURI string, timeout
 		"/sap/bc/adt/abapunit/testruns",
 		strings.NewReader(xml.Header+string(body)),
 		map[string]string{
-			"Content-Type": "application/xml",
-			"Accept":       "application/xml",
+			"Content-Type": contentTypeXML,
+			"Accept":       contentTypeXML,
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("RunUnitTests: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}

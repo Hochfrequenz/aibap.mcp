@@ -28,14 +28,14 @@ func TestSearchObjects(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<?xml version="1.0"?>
+		_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/ZTEST_REPORT" adtcore:type="PROG/P" adtcore:name="ZTEST_REPORT" adtcore:description="Test Report" adtcore:packageName="ZPACKAGE"/>
 </adtcore:objectReferences>`))
 	}))
 	defer srv.Close()
 
-	cfg := &config.Config{SAP: config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}}
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	results, err := client.SearchObjects(context.Background(), "ZTEST*", "", 10)
@@ -64,14 +64,14 @@ func TestWhereUsed(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<?xml version="1.0"?>
+		_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/ZCALLER" adtcore:type="PROG/P" adtcore:name="ZCALLER" adtcore:description="Caller"/>
 </adtcore:objectReferences>`))
 	}))
 	defer srv.Close()
 
-	cfg := &config.Config{SAP: config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}}
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	results, err := client.WhereUsed(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")

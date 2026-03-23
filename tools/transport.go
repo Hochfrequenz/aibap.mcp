@@ -27,10 +27,10 @@ func registerTransportTools(s *server.MCPServer, client adt.Client) {
 
 	s.AddTool(mcp.NewTool("add_to_transport",
 		mcp.WithDescription("Assign an ABAP object to a CTS transport request."),
-		mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT object URI")),
+		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number, e.g. DEVK900123")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString("object_uri", "")
+		uri := req.GetString(paramObjectURI, "")
 		transport := req.GetString("transport", "")
 		if err := client.AddToTransport(ctx, uri, transport); err != nil {
 			return errorResult(err), nil
