@@ -67,8 +67,8 @@ func (r *ClientRegistry) activeClient() Client {
 func (r *ClientRegistry) GetSource(ctx context.Context, objectURI string) (*SourceResult, error) {
 	return r.activeClient().GetSource(ctx, objectURI)
 }
-func (r *ClientRegistry) SetSource(ctx context.Context, objectURI, source, etag string) error {
-	return r.activeClient().SetSource(ctx, objectURI, source, etag)
+func (r *ClientRegistry) SetSource(ctx context.Context, objectURI, source, lockHandle, etag string) error {
+	return r.activeClient().SetSource(ctx, objectURI, source, lockHandle, etag)
 }
 func (r *ClientRegistry) ActivateObject(ctx context.Context, objectURI string) (*ActivationResult, error) {
 	return r.activeClient().ActivateObject(ctx, objectURI)
@@ -96,4 +96,22 @@ func (r *ClientRegistry) GetTransportRequests(ctx context.Context, user, status 
 }
 func (r *ClientRegistry) AddToTransport(ctx context.Context, objectURI, transport string) error {
 	return r.activeClient().AddToTransport(ctx, objectURI, transport)
+}
+func (r *ClientRegistry) LockObject(ctx context.Context, objectURI string) (string, error) {
+	return r.activeClient().LockObject(ctx, objectURI)
+}
+func (r *ClientRegistry) UnlockObject(ctx context.Context, objectURI string) error {
+	return r.activeClient().UnlockObject(ctx, objectURI)
+}
+func (r *ClientRegistry) PrettyPrint(ctx context.Context, source string) (string, error) {
+	return r.activeClient().PrettyPrint(ctx, source)
+}
+func (r *ClientRegistry) CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error {
+	return r.activeClient().CreateObject(ctx, objectType, name, packageName, description, transport)
+}
+func (r *ClientRegistry) DeleteObject(ctx context.Context, objectURI, transport string) error {
+	return r.activeClient().DeleteObject(ctx, objectURI, transport)
+}
+func (r *ClientRegistry) GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error) {
+	return r.activeClient().GetCompletions(ctx, objectURI, source, line, column)
 }

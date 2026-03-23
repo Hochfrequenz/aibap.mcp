@@ -26,5 +26,9 @@ func RegisterAll(s *server.MCPServer, client adt.Client, selector SystemSelector
 	registerSyntaxCheckTools(s, client)
 	registerUnitTestTools(s, client)
 	registerTransportTools(s, client)
+	registerLockTools(s, client)
+	registerPrettyPrinterTools(s, client)
+	registerObjectTools(s, client)
+	registerCompletionTools(s, client)
 	registerSystemTools(s, selector)
 }

@@ -16,17 +16,23 @@ const testObjectURI = "/sap/bc/adt/programs/programs/ZTEST"
 
 // mockClient is a test double for adt.Client.
 type mockClient struct {
-	getSourceFn     func(ctx context.Context, uri string) (*adt.SourceResult, error)
-	setSourceFn     func(ctx context.Context, uri, source, etag string) error
-	activateFn      func(ctx context.Context, uri string) (*adt.ActivationResult, error)
-	searchFn        func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
-	whereUsedFn     func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
-	browsePackageFn func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
-	getObjectFn     func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
-	syntaxCheckFn   func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
-	runTestsFn      func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
-	getTransportFn  func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
-	addTransportFn  func(ctx context.Context, uri, transport string) error
+	getSourceFn      func(ctx context.Context, uri string) (*adt.SourceResult, error)
+	setSourceFn      func(ctx context.Context, uri, source, lockHandle, etag string) error
+	activateFn       func(ctx context.Context, uri string) (*adt.ActivationResult, error)
+	searchFn         func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
+	whereUsedFn      func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
+	browsePackageFn  func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
+	getObjectFn      func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
+	syntaxCheckFn    func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
+	runTestsFn       func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
+	getTransportFn   func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
+	addTransportFn   func(ctx context.Context, uri, transport string) error
+	lockObjectFn     func(ctx context.Context, uri string) (string, error)
+	unlockObjectFn   func(ctx context.Context, uri string) error
+	prettyPrintFn    func(ctx context.Context, source string) (string, error)
+	createObjectFn   func(ctx context.Context, objectType, name, pkg, desc, transport string) error
+	deleteObjectFn   func(ctx context.Context, uri, transport string) error
+	getCompletionsFn func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -35,9 +41,9 @@ func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResu
 	}
 	return &adt.SourceResult{}, nil
 }
-func (m *mockClient) SetSource(ctx context.Context, uri, source, etag string) error {
+func (m *mockClient) SetSource(ctx context.Context, uri, source, lockHandle, etag string) error {
 	if m.setSourceFn != nil {
-		return m.setSourceFn(ctx, uri, source, etag)
+		return m.setSourceFn(ctx, uri, source, lockHandle, etag)
 	}
 	return nil
 }
@@ -94,6 +100,42 @@ func (m *mockClient) AddToTransport(ctx context.Context, uri, transport string) 
 		return m.addTransportFn(ctx, uri, transport)
 	}
 	return nil
+}
+func (m *mockClient) LockObject(ctx context.Context, uri string) (string, error) {
+	if m.lockObjectFn != nil {
+		return m.lockObjectFn(ctx, uri)
+	}
+	return "mock-lock-handle", nil
+}
+func (m *mockClient) UnlockObject(ctx context.Context, uri string) error {
+	if m.unlockObjectFn != nil {
+		return m.unlockObjectFn(ctx, uri)
+	}
+	return nil
+}
+func (m *mockClient) PrettyPrint(ctx context.Context, source string) (string, error) {
+	if m.prettyPrintFn != nil {
+		return m.prettyPrintFn(ctx, source)
+	}
+	return source, nil
+}
+func (m *mockClient) CreateObject(ctx context.Context, objectType, name, pkg, desc, transport string) error {
+	if m.createObjectFn != nil {
+		return m.createObjectFn(ctx, objectType, name, pkg, desc, transport)
+	}
+	return nil
+}
+func (m *mockClient) DeleteObject(ctx context.Context, uri, transport string) error {
+	if m.deleteObjectFn != nil {
+		return m.deleteObjectFn(ctx, uri, transport)
+	}
+	return nil
+}
+func (m *mockClient) GetCompletions(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error) {
+	if m.getCompletionsFn != nil {
+		return m.getCompletionsFn(ctx, uri, source, line, column)
+	}
+	return nil, nil
 }
 
 func newTestServer(client adt.Client) *server.MCPServer {
@@ -331,19 +373,20 @@ func TestAddToTransportTool(t *testing.T) {
 }
 
 func TestSetSourceTool(t *testing.T) {
-	var gotURI, gotSource, gotETag string
+	var gotURI, gotSource, gotLockHandle, gotETag string
 	mock := &mockClient{
-		setSourceFn: func(ctx context.Context, uri, source, etag string) error {
-			gotURI, gotSource, gotETag = uri, source, etag
+		setSourceFn: func(ctx context.Context, uri, source, lockHandle, etag string) error {
+			gotURI, gotSource, gotLockHandle, gotETag = uri, source, lockHandle, etag
 			return nil
 		},
 	}
 	s := newTestServer(mock)
 
 	result := callTool(t, s, "set_source", map[string]interface{}{
-		"object_uri": testObjectURI,
-		"source":     "REPORT ZTEST.\nNEW.",
-		"etag":       `"abc123"`,
+		"object_uri":  testObjectURI,
+		"source":      "REPORT ZTEST.\nNEW.",
+		"lock_handle": "lock123",
+		"etag":        `"abc123"`,
 	})
 
 	if result.IsError {
@@ -354,6 +397,9 @@ func TestSetSourceTool(t *testing.T) {
 	}
 	if gotSource != "REPORT ZTEST.\nNEW." {
 		t.Errorf("source: got %q", gotSource)
+	}
+	if gotLockHandle != "lock123" {
+		t.Errorf("lock_handle: got %q", gotLockHandle)
 	}
 	if gotETag != `"abc123"` {
 		t.Errorf("etag: got %q", gotETag)

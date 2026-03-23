@@ -18,7 +18,7 @@ import (
 // Client defines all SAP ADT operations exposed as MCP tools.
 type Client interface {
 	GetSource(ctx context.Context, objectURI string) (*SourceResult, error)
-	SetSource(ctx context.Context, objectURI, source, etag string) error
+	SetSource(ctx context.Context, objectURI, source, lockHandle, etag string) error
 	ActivateObject(ctx context.Context, objectURI string) (*ActivationResult, error)
 	SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error)
 	WhereUsed(ctx context.Context, objectURI string) ([]ObjectInfo, error)
@@ -28,6 +28,12 @@ type Client interface {
 	RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error)
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
+	LockObject(ctx context.Context, objectURI string) (string, error)
+	UnlockObject(ctx context.Context, objectURI string) error
+	PrettyPrint(ctx context.Context, source string) (string, error)
+	CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error
+	DeleteObject(ctx context.Context, objectURI, transport string) error
+	GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error)
 }
 
 type httpClient struct {

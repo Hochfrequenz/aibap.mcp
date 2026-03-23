@@ -24,13 +24,17 @@ func (c *httpClient) GetSource(ctx context.Context, objectURI string) (*SourceRe
 	return &SourceResult{Source: string(body), ETag: resp.Header.Get("ETag")}, nil
 }
 
-func (c *httpClient) SetSource(ctx context.Context, objectURI, source, etag string) error {
+func (c *httpClient) SetSource(ctx context.Context, objectURI, source, lockHandle, etag string) error {
+	headers := map[string]string{
+		"Content-Type": "plain/abap; charset=utf-8",
+		"If-Match":     etag,
+	}
+	if lockHandle != "" {
+		headers["X-SAP-Lock-Handle"] = lockHandle
+	}
 	resp, err := c.doMutate(ctx, http.MethodPut, objectURI+"/source/main",
 		strings.NewReader(source),
-		map[string]string{
-			"Content-Type": "plain/abap; charset=utf-8",
-			"If-Match":     etag,
-		},
+		headers,
 	)
 	if err != nil {
 		return fmt.Errorf("SetSource: %w", err)
