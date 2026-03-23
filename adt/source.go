@@ -13,7 +13,7 @@ func (c *httpClient) GetSource(ctx context.Context, objectURI string) (*SourceRe
 	if err != nil {
 		return nil, fmt.Errorf("GetSource: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}
@@ -35,6 +35,6 @@ func (c *httpClient) SetSource(ctx context.Context, objectURI, source, etag stri
 	if err != nil {
 		return fmt.Errorf("SetSource: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return checkResponse(resp)
 }

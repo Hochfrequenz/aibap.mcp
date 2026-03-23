@@ -11,10 +11,10 @@ import (
 )
 
 type xmlUnitTestRunRequest struct {
-	XMLName xml.Name           `xml:"aunit:run"`
-	NS      string             `xml:"xmlns:aunit,attr"`
-	NSCore  string             `xml:"xmlns:adtcore,attr"`
-	Timeout int                `xml:"adtcore:timeout,attr"`
+	XMLName xml.Name `xml:"aunit:run"`
+	NS      string   `xml:"xmlns:aunit,attr"`
+	NSCore  string   `xml:"xmlns:adtcore,attr"`
+	Timeout int      `xml:"adtcore:timeout,attr"`
 	Objects []xmlUnitTestObject
 }
 
@@ -75,7 +75,7 @@ func (c *httpClient) RunUnitTests(ctx context.Context, objectURI string, timeout
 	if err != nil {
 		return nil, fmt.Errorf("RunUnitTests: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}

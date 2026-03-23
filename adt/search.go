@@ -50,7 +50,7 @@ func (c *httpClient) SearchObjects(ctx context.Context, query, objectType string
 	if err != nil {
 		return nil, fmt.Errorf("SearchObjects: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (c *httpClient) WhereUsed(ctx context.Context, objectURI string) ([]ObjectI
 	if err != nil {
 		return nil, fmt.Errorf("WhereUsed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}
