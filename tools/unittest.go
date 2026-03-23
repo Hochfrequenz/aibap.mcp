@@ -12,10 +12,10 @@ import (
 func registerUnitTestTools(s *server.MCPServer, client adt.Client) {
 	s.AddTool(mcp.NewTool("run_unit_tests",
 		mcp.WithDescription("Run ABAP Unit Tests for an object. Returns test results with pass/fail counts."),
-		mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT object URI")),
+		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 		mcp.WithNumber("timeout_seconds", mcp.Description("Test execution timeout in seconds (default: 30)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString("object_uri", "")
+		uri := req.GetString(paramObjectURI, "")
 		timeout := req.GetInt("timeout_seconds", 30)
 		result, err := client.RunUnitTests(ctx, uri, timeout)
 		if err != nil {
