@@ -1,0 +1,15 @@
+name: Prevent ByteOrderMarks
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  bom-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check for BOM
+        uses: arma-actions/bom-check@v1
