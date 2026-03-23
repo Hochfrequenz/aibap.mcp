@@ -86,6 +86,22 @@ func TestLoadMissingFile(t *testing.T) {
 	}
 }
 
+func TestLoadEmptyHostReturnsError(t *testing.T) {
+	f := writeConfig(t, `
+default_system: dev
+systems:
+  dev:
+    host: ""
+    client: "100"
+    user: "U"
+    password: "P"
+`)
+	_, err := config.Load(f)
+	if err == nil {
+		t.Error("expected error for system with empty host")
+	}
+}
+
 func TestLoadOmittedDefaultSystem(t *testing.T) {
 	f := writeConfig(t, `
 systems:
