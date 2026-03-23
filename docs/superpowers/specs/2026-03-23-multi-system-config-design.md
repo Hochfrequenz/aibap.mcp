@@ -69,22 +69,28 @@ type Config struct {
 
 `applyEnvOverrides` is removed (no longer applicable).
 
+### `adt/client.go` (modified)
+
+`NewClient` signature changes from `NewClient(cfg *config.Config) Client` to `NewClient(cfg config.SAPConfig) Client` — accepts a single system's config directly instead of the full multi-system config. This is required because `ClientRegistry` creates one client per system.
+
 ### `adt/registry.go` (new)
 
 ```go
 type ClientRegistry struct {
     mu      sync.RWMutex
     clients map[string]Client
+    configs map[string]config.SAPConfig
     active  string
 }
 
 func NewClientRegistry(cfg *config.Config) (*ClientRegistry, error)
-func (r *ClientRegistry) Select(name string) (string, error) // returns display string
+func (r *ClientRegistry) Select(name string) (string, error) // write lock; returns "Active system: <name> (<host>)"
 func (r *ClientRegistry) ActiveName() string
-func (r *ClientRegistry) ActiveConfig() *config.SAPConfig
 ```
 
-`ClientRegistry` implements `adt.Client` by forwarding every method to the currently active client under a read lock. All 11 interface methods are delegated.
+`ClientRegistry` implements `adt.Client` by forwarding every method to the currently active client under a read lock. All 11 interface methods are delegated. `Select` takes a write lock — in-flight requests against the previous system complete normally.
+
+`configs` map stores `config.SAPConfig` by value (not pointer) to avoid unsafe map-entry addressing. The display string for `Select` is built from `configs[name].Host` inside the write lock.
 
 Clients are created eagerly at startup (one per system). Error on startup if any system config is invalid.
 
