@@ -7,14 +7,13 @@ default_system: dev
 systems:
   dev:
     host: "https://your-dev-system:8000"
-    client: "100"
     user: "DEVELOPER"
     password: ""
-    tls_skip_verify: false   # set true for self-signed certificates
+    # client: "100"          # optional, omit to use SAP default client
+    # tls_skip_verify: false # set true for self-signed certificates
 
   # Add more systems as needed:
   # prod:
   #   host: "https://your-prod-system:8000"
-  #   client: "200"
   #   user: "DEVELOPER"
   #   password: ""

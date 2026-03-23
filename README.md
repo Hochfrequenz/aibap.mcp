@@ -84,13 +84,12 @@ default_system: dev
 systems:
   dev:
     host: "https://your-dev-system:8000"
-    client: "100"
     user: "YOUR_USER"
     password: "YOUR_PASSWORD"
+    client: "100"          # optional, omit to use SAP default client
     tls_skip_verify: false
   prod:
     host: "https://your-prod-system:8000"
-    client: "200"
     user: "YOUR_USER"
     password: "YOUR_PASSWORD"
 ```
