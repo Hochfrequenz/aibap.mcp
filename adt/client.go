@@ -123,6 +123,7 @@ func (c *httpClient) applySession(req *http.Request) {
 
 // doRead performs a GET request (no CSRF required), with re-auth retry on 401.
 func (c *httpClient) doRead(ctx context.Context, path string, headers map[string]string) (*http.Response, error) {
+	path = encodeNamespacePath(path)
 	makeReq := func() (*http.Request, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.Host+path, nil)
 		if err != nil {
@@ -175,6 +176,7 @@ func (c *httpClient) doRead(ctx context.Context, path string, headers map[string
 // doMutate performs a POST/PUT/DELETE with CSRF token and retry on 403/401.
 // Body is buffered so it can be replayed on retry.
 func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
+	path = encodeNamespacePath(path)
 	var bodyBytes []byte
 	if body != nil {
 		var err error
@@ -259,6 +261,36 @@ func parseADTError(statusCode int, body io.Reader) error {
 	return &ADTError{StatusCode: statusCode, Message: strings.TrimSpace(string(data))}
 }
 
+// encodeNamespacePath detects SAP namespace objects in ADT paths and
+// percent-encodes the namespace slashes. When a user passes an object URI
+// like /sap/bc/adt/programs/programs//HFQ/REPORT, the double slash indicates
+// a namespace object. This function converts it to the ADT-required format:
+// /sap/bc/adt/programs/programs/%2fhfq%2freport
+func encodeNamespacePath(path string) string {
+	idx := strings.Index(path, "//")
+	if idx < 0 {
+		return path
+	}
+	// Everything before the // is the ADT prefix
+	prefix := path[:idx+1] // include one slash
+	rest := path[idx+1:]   // starts with /NAMESPACE/name...
+	// Find the closing namespace slash (second / after the namespace name)
+	endNS := strings.Index(rest[1:], "/")
+	if endNS < 0 {
+		return path // malformed, return as-is
+	}
+	nsName := rest[1 : endNS+1] // e.g. "HFQ"
+	after := rest[endNS+2:]     // e.g. "REPORT/source/main" or "REPORT"
+	// Split object name from any suffix path (e.g. /source/main)
+	objName := after
+	suffix := ""
+	if slashIdx := strings.Index(after, "/"); slashIdx >= 0 {
+		objName = after[:slashIdx]
+		suffix = after[slashIdx:]
+	}
+	return prefix + "%2f" + strings.ToLower(nsName) + "%2f" + strings.ToLower(objName) + suffix
+}
+
 // checkResponse returns an *ADTError if the response status indicates failure.
 func checkResponse(resp *http.Response) error {
 	if resp.StatusCode >= 400 {
@@ -266,3 +298,4 @@ func checkResponse(resp *http.Response) error {
 	}
 	return nil
 }
+
