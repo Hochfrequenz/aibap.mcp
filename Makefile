@@ -2,7 +2,7 @@ BINARY=mcp-server-abap
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS=-ldflags "-X main.version=$(VERSION)"
 
-.PHONY: build build-all test lint release
+.PHONY: build build-all test integration-test lint release
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) .
@@ -16,6 +16,9 @@ build-all:
 
 test:
 	go test ./... -v
+
+integration-test:
+	go test -tags integration -v -count=1 ./adt/...
 
 lint:
 	golangci-lint run ./...
