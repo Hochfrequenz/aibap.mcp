@@ -28,7 +28,7 @@ Introduce a comprehensive CI pipeline and branch protection for `mcp-server-abap
 
 ## Workflow Details
 
-All workflows use `actions/checkout@v4` and `actions/setup-go@v6` (matching existing `release.yml` conventions).
+All workflows use `actions/checkout@v6` and `actions/setup-go@v6` (latest versions, matching go-bo4e).
 
 ### test.yml
 
@@ -68,7 +68,7 @@ All workflows use `actions/checkout@v4` and `actions/setup-go@v6` (matching exis
   1. Checkout code (`actions/checkout@v6`)
   2. Setup Go (`actions/setup-go@v6`, go-version `1.26.x`)
   3. Run `golangci/golangci-lint-action@v9` with additional linters enabled: `dupl`, `goconst`, `gocyclo` (in addition to defaults)
-  4. Run format check: `golangci-lint fmt --diff --enable gofmt` (requires golangci-lint v2+; the action version v7 uses v2)
+  4. Run format check: `golangci-lint fmt --diff --enable gofmt` (requires golangci-lint v2+; the action `@v9` uses v2)
 - **Note:** PR-only trigger is intentional — linting on every push to feature branches adds noise; the PR gate is sufficient.
 
 ### no_byte_order_mark.yml
