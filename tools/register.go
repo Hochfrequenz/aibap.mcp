@@ -5,6 +5,12 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// Common parameter names and descriptions used across tool registrations.
+const (
+	paramObjectURI    = "object_uri"
+	descADTObjectURI  = "ADT object URI"
+)
+
 // RegisterAll registers all SAP ADT MCP tools on the given server.
 func RegisterAll(s *server.MCPServer, client adt.Client) {
 	registerSourceTools(s, client)
