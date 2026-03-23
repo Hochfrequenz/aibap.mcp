@@ -320,7 +320,8 @@ create new transport requests. Hypothesized endpoint: `POST /sap/bc/adt/cts/tran
 **Type:** Feature
 
 **Description:** Complete the transport lifecycle by supporting release. The endpoint is believed to
-be `POST /sap/bc/adt/cts/transportrequests/{nr}/newreleasejobs` (hypothesized, must verify).
+be `POST /sap/bc/adt/cts/transportrequests/{nr}/newreleasejobs` (hypothesized — must verify
+against real SAP).
 
 **Verification:**
 1. Check `/sap/bc/adt/discovery` for transport release service
