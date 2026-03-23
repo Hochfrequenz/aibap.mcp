@@ -1,3 +1,7 @@
+![Unittest status badge](https://github.com/dachner/mcp-server-abap/workflows/Unittests/badge.svg)
+![Coverage status badge](https://github.com/dachner/mcp-server-abap/workflows/coverage/badge.svg)
+![Linter status badge](https://github.com/dachner/mcp-server-abap/workflows/golangci-lint/badge.svg)
+
 # mcp-server-abap
 
 A community-built [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that lets AI assistants like Claude read, write, and manage ABAP source code on SAP systems — directly from the editor.
