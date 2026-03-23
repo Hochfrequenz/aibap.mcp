@@ -9,33 +9,33 @@ import (
 )
 
 type xmlCreateProgram struct {
-	XMLName     xml.Name       `xml:"program:abapProgram"`
-	NSProgram   string         `xml:"xmlns:program,attr"`
-	NSCore      string         `xml:"xmlns:adtcore,attr"`
-	Type        string         `xml:"adtcore:type,attr"`
-	Description string         `xml:"adtcore:description,attr"`
-	Name        string         `xml:"adtcore:name,attr"`
-	PackageRef  xmlPackageRef  `xml:"adtcore:packageRef"`
+	XMLName     xml.Name      `xml:"program:abapProgram"`
+	NSProgram   string        `xml:"xmlns:program,attr"`
+	NSCore      string        `xml:"xmlns:adtcore,attr"`
+	Type        string        `xml:"adtcore:type,attr"`
+	Description string        `xml:"adtcore:description,attr"`
+	Name        string        `xml:"adtcore:name,attr"`
+	PackageRef  xmlPackageRef `xml:"adtcore:packageRef"`
 }
 
 type xmlCreateClass struct {
-	XMLName     xml.Name       `xml:"class:abapClass"`
-	NSClass     string         `xml:"xmlns:class,attr"`
-	NSCore      string         `xml:"xmlns:adtcore,attr"`
-	Type        string         `xml:"adtcore:type,attr"`
-	Description string         `xml:"adtcore:description,attr"`
-	Name        string         `xml:"adtcore:name,attr"`
-	PackageRef  xmlPackageRef  `xml:"adtcore:packageRef"`
+	XMLName     xml.Name      `xml:"class:abapClass"`
+	NSClass     string        `xml:"xmlns:class,attr"`
+	NSCore      string        `xml:"xmlns:adtcore,attr"`
+	Type        string        `xml:"adtcore:type,attr"`
+	Description string        `xml:"adtcore:description,attr"`
+	Name        string        `xml:"adtcore:name,attr"`
+	PackageRef  xmlPackageRef `xml:"adtcore:packageRef"`
 }
 
 type xmlCreateInterface struct {
-	XMLName     xml.Name       `xml:"intf:abapInterface"`
-	NSIntf      string         `xml:"xmlns:intf,attr"`
-	NSCore      string         `xml:"xmlns:adtcore,attr"`
-	Type        string         `xml:"adtcore:type,attr"`
-	Description string         `xml:"adtcore:description,attr"`
-	Name        string         `xml:"adtcore:name,attr"`
-	PackageRef  xmlPackageRef  `xml:"adtcore:packageRef"`
+	XMLName     xml.Name      `xml:"intf:abapInterface"`
+	NSIntf      string        `xml:"xmlns:intf,attr"`
+	NSCore      string        `xml:"xmlns:adtcore,attr"`
+	Type        string        `xml:"adtcore:type,attr"`
+	Description string        `xml:"adtcore:description,attr"`
+	Name        string        `xml:"adtcore:name,attr"`
+	PackageRef  xmlPackageRef `xml:"adtcore:packageRef"`
 }
 
 type xmlPackageRef struct {
