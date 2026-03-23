@@ -2,6 +2,12 @@ package adt
 
 import "fmt"
 
+// Common constants used across ADT operations.
+const (
+	contentTypeXML = "application/xml"
+	nsADTCore      = "http://www.sap.com/adt/core"
+)
+
 // SourceResult holds ABAP source code and its ETag for optimistic locking.
 type SourceResult struct {
 	Source string

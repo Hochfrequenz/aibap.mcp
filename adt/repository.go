@@ -14,7 +14,7 @@ func (c *httpClient) BrowsePackage(ctx context.Context, packageName string) ([]O
 	params.Set("parent_name", packageName)
 	path := "/sap/bc/adt/repository/nodestructure?" + params.Encode()
 
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": contentTypeXML})
 	if err != nil {
 		return nil, fmt.Errorf("BrowsePackage: %w", err)
 	}
@@ -28,7 +28,7 @@ func (c *httpClient) BrowsePackage(ctx context.Context, packageName string) ([]O
 }
 
 func (c *httpClient) GetObjectInfo(ctx context.Context, objectURI string) (*ObjectInfo, error) {
-	resp, err := c.doRead(ctx, objectURI, map[string]string{"Accept": "application/xml"})
+	resp, err := c.doRead(ctx, objectURI, map[string]string{"Accept": contentTypeXML})
 	if err != nil {
 		return nil, fmt.Errorf("GetObjectInfo: %w", err)
 	}

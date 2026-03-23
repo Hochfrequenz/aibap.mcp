@@ -35,7 +35,7 @@ type xmlActivationMessage struct {
 
 func (c *httpClient) ActivateObject(ctx context.Context, objectURI string) (*ActivationResult, error) {
 	bodyXML, err := xml.Marshal(xmlActivationRequest{
-		NS:      "http://www.sap.com/adt/core",
+		NS:      nsADTCore,
 		Objects: []xmlActivationObject{{URI: objectURI}},
 	})
 	if err != nil {
@@ -45,7 +45,7 @@ func (c *httpClient) ActivateObject(ctx context.Context, objectURI string) (*Act
 	resp, err := c.doMutate(ctx, http.MethodPost,
 		"/sap/bc/adt/activation/activate?method=activate&preauditRequested=true",
 		strings.NewReader(xml.Header+string(bodyXML)),
-		map[string]string{"Content-Type": "application/xml"},
+		map[string]string{"Content-Type": contentTypeXML},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("ActivateObject: %w", err)
