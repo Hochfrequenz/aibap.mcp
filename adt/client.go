@@ -69,7 +69,7 @@ func (c *httpClient) fetchCSRFToken(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("CSRF fetch: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	io.Copy(io.Discard, resp.Body) //nolint:errcheck
 
 	c.csrfToken = resp.Header.Get("X-CSRF-Token")
@@ -117,7 +117,7 @@ func (c *httpClient) doRead(ctx context.Context, path string, headers map[string
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		c.mu.Lock()
 		if err := c.fetchCSRFToken(ctx); err != nil {
 			c.mu.Unlock()
@@ -168,7 +168,7 @@ func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.
 	}
 
 	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		c.mu.Lock()
 		if err := c.fetchCSRFToken(ctx); err != nil {
 			c.mu.Unlock()

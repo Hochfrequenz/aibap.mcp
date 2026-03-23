@@ -7,9 +7,10 @@ import (
 
 // Common parameter names and descriptions used across tool registrations.
 const (
-	paramObjectURI    = "object_uri"
-	descADTObjectURI  = "ADT object URI"
+	paramObjectURI   = "object_uri"
+	descADTObjectURI = "ADT object URI"
 )
+
 // SystemSelector can switch the active SAP system.
 type SystemSelector interface {
 	Select(name string) (string, error)

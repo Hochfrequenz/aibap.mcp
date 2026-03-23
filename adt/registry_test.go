@@ -21,7 +21,7 @@ func makeRegistryConfig(systems map[string]string, defaultSystem string) *config
 func TestRegistryDefaultSystem(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<?xml version="1.0"?><adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"></adtcore:objectReferences>`))
+		_, _ = w.Write([]byte(`<?xml version="1.0"?><adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core"></adtcore:objectReferences>`))
 	}))
 	defer srv.Close()
 
@@ -82,7 +82,7 @@ func TestRegistryDelegatesGetSource(t *testing.T) {
 		called = true
 		w.Header().Set("ETag", "etag123")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("REPORT ZTEST."))
+		_, _ = w.Write([]byte("REPORT ZTEST."))
 	}))
 	defer srv.Close()
 

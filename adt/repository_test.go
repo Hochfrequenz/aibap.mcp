@@ -22,7 +22,7 @@ func TestBrowsePackage(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<?xml version="1.0"?>
+		_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/ZREPORT" adtcore:type="PROG/P" adtcore:name="ZREPORT" adtcore:description="My Report" adtcore:packageName="ZPACKAGE"/>
 </adtcore:objectReferences>`))
@@ -49,7 +49,7 @@ func TestGetObjectInfo(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<?xml version="1.0"?>
+		_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <adtcore:objectReference xmlns:adtcore="http://www.sap.com/adt/core"
   adtcore:uri="/sap/bc/adt/programs/programs/ZREPORT"
   adtcore:type="PROG/P"
