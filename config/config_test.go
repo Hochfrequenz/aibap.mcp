@@ -85,3 +85,18 @@ func TestLoadMissingFile(t *testing.T) {
 		t.Error("expected error for missing file")
 	}
 }
+
+func TestLoadOmittedDefaultSystem(t *testing.T) {
+	f := writeConfig(t, `
+systems:
+  dev:
+    host: "https://dev.example.com:8000"
+    client: "100"
+    user: "U"
+    password: "P"
+`)
+	_, err := config.Load(f)
+	if err == nil {
+		t.Error("expected error when default_system is omitted")
+	}
+}
