@@ -18,7 +18,7 @@ func (c *httpClient) BrowsePackage(ctx context.Context, packageName string) ([]O
 	if err != nil {
 		return nil, fmt.Errorf("BrowsePackage: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func (c *httpClient) GetObjectInfo(ctx context.Context, objectURI string) (*Obje
 	if err != nil {
 		return nil, fmt.Errorf("GetObjectInfo: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}
@@ -43,11 +43,6 @@ func (c *httpClient) GetObjectInfo(ctx context.Context, objectURI string) (*Obje
 		return nil, fmt.Errorf("GetObjectInfo parsing: %w", err)
 	}
 
-	return &ObjectInfo{
-		URI:         ref.URI,
-		Type:        ref.Type,
-		Name:        ref.Name,
-		Description: ref.Description,
-		PackageName: ref.PackageName,
-	}, nil
+	info := ObjectInfo(ref)
+	return &info, nil
 }

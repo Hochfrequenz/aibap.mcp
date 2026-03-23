@@ -28,7 +28,7 @@ func TestSearchObjects(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<?xml version="1.0"?>
+		_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/ZTEST_REPORT" adtcore:type="PROG/P" adtcore:name="ZTEST_REPORT" adtcore:description="Test Report" adtcore:packageName="ZPACKAGE"/>
 </adtcore:objectReferences>`))
@@ -64,7 +64,7 @@ func TestWhereUsed(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`<?xml version="1.0"?>
+		_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
   <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/ZCALLER" adtcore:type="PROG/P" adtcore:name="ZCALLER" adtcore:description="Caller"/>
 </adtcore:objectReferences>`))

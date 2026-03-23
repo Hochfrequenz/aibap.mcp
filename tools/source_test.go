@@ -12,6 +12,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const testObjectURI = "/sap/bc/adt/programs/programs/ZTEST"
+
 // mockClient is a test double for adt.Client.
 type mockClient struct {
 	getSourceFn     func(ctx context.Context, uri string) (*adt.SourceResult, error)
@@ -145,7 +147,7 @@ func callTool(t *testing.T, s *server.MCPServer, toolName string, args map[strin
 func TestGetSourceTool(t *testing.T) {
 	mock := &mockClient{
 		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
-			if uri != "/sap/bc/adt/programs/programs/ZTEST" {
+			if uri != testObjectURI {
 				t.Errorf("unexpected uri: %q", uri)
 			}
 			return &adt.SourceResult{Source: "REPORT ZTEST.", ETag: `"abc123"`}, nil
@@ -154,7 +156,7 @@ func TestGetSourceTool(t *testing.T) {
 	s := newTestServer(mock)
 
 	result := callTool(t, s, "get_source", map[string]interface{}{
-		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+		"object_uri": testObjectURI,
 	})
 
 	if result.IsError {
@@ -189,7 +191,7 @@ func TestGetSourceToolError(t *testing.T) {
 	s := newTestServer(mock)
 
 	result := callTool(t, s, "get_source", map[string]interface{}{
-		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+		"object_uri": testObjectURI,
 	})
 
 	if !result.IsError {
@@ -200,7 +202,7 @@ func TestGetSourceToolError(t *testing.T) {
 func TestActivateObjectTool(t *testing.T) {
 	mock := &mockClient{
 		activateFn: func(ctx context.Context, uri string) (*adt.ActivationResult, error) {
-			if uri != "/sap/bc/adt/programs/programs/ZTEST" {
+			if uri != testObjectURI {
 				t.Errorf("unexpected uri: %q", uri)
 			}
 			return &adt.ActivationResult{Success: true, Messages: []adt.ActivationMessage{}}, nil
@@ -208,7 +210,7 @@ func TestActivateObjectTool(t *testing.T) {
 	}
 	s := newTestServer(mock)
 	result := callTool(t, s, "activate_object", map[string]interface{}{
-		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+		"object_uri": testObjectURI,
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error result")
@@ -223,7 +225,7 @@ func TestActivateObjectToolError(t *testing.T) {
 	}
 	s := newTestServer(mock)
 	result := callTool(t, s, "activate_object", map[string]interface{}{
-		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+		"object_uri": testObjectURI,
 	})
 	if !result.IsError {
 		t.Fatal("expected IsError=true")
@@ -314,13 +316,13 @@ func TestAddToTransportTool(t *testing.T) {
 	}
 	s := newTestServer(mock)
 	result := callTool(t, s, "add_to_transport", map[string]interface{}{
-		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+		"object_uri": testObjectURI,
 		"transport":  "DEVK900123",
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error result")
 	}
-	if gotURI != "/sap/bc/adt/programs/programs/ZTEST" {
+	if gotURI != testObjectURI {
 		t.Errorf("object_uri: got %q", gotURI)
 	}
 	if gotTransport != "DEVK900123" {
@@ -339,7 +341,7 @@ func TestSetSourceTool(t *testing.T) {
 	s := newTestServer(mock)
 
 	result := callTool(t, s, "set_source", map[string]interface{}{
-		"object_uri": "/sap/bc/adt/programs/programs/ZTEST",
+		"object_uri": testObjectURI,
 		"source":     "REPORT ZTEST.\nNEW.",
 		"etag":       `"abc123"`,
 	})
@@ -347,7 +349,7 @@ func TestSetSourceTool(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error result")
 	}
-	if gotURI != "/sap/bc/adt/programs/programs/ZTEST" {
+	if gotURI != testObjectURI {
 		t.Errorf("uri: got %q", gotURI)
 	}
 	if gotSource != "REPORT ZTEST.\nNEW." {
