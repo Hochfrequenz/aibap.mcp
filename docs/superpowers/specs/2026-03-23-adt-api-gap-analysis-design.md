@@ -15,7 +15,11 @@ verified against:
 2. Actual endpoint responses from the real SAP at `srvhfuhana.sap.msp.local:44300`
 3. Official SAP documentation (help.sap.com, SAP notes) where available
 
-Claims based on reverse-engineered third-party libraries are treated as hypotheses, not facts.
+We do not use third-party libraries or reverse-engineered code as a source of truth. All endpoint
+paths, HTTP methods, request/response formats, and behaviors must be confirmed by querying the
+real SAP system or citing an official SAP documentation URL. Unverified endpoints are clearly
+marked as **hypothesized** — not stated as fact.
+
 Each issue is marked **verified** or **needs verification** before submission.
 
 ## Verification Workflow
@@ -55,13 +59,13 @@ Basic Auth + `sap-client` header, session cookie caching, 401/403 retry with re-
 
 *Claude can reliably read, search, and navigate ABAP code.*
 
-### Issue 1.1 — Bug: BrowsePackage nodestructure response uses different XML schema than objectReferences
+### Issue 1.1 — Investigate: BrowsePackage XML parsing may not match real nodestructure response
 
-**Type:** Bug fix + test
+**Type:** Investigation + potential fix + test
 
 **Problem:** `BrowsePackage` reuses `parseObjectReferences` which expects `<objectReference>` elements.
-The `/sap/bc/adt/repository/nodestructure` endpoint likely returns `<objectNode>` elements with
-different attribute names. This may cause silent empty results.
+The `/sap/bc/adt/repository/nodestructure` endpoint may return a different XML schema (e.g.,
+`<objectNode>` elements with different attribute names). If so, this causes silent empty results.
 
 **Verification:**
 `GET /sap/bc/adt/repository/nodestructure?parent_type=DEVC/K&parent_name=$LOCAL` on real SAP.
@@ -106,7 +110,11 @@ Compare response XML structure to what `parseObjectReferences` expects.
 
 **Type:** Integration test
 
-**Verification:** `GET /sap/bc/adt/repository/informationsystem/usageReferences?adtObjectUri={uri}` on real SAP.
+**Note:** Our code uses `GET` for this endpoint. Some sources suggest it may require `POST` with a
+request body instead. The correct HTTP method must be verified against the real SAP.
+
+**Verification:** Call `GET /sap/bc/adt/repository/informationsystem/usageReferences?adtObjectUri={uri}`
+on real SAP. If it fails, try `POST` with the object URI in the request body.
 
 **Status:** Needs verification against SAP
 
@@ -198,7 +206,8 @@ Compare response XML structure to what `parseObjectReferences` expects.
 
 **Status:** No SAP verification needed (pure infrastructure)
 
-**Integration test:** The harness itself is tested by issue 1.2 (simplest real call).
+**Acceptance criteria:** Issue 1.2 (GetSource integration test) runs successfully using this harness.
+The harness is validated by the first real test that uses it.
 
 ---
 
@@ -210,26 +219,34 @@ Compare response XML structure to what `parseObjectReferences` expects.
 
 **Type:** Feature + fix
 
-**Problem:** Our `SetSource` writes source without acquiring a lock first. The ADT API is believed
-to require `POST {uri}?_action=LOCK&accessMode=MODIFY` before writing, returning a `LOCK_HANDLE`
-and optionally a `CORRNR` (transport number). After writing, `POST {uri}?_action=UNLOCK&lockHandle={handle}`
-releases the lock.
+**Problem:** Our `SetSource` writes source without acquiring a lock first. The ADT API may
+require locking before writing. The hypothesized endpoints are:
+- Lock: `POST {uri}?_action=LOCK&accessMode=MODIFY` — returns a lock handle
+- Unlock: `POST {uri}?_action=UNLOCK&lockHandle={handle}`
 
 Without locking, writes may fail on systems that enforce it, or cause data loss if two editors
 write concurrently.
 
+**Hypothesized endpoints** (must be verified against real SAP):
+- Lock endpoint path and query parameters
+- Lock response XML format (lock handle, transport number)
+- Unlock endpoint path and required parameters
+
 **Verification:**
 1. Attempt `PUT .../source/main` without prior LOCK on real SAP — does it succeed or fail?
-2. Call `POST {uri}?_action=LOCK&accessMode=MODIFY` — inspect response XML for lock handle format
-3. Call UNLOCK after
+2. Discover the lock endpoint via `/sap/bc/adt/discovery` or trial calls
+3. Inspect actual response XML for lock handle format
+4. Test unlock
 
 **Status:** Needs verification against SAP
 
 **New Client methods:** `LockObject(ctx, objectURI) (*LockResult, error)`,
 `UnlockObject(ctx, objectURI, lockHandle) error`
 
-**New MCP tool behavior:** `set_source` should auto-lock before write and unlock after, or expose
-`lock_object` / `unlock_object` as separate tools for explicit control.
+**Design decision (to resolve during verification):** Whether `set_source` auto-locks/unlocks
+internally, or whether `lock_object` / `unlock_object` are exposed as separate MCP tools.
+The verification step should determine which approach is more practical by observing how the
+real SAP behaves (e.g., does lock return a transport number that the user needs to see?).
 
 **Integration test:**
 - Lock a known object, assert lock handle returned
@@ -262,7 +279,7 @@ Some sources suggest the path is `/sap/bc/adt/activation?method=activate&preaudi
 **Type:** Feature
 
 **Description:** Before modifying an object, it is useful to know whether a transport request is
-required. The endpoint `POST /sap/bc/adt/cts/transportchecks` is believed to provide this.
+required. The hypothesized endpoint is `POST /sap/bc/adt/cts/transportchecks`.
 
 **Verification:**
 1. Check `/sap/bc/adt/discovery` for transport check service
@@ -282,7 +299,7 @@ required. The endpoint `POST /sap/bc/adt/cts/transportchecks` is believed to pro
 **Type:** Feature
 
 **Description:** Currently we can list transports and add objects to existing transports, but cannot
-create new transport requests. The endpoint is believed to be `POST /sap/bc/adt/cts/transports`.
+create new transport requests. Hypothesized endpoint: `POST /sap/bc/adt/cts/transports`.
 
 **Verification:**
 1. Check `/sap/bc/adt/discovery` for transport creation service
@@ -295,14 +312,15 @@ create new transport requests. The endpoint is believed to be `POST /sap/bc/adt/
 **Integration test:**
 - Create a transport with a test description
 - Assert transport number returned
-- Clean up: delete or release the test transport after
+- Clean up: release the test transport after (delete-transport endpoint availability to be
+  verified; if unavailable, releasing an empty transport is acceptable cleanup)
 
 ### Issue 2.5 — Feature: Add release transport request
 
 **Type:** Feature
 
 **Description:** Complete the transport lifecycle by supporting release. The endpoint is believed to
-be `POST /sap/bc/adt/cts/transportrequests/{nr}/newreleasejobs`.
+be `POST /sap/bc/adt/cts/transportrequests/{nr}/newreleasejobs` (hypothesized, must verify).
 
 **Verification:**
 1. Check `/sap/bc/adt/discovery` for transport release service
@@ -322,10 +340,14 @@ be `POST /sap/bc/adt/cts/transportrequests/{nr}/newreleasejobs`.
 
 **Description:** Prove the complete workflow: lock → get source → modify → set source → activate → assign transport → unlock.
 
+**Verification:** Run the full cycle against the real SAP with a dedicated test object.
+
+**Status:** Needs verification against SAP
+
 **Integration test:**
 - Read original source and ETag
 - Lock object
-- Write modified source (append a comment line)
+- Write modified source (append a comment line, e.g., `* integration test timestamp`)
 - Activate
 - Optionally assign to transport
 - Unlock
@@ -338,13 +360,34 @@ be `POST /sap/bc/adt/cts/transportrequests/{nr}/newreleasejobs`.
 
 **Description:** Verify optimistic locking works: writing with an outdated ETag should fail.
 
+**Verification:** Attempt a write with stale ETag against the real SAP and observe the error response.
+
+**Status:** Needs verification against SAP
+
 **Integration test:**
-- Get source + ETag
-- Get source again (same ETag expected)
-- Lock, write a trivial change, unlock (ETag now changed)
-- Attempt SetSource with the old ETag
+- Get source + ETag (call it etag_v1)
+- Lock object
+- Write a trivial change (append `* etag test`), activating to finalize (ETag now changes)
+- Unlock
+- Attempt SetSource with etag_v1 (now stale)
 - Assert error (expected: 412 Precondition Failed or ADT error)
-- Restore original source
+- No restore needed — the trivial change from step 3 is the final state; next test run overwrites it
+
+### Issue 2.8 — Test: AddToTransport assigns object to transport
+
+**Type:** Integration test
+
+**Description:** Verify that `AddToTransport` correctly assigns an object to an existing transport.
+
+**Verification:** Call endpoint on real SAP with a known object and transport.
+
+**Status:** Needs verification against SAP
+
+**Integration test:**
+- List transports for test user, pick one modifiable transport (or create one via 2.4 if available)
+- Call `AddToTransport` with a known object URI and the transport number
+- Assert no error returned
+- Verify by listing transport contents (if endpoint available) or by re-listing transports
 
 ---
 
@@ -357,7 +400,7 @@ be `POST /sap/bc/adt/cts/transportrequests/{nr}/newreleasejobs`.
 **Type:** Feature
 
 **Description:** Static analysis beyond syntax check. ATC provides code quality checks similar to
-linting. Multiple endpoints are believed to exist under `/sap/bc/adt/atc/...`.
+linting. Multiple endpoints are hypothesized under `/sap/bc/adt/atc/...` (must verify via discovery).
 
 **Verification:**
 1. Check `/sap/bc/adt/discovery` for ATC-related services
@@ -378,7 +421,7 @@ linting. Multiple endpoints are believed to exist under `/sap/bc/adt/atc/...`.
 **Type:** Feature
 
 **Description:** Format ABAP source code using SAP's built-in pretty-printer.
-Endpoint believed to be `POST /sap/bc/adt/abapsource/prettyprinter`.
+Hypothesized endpoint: `POST /sap/bc/adt/abapsource/prettyprinter` (must verify via discovery).
 
 **Verification:**
 1. Check `/sap/bc/adt/discovery` for prettyprinter service
@@ -397,7 +440,7 @@ Endpoint believed to be `POST /sap/bc/adt/abapsource/prettyprinter`.
 **Type:** Feature
 
 **Description:** Provide code completion suggestions at a cursor position.
-Endpoint believed to be `POST /sap/bc/adt/abapsource/codecompletion/proposal`.
+Hypothesized endpoint: `POST /sap/bc/adt/abapsource/codecompletion/proposal` (must verify via discovery).
 
 **Verification:**
 1. Check `/sap/bc/adt/discovery` for codecompletion service
@@ -416,7 +459,7 @@ Endpoint believed to be `POST /sap/bc/adt/abapsource/codecompletion/proposal`.
 **Type:** Feature
 
 **Description:** Resolve a symbol at a given position to its definition URI.
-Endpoint believed to be `POST /sap/bc/adt/navigation/target`.
+Hypothesized endpoint: `POST /sap/bc/adt/navigation/target` (must verify via discovery).
 
 **Verification:**
 1. Check `/sap/bc/adt/discovery` for navigation service
@@ -435,7 +478,7 @@ Endpoint believed to be `POST /sap/bc/adt/navigation/target`.
 **Type:** Feature
 
 **Description:** List objects pending activation.
-Endpoint: `GET /sap/bc/adt/activation/inactiveobjects`.
+Hypothesized endpoint: `GET /sap/bc/adt/activation/inactiveobjects` (must verify via discovery).
 
 **Verification:**
 1. Check `/sap/bc/adt/discovery` for inactive objects service
@@ -443,19 +486,21 @@ Endpoint: `GET /sap/bc/adt/activation/inactiveobjects`.
 
 **Status:** Needs verification against SAP
 
+**Dependencies:** Integration test requires object locking and writing (Milestone 2, issue 2.1).
+
 **New Client method:** `GetInactiveObjects(ctx) ([]ObjectInfo, error)`
 
 **Integration test:**
-- Modify an object without activating, then list inactive objects
+- Lock and modify an object without activating (requires Milestone 2 locking), then list inactive objects
 - Assert the modified object appears in the list
-- Clean up: activate the object
+- Clean up: activate the object and unlock
 
 ### Issue 3.6 — Feature: Add ABAP keyword documentation
 
 **Type:** Feature
 
 **Description:** Retrieve built-in ABAP keyword documentation.
-Endpoint believed to be `POST /sap/bc/adt/docu/abap/langu`.
+Hypothesized endpoint: `POST /sap/bc/adt/docu/abap/langu` (must verify via discovery).
 
 **Verification:**
 1. Check `/sap/bc/adt/discovery` for documentation service
@@ -548,10 +593,10 @@ integration-test:
 
 | Milestone | Issues | Type Breakdown |
 |-----------|--------|----------------|
-| 1 — Read & Navigate | 10 | 1 bug fix, 8 integration tests, 1 infrastructure |
-| 2 — Safe Edit Workflow | 7 | 3 features, 1 verification, 3 integration tests |
+| 1 — Read & Navigate | 10 | 1 investigation/fix, 8 integration tests, 1 infrastructure |
+| 2 — Safe Edit Workflow | 8 | 4 features, 1 verification, 3 integration tests |
 | 3 — Advanced Tooling | 7 | 7 features (each with integration test) |
-| **Total** | **24** | |
+| **Total** | **25** | |
 
 All issues are **"needs verification against SAP"** until validated against the real system.
 No GitHub issue will be created without evidence.
