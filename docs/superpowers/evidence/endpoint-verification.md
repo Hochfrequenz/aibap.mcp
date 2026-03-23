@@ -423,3 +423,400 @@ SUBMIT RSPFPAR.
 3. **Wrong URL path (1 endpoint):** Activation uses `/activation/activate` but correct is `/activation`
 4. **Wrong XML request body (3 endpoints):** WhereUsed, SyntaxCheck, and BrowsePackage need proper XML request bodies
 5. **Wrong response parser (4 endpoints):** WhereUsed, BrowsePackage, SyntaxCheck, and GetObjectInfo expect different XML structures than SAP returns
+
+---
+
+## New Endpoint Verification
+
+**Date:** 2026-03-23
+**System:** srvhfuhana.sap.msp.local:44300
+**Client:** 100 / User:** kleink
+
+---
+
+### Endpoint 1: Lock Object
+
+**URL:** `POST /sap/bc/adt/programs/programs/{name}?_action=LOCK&accessMode=MODIFY`
+**HTTP Method:** POST
+**HTTP Status:** 200 OK
+**Content-Type (response):** `application/vnd.sap.as+xml; charset=utf-8; dataname=com.sap.adt.lock.Result`
+**Required headers:** `X-CSRF-Token: <token>`, `sap-client: <client>`
+
+**Response body (full):**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<asx:abap version="1.0" xmlns:asx="http://www.sap.com/abapxml">
+  <asx:values>
+    <DATA>
+      <LOCK_HANDLE>15F0D1EAA10BDCBE10C24098848DC83FF52C7A5F</LOCK_HANDLE>
+      <CORRNR/>
+      <CORRUSER/>
+      <CORRTEXT/>
+      <IS_LOCAL/>
+      <IS_LINK_UP/>
+      <MODIFICATION_SUPPORT>ModificationsLoggedOnly</MODIFICATION_SUPPORT>
+      <SCOPE_MESSAGES/>
+    </DATA>
+  </asx:values>
+</asx:abap>
+```
+
+**Notes:**
+- The `LOCK_HANDLE` is a 40-character hex string needed to unlock
+- `CORRNR` / `CORRUSER` / `CORRTEXT` are populated when a transport is assigned
+- `IS_LOCAL` is set when object is in a local (`$TMP`) package
+- `MODIFICATION_SUPPORT` indicates lock scope
+
+**Conclusion:** AVAILABLE. Response format is `asx:abap` wrapper with `DATA/LOCK_HANDLE`. Needs custom XML parser.
+
+---
+
+### Endpoint 2: Unlock Object
+
+**URL:** `POST /sap/bc/adt/programs/programs/{name}?_action=UNLOCK&lockHandle={handle}`
+**HTTP Method:** POST (not DELETE)
+**HTTP Status:** 200 OK (empty body on success)
+**Required headers:** `X-CSRF-Token: <token>`, `sap-client: <client>`
+
+**Notes:**
+- DELETE method on same URL returns 423 with `ExceptionResourceInvalidLockHandle` even with a valid handle
+- POST with `_action=UNLOCK` returns 200 empty body on success
+- The lock handle is the hex string from the LOCK response
+
+**Conclusion:** AVAILABLE. Use POST (not DELETE) with `_action=UNLOCK` query param.
+
+---
+
+### Endpoint 3: Transport Checks
+
+**URL:** `POST /sap/bc/adt/cts/transportchecks`
+**HTTP Method:** POST
+**HTTP Status:** 200 OK
+**Content-Type (request):** `application/vnd.sap.as+xml; charset=utf-8; dataname=com.sap.adt.transport.CheckObjects`
+**Content-Type (response):** `application/vnd.sap.as+xml; charset=utf-8; dataname=com.sap.adt.transport.service.checkData`
+**Required headers:** `X-CSRF-Token: <token>`, `sap-client: <client>`
+
+**Request body:**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<asx:abap version="1.0" xmlns:asx="http://www.sap.com/abapxml">
+  <asx:values>
+    <DATA>
+      <PGMID>R3TR</PGMID>
+      <OBJECT>PROG</OBJECT>
+      <OBJECTNAME>RSPARAM</OBJECTNAME>
+      <OPERATION>I</OPERATION>
+    </DATA>
+  </asx:values>
+</asx:abap>
+```
+
+**Response body (excerpt):**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<asx:abap version="1.0" xmlns:asx="http://www.sap.com/abapxml">
+  <asx:values>
+    <DATA>
+      <PGMID>R3TR</PGMID>
+      <OBJECT>PROG</OBJECT>
+      <OBJECTNAME>RSPARAM</OBJECTNAME>
+      <OPERATION>I</OPERATION>
+      <DEVCLASS>STUN</DEVCLASS>
+      <CTEXT>SAP Monitoring Tools</CTEXT>
+      <KORRFLAG>X</KORRFLAG>
+      <AS4USER>SAP</AS4USER>
+      <PDEVCLASS>SAP</PDEVCLASS>
+      <DLVUNIT>SAP_BASIS</DLVUNIT>
+      <NAMESPACE>/0SAP/</NAMESPACE>
+      <RESULT>S</RESULT>
+      <RECORDING>X</RECORDING>
+      <MESSAGES>
+        <CTS_MESSAGE>
+          <SEVERITY>S</SEVERITY>
+          <ARBGB>TR</ARBGB>
+          <MSGNR>015</MSGNR>
+          <TEXT>Object can only be created in SAP package</TEXT>
+        </CTS_MESSAGE>
+      </MESSAGES>
+      <REQUESTS>
+        <CTS_REQUEST>
+          <REQ_HEADER>
+            <TRKORR>S4UK902321</TRKORR>
+            <TRFUNCTION>K</TRFUNCTION>
+            <TRSTATUS>D</TRSTATUS>
+            <TARSYSTEM>DUM</TARSYSTEM>
+            <AS4USER>KLEINK</AS4USER>
+            <AS4DATE>2026-03-20</AS4DATE>
+            <AS4TEXT>zdm_sql</AS4TEXT>
+          </REQ_HEADER>
+        </CTS_REQUEST>
+        <!-- ... more requests ... -->
+      </REQUESTS>
+    </DATA>
+  </asx:values>
+</asx:abap>
+```
+
+**Notes:**
+- `RESULT` field: `S` = success/recordable, `E` = error (e.g., invalid object)
+- `REQUESTS` contains a list of existing open transport requests the user can choose from
+- `RECORDING` = `X` means the object can be recorded into a transport
+- Without proper body, returns 400 `No data type found in content type ''`
+- With wrong Accept, returns 406 listing required types
+
+**Conclusion:** AVAILABLE. Uses `asx:abap` format for both request and response. Must parse `DATA/RESULT` and `DATA/REQUESTS/CTS_REQUEST/REQ_HEADER` for transport list.
+
+---
+
+### Endpoint 4: Create Transport
+
+**URL:** `POST /sap/bc/adt/cts/transports`
+**HTTP Method:** POST
+**HTTP Status:** 200 OK (empty body — transport number not returned in response headers or body)
+**Content-Type (request):** `application/vnd.sap.as+xml; charset=utf-8; dataname=com.sap.adt.transport.WorkbenchTransport`
+**Content-Type (response):** none (empty body, content-length: 0)
+**Required headers:** `X-CSRF-Token: <token>`, `sap-client: <client>`
+
+**Request body:**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<asx:abap version="1.0" xmlns:asx="http://www.sap.com/abapxml">
+  <asx:values>
+    <DATA>
+      <CATEGORY>K</CATEGORY>
+      <TARGET>DUM</TARGET>
+      <DESCRIPTION>My transport description</DESCRIPTION>
+      <DEVCLASS>$TMP</DEVCLASS>
+    </DATA>
+  </asx:values>
+</asx:abap>
+```
+
+**Notes:**
+- `CATEGORY`: `K` = Workbench, `W` = Customizing
+- `TARGET`: transport target system (e.g., `DUM`, `S4UCLNT100`)
+- `DEVCLASS`: must be a valid package that exists (returns 500 with `ExceptionResourceCreationFailure` for non-existent package)
+- Response body is empty (content-length: 0); no `Location` header with new transport number
+- This is a concern — the transport number is needed for subsequent operations (adding objects)
+- Needs further investigation to determine how the created transport number is retrieved
+
+**Conclusion:** AVAILABLE but NEEDS FURTHER INVESTIGATION. Endpoint accepts requests but returns no transport number in the response. Must probe discovery or alternative paths for how the new transport ID is communicated back.
+
+---
+
+### Endpoint 5: ATC Customizing
+
+**URL:** `GET /sap/bc/adt/atc/customizing`
+**HTTP Method:** GET
+**HTTP Status:** 200 OK
+**Content-Type (response):** `application/vnd.sap.atc.customizing-v1+xml; charset=utf-8`
+**Required headers:** `sap-client: <client>`
+
+**Response body (full):**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<atc:customizing xmlns:atc="http://www.sap.com/adt/atc">
+  <properties>
+    <property name="ciCheckFlavour" value="true"/>
+    <property name="systemCheckVariant" value="ZCB_CLEAN_ABAP_1"/>
+    <property name="isCCSTunnelEnabled" value="false"/>
+    <property name="isTransportableExemptionTypeUsed" value="false"/>
+  </properties>
+  <exemption>
+    <reasons>
+      <reason id="FPOS" justificationMandatory="true" title="False Positive - finding does not apply - see justification"/>
+      <reason id="OTHR" justificationMandatory="true" title="Other Reason - see justification"/>
+    </reasons>
+    <validities>
+      <validity id="U" value="No Restrictions"/>
+      <validity id="D" value="Date"/>
+    </validities>
+  </exemption>
+  <scaAttributes>
+    <scaAttribute labelL="Additional Info" labelM="Additional Info" labelS="Add. Info" label="false" attributeName="ADD_INFO"/>
+    <!-- ... more scaAttribute elements ... -->
+  </scaAttributes>
+</atc:customizing>
+```
+
+**Conclusion:** AVAILABLE. Simple GET, no auth headers beyond basic. Returns `atc:customizing` root with `properties`, `exemption`, `scaAttributes` children.
+
+---
+
+### Endpoint 6: Pretty Printer Settings
+
+**URL:** `GET /sap/bc/adt/abapsource/prettyprinter/settings`
+**HTTP Method:** GET
+**HTTP Status:** 200 OK
+**Content-Type (response):** `application/vnd.sap.adt.ppsettings.v5+xml; charset=utf-8`
+**Required headers:** `sap-client: <client>`
+
+**Response body (full):**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<abapformatter:PrettyPrinterSettings
+  abapformatter:indentation="true"
+  abapformatter:style="keywordUpper"
+  abapformatter:keepIdentifier="true"
+  xmlns:abapformatter="http://www.sap.com/adt/prettyprintersettings"/>
+```
+
+**Notes:**
+- Single self-closing root element with all settings as attributes
+- `style`: `keywordUpper` = keywords in uppercase; other values: `keywordLower`, `keywordPretty`
+- `indentation`: boolean, whether to auto-indent
+- `keepIdentifier`: boolean, whether to preserve identifier case
+
+**Conclusion:** AVAILABLE. Simple GET, minimal response. Single XML element with attributes only.
+
+---
+
+### Endpoint 7: Code Completion
+
+**URL:** `POST /sap/bc/adt/abapsource/codecompletion/proposal`
+**HTTP Method:** POST
+**HTTP Status:** 200 OK (empty body when no completions available)
+**Content-Type (request):** `text/plain`
+**Accept (request):** `application/vnd.sap.as+xml`
+**Content-Type (response):** none listed (content-length: 0 when empty)
+**Required headers:** `X-CSRF-Token: <token>`, `sap-client: <client>`
+
+**Query parameters:**
+- `uri`: ADT source URI (e.g., `/sap/bc/adt/programs/programs/RSPARAM/source/main`)
+- `row`: 1-based row number in the source
+- `col`: 1-based column number
+
+**Request body:** The current source text (plain text, not XML)
+
+**Notes:**
+- Without `uri` parameter: 400 `Parameter uri could not be found`
+- Without correct Accept header: 406, accepted types: `application/vnd.sap.as+xml`
+- Attempting to use a fragment (`#row,col`) in the URI causes 400 `URI-Mapping cannot be performed due to invalid URI`
+- Use `row` and `col` query params instead of URI fragment
+- An empty response (content-length: 0) means no completions available for the given position/source
+- Could not provoke a non-empty completion response in testing (RSPARAM is a read-only SAP object)
+
+**Conclusion:** AVAILABLE. Endpoint accepts requests and returns 200. Response format when completions exist needs further investigation with a custom (non-SAP-delivered) ABAP program.
+
+---
+
+### Endpoint 8: Navigation Target
+
+**URL:** `POST /sap/bc/adt/navigation/target`
+**HTTP Method:** POST (GET returns 405)
+**HTTP Status:** 400 Bad Request (with incomplete/wrong URI)
+**Content-Type (response):** `application/xml` (error responses)
+**Required headers:** `X-CSRF-Token: <token>`, `sap-client: <client>`
+
+**Query parameters:**
+- `uri`: ADT object or source URI
+
+**Notes:**
+- GET method: 405 `Resource controller does not support method GET`
+- POST with `uri=/sap/bc/adt/programs/programs/RSPARAM`: 400 `NavigationFailure` with message `I::000` (empty message key — no navigation target found for program object itself)
+- POST with source reference `uri=.../source/main&line=N&column=M`: same 400 NavigationFailure
+- POST with URI fragment (`#start...`): 400 `URI-Mapping cannot be performed due to invalid URI`
+- The endpoint EXISTS and rejects navigating to a program (it expects a usage/reference URI, not the object itself)
+- Likely requires a URI pointing to a specific element within source code (e.g., a class call site) to return a navigation target
+
+**Conclusion:** AVAILABLE but NEEDS FURTHER INVESTIGATION for exact request format. The endpoint exists and is functional (rejects invalid navigations properly), but could not provoke a success response with the test objects available.
+
+---
+
+### Endpoint 9: Inactive Objects
+
+**URL:** `GET /sap/bc/adt/activation/inactiveobjects`
+**HTTP Method:** GET
+**HTTP Status:** 200 OK
+**Content-Type (response):** `application/vnd.sap.adt.inactivectsobjects.v1+xml; charset=utf-8`
+**Required headers:** `sap-client: <client>`
+
+**Response body (full, when no inactive objects exist):**
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<ioc:inactiveObjects xmlns:ioc="http://www.sap.com/abapxml/inactiveCtsObjects"/>
+```
+
+**Notes:**
+- Returns an empty root element when no inactive objects exist for the current user
+- When inactive objects are present, would contain child elements
+- No CSRF token required (read-only GET)
+
+**Conclusion:** AVAILABLE. Simple GET. Empty `ioc:inactiveObjects` root when nothing inactive. Full schema for child elements needs to be determined from activation workflow testing.
+
+---
+
+### Endpoint 10: ABAP Keyword Documentation
+
+**URL:** `GET /sap/bc/adt/docu/abap/langu` (also accepts POST — returns same HTML)
+**HTTP Method:** GET preferred (POST also works)
+**HTTP Status:** 200 OK
+**Content-Type (response):** `application/vnd.sap.adt.docu.v1+html; charset=utf-8`
+**Required headers:** `sap-client: <client>`
+
+**Query parameters:**
+- `objectUri`: ADT object URI (optional — context for the documentation)
+- `keyword`: specific ABAP keyword to look up (optional)
+- `context`: context type, e.g., `ABAP_KEYWORD`
+
+**Response body:** Full HTML page with ABAP keyword documentation (SAP Fiori-styled). The response is several hundred KB of HTML.
+
+**Notes:**
+- GET with no parameters returns the ABAP keyword documentation landing page (200 OK, not an error)
+- GET with `?objectUri=...` returns object-relevant documentation
+- GET with `?keyword=REPORT&context=ABAP_KEYWORD` returns documentation for the `REPORT` keyword
+- POST with no body also returns 200 with HTML (the ABAP docs index page)
+- Response is HTML, not XML — cannot be parsed with standard XML parsers
+
+**Conclusion:** AVAILABLE. Returns HTML documentation. Can be surfaced to AI agents as-is (HTML content) or via a text extraction wrapper.
+
+---
+
+### Endpoint 11: Logoff
+
+**URL:** `GET /sap/public/bc/icf/logoff`
+**HTTP Method:** GET
+**HTTP Status:** 200 OK
+**Content-Type (response):** `text/html; charset=utf-8`
+**Required headers:** `sap-client: <client>`
+
+**Response body:** Standard SAP "Goodbye — You have been logged off" HTML page.
+
+**Notes:**
+- This endpoint invalidates the current session cookie
+- After calling this, the CSRF token and session cookie are no longer valid
+- Must re-authenticate after calling this endpoint
+
+**Conclusion:** AVAILABLE. Simple GET. Returns HTML goodbye page and invalidates session.
+
+---
+
+## Summary: New Endpoint Verification
+
+| # | Endpoint | Method | Status | Conclusion |
+|---|----------|--------|--------|------------|
+| 1 | `/sap/bc/adt/programs/programs/{name}?_action=LOCK` | POST | 200 | AVAILABLE |
+| 2 | `/sap/bc/adt/programs/programs/{name}?_action=UNLOCK` | POST | 200 | AVAILABLE |
+| 3 | `/sap/bc/adt/cts/transportchecks` | POST | 200 | AVAILABLE |
+| 4 | `/sap/bc/adt/cts/transports` (create) | POST | 200 | AVAILABLE (transport number in response unknown) |
+| 5 | `/sap/bc/adt/atc/customizing` | GET | 200 | AVAILABLE |
+| 6 | `/sap/bc/adt/abapsource/prettyprinter/settings` | GET | 200 | AVAILABLE |
+| 7 | `/sap/bc/adt/abapsource/codecompletion/proposal` | POST | 200 | AVAILABLE (empty response format needs further testing) |
+| 8 | `/sap/bc/adt/navigation/target` | POST | 400* | AVAILABLE (correct format not yet determined) |
+| 9 | `/sap/bc/adt/activation/inactiveobjects` | GET | 200 | AVAILABLE |
+| 10 | `/sap/bc/adt/docu/abap/langu` | GET | 200 | AVAILABLE |
+| 11 | `/sap/public/bc/icf/logoff` | GET | 200 | AVAILABLE |
+
+*400 is a validation error (not 404), confirming the endpoint exists.
+
+### Key Findings
+
+1. **All 11 new endpoints exist** — none returned 404.
+2. **Lock/Unlock pattern**: LOCK uses POST with `_action=LOCK`, UNLOCK also uses POST (not DELETE) with `_action=UNLOCK`. Response is `asx:abap` wrapper format.
+3. **Transport checks** use `asx:abap` XML format for both request and response (not JSON or generic XML). Request body must include `PGMID`, `OBJECT`, `OBJECTNAME`, `OPERATION` fields.
+4. **Create transport** accepts the correct request but returns no transport number in the response (content-length: 0). This needs further investigation — the transport number may need to be retrieved separately (e.g., via `GetTransportRequests`).
+5. **ATC customizing, pretty printer, inactive objects** are simple GETs requiring no CSRF token and returning vendor-specific XML.
+6. **Code completion** requires `row`/`col` query parameters (not URI fragments), `Content-Type: text/plain` for the source body, and `Accept: application/vnd.sap.as+xml`.
+7. **Navigation target** POST exists but the exact URI format that produces a successful navigation could not be determined — `I::000` error suggests the test object URI does not have navigable sub-elements.
+8. **ABAP docs** returns HTML content (`application/vnd.sap.adt.docu.v1+html`), not XML.
+9. **Logoff** invalidates the session — must be the last call before re-authentication.
