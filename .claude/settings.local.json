@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git check-ignore:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(go mod:*)",
+      "Bash(go build:*)",
+      "Bash(go get:*)",
+      "Bash(git:*)",
+      "Bash(go test:*)",
+      "Bash(go doc:*)",
+      "Bash(find C:/Users/dachner/dev/sapadt.mcp/.worktrees/implement -name *.go -path */mark3labs/mcp-go/*)",
+      "Bash(ls -lh C:/Users/dachner/dev/sapadt.mcp/.worktrees/implement/sapadt-mcp*)",
+      "Bash(go vet:*)"
+    ]
+  }
+}

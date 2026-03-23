@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/dachner/sapadt-mcp/adt"
-	"github.com/dachner/sapadt-mcp/config"
+	"github.com/dachner/mcp-server-abap/adt"
+	"github.com/dachner/mcp-server-abap/config"
 )
 
 func newTestConfig(host string) *config.Config {

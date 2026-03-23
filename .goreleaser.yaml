@@ -5,8 +5,8 @@ before:
     - go mod tidy
 
 builds:
-  - id: sapadt-mcp
-    binary: sapadt-mcp
+  - id: mcp-server-abap
+    binary: mcp-server-abap
     ldflags:
       - -X main.version={{.Version}}
     goos:
@@ -30,4 +30,4 @@ checksum:
 release:
   github:
     owner: dachner
-    name: sapadt-mcp
+    name: mcp-server-abap

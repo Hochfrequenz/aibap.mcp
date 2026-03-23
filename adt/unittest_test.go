@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dachner/sapadt-mcp/adt"
-	"github.com/dachner/sapadt-mcp/config"
+	"github.com/dachner/mcp-server-abap/adt"
+	"github.com/dachner/mcp-server-abap/config"
 )
 
 func TestRunUnitTests(t *testing.T) {

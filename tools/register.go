@@ -1,7 +1,7 @@
 package tools
 
 import (
-	"github.com/dachner/sapadt-mcp/adt"
+	"github.com/dachner/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/server"
 )
 

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dachner/sapadt-mcp/config"
+	"github.com/dachner/mcp-server-abap/config"
 )
 
 func TestLoadFromFile(t *testing.T) {

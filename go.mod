@@ -1,4 +1,4 @@
-module github.com/dachner/sapadt-mcp
+module github.com/dachner/mcp-server-abap
 
 go 1.23.0
 
