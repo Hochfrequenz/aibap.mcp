@@ -15,58 +15,77 @@ Introduce a comprehensive CI pipeline and branch protection for `mcp-server-abap
 | `.github/workflows/dependabot_automerge.yml` | Auto-approve + squash-merge Dependabot PRs |
 | `.github/dependabot.yml` | Daily dependency update monitoring |
 | `.github/CODEOWNERS` | Code ownership for review requirements |
-| `.gitattributes` | Enforce LF line endings for Go files |
+| `.gitattributes` | Enforce LF line endings for all text files |
 
-No existing files are modified. `release.yml` remains untouched.
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `README.md` | Add status badges at the top |
+| `go.mod` | Update Go version directive to 1.26 |
+
+`release.yml` remains untouched.
 
 ## Workflow Details
 
+All workflows use `actions/checkout@v4` and `actions/setup-go@v5` (matching existing `release.yml` conventions).
+
 ### test.yml
 
+- **Workflow name:** `Unittests` (used for badge URL)
 - **Triggers:** push (all branches), pull_request
 - **Runner:** ubuntu-latest
 - **Go version:** 1.26.x
+- **Job ID:** `test`
 - **Steps:**
-  1. Checkout code
-  2. Setup Go 1.26.x
+  1. Checkout code (`actions/checkout@v4`)
+  2. Setup Go (`actions/setup-go@v5`, go-version `1.26.x`)
   3. Run `go test ./...`
 
 ### coverage.yml
 
+- **Workflow name:** `coverage`
 - **Triggers:** push (all branches), pull_request
 - **Runner:** ubuntu-latest
 - **Go version:** 1.26.x
+- **Job ID:** `coverage`
 - **Steps:**
-  1. Checkout code
-  2. Setup Go 1.26.x
+  1. Checkout code (`actions/checkout@v4`)
+  2. Setup Go (`actions/setup-go@v5`, go-version `1.26.x`)
   3. Run `go test ./... -v -covermode=count -coverprofile=coverage.out`
-  4. Convert to lcov format via `jandelgado/gcov2lcov-action`
-  5. Enforce 70% minimum via `VeryGoodOpenSource/very_good_coverage`
+  4. Convert to lcov format via `jandelgado/gcov2lcov-action@v1`
+  5. Enforce 70% minimum via `VeryGoodOpenSource/very_good_coverage@v3`
 - **Notes:** 70% is the initial threshold; increase over time as coverage improves.
 
 ### golangci-lint.yml
 
+- **Workflow name:** `golangci-lint`
 - **Triggers:** pull_request only
 - **Runner:** ubuntu-latest
 - **Go version:** 1.26.x
+- **Job ID:** `golangci-lint`
 - **Steps:**
-  1. Checkout code
-  2. Setup Go 1.26.x
-  3. Run `golangci/golangci-lint-action` with enabled linters: `dupl`, `goconst`, `gocyclo`
-  4. Run format check: `golangci-lint fmt --diff --enable gofmt`
+  1. Checkout code (`actions/checkout@v4`)
+  2. Setup Go (`actions/setup-go@v5`, go-version `1.26.x`)
+  3. Run `golangci/golangci-lint-action@v7` with additional linters enabled: `dupl`, `goconst`, `gocyclo` (in addition to defaults)
+  4. Run format check: `golangci-lint fmt --diff --enable gofmt` (requires golangci-lint v2+; the action version v7 uses v2)
+- **Note:** PR-only trigger is intentional — linting on every push to feature branches adds noise; the PR gate is sufficient.
 
 ### no_byte_order_mark.yml
 
 - **Triggers:** push to master, pull_request
 - **Runner:** ubuntu-latest
+- **Job ID:** `bom-check`
 - **Steps:**
-  1. Checkout code
+  1. Checkout code (`actions/checkout@v4`)
   2. Run `arma-actions/bom-check@v1`
 
 ### dependabot_automerge.yml
 
-- **Triggers:** pull_request from `dependabot[bot]`
+- **Triggers:** `pull_request_target` (not `pull_request`, for security with write permissions)
+- **Condition:** `if: github.actor == 'dependabot[bot]'`
 - **Permissions:** contents write, pull-requests write
+- **Job ID:** `automerge`
 - **Steps:**
   1. Auto-approve PR via `gh pr review --approve`
   2. Auto-merge with squash via `gh pr merge --squash --auto`
@@ -92,17 +111,30 @@ All files require review from `@hf-mrdachner`.
 ### .gitattributes
 
 ```
+* text=auto
 *.go text eol=lf
 ```
 
-Ensures consistent line endings for Go source files across platforms.
+`text=auto` normalizes line endings for all text files. `*.go` explicitly forces LF (relevant for Windows development).
+
+## README Badges
+
+Add status badges at the top of `README.md`, before the title, following the go-bo4e pattern:
+
+```markdown
+![Unittest status badge](https://github.com/dachner/mcp-server-abap/workflows/Unittests/badge.svg)
+![Coverage status badge](https://github.com/dachner/mcp-server-abap/workflows/coverage/badge.svg)
+![Linter status badge](https://github.com/dachner/mcp-server-abap/workflows/golangci-lint/badge.svg)
+```
+
+Badge URLs use the workflow `name` field, not the filename. This is why workflow names are specified explicitly above.
 
 ## Branch Protection Rules (Manual Configuration)
 
 Configure in GitHub repository settings for the `master` branch:
 
 - **Require a pull request before merging**
-- **Required status checks before merging:**
+- **Required status checks before merging** (these match the job IDs above):
   - `test`
   - `coverage`
   - `golangci-lint`
@@ -115,5 +147,9 @@ Configure in GitHub repository settings for the `master` branch:
 - **No CodeQL:** Excluded per user preference.
 - **No Go proxy warmup:** Not needed at this stage.
 - **Coverage at 70%:** Conservative starting point; raise once actual coverage is confirmed in CI.
-- **Go 1.26.x everywhere:** Latest stable version used across all workflows.
-- **Linters (dupl, goconst, gocyclo):** Matches reference repository; catches duplicated code, magic constants, and complex functions.
+- **Go 1.26.x:** Latest stable version. `go.mod` will be updated to match. `release.yml` still uses 1.22 but is not modified per user request.
+- **Linters (dupl, goconst, gocyclo):** Added on top of defaults; matches reference repository. Catches duplicated code, magic constants, and complex functions.
+- **golangci-lint PR-only:** Intentional to reduce noise on feature branch pushes; PR gate is the quality checkpoint.
+- **`pull_request_target` for Dependabot:** Required for security when running with write permissions on bot-created PRs.
+- **Daily Dependabot schedule:** Matches reference repository. Combined with auto-merge, keeps dependencies current with minimal manual effort.
+- **No `.golangci.yml`:** Linter config is passed via CLI flags in the workflow, matching the reference repo's approach. Can be extracted to a config file later if needed.
