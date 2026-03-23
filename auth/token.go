@@ -32,7 +32,8 @@ func NewTokenStore(path string) *TokenStore {
 
 // DefaultTokenPath returns the default path for the token file:
 // ~/.config/mcp-server-abap/tokens.json
-func DefaultTokenPath() string {
+// It is a variable so tests can override it.
+var DefaultTokenPath = func() string {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		configDir = filepath.Join(os.Getenv("HOME"), ".config")
