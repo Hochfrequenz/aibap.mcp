@@ -180,7 +180,7 @@ func TestCallbackServerMissingCode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /callback: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
@@ -210,7 +210,7 @@ func TestCallbackServerWithError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GET /callback: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)

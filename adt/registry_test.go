@@ -102,102 +102,79 @@ func TestRegistryDelegatesGetSource(t *testing.T) {
 	}
 }
 
-// TestRegistryDelegatesAllMethods verifies that all 16 delegation methods on
-// ClientRegistry forward calls to the underlying client. A single httptest server
-// handles all ADT endpoints; we just verify no error is returned, which proves
-// the call reached the server (i.e. delegation happened).
-func TestRegistryDelegatesAllMethods(t *testing.T) {
+// allEndpointsHandler returns an http.Handler that stubs all ADT endpoints.
+func allEndpointsHandler() http.Handler {
 	const (
-		emptyObjectRefs = `<objectReferences></objectReferences>`
-		emptyMessages   = `<messages></messages>`
-		emptyRunResult  = `<runResult></runResult>`
-		emptyTransports = `<root><workbenchRequests></workbenchRequests></root>`
+		emptyObjectRefs  = `<objectReferences></objectReferences>`
+		emptyMessages    = `<messages></messages>`
+		emptyRunResult   = `<runResult></runResult>`
+		emptyTransports  = `<root><workbenchRequests></workbenchRequests></root>`
 		emptyCompletions = `<completions></completions>`
+		activatePath     = "/sap/bc/adt/activation/activate"
 	)
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// CSRF preflight
-		if r.URL.Path == "/sap/bc/adt/discovery" {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "tok")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-
 		w.Header().Set("Content-Type", "application/xml")
 		w.Header().Set("ETag", "e1")
-
 		path := r.URL.Path
 		method := r.Method
-
 		switch {
-		// GetSource / SetSource
 		case strings.HasSuffix(path, "/source/main"):
-			if method == http.MethodPut {
-				w.WriteHeader(http.StatusOK)
-			} else {
-				w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusOK)
+			if method == http.MethodGet {
 				_, _ = w.Write([]byte("REPORT ZTEST."))
 			}
-		// ActivateObject
-		case path == "/sap/bc/adt/activation/activate":
+		case path == activatePath:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyMessages))
-		// SearchObjects
-		case path == "/sap/bc/adt/repository/informationsystem/search":
+		case path == "/sap/bc/adt/repository/informationsystem/search",
+			path == "/sap/bc/adt/repository/informationsystem/usageReferences",
+			path == "/sap/bc/adt/repository/nodestructure":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyObjectRefs))
-		// WhereUsed
-		case path == "/sap/bc/adt/repository/informationsystem/usageReferences":
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(emptyObjectRefs))
-		// BrowsePackage
-		case path == "/sap/bc/adt/repository/nodestructure":
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(emptyObjectRefs))
-		// GetObjectInfo — object URI with XML response
 		case path == "/sap/bc/adt/programs/programs/ZTEST":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<objectReference uri="/sap/bc/adt/programs/programs/ZTEST" type="PROG/P" name="ZTEST" description="" packageName=""></objectReference>`))
-		// SyntaxCheck
 		case path == "/sap/bc/adt/checkruns":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyMessages))
-		// RunUnitTests
 		case path == "/sap/bc/adt/abapunit/testruns":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyRunResult))
-		// GetTransportRequests
 		case path == "/sap/bc/adt/cts/transportrequests" && method == http.MethodGet:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyTransports))
-		// AddToTransport
-		case strings.HasPrefix(path, "/sap/bc/adt/cts/transportrequests/") && strings.HasSuffix(path, "/abaptransportcomponents"):
+		case strings.HasPrefix(path, "/sap/bc/adt/cts/transportrequests/"):
 			w.WriteHeader(http.StatusOK)
-		// LockObject
 		case strings.Contains(r.URL.RawQuery, "_action=LOCK"):
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("lock-handle-123"))
-		// UnlockObject
 		case strings.Contains(r.URL.RawQuery, "_action=UNLOCK"):
 			w.WriteHeader(http.StatusOK)
-		// PrettyPrint
 		case path == "/sap/bc/adt/abapsource/prettyprinter":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("REPORT ZTEST.\n"))
-		// CreateObject (programs)
-		case path == "/sap/bc/adt/programs/programs":
+		case path == "/sap/bc/adt/programs/programs" && method == http.MethodPost:
 			w.WriteHeader(http.StatusCreated)
-		// DeleteObject
 		case method == http.MethodDelete:
 			w.WriteHeader(http.StatusOK)
-		// GetCompletions
 		case path == "/sap/bc/adt/abapsource/codecompletion/proposals":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyCompletions))
 		default:
 			w.WriteHeader(http.StatusOK)
 		}
-	}))
+	})
+}
+
+// TestRegistryDelegatesAllMethods verifies that all delegation methods on
+// ClientRegistry forward calls to the underlying client.
+func TestRegistryDelegatesAllMethods(t *testing.T) {
+	srv := httptest.NewServer(allEndpointsHandler())
 	defer srv.Close()
 
 	cfg := makeRegistryConfig(map[string]string{"dev": srv.URL}, "dev")
