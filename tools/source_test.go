@@ -95,8 +95,12 @@ func (m *mockClient) AddToTransport(ctx context.Context, uri, transport string) 
 }
 
 func newTestServer(client adt.Client) *server.MCPServer {
+	return newTestServerWithSelector(client, &mockSelector{})
+}
+
+func newTestServerWithSelector(client adt.Client, selector tools.SystemSelector) *server.MCPServer {
 	s := server.NewMCPServer("test", "0.0.1")
-	tools.RegisterAll(s, client)
+	tools.RegisterAll(s, client, selector)
 	return s
 }
 
