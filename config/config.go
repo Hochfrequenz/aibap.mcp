@@ -8,12 +8,12 @@ import (
 )
 
 type SAPConfig struct {
-	Host            string `yaml:"host"`
-	Client          string `yaml:"client"`
-	User            string `yaml:"user"`
-	Password        string `yaml:"password"`
-	TLSSkipVerify   bool   `yaml:"tls_skip_verify"`
-	OAuth2ClientID  string `yaml:"oauth2_client_id"`
+	Host           string `yaml:"host"`
+	Client         string `yaml:"client"`
+	User           string `yaml:"user"`
+	Password       string `yaml:"password"`
+	TLSSkipVerify  bool   `yaml:"tls_skip_verify"`
+	OAuth2ClientID string `yaml:"oauth2_client_id"`
 }
 
 // IsOAuth2 returns true when no basic-auth credentials are configured,
