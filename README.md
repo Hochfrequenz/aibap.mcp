@@ -38,7 +38,7 @@ SAP ADT REST API  (/sap/bc/adt/...)
 | `run_unit_tests` | Run ABAP Unit Tests |
 | `get_transport_requests` | List open or released transport requests |
 | `add_to_transport` | Assign an object to a transport request |
-| `select_system` | Switch the active SAP system | `system` | display string |
+| `select_system` | Switch the active SAP system |
 
 ## Requirements
 
@@ -122,10 +122,7 @@ Add to your `claude_desktop_config.json`:
       "command": "/path/to/mcp-server-abap",
       "args": [],
       "env": {
-        "SAP_HOST": "https://your-sap-system:8000",
-        "SAP_CLIENT": "100",
-        "SAP_USER": "YOUR_USER",
-        "SAP_PASSWORD": "YOUR_PASSWORD"
+        "SAP_CONFIG_FILE": "/path/to/config.yaml"
       }
     }
   }
