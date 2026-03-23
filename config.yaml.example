@@ -1,6 +1,20 @@
-sap:
-  host: "https://your-sap-system:8000"
-  client: "100"
-  user: "DEVELOPER"
-  password: ""
-  tls_skip_verify: false
+# mcp-server-abap configuration
+# Copy to config.yaml and fill in your SAP system details.
+# config.yaml is listed in .gitignore — never commit real credentials.
+
+default_system: dev
+
+systems:
+  dev:
+    host: "https://your-dev-system:8000"
+    client: "100"
+    user: "DEVELOPER"
+    password: ""
+    tls_skip_verify: false   # set true for self-signed certificates
+
+  # Add more systems as needed:
+  # prod:
+  #   host: "https://your-prod-system:8000"
+  #   client: "200"
+  #   user: "DEVELOPER"
+  #   password: ""
