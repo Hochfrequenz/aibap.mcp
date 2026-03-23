@@ -31,13 +31,13 @@ func run() error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	client := adt.NewClient(cfg.Systems[cfg.DefaultSystem])
+	registry, err := adt.NewClientRegistry(cfg)
+	if err != nil {
+		return fmt.Errorf("creating client registry: %w", err)
+	}
 
-	s := server.NewMCPServer(
-		"SAP ADT MCP Server",
-		version,
-	)
-	tools.RegisterAll(s, client)
+	s := server.NewMCPServer("SAP ADT MCP Server", version)
+	tools.RegisterAll(s, registry, registry)
 
 	stdioServer := server.NewStdioServer(s)
 	ctx := context.Background()
