@@ -52,7 +52,7 @@ func (c *httpClient) SearchObjects(ctx context.Context, query, objectType string
 	}
 	path := "/sap/bc/adt/repository/informationsystem/search?" + params.Encode()
 
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": contentTypeXML})
 	if err != nil {
 		return nil, fmt.Errorf("SearchObjects: %w", err)
 	}
@@ -70,7 +70,7 @@ func (c *httpClient) WhereUsed(ctx context.Context, objectURI string) ([]ObjectI
 	params.Set("adtObjectUri", objectURI)
 	path := "/sap/bc/adt/repository/informationsystem/usageReferences?" + params.Encode()
 
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": contentTypeXML})
 	if err != nil {
 		return nil, fmt.Errorf("WhereUsed: %w", err)
 	}

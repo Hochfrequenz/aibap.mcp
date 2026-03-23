@@ -33,8 +33,8 @@ func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]Synta
 		"/sap/bc/adt/checkruns?"+params.Encode(),
 		strings.NewReader(""),
 		map[string]string{
-			"Content-Type": "application/xml",
-			"Accept":       "application/xml",
+			"Content-Type": contentTypeXML,
+			"Accept":       contentTypeXML,
 		},
 	)
 	if err != nil {

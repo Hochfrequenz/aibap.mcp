@@ -35,7 +35,7 @@ func (c *httpClient) GetTransportRequests(ctx context.Context, user, status stri
 		path += "?" + params.Encode()
 	}
 
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": contentTypeXML})
 	if err != nil {
 		return nil, fmt.Errorf("GetTransportRequests: %w", err)
 	}
@@ -70,7 +70,7 @@ type xmlTransportComponent struct {
 
 func (c *httpClient) AddToTransport(ctx context.Context, objectURI, transport string) error {
 	body, err := xml.Marshal(xmlTransportComponent{
-		NSCore:    "http://www.sap.com/adt/core",
+		NSCore:    nsADTCore,
 		ObjectURI: objectURI,
 	})
 	if err != nil {
@@ -80,7 +80,7 @@ func (c *httpClient) AddToTransport(ctx context.Context, objectURI, transport st
 	path := "/sap/bc/adt/cts/transportrequests/" + transport + "/abaptransportcomponents"
 	resp, err := c.doMutate(ctx, http.MethodPost, path,
 		strings.NewReader(xml.Header+string(body)),
-		map[string]string{"Content-Type": "application/xml"},
+		map[string]string{"Content-Type": contentTypeXML},
 	)
 	if err != nil {
 		return fmt.Errorf("AddToTransport: %w", err)

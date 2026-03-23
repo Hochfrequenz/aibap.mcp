@@ -13,12 +13,12 @@ import (
 func registerSourceTools(s *server.MCPServer, client adt.Client) {
 	s.AddTool(mcp.NewTool("get_source",
 		mcp.WithDescription("Read ABAP source code from SAP. Returns source text and ETag for optimistic locking."),
-		mcp.WithString("object_uri",
+		mcp.WithString(paramObjectURI,
 			mcp.Required(),
 			mcp.Description("ADT object URI, e.g. /sap/bc/adt/programs/programs/ZREPORT"),
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString("object_uri", "")
+		uri := req.GetString(paramObjectURI, "")
 		result, err := client.GetSource(ctx, uri)
 		if err != nil {
 			return errorResult(err), nil
@@ -32,9 +32,9 @@ func registerSourceTools(s *server.MCPServer, client adt.Client) {
 
 	s.AddTool(mcp.NewTool("set_source",
 		mcp.WithDescription("Write ABAP source code to SAP. Requires the ETag returned by get_source to prevent lost updates."),
-		mcp.WithString("object_uri",
+		mcp.WithString(paramObjectURI,
 			mcp.Required(),
-			mcp.Description("ADT object URI"),
+			mcp.Description(descADTObjectURI),
 		),
 		mcp.WithString("source",
 			mcp.Required(),
@@ -45,7 +45,7 @@ func registerSourceTools(s *server.MCPServer, client adt.Client) {
 			mcp.Description("ETag value from get_source, passed verbatim including quotes"),
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString("object_uri", "")
+		uri := req.GetString(paramObjectURI, "")
 		source := req.GetString("source", "")
 		etag := req.GetString("etag", "")
 		if err := client.SetSource(ctx, uri, source, etag); err != nil {

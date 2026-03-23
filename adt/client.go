@@ -167,20 +167,7 @@ func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.
 		return nil, err
 	}
 
-	if resp.StatusCode == http.StatusForbidden {
-		resp.Body.Close()
-		c.mu.Lock()
-		if err := c.fetchCSRFToken(ctx); err != nil {
-			c.mu.Unlock()
-			return nil, err
-		}
-		token = c.csrfToken
-		cookies = c.sessionCookies
-		c.mu.Unlock()
-		return c.execMutate(ctx, method, path, newBody(), headers, token, cookies)
-	}
-
-	if resp.StatusCode == http.StatusUnauthorized {
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
 		resp.Body.Close()
 		c.mu.Lock()
 		if err := c.fetchCSRFToken(ctx); err != nil {
