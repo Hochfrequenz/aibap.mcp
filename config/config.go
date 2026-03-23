@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -17,11 +16,11 @@ type SAPConfig struct {
 }
 
 type Config struct {
-	SAP SAPConfig `yaml:"sap"`
+	DefaultSystem string               `yaml:"default_system"`
+	Systems       map[string]SAPConfig `yaml:"systems"`
 }
 
-// Load reads config from the given YAML file, then applies environment variable overrides.
-// Relative paths are resolved from the process working directory.
+// Load reads config from the given YAML file and validates it.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -33,24 +32,12 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
 
-	applyEnvOverrides(&cfg)
-	return &cfg, nil
-}
+	if len(cfg.Systems) == 0 {
+		return nil, fmt.Errorf("config has no systems defined")
+	}
+	if _, ok := cfg.Systems[cfg.DefaultSystem]; !ok {
+		return nil, fmt.Errorf("default_system %q not found in systems", cfg.DefaultSystem)
+	}
 
-func applyEnvOverrides(cfg *Config) {
-	if v := os.Getenv("SAP_HOST"); v != "" {
-		cfg.SAP.Host = v
-	}
-	if v := os.Getenv("SAP_CLIENT"); v != "" {
-		cfg.SAP.Client = v
-	}
-	if v := os.Getenv("SAP_USER"); v != "" {
-		cfg.SAP.User = v
-	}
-	if v := os.Getenv("SAP_PASSWORD"); v != "" {
-		cfg.SAP.Password = v
-	}
-	if v := os.Getenv("SAP_TLS_SKIP_VERIFY"); strings.EqualFold(v, "true") {
-		cfg.SAP.TLSSkipVerify = true
-	}
+	return &cfg, nil
 }
