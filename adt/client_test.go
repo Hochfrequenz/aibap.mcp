@@ -141,3 +141,77 @@ func TestADTErrorParsed(t *testing.T) {
 		t.Errorf("message: got %q", adtErr.Message)
 	}
 }
+
+func TestBearerAuthHeader(t *testing.T) {
+	var gotAuth string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`REPORT ZTEST.`))
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, Client: "100"}
+	client := adt.NewClientWithToken(cfg, "my-access-token", nil)
+
+	_, err := client.GetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotAuth != "Bearer my-access-token" {
+		t.Errorf("expected Authorization header %q, got %q", "Bearer my-access-token", gotAuth)
+	}
+}
+
+func TestOAuth2TokenRefreshOn401(t *testing.T) {
+	var refreshCalled atomic.Bool
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		count := callCount.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		// Verify the refreshed token is used
+		auth := r.Header.Get("Authorization")
+		if auth != "Bearer refreshed-token" {
+			t.Errorf("expected refreshed token, got %q", auth)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`REPORT ZTEST.`))
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, Client: "100"}
+	onRefresh := func(oldToken string) (string, error) {
+		refreshCalled.Store(true)
+		if oldToken != "expired-token" {
+			t.Errorf("expected old token %q, got %q", "expired-token", oldToken)
+		}
+		return "refreshed-token", nil
+	}
+	client := adt.NewClientWithToken(cfg, "expired-token", onRefresh)
+
+	_, err := client.GetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !refreshCalled.Load() {
+		t.Error("expected onRefresh callback to be called")
+	}
+	if callCount.Load() != 2 {
+		t.Errorf("expected 2 calls (initial + retry), got %d", callCount.Load())
+	}
+}

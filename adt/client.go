@@ -42,6 +42,8 @@ type httpClient struct {
 	mu             sync.Mutex
 	csrfToken      string
 	sessionCookies []*http.Cookie
+	accessToken    string                       // OAuth2 access token (empty = Basic Auth)
+	onTokenRefresh func(string) (string, error) // callback to refresh token, returns new access token
 }
 
 // NewClient creates a new ADT HTTP client configured from cfg.
@@ -60,6 +62,25 @@ func NewClient(cfg config.SAPConfig) Client {
 	}
 }
 
+// NewClientWithToken creates a Client using Bearer token auth.
+// onRefresh is called with the current access token when a 401 occurs; it should return a new access token.
+func NewClientWithToken(cfg config.SAPConfig, accessToken string, onRefresh func(string) (string, error)) Client {
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: cfg.TLSSkipVerify, //nolint:gosec
+		},
+	}
+	return &httpClient{
+		cfg: cfg,
+		http: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: transport,
+		},
+		accessToken:    accessToken,
+		onTokenRefresh: onRefresh,
+	}
+}
+
 // fetchCSRFToken performs the CSRF preflight GET and caches the token and session cookies.
 // Caller must hold c.mu.
 func (c *httpClient) fetchCSRFToken(ctx context.Context) error {
@@ -68,7 +89,7 @@ func (c *httpClient) fetchCSRFToken(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c.setBasicAuth(req)
+	c.setAuth(req)
 	req.Header.Set("X-CSRF-Token", "Fetch")
 
 	resp, err := c.http.Do(req)
@@ -83,8 +104,12 @@ func (c *httpClient) fetchCSRFToken(ctx context.Context) error {
 	return nil
 }
 
-func (c *httpClient) setBasicAuth(req *http.Request) {
-	req.SetBasicAuth(c.cfg.User, c.cfg.Password)
+func (c *httpClient) setAuth(req *http.Request) {
+	if c.accessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	} else {
+		req.SetBasicAuth(c.cfg.User, c.cfg.Password)
+	}
 	if c.cfg.Client != "" {
 		req.Header.Set("sap-client", c.cfg.Client)
 	}
@@ -103,7 +128,7 @@ func (c *httpClient) doRead(ctx context.Context, path string, headers map[string
 		if err != nil {
 			return nil, err
 		}
-		c.setBasicAuth(req)
+		c.setAuth(req)
 		c.mu.Lock()
 		c.applySession(req)
 		c.mu.Unlock()
@@ -125,6 +150,14 @@ func (c *httpClient) doRead(ctx context.Context, path string, headers map[string
 	if resp.StatusCode == http.StatusUnauthorized {
 		_ = resp.Body.Close()
 		c.mu.Lock()
+		if c.onTokenRefresh != nil {
+			newToken, err := c.onTokenRefresh(c.accessToken)
+			if err != nil {
+				c.mu.Unlock()
+				return nil, fmt.Errorf("token refresh failed: %w", err)
+			}
+			c.accessToken = newToken
+		}
 		if err := c.fetchCSRFToken(ctx); err != nil {
 			c.mu.Unlock()
 			return nil, err
@@ -176,6 +209,14 @@ func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.
 	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
 		_ = resp.Body.Close()
 		c.mu.Lock()
+		if resp.StatusCode == http.StatusUnauthorized && c.onTokenRefresh != nil {
+			newToken, err := c.onTokenRefresh(c.accessToken)
+			if err != nil {
+				c.mu.Unlock()
+				return nil, fmt.Errorf("token refresh failed: %w", err)
+			}
+			c.accessToken = newToken
+		}
 		if err := c.fetchCSRFToken(ctx); err != nil {
 			c.mu.Unlock()
 			return nil, err
@@ -194,7 +235,7 @@ func (c *httpClient) execMutate(ctx context.Context, method, path string, body i
 	if err != nil {
 		return nil, err
 	}
-	c.setBasicAuth(req)
+	c.setAuth(req)
 	req.Header.Set("X-CSRF-Token", csrfToken)
 	for _, cookie := range cookies {
 		req.AddCookie(cookie)
