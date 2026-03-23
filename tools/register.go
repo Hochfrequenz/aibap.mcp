@@ -5,8 +5,14 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// SystemSelector can switch the active SAP system.
+type SystemSelector interface {
+	Select(name string) (string, error)
+	ActiveName() string
+}
+
 // RegisterAll registers all SAP ADT MCP tools on the given server.
-func RegisterAll(s *server.MCPServer, client adt.Client) {
+func RegisterAll(s *server.MCPServer, client adt.Client, selector SystemSelector) {
 	registerSourceTools(s, client)
 	registerActivateTools(s, client)
 	registerSearchTools(s, client)
@@ -14,4 +20,5 @@ func RegisterAll(s *server.MCPServer, client adt.Client) {
 	registerSyntaxCheckTools(s, client)
 	registerUnitTestTools(s, client)
 	registerTransportTools(s, client)
+	registerSystemTools(s, selector)
 }
