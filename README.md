@@ -19,7 +19,7 @@ Claude / AI assistant
         │  MCP (stdio)
         ▼
 mcp-server-abap
-        │  HTTP + Basic Auth + CSRF
+        │  HTTP + Basic Auth or OAuth2 + CSRF
         ▼
 SAP ADT REST API  (/sap/bc/adt/...)
         │
@@ -53,7 +53,7 @@ SAP ADT REST API  (/sap/bc/adt/...)
 ## Requirements
 
 - SAP NetWeaver 7.40+ with ADT services active (transaction SICF: `/sap/bc/adt`)
-- A user with developer authorizations (`S_ADT_RES`, `S_DEVELOP`)
+- A user with developer authorizations (`S_ADT_RES`, `S_DEVELOP`) — or OAuth2 SSO (see below)
 - Go 1.26+ (to build from source)
 
 ## Installation
@@ -93,6 +93,28 @@ systems:
     user: "YOUR_USER"
     password: "YOUR_PASSWORD"
 ```
+
+### OAuth2 / SSO
+
+For systems with SAML SSO, omit `user` and `password` to use OAuth2:
+
+```yaml
+systems:
+  prod:
+    host: "https://your-prod-system:8000"
+    # no user/password → OAuth2 mode
+    oauth2_client_id: "mcp-server-abap"  # optional, this is the default
+```
+
+Then authenticate via browser before starting the server:
+
+```bash
+mcp-server-abap login prod
+```
+
+This opens your browser for SAML authentication. After login, tokens are cached in `~/.config/mcp-server-abap/tokens.json` and refreshed automatically.
+
+**SAP prerequisites:** Register OAuth2 client `mcp-server-abap` in transaction `SOAUTH2` with grant type "Authorization Code" and redirect URI pattern `http://localhost:*`. SAML IdP trust must be configured in transaction `SAML2`.
 
 Alternatively, configure via environment variables:
 
