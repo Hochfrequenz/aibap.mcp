@@ -22,7 +22,7 @@ func TestGetSource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := &config.Config{SAP: config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}}
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.GetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
@@ -59,7 +59,7 @@ func TestSetSource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := &config.Config{SAP: config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}}
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.\nNEW CODE.", `"etag-abc123"`)

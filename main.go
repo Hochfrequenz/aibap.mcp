@@ -31,7 +31,7 @@ func run() error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	client := adt.NewClient(cfg)
+	client := adt.NewClient(cfg.Systems[cfg.DefaultSystem])
 
 	s := server.NewMCPServer(
 		"SAP ADT MCP Server",
