@@ -31,7 +31,7 @@ type Client interface {
 }
 
 type httpClient struct {
-	cfg            *config.Config
+	cfg            config.SAPConfig
 	http           *http.Client
 	mu             sync.Mutex
 	csrfToken      string
@@ -39,10 +39,10 @@ type httpClient struct {
 }
 
 // NewClient creates a new ADT HTTP client configured from cfg.
-func NewClient(cfg *config.Config) Client {
+func NewClient(cfg config.SAPConfig) Client {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: cfg.SAP.TLSSkipVerify, //nolint:gosec
+			InsecureSkipVerify: cfg.TLSSkipVerify, //nolint:gosec
 		},
 	}
 	return &httpClient{
@@ -57,7 +57,7 @@ func NewClient(cfg *config.Config) Client {
 // fetchCSRFToken performs the CSRF preflight GET and caches the token and session cookies.
 // Caller must hold c.mu.
 func (c *httpClient) fetchCSRFToken(ctx context.Context) error {
-	url := c.cfg.SAP.Host + "/sap/bc/adt/discovery"
+	url := c.cfg.Host + "/sap/bc/adt/discovery"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -78,9 +78,9 @@ func (c *httpClient) fetchCSRFToken(ctx context.Context) error {
 }
 
 func (c *httpClient) setBasicAuth(req *http.Request) {
-	req.SetBasicAuth(c.cfg.SAP.User, c.cfg.SAP.Password)
-	if c.cfg.SAP.Client != "" {
-		req.Header.Set("sap-client", c.cfg.SAP.Client)
+	req.SetBasicAuth(c.cfg.User, c.cfg.Password)
+	if c.cfg.Client != "" {
+		req.Header.Set("sap-client", c.cfg.Client)
 	}
 }
 
@@ -93,7 +93,7 @@ func (c *httpClient) applySession(req *http.Request) {
 // doRead performs a GET request (no CSRF required), with re-auth retry on 401.
 func (c *httpClient) doRead(ctx context.Context, path string, headers map[string]string) (*http.Response, error) {
 	makeReq := func() (*http.Request, error) {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.SAP.Host+path, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.Host+path, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -197,7 +197,7 @@ func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.
 }
 
 func (c *httpClient) execMutate(ctx context.Context, method, path string, body io.Reader, headers map[string]string, csrfToken string, cookies []*http.Cookie) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, method, c.cfg.SAP.Host+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, c.cfg.Host+path, body)
 	if err != nil {
 		return nil, err
 	}

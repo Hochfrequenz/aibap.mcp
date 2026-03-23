@@ -11,14 +11,12 @@ import (
 	"github.com/dachner/mcp-server-abap/config"
 )
 
-func newTestConfig(host string) *config.Config {
-	return &config.Config{
-		SAP: config.SAPConfig{
-			Host:     host,
-			Client:   "100",
-			User:     "TESTUSER",
-			Password: "testpass",
-		},
+func newTestConfig(host string) config.SAPConfig {
+	return config.SAPConfig{
+		Host:     host,
+		Client:   "100",
+		User:     "TESTUSER",
+		Password: "testpass",
 	}
 }
 
