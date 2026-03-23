@@ -1,6 +1,6 @@
-![Unittest status badge](https://github.com/dachner/mcp-server-abap/workflows/Unittests/badge.svg)
-![Coverage status badge](https://github.com/dachner/mcp-server-abap/workflows/coverage/badge.svg)
-![Linter status badge](https://github.com/dachner/mcp-server-abap/workflows/golangci-lint/badge.svg)
+![Unittest status badge](https://github.com/Hochfrequenz/mcp-server-abap/workflows/Unittests/badge.svg)
+![Coverage status badge](https://github.com/Hochfrequenz/mcp-server-abap/workflows/coverage/badge.svg)
+![Linter status badge](https://github.com/Hochfrequenz/mcp-server-abap/workflows/golangci-lint/badge.svg)
 
 # mcp-server-abap
 
