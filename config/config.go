@@ -39,5 +39,11 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("default_system %q not found in systems", cfg.DefaultSystem)
 	}
 
+	for name, sys := range cfg.Systems {
+		if sys.Host == "" {
+			return nil, fmt.Errorf("system %q has no host configured", name)
+		}
+	}
+
 	return &cfg, nil
 }
