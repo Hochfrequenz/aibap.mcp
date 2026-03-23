@@ -132,10 +132,12 @@ func allEndpointsHandler() http.Handler {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyMessages))
 		case path == "/sap/bc/adt/repository/informationsystem/search",
-			path == "/sap/bc/adt/repository/informationsystem/usageReferences",
 			path == "/sap/bc/adt/repository/nodestructure":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyObjectRefs))
+		case path == "/sap/bc/adt/repository/informationsystem/usageReferences":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences"><usageReferences:referencedObjects/></usageReferences:usageReferenceResult>`))
 		case path == "/sap/bc/adt/programs/programs/ZTEST":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<objectReference uri="/sap/bc/adt/programs/programs/ZTEST" type="PROG/P" name="ZTEST" description="" packageName=""></objectReference>`))
