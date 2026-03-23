@@ -28,7 +28,7 @@ Introduce a comprehensive CI pipeline and branch protection for `mcp-server-abap
 
 ## Workflow Details
 
-All workflows use `actions/checkout@v4` and `actions/setup-go@v5` (matching existing `release.yml` conventions).
+All workflows use `actions/checkout@v4` and `actions/setup-go@v6` (matching existing `release.yml` conventions).
 
 ### test.yml
 
@@ -39,7 +39,7 @@ All workflows use `actions/checkout@v4` and `actions/setup-go@v5` (matching exis
 - **Job ID:** `test`
 - **Steps:**
   1. Checkout code (`actions/checkout@v6`)
-  2. Setup Go (`actions/setup-go@v5`, go-version `1.26.x`)
+  2. Setup Go (`actions/setup-go@v6`, go-version `1.26.x`)
   3. Run `go test ./...`
 
 ### coverage.yml
@@ -51,10 +51,10 @@ All workflows use `actions/checkout@v4` and `actions/setup-go@v5` (matching exis
 - **Job ID:** `coverage`
 - **Steps:**
   1. Checkout code (`actions/checkout@v6`)
-  2. Setup Go (`actions/setup-go@v5`, go-version `1.26.x`)
+  2. Setup Go (`actions/setup-go@v6`, go-version `1.26.x`)
   3. Run `go test ./... -v -covermode=count -coverprofile=coverage.out`
-  4. Convert to lcov format via `jandelgado/gcov2lcov-action@v1` (outputs `coverage.lcov`)
-  5. Enforce 70% minimum via `VeryGoodOpenSource/very_good_coverage@v3` with `min_coverage: 70`, `path: coverage.lcov`
+  4. Convert to lcov format via `jandelgado/gcov2lcov-action@v1.2.0` (outputs `coverage.lcov`)
+  5. Enforce 70% minimum via `VeryGoodOpenSource/very_good_coverage@v3.0.0` with `min_coverage: 70`, `path: coverage.lcov`
 - **Notes:** 70% is the initial threshold; increase over time as coverage improves.
 
 ### golangci-lint.yml
@@ -66,7 +66,7 @@ All workflows use `actions/checkout@v4` and `actions/setup-go@v5` (matching exis
 - **Job ID:** `golangci-lint`
 - **Steps:**
   1. Checkout code (`actions/checkout@v6`)
-  2. Setup Go (`actions/setup-go@v5`, go-version `1.26.x`)
+  2. Setup Go (`actions/setup-go@v6`, go-version `1.26.x`)
   3. Run `golangci/golangci-lint-action@v9` with additional linters enabled: `dupl`, `goconst`, `gocyclo` (in addition to defaults)
   4. Run format check: `golangci-lint fmt --diff --enable gofmt` (requires golangci-lint v2+; the action version v7 uses v2)
 - **Note:** PR-only trigger is intentional — linting on every push to feature branches adds noise; the PR gate is sufficient.
@@ -157,4 +157,4 @@ Configure in GitHub repository settings for the `master` branch:
 - **`pull_request_target` for Dependabot:** Deliberate departure from reference repo (which uses `pull_request`). Required for security when running with write permissions on bot-created PRs.
 - **Daily Dependabot schedule:** Matches reference repository. Combined with auto-merge, keeps dependencies current with minimal manual effort.
 - **No `.golangci.yml`:** Linter config is passed via CLI flags in the workflow, matching the reference repo's approach. Can be extracted to a config file later if needed.
-- **Action versions:** Uses `actions/checkout@v6` and `golangci/golangci-lint-action@v9` (latest). Keeps `actions/setup-go@v5` as the latest stable version. Dependabot will propose updates if newer versions become available.
+- **Action versions:** Uses `actions/checkout@v6`, `actions/setup-go@v6`, `golangci/golangci-lint-action@v9` with golangci-lint `v2.9.0` (all latest, matching go-bo4e). Dependabot will propose updates if newer versions become available.
