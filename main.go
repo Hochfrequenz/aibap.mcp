@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/dachner/mcp-server-abap/adt"
+	"github.com/dachner/mcp-server-abap/cmd"
 	"github.com/dachner/mcp-server-abap/config"
 	"github.com/dachner/mcp-server-abap/tools"
 	"github.com/mark3labs/mcp-go/server"
@@ -14,6 +15,23 @@ import (
 var version = "dev"
 
 func main() {
+	// Handle login subcommand
+	if len(os.Args) >= 2 && os.Args[1] == "login" {
+		configPath := os.Getenv("SAP_CONFIG_FILE")
+		if configPath == "" {
+			configPath = "config.yaml"
+		}
+		systemName := ""
+		if len(os.Args) >= 3 {
+			systemName = os.Args[2]
+		}
+		if err := cmd.RunLogin(configPath, systemName); err != nil {
+			fmt.Fprintf(os.Stderr, "Login failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

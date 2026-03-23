@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dachner/mcp-server-abap/auth"
 	"github.com/dachner/mcp-server-abap/config"
 )
 
@@ -20,10 +21,38 @@ type ClientRegistry struct {
 }
 
 // NewClientRegistry creates one Client per system in cfg, with cfg.DefaultSystem active.
+// For OAuth2 systems it loads the stored token and sets up automatic refresh.
 func NewClientRegistry(cfg *config.Config) (*ClientRegistry, error) {
 	clients := make(map[string]Client, len(cfg.Systems))
 	for name, sysCfg := range cfg.Systems {
-		clients[name] = NewClient(sysCfg)
+		if sysCfg.IsOAuth2() {
+			store := auth.NewTokenStore(auth.DefaultTokenPath())
+			tokenData, err := store.TokenForSystem(name)
+			if err != nil {
+				return nil, fmt.Errorf("system %q requires OAuth2 login. Run: mcp-server-abap login %s", name, name)
+			}
+			systemName := name   // capture for closure
+			sysCfgCopy := sysCfg // capture for closure
+			td := tokenData      // mutable copy for closure
+			onRefresh := func(currentToken string) (string, error) {
+				newToken, err := auth.RefreshToken(
+					sysCfgCopy.Host,
+					sysCfgCopy.EffectiveOAuth2ClientID(),
+					td.RefreshToken,
+					sysCfgCopy.TLSSkipVerify,
+				)
+				if err != nil {
+					return "", fmt.Errorf("token refresh failed for %q: %w. Run: mcp-server-abap login %s", systemName, err, systemName)
+				}
+				// Save refreshed token
+				_ = store.Save(systemName, newToken)
+				td = newToken // update closure's copy
+				return newToken.AccessToken, nil
+			}
+			clients[name] = NewClientWithToken(sysCfg, tokenData.AccessToken, onRefresh)
+		} else {
+			clients[name] = NewClient(sysCfg)
+		}
 	}
 	return &ClientRegistry{
 		clients: clients,
