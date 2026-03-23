@@ -15,7 +15,7 @@ build-all:
 	GOOS=darwin  GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-arm64 .
 
 test:
-	go test ./... -v
+	go test -v ./...
 
 integration-test:
 	go test -tags integration -v -count=1 ./adt/...

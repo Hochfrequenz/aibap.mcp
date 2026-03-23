@@ -4,19 +4,22 @@ package adt_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/dachner/mcp-server-abap/adt"
 	"github.com/dachner/mcp-server-abap/config"
 )
 
+// newIntegrationClient creates a real ADT client from environment variables.
+// Do not log the returned client or its config — they contain credentials.
 func newIntegrationClient(t *testing.T) adt.Client {
 	t.Helper()
-	host := os.Getenv("SAP_INTEGRATION_HOST")
+	host := strings.TrimSpace(os.Getenv("SAP_INTEGRATION_HOST"))
 	if host == "" {
 		t.Skip("SAP_INTEGRATION_HOST not set, skipping integration test")
 	}
-	user := os.Getenv("SAP_INTEGRATION_USER")
+	user := strings.TrimSpace(os.Getenv("SAP_INTEGRATION_USER"))
 	if user == "" {
 		t.Fatal("SAP_INTEGRATION_USER must be set when SAP_INTEGRATION_HOST is set")
 	}
