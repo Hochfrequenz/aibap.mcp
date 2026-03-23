@@ -600,6 +600,7 @@ Create `tools/system_test.go`:
 package tools_test
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -648,8 +649,6 @@ func TestSelectSystemUnknown(t *testing.T) {
 	}
 }
 ```
-
-Also add `"fmt"` to the import in `system_test.go`.
 
 Update `tools/source_test.go` — replace `newTestServer`:
 ```go
@@ -736,7 +735,7 @@ func registerSystemTools(s *server.MCPServer, selector SystemSelector) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("%s", msg)), nil
+		return mcp.NewToolResultText(msg), nil
 	})
 }
 ```
