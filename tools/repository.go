@@ -25,9 +25,9 @@ func registerRepositoryTools(s *server.MCPServer, client adt.Client) {
 
 	s.AddTool(mcp.NewTool("get_object_info",
 		mcp.WithDescription("Get metadata for an ABAP repository object."),
-		mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT object URI")),
+		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString("object_uri", "")
+		uri := req.GetString(paramObjectURI, "")
 		info, err := client.GetObjectInfo(ctx, uri)
 		if err != nil {
 			return errorResult(err), nil

@@ -12,9 +12,9 @@ import (
 func registerSyntaxCheckTools(s *server.MCPServer, client adt.Client) {
 	s.AddTool(mcp.NewTool("syntax_check",
 		mcp.WithDescription("Run ABAP syntax check on an object. Returns list of syntax messages with line/column info."),
-		mcp.WithString("object_uri", mcp.Required(), mcp.Description("ADT object URI")),
+		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString("object_uri", "")
+		uri := req.GetString(paramObjectURI, "")
 		msgs, err := client.SyntaxCheck(ctx, uri)
 		if err != nil {
 			return errorResult(err), nil

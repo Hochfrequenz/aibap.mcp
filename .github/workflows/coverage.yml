@@ -1,0 +1,27 @@
+name: coverage
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.x'
+
+      - name: Run tests with coverage
+        run: go test ./... -v -covermode=count -coverprofile=coverage.out
+
+      - name: Convert coverage to lcov
+        uses: jandelgado/gcov2lcov-action@v1.2.0
+
+      - name: Check coverage threshold
+        uses: VeryGoodOpenSource/very_good_coverage@v3.0.0
+        with:
+          path: coverage.lcov
+          min_coverage: 70
