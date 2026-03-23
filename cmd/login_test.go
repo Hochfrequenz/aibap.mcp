@@ -27,7 +27,7 @@ func TestRunLoginFullFlow(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"access_token":  "test-access-token",
 			"refresh_token": "test-refresh-token",
 			"expires_in":    3600,

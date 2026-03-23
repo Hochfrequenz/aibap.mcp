@@ -48,7 +48,7 @@ func RunLogin(configPath, systemName string) error {
 	if err != nil {
 		return fmt.Errorf("start callback listener: %w", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	port := listener.Addr().(*net.TCPAddr).Port
 	redirectURI := fmt.Sprintf("http://localhost:%d/callback", port)
@@ -103,7 +103,7 @@ func startCallbackServer(listener net.Listener) (codeCh chan string, errCh chan 
 				errMsg = errMsg + ": " + desc
 			}
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, "Login failed. You can close this tab.")
+			_, _ = fmt.Fprint(w, "Login failed. You can close this tab.")
 			errCh <- fmt.Errorf("%s", errMsg)
 			return
 		}
@@ -111,13 +111,13 @@ func startCallbackServer(listener net.Listener) (codeCh chan string, errCh chan 
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			fmt.Fprint(w, "Missing authorization code.")
+			_, _ = fmt.Fprint(w, "Missing authorization code.")
 			errCh <- fmt.Errorf("callback received without code parameter")
 			return
 		}
 
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "Login successful! You can close this tab.")
+		_, _ = fmt.Fprint(w, "Login successful! You can close this tab.")
 		codeCh <- code
 	})
 

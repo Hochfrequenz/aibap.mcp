@@ -73,7 +73,7 @@ func postToken(host string, form url.Values, tlsSkipVerify bool) (TokenData, err
 	if err != nil {
 		return TokenData{}, fmt.Errorf("token request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return TokenData{}, fmt.Errorf("token endpoint returned status %d", resp.StatusCode)
