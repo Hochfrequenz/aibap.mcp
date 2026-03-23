@@ -12,7 +12,7 @@ import (
 
 func TestSyntaxCheckWithErrors(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/compatibility/product" {
+		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -20,7 +20,7 @@ func TestSyntaxCheckWithErrors(t *testing.T) {
 		if r.URL.Path == "/sap/bc/adt/checkruns" {
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<?xml version="1.0"?>
+			_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <chkl:messages xmlns:chkl="http://www.sap.com/adt/checklist">
   <chkl:message chkl:type="E" chkl:typeText="Error">
     <chkl:shortTextElements><chkl:shortText>Field "FOO" is unknown.</chkl:shortText></chkl:shortTextElements>
@@ -57,7 +57,7 @@ func TestSyntaxCheckWithErrors(t *testing.T) {
 
 func TestSyntaxCheckClean(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/compatibility/product" {
+		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
 			return

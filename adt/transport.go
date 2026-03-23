@@ -52,12 +52,7 @@ func (c *httpClient) GetTransportRequests(ctx context.Context, user, status stri
 
 	result := make([]TransportRequest, len(root.WorkbenchRequests))
 	for i, r := range root.WorkbenchRequests {
-		result[i] = TransportRequest{
-			Number:      r.Number,
-			Owner:       r.Owner,
-			Description: r.Description,
-			Status:      r.Status,
-		}
+		result[i] = TransportRequest(r)
 	}
 	return result, nil
 }

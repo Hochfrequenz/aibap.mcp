@@ -29,13 +29,7 @@ func parseObjectReferences(data []byte) ([]ObjectInfo, error) {
 	}
 	result := make([]ObjectInfo, len(refs.References))
 	for i, r := range refs.References {
-		result[i] = ObjectInfo{
-			URI:         r.URI,
-			Type:        r.Type,
-			Name:        r.Name,
-			Description: r.Description,
-			PackageName: r.PackageName,
-		}
+		result[i] = ObjectInfo(r)
 	}
 	return result, nil
 }

@@ -10,8 +10,8 @@ import (
 )
 
 type xmlActivationRequest struct {
-	XMLName xml.Name              `xml:"adtcore:objectReferences"`
-	NS      string                `xml:"xmlns:adtcore,attr"`
+	XMLName xml.Name `xml:"adtcore:objectReferences"`
+	NS      string   `xml:"xmlns:adtcore,attr"`
 	Objects []xmlActivationObject
 }
 
@@ -50,7 +50,7 @@ func (c *httpClient) ActivateObject(ctx context.Context, objectURI string) (*Act
 	if err != nil {
 		return nil, fmt.Errorf("ActivateObject: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if err := checkResponse(resp); err != nil {
 		return nil, err
