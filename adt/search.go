@@ -42,7 +42,8 @@ func parseObjectReferences(data []byte) ([]ObjectInfo, error) {
 
 func (c *httpClient) SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error) {
 	params := url.Values{}
-	params.Set("objectName", query)
+	params.Set("operation", "quickSearch")
+	params.Set("query", query)
 	if objectType != "" {
 		params.Set("objectType", objectType)
 	}

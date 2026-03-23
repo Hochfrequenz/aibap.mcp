@@ -17,8 +17,11 @@ func TestSearchObjects(t *testing.T) {
 			return
 		}
 		q := r.URL.Query()
-		if q.Get("objectName") != "ZTEST*" {
-			t.Errorf("objectName: got %q", q.Get("objectName"))
+		if q.Get("operation") != "quickSearch" {
+			t.Errorf("operation: got %q", q.Get("operation"))
+		}
+		if q.Get("query") != "ZTEST*" {
+			t.Errorf("query: got %q", q.Get("query"))
 		}
 		if q.Get("maxResults") != "10" {
 			t.Errorf("maxResults: got %q", q.Get("maxResults"))

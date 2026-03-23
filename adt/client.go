@@ -57,7 +57,7 @@ func NewClient(cfg *config.Config) Client {
 // fetchCSRFToken performs the CSRF preflight GET and caches the token and session cookies.
 // Caller must hold c.mu.
 func (c *httpClient) fetchCSRFToken(ctx context.Context) error {
-	url := c.cfg.SAP.Host + "/sap/bc/adt/compatibility/product"
+	url := c.cfg.SAP.Host + "/sap/bc/adt/discovery"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err

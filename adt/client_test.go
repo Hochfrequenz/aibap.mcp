@@ -27,7 +27,7 @@ func TestCSRFTokenFetchedOnFirstMutate(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/sap/bc/adt/compatibility/product":
+		case "/sap/bc/adt/discovery":
 			csrfFetched.Store(true)
 			w.Header().Set("X-CSRF-Token", "test-csrf-token")
 			w.Header().Set("Set-Cookie", "sap-session=abc123; Path=/")
@@ -49,7 +49,7 @@ func TestCSRFTokenFetchedOnFirstMutate(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !csrfFetched.Load() {
-		t.Error("expected CSRF preflight request to /sap/bc/adt/compatibility/product")
+		t.Error("expected CSRF preflight request to /sap/bc/adt/discovery")
 	}
 }
 
@@ -57,7 +57,7 @@ func TestCSRFTokenRefreshedOn403(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/compatibility/product" {
+		if r.URL.Path == "/sap/bc/adt/discovery" {
 			w.Header().Set("X-CSRF-Token", "refreshed-token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -87,7 +87,7 @@ func TestReauthOn401(t *testing.T) {
 	var authAttempts atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/compatibility/product" {
+		if r.URL.Path == "/sap/bc/adt/discovery" {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
 			return
@@ -112,7 +112,7 @@ func TestReauthOn401(t *testing.T) {
 
 func TestADTErrorParsed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/sap/bc/adt/compatibility/product" {
+		if r.URL.Path == "/sap/bc/adt/discovery" {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
 			return
