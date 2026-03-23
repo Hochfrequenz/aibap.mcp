@@ -4,9 +4,11 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/dachner/mcp-server-abap/adt"
+	"github.com/dachner/mcp-server-abap/auth"
 	"github.com/dachner/mcp-server-abap/config"
 )
 
@@ -97,5 +99,227 @@ func TestRegistryDelegatesGetSource(t *testing.T) {
 	}
 	if !called {
 		t.Error("expected GetSource to delegate to underlying client")
+	}
+}
+
+// TestRegistryDelegatesAllMethods verifies that all 16 delegation methods on
+// ClientRegistry forward calls to the underlying client. A single httptest server
+// handles all ADT endpoints; we just verify no error is returned, which proves
+// the call reached the server (i.e. delegation happened).
+func TestRegistryDelegatesAllMethods(t *testing.T) {
+	const (
+		emptyObjectRefs = `<objectReferences></objectReferences>`
+		emptyMessages   = `<messages></messages>`
+		emptyRunResult  = `<runResult></runResult>`
+		emptyTransports = `<root><workbenchRequests></workbenchRequests></root>`
+		emptyCompletions = `<completions></completions>`
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// CSRF preflight
+		if r.URL.Path == "/sap/bc/adt/discovery" {
+			w.Header().Set("X-CSRF-Token", "tok")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/xml")
+		w.Header().Set("ETag", "e1")
+
+		path := r.URL.Path
+		method := r.Method
+
+		switch {
+		// GetSource / SetSource
+		case strings.HasSuffix(path, "/source/main"):
+			if method == http.MethodPut {
+				w.WriteHeader(http.StatusOK)
+			} else {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("REPORT ZTEST."))
+			}
+		// ActivateObject
+		case path == "/sap/bc/adt/activation/activate":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(emptyMessages))
+		// SearchObjects
+		case path == "/sap/bc/adt/repository/informationsystem/search":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(emptyObjectRefs))
+		// WhereUsed
+		case path == "/sap/bc/adt/repository/informationsystem/usageReferences":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(emptyObjectRefs))
+		// BrowsePackage
+		case path == "/sap/bc/adt/repository/nodestructure":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(emptyObjectRefs))
+		// GetObjectInfo — object URI with XML response
+		case path == "/sap/bc/adt/programs/programs/ZTEST":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<objectReference uri="/sap/bc/adt/programs/programs/ZTEST" type="PROG/P" name="ZTEST" description="" packageName=""></objectReference>`))
+		// SyntaxCheck
+		case path == "/sap/bc/adt/checkruns":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(emptyMessages))
+		// RunUnitTests
+		case path == "/sap/bc/adt/abapunit/testruns":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(emptyRunResult))
+		// GetTransportRequests
+		case path == "/sap/bc/adt/cts/transportrequests" && method == http.MethodGet:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(emptyTransports))
+		// AddToTransport
+		case strings.HasPrefix(path, "/sap/bc/adt/cts/transportrequests/") && strings.HasSuffix(path, "/abaptransportcomponents"):
+			w.WriteHeader(http.StatusOK)
+		// LockObject
+		case strings.Contains(r.URL.RawQuery, "_action=LOCK"):
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("lock-handle-123"))
+		// UnlockObject
+		case strings.Contains(r.URL.RawQuery, "_action=UNLOCK"):
+			w.WriteHeader(http.StatusOK)
+		// PrettyPrint
+		case path == "/sap/bc/adt/abapsource/prettyprinter":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("REPORT ZTEST.\n"))
+		// CreateObject (programs)
+		case path == "/sap/bc/adt/programs/programs":
+			w.WriteHeader(http.StatusCreated)
+		// DeleteObject
+		case method == http.MethodDelete:
+			w.WriteHeader(http.StatusOK)
+		// GetCompletions
+		case path == "/sap/bc/adt/abapsource/codecompletion/proposals":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(emptyCompletions))
+		default:
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := makeRegistryConfig(map[string]string{"dev": srv.URL}, "dev")
+	registry, err := adt.NewClientRegistry(cfg)
+	if err != nil {
+		t.Fatalf("NewClientRegistry: %v", err)
+	}
+
+	ctx := context.Background()
+	const objURI = "/sap/bc/adt/programs/programs/ZTEST"
+
+	t.Run("GetSource", func(t *testing.T) {
+		if _, err := registry.GetSource(ctx, objURI); err != nil {
+			t.Fatalf("GetSource: %v", err)
+		}
+	})
+	t.Run("SetSource", func(t *testing.T) {
+		if err := registry.SetSource(ctx, objURI, "REPORT ZTEST.", "", "e1"); err != nil {
+			t.Fatalf("SetSource: %v", err)
+		}
+	})
+	t.Run("ActivateObject", func(t *testing.T) {
+		if _, err := registry.ActivateObject(ctx, objURI); err != nil {
+			t.Fatalf("ActivateObject: %v", err)
+		}
+	})
+	t.Run("SearchObjects", func(t *testing.T) {
+		if _, err := registry.SearchObjects(ctx, "ZTEST", "PROG/P", 10); err != nil {
+			t.Fatalf("SearchObjects: %v", err)
+		}
+	})
+	t.Run("WhereUsed", func(t *testing.T) {
+		if _, err := registry.WhereUsed(ctx, objURI); err != nil {
+			t.Fatalf("WhereUsed: %v", err)
+		}
+	})
+	t.Run("BrowsePackage", func(t *testing.T) {
+		if _, err := registry.BrowsePackage(ctx, "ZTEST_PKG"); err != nil {
+			t.Fatalf("BrowsePackage: %v", err)
+		}
+	})
+	t.Run("GetObjectInfo", func(t *testing.T) {
+		if _, err := registry.GetObjectInfo(ctx, objURI); err != nil {
+			t.Fatalf("GetObjectInfo: %v", err)
+		}
+	})
+	t.Run("SyntaxCheck", func(t *testing.T) {
+		if _, err := registry.SyntaxCheck(ctx, objURI); err != nil {
+			t.Fatalf("SyntaxCheck: %v", err)
+		}
+	})
+	t.Run("RunUnitTests", func(t *testing.T) {
+		if _, err := registry.RunUnitTests(ctx, objURI, 30); err != nil {
+			t.Fatalf("RunUnitTests: %v", err)
+		}
+	})
+	t.Run("GetTransportRequests", func(t *testing.T) {
+		if _, err := registry.GetTransportRequests(ctx, "USER", "D"); err != nil {
+			t.Fatalf("GetTransportRequests: %v", err)
+		}
+	})
+	t.Run("AddToTransport", func(t *testing.T) {
+		if err := registry.AddToTransport(ctx, objURI, "NPLK000001"); err != nil {
+			t.Fatalf("AddToTransport: %v", err)
+		}
+	})
+	t.Run("LockObject", func(t *testing.T) {
+		if _, err := registry.LockObject(ctx, objURI); err != nil {
+			t.Fatalf("LockObject: %v", err)
+		}
+	})
+	t.Run("UnlockObject", func(t *testing.T) {
+		if err := registry.UnlockObject(ctx, objURI); err != nil {
+			t.Fatalf("UnlockObject: %v", err)
+		}
+	})
+	t.Run("PrettyPrint", func(t *testing.T) {
+		if _, err := registry.PrettyPrint(ctx, "REPORT ZTEST."); err != nil {
+			t.Fatalf("PrettyPrint: %v", err)
+		}
+	})
+	t.Run("CreateObject", func(t *testing.T) {
+		if err := registry.CreateObject(ctx, "PROG", "ZTEST", "ZTEST_PKG", "Test", ""); err != nil {
+			t.Fatalf("CreateObject: %v", err)
+		}
+	})
+	t.Run("DeleteObject", func(t *testing.T) {
+		if err := registry.DeleteObject(ctx, objURI, ""); err != nil {
+			t.Fatalf("DeleteObject: %v", err)
+		}
+	})
+	t.Run("GetCompletions", func(t *testing.T) {
+		if _, err := registry.GetCompletions(ctx, objURI, "REPORT ZTEST.", 1, 1); err != nil {
+			t.Fatalf("GetCompletions: %v", err)
+		}
+	})
+}
+
+// TestNewClientRegistryOAuth2Error verifies that NewClientRegistry returns an error
+// when a system is configured for OAuth2 (no user/password) but no token file exists.
+func TestNewClientRegistryOAuth2Error(t *testing.T) {
+	// Point the token store at a path that definitely does not exist.
+	orig := auth.DefaultTokenPath
+	auth.DefaultTokenPath = func() string { return t.TempDir() + "/nonexistent/tokens.json" }
+	defer func() { auth.DefaultTokenPath = orig }()
+
+	cfg := &config.Config{
+		DefaultSystem: "oauth-sys",
+		Systems: map[string]config.SAPConfig{
+			"oauth-sys": {
+				Host:   "http://example.com",
+				Client: "100",
+				// No User/Password => IsOAuth2() == true
+			},
+		},
+	}
+
+	_, err := adt.NewClientRegistry(cfg)
+	if err == nil {
+		t.Fatal("expected error for OAuth2 system without token, got nil")
+	}
+	if !strings.Contains(err.Error(), "OAuth2") && !strings.Contains(err.Error(), "login") {
+		t.Errorf("error message should mention OAuth2 or login, got: %v", err)
 	}
 }
