@@ -73,6 +73,8 @@ type Config struct {
 
 `NewClient` signature changes from `NewClient(cfg *config.Config) Client` to `NewClient(cfg config.SAPConfig) Client` — accepts a single system's config directly instead of the full multi-system config. This is required because `ClientRegistry` creates one client per system.
 
+The `httpClient` struct field changes from `cfg *config.Config` to `cfg config.SAPConfig`. All internal usages change from `c.cfg.SAP.Host`, `c.cfg.SAP.User`, etc. to `c.cfg.Host`, `c.cfg.User`, etc. (roughly 7–8 call sites in `fetchCSRFToken`, `setBasicAuth`, `doRead`, `doMutate`).
+
 ### `adt/registry.go` (new)
 
 ```go
