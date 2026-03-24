@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
 	"strconv"
 )
 
@@ -61,10 +62,21 @@ func (c *httpClient) SearchObjects(ctx context.Context, query, objectType string
 
 func (c *httpClient) WhereUsed(ctx context.Context, objectURI string) ([]ObjectInfo, error) {
 	params := url.Values{}
-	params.Set("adtObjectUri", objectURI)
+	params.Set("uri", objectURI)
 	path := "/sap/bc/adt/repository/informationsystem/usageReferences?" + params.Encode()
 
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": contentTypeXML})
+	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
+		`<usageReferenceRequest xmlns="http://www.sap.com/adt/ris/usageReferences" xmlns:adtcore="%s">`+
+		`<adtcore:objectReference adtcore:uri="%s"/>`+
+		`</usageReferenceRequest>`, nsADTCore, objectURI)
+
+	resp, err := c.doMutate(ctx, "POST", path,
+		strings.NewReader(body),
+		map[string]string{
+			"Content-Type": "application/vnd.sap.adt.repository.usagereferences.request.v1+xml",
+			"Accept":       "application/vnd.sap.adt.repository.usagereferences.result.v1+xml",
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("WhereUsed: %w", err)
 	}
@@ -74,5 +86,42 @@ func (c *httpClient) WhereUsed(ctx context.Context, objectURI string) ([]ObjectI
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	return parseObjectReferences(data)
+	return parseUsageReferences(data)
+}
+
+type xmlUsageReferenceResult struct {
+	XMLName    xml.Name              `xml:"usageReferenceResult"`
+	References []xmlReferencedObject `xml:"referencedObjects>referencedObject"`
+}
+
+type xmlReferencedObject struct {
+	URI       string       `xml:"uri,attr"`
+	ADTObject xmlADTObject `xml:"adtObject"`
+}
+
+type xmlADTObject struct {
+	Name        string `xml:"name,attr"`
+	Type        string `xml:"type,attr"`
+	Description string `xml:"description,attr"`
+	PackageRef  struct {
+		Name string `xml:"name,attr"`
+	} `xml:"packageRef"`
+}
+
+func parseUsageReferences(data []byte) ([]ObjectInfo, error) {
+	var result xmlUsageReferenceResult
+	if err := xml.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("parsing usage references: %w", err)
+	}
+	refs := make([]ObjectInfo, len(result.References))
+	for i, r := range result.References {
+		refs[i] = ObjectInfo{
+			URI:         r.URI,
+			Type:        r.ADTObject.Type,
+			Name:        r.ADTObject.Name,
+			Description: r.ADTObject.Description,
+			PackageName: r.ADTObject.PackageRef.Name,
+		}
+	}
+	return refs, nil
 }

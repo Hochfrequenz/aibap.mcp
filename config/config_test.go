@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dachner/mcp-server-abap/config"
+	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
 func writeConfig(t *testing.T, content string) string {
@@ -114,5 +114,86 @@ systems:
 	_, err := config.Load(f)
 	if err == nil {
 		t.Error("expected error when default_system is omitted")
+	}
+}
+
+func TestOAuth2Config(t *testing.T) {
+	f := writeConfig(t, `
+default_system: dev
+systems:
+  dev:
+    host: "https://dev.example.com:8000"
+    client: "100"
+`)
+	cfg, err := config.Load(f)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	dev := cfg.Systems["dev"]
+	if !dev.IsOAuth2() {
+		t.Error("expected IsOAuth2() to return true for system without user/password")
+	}
+}
+
+func TestBasicAuthConfig(t *testing.T) {
+	f := writeConfig(t, `
+default_system: dev
+systems:
+  dev:
+    host: "https://dev.example.com:8000"
+    client: "100"
+    user: "MYUSER"
+    password: "secret"
+`)
+	cfg, err := config.Load(f)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	dev := cfg.Systems["dev"]
+	if dev.IsOAuth2() {
+		t.Error("expected IsOAuth2() to return false for system with user/password")
+	}
+}
+
+func TestPartialCredentialsError(t *testing.T) {
+	f := writeConfig(t, `
+default_system: dev
+systems:
+  dev:
+    host: "https://dev.example.com:8000"
+    client: "100"
+    user: "MYUSER"
+`)
+	_, err := config.Load(f)
+	if err == nil {
+		t.Error("expected error for system with user but no password")
+	}
+}
+
+func TestEffectiveOAuth2ClientID(t *testing.T) {
+	f := writeConfig(t, `
+default_system: dev
+systems:
+  dev:
+    host: "https://dev.example.com:8000"
+    client: "100"
+    oauth2_client_id: "my-custom-client"
+  staging:
+    host: "https://staging.example.com:8000"
+    client: "200"
+`)
+	cfg, err := config.Load(f)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	dev := cfg.Systems["dev"]
+	if got := dev.EffectiveOAuth2ClientID(); got != "my-custom-client" {
+		t.Errorf("EffectiveOAuth2ClientID: got %q, want %q", got, "my-custom-client")
+	}
+
+	staging := cfg.Systems["staging"]
+	if got := staging.EffectiveOAuth2ClientID(); got != "mcp-server-abap" {
+		t.Errorf("EffectiveOAuth2ClientID: got %q, want %q", got, "mcp-server-abap")
 	}
 }

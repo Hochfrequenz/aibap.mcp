@@ -68,6 +68,12 @@ type TransportRequest struct {
 	Status      string // "D" = modifiable, "L" = released
 }
 
+// CompletionItem represents a single code completion proposal.
+type CompletionItem struct {
+	Text        string
+	Description string
+}
+
 // ADTError is returned when SAP ADT responds with an error status.
 type ADTError struct {
 	StatusCode int
