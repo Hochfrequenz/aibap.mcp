@@ -6,7 +6,7 @@ before:
 
 builds:
   - id: mcp-server-abap
-    binary: mcp-server-abap
+    binary: mcp-server-abap-{{ .Version }}
     ldflags:
       - -X main.version={{.Version}}
     goos:
