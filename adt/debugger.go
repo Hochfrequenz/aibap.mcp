@@ -22,12 +22,26 @@ type DebugSession struct {
 	breakpoints map[string]string // serverID → serverID
 }
 
+// resolveHTTPClient extracts the concrete *httpClient from a Client.
+// Supports both direct *httpClient and *ClientRegistry (uses active client).
+func resolveHTTPClient(c Client) *httpClient {
+	switch v := c.(type) {
+	case *httpClient:
+		return v
+	case *ClientRegistry:
+		hc, ok := v.activeClient().(*httpClient)
+		if !ok {
+			panic("ClientRegistry active client is not *httpClient")
+		}
+		return hc
+	default:
+		panic("NewDebugSession requires *httpClient or *ClientRegistry")
+	}
+}
+
 // NewDebugSession creates a debug session sharing the HTTP client from an existing Client.
 func NewDebugSession(c Client, user string) *DebugSession {
-	hc, ok := c.(*httpClient)
-	if !ok {
-		panic("NewDebugSession requires *httpClient, got different Client implementation")
-	}
+	hc := resolveHTTPClient(c)
 	return &DebugSession{
 		client:      hc,
 		user:        strings.ToUpper(user),
@@ -211,6 +225,24 @@ func (d *DebugSession) GetStack(ctx context.Context) ([]byte, error) {
 		map[string]string{"Accept": "application/xml"})
 	if err != nil {
 		return nil, fmt.Errorf("GetStack: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// SetWatchpoint sets a watchpoint on a variable to break when its value changes.
+func (d *DebugSession) SetWatchpoint(ctx context.Context, variableName, condition string) ([]byte, error) {
+	path := fmt.Sprintf("/sap/bc/adt/debugger/watchpoints?variableName=%s", variableName)
+	if condition != "" {
+		path += "&condition=" + condition
+	}
+	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
+		map[string]string{"Accept": "application/xml"})
+	if err != nil {
+		return nil, fmt.Errorf("SetWatchpoint: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
