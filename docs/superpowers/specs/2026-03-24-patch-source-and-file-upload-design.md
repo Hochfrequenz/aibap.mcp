@@ -17,13 +17,15 @@
 The MCP server maintains an in-memory map of active locks:
 
 ```
-map[string]lockState   // key: objectURI
+map[string]lockState   // key: systemName + ":" + objectURI
 
 type lockState struct {
     LockHandle string
     ETag       string
 }
 ```
+
+The key includes the system name from the active `ClientRegistry` entry to prevent cross-system lock handle collisions when using multi-system configurations.
 
 **Lifecycle:**
 - `lock_object` stores `{lockHandle, etag}` in the map after a successful lock
@@ -32,7 +34,7 @@ type lockState struct {
 - `unlock_object` removes the entry from the map
 - All tools that need a lock check the map first if no `lock_handle` parameter was provided
 
-**Auto-lock:** If a mutating tool (`patch_source`, `set_source_from_file`, `set_source`) is called without a `lock_handle` parameter AND no entry exists in the lock map, the server automatically locks the object and stores the result.
+**Auto-lock:** If a mutating tool (`patch_source`, `set_source_from_file`, `set_source`) is called without a `lock_handle` parameter AND no entry exists in the lock map, the server automatically locks the object and stores the result. Transport is not needed at lock time — SAP only requires it at write time (`?corrNr=`). If auto-lock fails (e.g., object locked by another user), the tool returns an error immediately without attempting the write.
 
 ### 2. `patch_source` Tool
 
@@ -63,7 +65,7 @@ Each operation is an object with a `type` field and type-specific parameters:
 - `delete`: Delete lines `from_line` through `to_line` (inclusive, 1-based)
 - `search_replace`: Find `search` string and replace with `replace`. If `all` is true (default false), replace all occurrences. Operates on the full source text, not line-based.
 
-**Operation ordering:** Operations are sorted by line number descending (bottom-to-top) before applying, so that earlier line numbers remain valid. `search_replace` operations run after all line-based operations.
+**Operation ordering:** Line-based operations are sorted descending by their primary line number (`after_line` for insert, `from_line` for replace/delete) and applied bottom-to-top, so that earlier line numbers remain valid. `search_replace` operations run after all line-based operations. Overlapping line-based operations (e.g., delete 5-10 and replace 8-12) are rejected with an error.
 
 **Flow:**
 
@@ -99,6 +101,8 @@ Reads source from a local file and uploads it to the SAP object.
 | `file_path` | string | yes | Path to source file (absolute or relative to CWD) |
 | `transport` | string | no | Transport request for non-$TMP objects |
 | `lock_handle` | string | no | Explicit lock handle (overrides lock map) |
+
+**Validation:** File must exist and be readable. Files are assumed UTF-8 encoded (matching SAP's `charset=utf-8`). No path traversal restriction — the MCP server runs locally with the user's permissions, same as any file-reading MCP tool.
 
 **Flow:**
 
@@ -140,11 +144,14 @@ Replaces `activate_object` (singular). Activates one or more objects in a single
 - `tools/file_source.go` — `set_source_from_file` tool registration
 
 ### Modified files
-- `adt/client.go` — no interface changes needed; lock map is tool-layer only
-- `tools/register.go` — register new tools
+- `adt/client.go` — `SetSource` return type changes from `error` to `(string, error)` where string is the new ETag from the response header. `ActivateObject` renamed to `ActivateObjects` accepting `[]string`. Old `ActivateObject` becomes a convenience wrapper.
+- `adt/source.go` — `SetSource` captures and returns ETag from response
+- `adt/activate.go` — accepts `[]string` URIs (already builds XML with slice internally)
+- `adt/registry.go` — updated delegation signatures, exposes `ActiveSystemName() string` for lock map keys
+- `tools/register.go` — register new tools, pass lock map to all tool registrations
 - `tools/lock.go` — optional `lock_handle`, lock map integration
-- `tools/source.go` — optional `lock_handle`/`etag`, lock map integration
-- `tools/activation.go` — `activate_objects` with multi-URI support
+- `tools/source.go` — optional `lock_handle`/`etag`, lock map integration, `get_source` updates ETag in lock map at tool layer
+- `tools/activation.go` — `activate_objects` with multi-URI support, keep `activate_object` alias
 
 ### Not in scope
 - Persistent lock map (in-memory only, cleared on server restart — locks expire server-side in SAP anyway)
