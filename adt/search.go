@@ -8,29 +8,21 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
 
-type xmlObjectReferences struct {
-	XMLName    xml.Name             `xml:"objectReferences"`
-	References []xmlObjectReference `xml:"objectReference"`
-}
-
-type xmlObjectReference struct {
-	URI         string `xml:"uri,attr"`
-	Type        string `xml:"type,attr"`
-	Name        string `xml:"name,attr"`
-	Description string `xml:"description,attr"`
-	PackageName string `xml:"packageName,attr"`
-}
-
 func parseObjectReferences(data []byte) ([]ObjectInfo, error) {
-	var refs xmlObjectReferences
+	var refs adtmodel.ObjectReferences
 	if err := xml.Unmarshal(data, &refs); err != nil {
 		return nil, fmt.Errorf("parsing object references: %w", err)
 	}
 	result := make([]ObjectInfo, len(refs.References))
 	for i, r := range refs.References {
-		result[i] = ObjectInfo(r)
+		result[i] = ObjectInfo{
+			URI: r.URI, Type: r.Type, Name: r.Name,
+			Description: r.Description, PackageName: r.PackageName,
+		}
 	}
 	return result, nil
 }
@@ -89,27 +81,8 @@ func (c *httpClient) WhereUsed(ctx context.Context, objectURI string) ([]ObjectI
 	return parseUsageReferences(data)
 }
 
-type xmlUsageReferenceResult struct {
-	XMLName    xml.Name              `xml:"usageReferenceResult"`
-	References []xmlReferencedObject `xml:"referencedObjects>referencedObject"`
-}
-
-type xmlReferencedObject struct {
-	URI       string       `xml:"uri,attr"`
-	ADTObject xmlADTObject `xml:"adtObject"`
-}
-
-type xmlADTObject struct {
-	Name        string `xml:"name,attr"`
-	Type        string `xml:"type,attr"`
-	Description string `xml:"description,attr"`
-	PackageRef  struct {
-		Name string `xml:"name,attr"`
-	} `xml:"packageRef"`
-}
-
 func parseUsageReferences(data []byte) ([]ObjectInfo, error) {
-	var result xmlUsageReferenceResult
+	var result adtmodel.UsageReferenceResult
 	if err := xml.Unmarshal(data, &result); err != nil {
 		return nil, fmt.Errorf("parsing usage references: %w", err)
 	}

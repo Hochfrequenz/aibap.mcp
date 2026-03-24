@@ -8,17 +8,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
-
-type xmlCompletions struct {
-	XMLName xml.Name        `xml:"completions"`
-	Items   []xmlCompletion `xml:"completion"`
-}
-
-type xmlCompletion struct {
-	Text        string `xml:"text,attr"`
-	Description string `xml:"description,attr"`
-}
 
 func (c *httpClient) GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error) {
 	params := url.Values{}
@@ -46,13 +38,13 @@ func (c *httpClient) GetCompletions(ctx context.Context, objectURI, source strin
 	if err != nil {
 		return nil, fmt.Errorf("GetCompletions reading body: %w", err)
 	}
-	var comps xmlCompletions
+	var comps adtmodel.Completions
 	if err := xml.Unmarshal(data, &comps); err != nil {
 		return nil, fmt.Errorf("GetCompletions parsing: %w", err)
 	}
 	result := make([]CompletionItem, len(comps.Items))
 	for i, c := range comps.Items {
-		result[i] = CompletionItem(c)
+		result[i] = CompletionItem{Text: c.Text, Description: c.Description}
 	}
 	return result, nil
 }

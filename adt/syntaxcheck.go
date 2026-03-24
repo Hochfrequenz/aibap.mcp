@@ -8,26 +8,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
-
-type xmlCheckRunReports struct {
-	XMLName xml.Name            `xml:"checkRunReports"`
-	Reports []xmlCheckRunReport `xml:"checkReport"`
-}
-
-type xmlCheckRunReport struct {
-	Reporter   string            `xml:"reporter,attr"`
-	TriggerURI string            `xml:"triggeringUri,attr"`
-	Status     string            `xml:"status,attr"`
-	StatusText string            `xml:"statusText,attr"`
-	Messages   []xmlCheckMessage `xml:"checkMessageList>checkMessage"`
-}
-
-type xmlCheckMessage struct {
-	URI       string `xml:"uri,attr"`
-	Type      string `xml:"type,attr"`
-	ShortText string `xml:"shortText,attr"`
-}
 
 func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error) {
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
@@ -53,7 +36,7 @@ func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]Synta
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var reports xmlCheckRunReports
+	var reports adtmodel.CheckRunReports
 	xml.Unmarshal(data, &reports) //nolint:errcheck
 
 	var result []SyntaxMessage

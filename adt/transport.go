@@ -8,19 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
-
-type xmlTransportRoot struct {
-	XMLName           xml.Name              `xml:"root"`
-	WorkbenchRequests []xmlTransportRequest `xml:"workbenchRequests>workbenchRequest"`
-}
-
-type xmlTransportRequest struct {
-	Number      string `xml:"number,attr"`
-	Owner       string `xml:"owner,attr"`
-	Description string `xml:"shortDescription,attr"`
-	Status      string `xml:"status,attr"`
-}
 
 func (c *httpClient) GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error) {
 	params := url.Values{}
@@ -45,26 +35,23 @@ func (c *httpClient) GetTransportRequests(ctx context.Context, user, status stri
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var root xmlTransportRoot
+	var root adtmodel.TransportRoot
 	if err := xml.Unmarshal(data, &root); err != nil {
 		return nil, fmt.Errorf("GetTransportRequests parsing: %w", err)
 	}
 
 	result := make([]TransportRequest, len(root.WorkbenchRequests))
 	for i, r := range root.WorkbenchRequests {
-		result[i] = TransportRequest(r)
+		result[i] = TransportRequest{
+			Number: r.Number, Owner: r.Owner,
+			Description: r.Description, Status: r.Status,
+		}
 	}
 	return result, nil
 }
 
-type xmlTransportComponent struct {
-	XMLName   xml.Name `xml:"adtcore:objectReference"`
-	NSCore    string   `xml:"xmlns:adtcore,attr"`
-	ObjectURI string   `xml:"adtcore:uri,attr"`
-}
-
 func (c *httpClient) AddToTransport(ctx context.Context, objectURI, transport string) error {
-	body, err := xml.Marshal(xmlTransportComponent{
+	body, err := xml.Marshal(adtmodel.TransportComponent{
 		NSCore:    nsADTCore,
 		ObjectURI: objectURI,
 	})
