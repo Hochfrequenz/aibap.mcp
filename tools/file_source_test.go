@@ -25,7 +25,7 @@ func TestSetSourceFromFileTool(t *testing.T) {
 	mock := &mockClient{
 		setSourceFn: func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error) {
 			gotURI, gotSource, gotHandle, gotTransport, gotETag = uri, source, lockHandle, transport, etag
-			return `"etag-after"`, nil
+			return testETagAfter, nil
 		},
 	}
 
@@ -69,7 +69,7 @@ func TestSetSourceFromFileTool(t *testing.T) {
 	if resp["lock_handle"] != "pre-lock-handle" {
 		t.Errorf("lock_handle in response: got %v", resp["lock_handle"])
 	}
-	if resp["etag"] != `"etag-after"` {
+	if resp["etag"] != testETagAfter {
 		t.Errorf("etag in response: got %v", resp["etag"])
 	}
 
@@ -78,8 +78,8 @@ func TestSetSourceFromFileTool(t *testing.T) {
 	if !ok {
 		t.Fatal("expected lock map entry to exist after set_source_from_file")
 	}
-	if state.ETag != `"etag-after"` {
-		t.Errorf("lock map ETag: got %q, want %q", state.ETag, `"etag-after"`)
+	if state.ETag != testETagAfter {
+		t.Errorf("lock map ETag: got %q, want %q", state.ETag, testETagAfter)
 	}
 }
 
@@ -115,7 +115,7 @@ func TestSetSourceFromFileToolAutoLock(t *testing.T) {
 			return &adt.SourceResult{Source: "", ETag: `"etag-fresh"`}, nil
 		},
 		setSourceFn: func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error) {
-			return `"etag-new"`, nil
+			return testETagNew, nil
 		},
 	}
 

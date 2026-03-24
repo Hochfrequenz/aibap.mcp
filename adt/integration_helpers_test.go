@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dachner/mcp-server-abap/adt"
-	"github.com/dachner/mcp-server-abap/config"
+	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
 // newIntegrationClient creates a real ADT client from environment variables.

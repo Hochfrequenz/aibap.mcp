@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 type xmlObjectReferences struct {
