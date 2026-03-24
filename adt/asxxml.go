@@ -7,7 +7,7 @@ import (
 
 // asxEnvelope is the generic wrapper for SAP's asx:abap XML format.
 type asxEnvelope[T any] struct {
-	XMLName xml.Name    `xml:"abap"`
+	XMLName xml.Name     `xml:"abap"`
 	Values  asxValues[T] `xml:"values"`
 }
 
@@ -17,10 +17,10 @@ type asxValues[T any] struct {
 
 // asxEnvelopeMarshal uses explicit namespace attributes for marshalling.
 type asxEnvelopeMarshal[T any] struct {
-	XMLName xml.Name              `xml:"asx:abap"`
-	NS      string                `xml:"xmlns:asx,attr"`
-	Version string                `xml:"version,attr"`
-	Values  asxValuesMarshal[T]   `xml:"asx:values"`
+	XMLName xml.Name            `xml:"asx:abap"`
+	NS      string              `xml:"xmlns:asx,attr"`
+	Version string              `xml:"version,attr"`
+	Values  asxValuesMarshal[T] `xml:"asx:values"`
 }
 
 type asxValuesMarshal[T any] struct {
