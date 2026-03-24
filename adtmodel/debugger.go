@@ -16,6 +16,7 @@ type BreakpointsRequest struct {
 	RequestUser   string              `xml:"requestUser,attr,omitempty"`
 	TerminalID    string              `xml:"terminalId,attr,omitempty"`
 	IdeID         string              `xml:"ideId,attr,omitempty"`
+	SyncMode      string              `xml:"syncMode,attr,omitempty"`
 	Breakpoints   []BreakpointRequest `xml:"breakpoint"`
 }
 

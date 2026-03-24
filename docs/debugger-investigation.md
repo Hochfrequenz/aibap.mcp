@@ -1,47 +1,41 @@
 # Debugger Investigation Notes (2026-03-25)
 
-## What works
+## What works (verified against hfq.sap.msp.local:8100)
 
-- **Setting breakpoints via API**: POST `/sap/bc/adt/debugger/breakpoints` with `scope=external`, `debuggingMode=user` returns a valid breakpoint ID
-- **XML format**: `adtcore:uri`, `adtcore:type`, `adtcore:name` attributes are correct (custom MarshalXML needed)
-- **Listener endpoint**: POST `/sap/bc/adt/debugger/listeners` blocks correctly until timeout
-- **Breakpoint validation**: SAP correctly rejects non-executable lines (DATA declarations, REPORT statement)
+- **Setting breakpoints**: POST `/debugger/breakpoints` with `syncMode="full"` persists breakpoints in SAP shared memory
+- **Listener**: POST `/debugger/listeners` with `Accept: application/vnd.sap.as+xml` returns debuggee session info when a breakpoint is hit
+- **Triggering execution**: The ABAP Unit test runner (`/abapunit/testruns`) executes code in the same SAP session, which triggers breakpoints
+- **Attach**: POST `/debugger?method=attach&debuggeeId=<id>` successfully attaches to the debuggee, returns debug session ID, process ID, and reached breakpoints
 
-## What doesn't work yet
+## What doesn't work over HTTP
 
-- **Breakpoints don't persist**: GET after SET returns empty body. The breakpoint is a session-scoped breakpoint, not a true external breakpoint
-- **Listener doesn't catch events**: Even when a GUI external breakpoint triggers the GUI debugger, the ADT listener gets nothing
-- **No program execution**: The ADT HTTP session can't execute ABAP programs — there's no `SUBMIT` equivalent via REST
+- **Step/Variables/Stack**: These endpoints require `get_attached_session()` which relies on being in the **same work process** as the attach call. Over HTTP, each request gets a new work process (stateless). Eclipse ADT uses RFC (JCo) which is inherently stateful.
 
-## Key findings from SAP source code
+## Key findings
 
-### CL_TPDA_ADT_RES_BREAKPOINTS
-- `scope=external` → calls `init_static()` → `get_static_bp_services()`
-- `debuggingMode=user` → calls `set_external_bp_context_user(i_ide_user=sy-uname, i_request_user=<user>)`
-- Breakpoint is created via `ref_bp_factory->create_line_breakpoint()` then `submit()` then `initialize()`
-- Despite returning an ID, the breakpoint doesn't survive beyond the HTTP request
+### syncMode=full is essential
+Without `syncMode="full"` in the breakpoint request, the breakpoint lives only for the duration of the HTTP request. With it, SAP calls `set_dummy_breakpoint()` which registers the external debugger in shared memory. Eclipse detected our breakpoint as a "conflicting breakpoint" — proving it persists.
 
-### CL_TPDA_ADT_RES_LISTENERS
-- `debuggingMode=user` → calls `start_listener_for_user(i_request_user, i_ide_user, i_ide_id, i_timeout)`
-- This is a blocking call (long poll)
-- On success, calls `post_get_dbgee_sessions` to return session info
-- Timeout returns empty body (0 bytes), no error
+### Accept header matters for listener
+- `application/xml` → listener returns 406 when debuggee attaches
+- `application/vnd.sap.as+xml` → listener returns full debuggee info (ASX XML with DEBUGGEE_ID, program, line, etc.)
 
-### SADT_REST_RFC_ENDPOINT
-- RFC-enabled function module that handles ALL Eclipse ADT requests
-- Takes `SADT_REST_REQUEST` structure (URI, headers, body) and returns `SADT_REST_RESPONSE`
-- Eclipse uses JCo (Java Connector) to call this via RFC, not HTTP
-- The FM delegates to the same REST handler classes as HTTP/ICF
-- Can redirect to different app server instances via `X-sap-adt-server-instance` header
+### HTTP vs RFC
+Eclipse ADT communicates via `SADT_REST_RFC_ENDPOINT` (RFC function module), not HTTP. The REST handler code is identical, but RFC sessions are stateful — the work process is kept for the duration of the connection. HTTP/ICF is stateless — each request gets a new work process.
 
-## Open questions
+The `get_attached_session()` call in `CL_TPDA_ADT_RES_ACTIONS` (step) and `CL_TPDA_ADT_RES_VARIABLES` looks up the debug session in the **current work process**, which only works when the work process is the same as the one that did the attach (RFC stateful session).
 
-1. **How does Eclipse set a TRUE external breakpoint?** Our API call creates a session-scoped BP. Eclipse must do something different.
-2. **Does Eclipse use RFC instead of HTTP?** The `SADT_REST_RFC_ENDPOINT` FM suggests yes, but the handler code is the same.
-3. **Is the listener meant to work with GUI-set external breakpoints?** Our test says no — GUI debugger and ADT listener are independent.
+## Proven debug flow (integration tested)
 
-## Next steps
+1. **Set breakpoint** with `syncMode=full`, `scope=external`, `debuggingMode=user`
+2. **Start listener** (long poll, blocks until breakpoint hit or timeout)
+3. **Execute code** via unit test runner (same HTTP cookie jar)
+4. **Listener returns** debuggee info (DEBUGGEE_ID, program, line)
+5. **Attach** to debuggee session
 
-- Install Eclipse ADT and capture network/RFC traffic to see the exact flow
-- Compare Eclipse's breakpoint request with ours
-- Check if Eclipse uses different parameters or a different endpoint sequence
+## Next steps: RFC support
+
+To enable step/variables/stack, we need stateful sessions via RFC:
+- Use Go SAP RFC library (gorfc or similar) to call `SADT_REST_RFC_ENDPOINT`
+- Package our REST requests as `SADT_REST_REQUEST` structures
+- This gives us stateful sessions where attach + step + variables all share the same work process

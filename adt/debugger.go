@@ -58,6 +58,8 @@ type BreakpointResult struct {
 }
 
 // SetBreakpoint sets an external line breakpoint on the given object.
+// Uses syncMode=full to persist the breakpoint in SAP shared memory,
+// which is required for the listener to detect debug events.
 func (d *DebugSession) SetBreakpoint(ctx context.Context, objectURI string, line int, objectType, objectName string) (*BreakpointResult, error) {
 	uri := fmt.Sprintf("%s#start=%d,0", objectURI, line)
 	reqBody := adtmodel.BreakpointsRequest{
@@ -68,6 +70,7 @@ func (d *DebugSession) SetBreakpoint(ctx context.Context, objectURI string, line
 		RequestUser:   d.user,
 		TerminalID:    d.terminalID,
 		IdeID:         d.ideID,
+		SyncMode:      "full",
 		Breakpoints: []adtmodel.BreakpointRequest{{
 			Kind: "line",
 			URI:  uri,
@@ -115,18 +118,20 @@ func (d *DebugSession) SetBreakpoint(ctx context.Context, objectURI string, line
 
 // ListenerResult holds the result of a debug listener call.
 type ListenerResult struct {
-	Status     string // "attached", "timeout"
-	DebuggeeID string
+	Status      string // "attached", "timeout"
+	DebuggeeID  string
+	RawResponse string // full XML for debugging
 }
 
 // StartListener starts a debug listener that blocks until a breakpoint
-// is hit or the timeout expires.
+// is hit or the timeout expires. Uses Accept: application/vnd.sap.as+xml
+// to receive the debuggee session info in ASX XML format.
 func (d *DebugSession) StartListener(ctx context.Context, timeoutSeconds int) (*ListenerResult, error) {
 	path := fmt.Sprintf("/sap/bc/adt/debugger/listeners?debuggingMode=user&requestUser=%s&terminalId=%s&ideId=%s&timeout=%d",
 		d.user, d.terminalID, d.ideID, timeoutSeconds)
 
 	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
-		map[string]string{"Accept": "application/xml"})
+		map[string]string{"Accept": "application/vnd.sap.as+xml"})
 	if err != nil {
 		return nil, fmt.Errorf("StartListener: %w", err)
 	}
@@ -140,7 +145,24 @@ func (d *DebugSession) StartListener(ctx context.Context, timeoutSeconds int) (*
 		return &ListenerResult{Status: "timeout"}, nil
 	}
 
-	return &ListenerResult{Status: "attached", DebuggeeID: string(data)}, nil
+	// Parse debuggee ID from ASX XML response
+	debuggeeID := extractXMLTag(string(data), "DEBUGGEE_ID")
+	return &ListenerResult{Status: "attached", DebuggeeID: debuggeeID, RawResponse: string(data)}, nil
+}
+
+// extractXMLTag extracts the text content of a simple XML tag.
+func extractXMLTag(s, tag string) string {
+	open := "<" + tag + ">"
+	close := "</" + tag + ">"
+	i := strings.Index(s, open)
+	if i < 0 {
+		return ""
+	}
+	j := strings.Index(s[i:], close)
+	if j < 0 {
+		return ""
+	}
+	return s[i+len(open) : i+j]
 }
 
 // StopListener stops the debug listener and cleans up breakpoints.
