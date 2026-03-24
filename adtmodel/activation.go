@@ -4,8 +4,8 @@ import "encoding/xml"
 
 // ActivationRequest is the XML body for POST /sap/bc/adt/activation.
 type ActivationRequest struct {
-	XMLName xml.Name          `xml:"adtcore:objectReferences"`
-	NS      string            `xml:"xmlns:adtcore,attr"`
+	XMLName xml.Name `xml:"adtcore:objectReferences"`
+	NS      string   `xml:"xmlns:adtcore,attr"`
 	Objects []ActivationObject
 }
 
