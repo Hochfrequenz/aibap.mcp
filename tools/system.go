@@ -4,10 +4,9 @@ import (
 	"context"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 )
 
-func registerSystemTools(s *server.MCPServer, selector SystemSelector) {
+func registerSystemTools(s toolAdder, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("select_system",
 		mcp.WithDescription("Switch the active SAP system for all subsequent tool calls. Returns the active system name and host."),
 		mcp.WithString("system",

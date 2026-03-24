@@ -203,6 +203,33 @@ You: Run the unit tests for this class
 Claude: [calls run_unit_tests] 5 tests passed, 0 failed.
 ```
 
+## Logging
+
+Logs go to stderr by default (text format). Configure via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_FORMAT` | `text` | `text` or `json` |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `PAPERTRAIL_HOST` | — | Papertrail syslog host (e.g. `logs5.papertrailapp.com`) |
+| `PAPERTRAIL_PORT` | — | Papertrail syslog port (e.g. `12345`) |
+
+### Papertrail setup
+
+To send logs to [Papertrail](https://www.papertrail.com/):
+
+1. Create a Papertrail account and set up a **Log Destination** (Settings > Log Destinations)
+2. Note the host and port (e.g. `logs5.papertrailapp.com:12345`)
+3. Set the environment variables before starting the server:
+
+```bash
+export PAPERTRAIL_HOST=logs5.papertrailapp.com
+export PAPERTRAIL_PORT=12345
+SAP_CONFIG_FILE=config.yaml ./mcp-server-abap
+```
+
+Logs are sent over TLS. Both stderr and Papertrail receive every log event.
+
 ## Development
 
 ### Unit tests
