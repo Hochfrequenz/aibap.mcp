@@ -1,4 +1,4 @@
-// Package sapxml provides types and helpers for SAP ADT XML formats.
+// Package adtmodel provides types and helpers for SAP ADT XML formats.
 //
 // This package is designed to be extractable to a separate repository once stable.
 // Only add types here that have been verified against a real SAP system.

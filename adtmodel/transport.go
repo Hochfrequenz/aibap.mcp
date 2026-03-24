@@ -5,11 +5,11 @@ import "encoding/xml"
 // TransportRoot is the XML response from GET /sap/bc/adt/cts/transportrequests.
 type TransportRoot struct {
 	XMLName           xml.Name              `xml:"root"`
-	WorkbenchRequests []TransportRequestXML `xml:"workbenchRequests>workbenchRequest"`
+	WorkbenchRequests []TransportRequest `xml:"workbenchRequests>workbenchRequest"`
 }
 
-// TransportRequestXML is a single transport request in the transport list XML response.
-type TransportRequestXML struct {
+// TransportRequest is a single transport request in the transport list XML response.
+type TransportRequest struct {
 	Number      string `xml:"number,attr"`
 	Owner       string `xml:"owner,attr"`
 	Description string `xml:"shortDescription,attr"`
