@@ -185,22 +185,16 @@ func setFixtureSource(ctx context.Context, client adt.Client, f fixtureObject) e
 	return nil
 }
 
-// cleanupFixtures locks and deletes all test fixture objects in reverse order.
+// cleanupFixtures deletes all test fixture objects in reverse order.
+// Uses optimistic locking (ETag) internally — no explicit lock needed.
 func cleanupFixtures(ctx context.Context, client adt.Client) {
-	// Delete in reverse order: classes before interface, to avoid dependency issues.
 	for i := len(testFixtures) - 1; i >= 0; i-- {
 		f := testFixtures[i]
-		lockHandle, err := client.LockObject(ctx, f.objectURI)
+		err := client.DeleteObject(ctx, f.objectURI, "", "")
 		if err != nil {
-			fmt.Printf("  [cleanup skip] %s: lock failed: %v\n", f.name, err)
-			continue
+			fmt.Printf("  [cleanup skip] %s: %v\n", f.name, err)
+		} else {
+			fmt.Printf("  [deleted] %s %s\n", f.objType, f.name)
 		}
-		err = client.DeleteObject(ctx, f.objectURI, lockHandle, "")
-		if err != nil {
-			fmt.Printf("  [cleanup skip] %s: delete failed: %v\n", f.name, err)
-			_ = client.UnlockObject(ctx, f.objectURI, lockHandle)
-			continue
-		}
-		fmt.Printf("  [deleted] %s %s\n", f.objType, f.name)
 	}
 }

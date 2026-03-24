@@ -42,7 +42,7 @@ func registerObjectTools(s toolAdder, client adt.Client) {
 	})
 
 	s.AddTool(mcp.NewTool("delete_object",
-		mcp.WithDescription("Delete an ABAP object from the SAP system. The object is automatically locked before deletion."),
+		mcp.WithDescription("Delete an ABAP object from the SAP system. Uses optimistic locking (ETag) internally."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
 			mcp.Description(descADTObjectURI),
@@ -53,15 +53,7 @@ func registerObjectTools(s toolAdder, client adt.Client) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		transport := req.GetString("transport", "")
-
-		lockHandle, err := client.LockObject(ctx, uri)
-		if err != nil {
-			return errorResult(err), nil
-		}
-
-		if err := client.DeleteObject(ctx, uri, lockHandle, transport); err != nil {
-			// Best-effort unlock on delete failure.
-			_ = client.UnlockObject(ctx, uri, lockHandle)
+		if err := client.DeleteObject(ctx, uri, "", transport); err != nil {
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultText("Object deleted"), nil
