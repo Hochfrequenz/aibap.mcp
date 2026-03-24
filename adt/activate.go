@@ -7,38 +7,16 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
 
-type xmlActivationRequest struct {
-	XMLName xml.Name `xml:"adtcore:objectReferences"`
-	NS      string   `xml:"xmlns:adtcore,attr"`
-	Objects []xmlActivationObject
-}
-
-type xmlActivationObject struct {
-	XMLName xml.Name `xml:"adtcore:objectReference"`
-	URI     string   `xml:"adtcore:uri,attr"`
-}
-
-type xmlActivationMessages struct {
-	XMLName  xml.Name               `xml:"messages"`
-	Messages []xmlActivationMessage `xml:"message"`
-}
-
-type xmlActivationMessage struct {
-	URI       string `xml:"uri,attr"`
-	Type      string `xml:"type,attr"`
-	ShortText struct {
-		Text string `xml:"shortText"`
-	} `xml:"shortTextElements"`
-}
-
 func (c *httpClient) ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error) {
-	objects := make([]xmlActivationObject, len(objectURIs))
+	objects := make([]adtmodel.ActivationObject, len(objectURIs))
 	for i, uri := range objectURIs {
-		objects[i] = xmlActivationObject{URI: uri}
+		objects[i] = adtmodel.ActivationObject{URI: uri}
 	}
-	bodyXML, err := xml.Marshal(xmlActivationRequest{
+	bodyXML, err := xml.Marshal(adtmodel.ActivationRequest{
 		NS:      nsADTCore,
 		Objects: objects,
 	})
@@ -64,13 +42,13 @@ func (c *httpClient) ActivateObjects(ctx context.Context, objectURIs []string) (
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var msgs xmlActivationMessages
+	var msgs adtmodel.ActivationMessages
 	xml.Unmarshal(data, &msgs) //nolint:errcheck
 
 	result := &ActivationResult{Success: true}
 	for _, m := range msgs.Messages {
 		msg := ActivationMessage{
-			ObjectURI: m.URI,
+			ObjectURI: m.Href,
 			Type:      m.Type,
 			Text:      m.ShortText.Text,
 		}

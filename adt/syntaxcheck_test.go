@@ -2,8 +2,10 @@ package adt_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
@@ -17,20 +19,39 @@ func TestSyntaxCheckWithErrors(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/checkruns" {
-			w.Header().Set("Content-Type", "application/xml")
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`<?xml version="1.0"?>
-<chkl:messages xmlns:chkl="http://www.sap.com/adt/checklist">
-  <chkl:message chkl:type="E" chkl:typeText="Error">
-    <chkl:shortTextElements><chkl:shortText>Field "FOO" is unknown.</chkl:shortText></chkl:shortTextElements>
-    <chkl:line>42</chkl:line>
-    <chkl:column>5</chkl:column>
-  </chkl:message>
-</chkl:messages>`))
+		if r.URL.Path != "/sap/bc/adt/checkruns" {
+			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		w.WriteHeader(http.StatusNotFound)
+		ct := r.Header.Get("Content-Type")
+		if ct != "application/vnd.sap.adt.checkobjects+xml" {
+			t.Errorf("Content-Type: got %q", ct)
+		}
+		accept := r.Header.Get("Accept")
+		if accept != "application/vnd.sap.adt.checkmessages+xml" {
+			t.Errorf("Accept: got %q", accept)
+		}
+		body, _ := io.ReadAll(r.Body)
+		bodyStr := string(body)
+		if !strings.Contains(bodyStr, "checkObjectList") {
+			t.Errorf("body missing checkObjectList: %s", bodyStr)
+		}
+		if !strings.Contains(bodyStr, "/sap/bc/adt/programs/programs/ZTEST") {
+			t.Errorf("body missing object URI: %s", bodyStr)
+		}
+		w.Header().Set("Content-Type", "application/vnd.sap.adt.checkmessages+xml")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun">
+  <chkrun:checkReport chkrun:reporter="abapCheckRun"
+    chkrun:triggeringUri="/sap/bc/adt/programs/programs/ZTEST"
+    chkrun:status="processed" chkrun:statusText="Syntax check performed">
+    <chkrun:checkMessageList>
+      <chkrun:checkMessage chkrun:uri="/sap/bc/adt/programs/programs/ZTEST/source/main#start=42,5"
+        chkrun:type="E" chkrun:shortText="Field &quot;FOO&quot; is unknown."/>
+    </chkrun:checkMessageList>
+  </chkrun:checkReport>
+</chkrun:checkRunReports>`))
 	}))
 	defer srv.Close()
 
@@ -47,6 +68,9 @@ func TestSyntaxCheckWithErrors(t *testing.T) {
 	if msgs[0].Type != "E" {
 		t.Errorf("type: got %q", msgs[0].Type)
 	}
+	if msgs[0].Text != `Field "FOO" is unknown.` {
+		t.Errorf("text: got %q", msgs[0].Text)
+	}
 	if msgs[0].Line != 42 {
 		t.Errorf("line: got %d", msgs[0].Line)
 	}
@@ -62,9 +86,14 @@ func TestSyntaxCheckClean(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		w.Header().Set("Content-Type", "application/xml")
+		w.Header().Set("Content-Type", "application/vnd.sap.adt.checkmessages+xml")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`<?xml version="1.0"?><chkl:messages xmlns:chkl="http://www.sap.com/adt/checklist"/>`))
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun">
+  <chkrun:checkReport chkrun:reporter="abapCheckRun"
+    chkrun:triggeringUri="/sap/bc/adt/programs/programs/ZTEST"
+    chkrun:status="processed" chkrun:statusText="Object ZTEST has been checked"/>
+</chkrun:checkRunReports>`))
 	}))
 	defer srv.Close()
 

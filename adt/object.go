@@ -6,42 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
-
-type xmlCreateProgram struct {
-	XMLName     xml.Name      `xml:"program:abapProgram"`
-	NSProgram   string        `xml:"xmlns:program,attr"`
-	NSCore      string        `xml:"xmlns:adtcore,attr"`
-	Type        string        `xml:"adtcore:type,attr"`
-	Description string        `xml:"adtcore:description,attr"`
-	Name        string        `xml:"adtcore:name,attr"`
-	PackageRef  xmlPackageRef `xml:"adtcore:packageRef"`
-}
-
-type xmlCreateClass struct {
-	XMLName     xml.Name      `xml:"class:abapClass"`
-	NSClass     string        `xml:"xmlns:class,attr"`
-	NSCore      string        `xml:"xmlns:adtcore,attr"`
-	Type        string        `xml:"adtcore:type,attr"`
-	Description string        `xml:"adtcore:description,attr"`
-	Name        string        `xml:"adtcore:name,attr"`
-	PackageRef  xmlPackageRef `xml:"adtcore:packageRef"`
-}
-
-type xmlCreateInterface struct {
-	XMLName     xml.Name      `xml:"intf:abapInterface"`
-	NSIntf      string        `xml:"xmlns:intf,attr"`
-	NSCore      string        `xml:"xmlns:adtcore,attr"`
-	Type        string        `xml:"adtcore:type,attr"`
-	Description string        `xml:"adtcore:description,attr"`
-	Name        string        `xml:"adtcore:name,attr"`
-	PackageRef  xmlPackageRef `xml:"adtcore:packageRef"`
-}
-
-type xmlPackageRef struct {
-	XMLName xml.Name `xml:"adtcore:packageRef"`
-	Name    string   `xml:"adtcore:name,attr"`
-}
 
 var objectTypeMap = map[string]struct {
 	endpoint string
@@ -64,20 +31,20 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 
 	var body []byte
 	var err error
-	pkgRef := xmlPackageRef{Name: packageName}
+	pkgRef := adtmodel.PackageRef{Name: packageName}
 	switch strings.ToUpper(objectType) {
 	case "PROG":
-		body, err = xml.Marshal(xmlCreateProgram{
+		body, err = xml.Marshal(adtmodel.CreateProgram{
 			NSProgram: "http://www.sap.com/adt/programs/programs", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
 	case "CLAS":
-		body, err = xml.Marshal(xmlCreateClass{
+		body, err = xml.Marshal(adtmodel.CreateClass{
 			NSClass: "http://www.sap.com/adt/oo/classes", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
 	case "INTF":
-		body, err = xml.Marshal(xmlCreateInterface{
+		body, err = xml.Marshal(adtmodel.CreateInterface{
 			NSIntf: "http://www.sap.com/adt/oo/interfaces", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
