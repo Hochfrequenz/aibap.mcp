@@ -20,7 +20,8 @@ func TestActivateObjectSuccess(t *testing.T) {
 		if r.URL.Path == "/sap/bc/adt/activation" {
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`<?xml version="1.0"?><chkl:messages xmlns:chkl="http://www.sap.com/adt/checklist" xmlns:adtcore="http://www.sap.com/adt/core"/>`))
+			// Empty messages = successful activation
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?><chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist"><chkl:properties checkExecuted="false" activationExecuted="false" generationExecuted="true"/></chkl:messages>`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -50,13 +51,16 @@ func TestActivateObjectWithErrors(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/sap/bc/adt/activation" {
-			w.Header().Set("Content-Type", "application/xml")
+			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`<?xml version="1.0"?>
-<chkl:messages xmlns:chkl="http://www.sap.com/adt/checklist" xmlns:adtcore="http://www.sap.com/adt/core">
-  <chkl:message adtcore:uri="/sap/bc/adt/programs/programs/ZTEST" chkl:type="E">
-    <chkl:shortTextElements><chkl:shortText>Syntax error in line 5</chkl:shortText></chkl:shortTextElements>
-  </chkl:message>
+			// Real SAP activation error response format
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist">
+  <msg objDescr="Programm ZTEST" type="E" line="1"
+       href="/sap/bc/adt/programs/programs/ztest/source/main#start=5,0"
+       forceSupported="true">
+    <shortText><txt>Syntax error in line 5</txt></shortText>
+  </msg>
 </chkl:messages>`))
 			return
 		}
@@ -82,5 +86,8 @@ func TestActivateObjectWithErrors(t *testing.T) {
 	}
 	if result.Messages[0].Text != "Syntax error in line 5" {
 		t.Errorf("message text: got %q", result.Messages[0].Text)
+	}
+	if result.Messages[0].ObjectURI != "/sap/bc/adt/programs/programs/ztest/source/main#start=5,0" {
+		t.Errorf("object URI: got %q", result.Messages[0].ObjectURI)
 	}
 }

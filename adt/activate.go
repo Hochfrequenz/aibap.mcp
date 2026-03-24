@@ -48,7 +48,7 @@ func (c *httpClient) ActivateObjects(ctx context.Context, objectURIs []string) (
 	result := &ActivationResult{Success: true}
 	for _, m := range msgs.Messages {
 		msg := ActivationMessage{
-			ObjectURI: m.URI,
+			ObjectURI: m.Href,
 			Type:      m.Type,
 			Text:      m.ShortText.Text,
 		}
