@@ -142,3 +142,36 @@ func (d *DebugSession) StopListener(ctx context.Context) error {
 	d.breakpoints = make(map[string]string)
 	return checkResponse(resp)
 }
+
+// GetDebuggeeSessions returns active debuggee sessions.
+func (d *DebugSession) GetDebuggeeSessions(ctx context.Context) ([]byte, error) {
+	resp, err := d.client.doMutate(ctx, http.MethodPost,
+		"/sap/bc/adt/debugger?method=getDebuggeeSessions",
+		nil,
+		map[string]string{"Accept": "application/vnd.sap.as+xml"})
+	if err != nil {
+		return nil, fmt.Errorf("GetDebuggeeSessions: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+	data, _ := io.ReadAll(resp.Body)
+	return data, nil
+}
+
+// Attach attaches to an active debuggee session.
+func (d *DebugSession) Attach(ctx context.Context, debuggeeID string) error {
+	path := fmt.Sprintf("/sap/bc/adt/debugger?method=attach&debuggeeId=%s", debuggeeID)
+	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
+		map[string]string{"Accept": "application/xml"})
+	if err != nil {
+		return fmt.Errorf("Attach: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return err
+	}
+	d.debuggeeID = debuggeeID
+	return nil
+}

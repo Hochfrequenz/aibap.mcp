@@ -108,3 +108,69 @@ func TestDebugSessionStopListener(t *testing.T) {
 		t.Errorf("path: got %q", gotPath)
 	}
 }
+
+func TestDebugSessionGetDebuggeeSessions(t *testing.T) {
+	var gotPath, gotAccept string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "getDebuggeeSessions" {
+			gotPath = r.URL.Path
+			gotAccept = r.Header.Get("Accept")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<sessions><session id="123"/></sessions>`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
+
+	data, err := dbg.GetDebuggeeSessions(context.Background())
+	if err != nil {
+		t.Fatalf("GetDebuggeeSessions: %v", err)
+	}
+	if gotPath != "/sap/bc/adt/debugger" {
+		t.Errorf("path: got %q", gotPath)
+	}
+	if gotAccept != "application/vnd.sap.as+xml" {
+		t.Errorf("accept: got %q", gotAccept)
+	}
+	if !strings.Contains(string(data), "session") {
+		t.Errorf("unexpected response: %s", data)
+	}
+}
+
+func TestDebugSessionAttach(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "attach" {
+			gotPath = r.URL.RequestURI()
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
+
+	err := dbg.Attach(context.Background(), "debuggee-42")
+	if err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+	if !strings.Contains(gotPath, "debuggeeId=debuggee-42") {
+		t.Errorf("path missing debuggeeId: %s", gotPath)
+	}
+}
