@@ -30,11 +30,11 @@ The key includes the system name from the active `ClientRegistry` entry to preve
 **Lifecycle:**
 - `lock_object` stores `{lockHandle, etag}` in the map after a successful lock
 - `get_source` updates the `etag` in the map (if entry exists) from the response
-- `patch_source`, `set_source_from_file`, `set_source` update the `etag` after a successful write
+- `patch_source`, `set_source_from_file` update the `etag` after a successful write
 - `unlock_object` removes the entry from the map
 - All tools that need a lock check the map first if no `lock_handle` parameter was provided
 
-**Auto-lock:** If a mutating tool (`patch_source`, `set_source_from_file`, `set_source`) is called without a `lock_handle` parameter AND no entry exists in the lock map, the server automatically locks the object and stores the result. Transport is not needed at lock time — SAP only requires it at write time (`?corrNr=`). If auto-lock fails (e.g., object locked by another user), the tool returns an error immediately without attempting the write.
+**Auto-lock:** If a mutating tool (`patch_source`, `set_source_from_file`) is called without a `lock_handle` parameter AND no entry exists in the lock map, the server automatically locks the object and stores the result. Transport is not needed at lock time — SAP only requires it at write time (`?corrNr=`). If auto-lock fails (e.g., object locked by another user), the tool returns an error immediately without attempting the write.
 
 ### 2. `patch_source` Tool
 
@@ -134,7 +134,7 @@ Replaces `activate_object` (singular). Activates one or more objects in a single
 
 **`get_source`** — unchanged API, but updates ETag in lock map if entry exists.
 
-**`set_source`** — `lock_handle` and `etag` become **optional**. If omitted, looks up the lock map. Updates ETag in map after success.
+**`set_source`** — **removed**. Replaced by `patch_source` (surgical edits) and `set_source_from_file` (full replacement from disk). Passing full source as a string parameter is impractical for large programs.
 
 ## Implementation Scope
 
@@ -150,7 +150,7 @@ Replaces `activate_object` (singular). Activates one or more objects in a single
 - `adt/registry.go` — updated delegation signatures, exposes `ActiveSystemName() string` for lock map keys
 - `tools/register.go` — register new tools, pass lock map to all tool registrations
 - `tools/lock.go` — optional `lock_handle`, lock map integration
-- `tools/source.go` — optional `lock_handle`/`etag`, lock map integration, `get_source` updates ETag in lock map at tool layer
+- `tools/source.go` — remove `set_source` tool, `get_source` updates ETag in lock map at tool layer
 - `tools/activation.go` — `activate_objects` with multi-URI support, keep `activate_object` alias
 
 ### Not in scope
