@@ -17,7 +17,7 @@ func TestLockObjectTool(t *testing.T) {
 	mock := &mockClient{
 		lockObjectFn: func(ctx context.Context, uri string) (string, error) {
 			gotURI = uri
-			return "lock-handle-123", nil
+			return testLockHandle123, nil
 		},
 	}
 	s := newTestServerWithLockMap(mock, lockMap)
@@ -32,16 +32,16 @@ func TestLockObjectTool(t *testing.T) {
 	}
 	// Result text should be the lock handle.
 	text := firstText(result)
-	if text != "lock-handle-123" {
-		t.Errorf("result text = %q, want %q", text, "lock-handle-123")
+	if text != testLockHandle123 {
+		t.Errorf("result text = %q, want %q", text, testLockHandle123)
 	}
 	// Lock map should be populated.
 	state, ok := lockMap.Get("dev:" + testObjectURI)
 	if !ok {
 		t.Fatal("expected lock map entry after lock_object")
 	}
-	if state.LockHandle != "lock-handle-123" {
-		t.Errorf("lock map handle: got %q, want %q", state.LockHandle, "lock-handle-123")
+	if state.LockHandle != testLockHandle123 {
+		t.Errorf("lock map handle: got %q, want %q", state.LockHandle, testLockHandle123)
 	}
 }
 
