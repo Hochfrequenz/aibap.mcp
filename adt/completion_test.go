@@ -17,7 +17,7 @@ func TestGetCompletions(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path != "/sap/bc/adt/abapsource/codecompletion/proposals" {
+		if r.URL.Path != "/sap/bc/adt/abapsource/codecompletion/proposal" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
