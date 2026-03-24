@@ -185,28 +185,16 @@ func setFixtureSource(ctx context.Context, client adt.Client, f fixtureObject) e
 	return nil
 }
 
-// cleanupFixtures attempts to delete all test fixture objects in reverse order.
-// NOTE: This is best-effort. DeleteObject currently does not pass a lock handle
-// to SAP, which causes 400/423 errors (see GitHub issue #40). Once #40 is fixed,
-// cleanup will work automatically. Until then, fixtures persist in $TMP between
-// runs — setupFixtures is idempotent and handles this gracefully.
+// cleanupFixtures deletes all test fixture objects in reverse order.
+// Uses optimistic locking (ETag) internally — no explicit lock needed.
 func cleanupFixtures(ctx context.Context, client adt.Client) {
 	for i := len(testFixtures) - 1; i >= 0; i-- {
 		f := testFixtures[i]
-		err := client.DeleteObject(ctx, f.objectURI, "")
+		err := client.DeleteObject(ctx, f.objectURI, "", "")
 		if err != nil {
-			fmt.Printf("  [cleanup skip] %s: %v\n", f.name, shortenError(err))
+			fmt.Printf("  [cleanup skip] %s: %v\n", f.name, err)
 		} else {
 			fmt.Printf("  [deleted] %s %s\n", f.objType, f.name)
 		}
 	}
-}
-
-// shortenError returns a concise version of SAP ADT errors (strips XML).
-func shortenError(err error) string {
-	s := err.Error()
-	if adtErr, ok := err.(*adt.ADTError); ok {
-		return fmt.Sprintf("SAP %d (see #40: DeleteObject needs lock handle)", adtErr.StatusCode)
-	}
-	return s
 }

@@ -267,7 +267,7 @@ func TestRegistryDelegatesAllMethods(t *testing.T) {
 		}
 	})
 	t.Run("DeleteObject", func(t *testing.T) {
-		if err := registry.DeleteObject(ctx, objURI, ""); err != nil {
+		if err := registry.DeleteObject(ctx, objURI, "handle", ""); err != nil {
 			t.Fatalf("DeleteObject: %v", err)
 		}
 	})
