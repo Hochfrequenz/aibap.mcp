@@ -8,10 +8,9 @@ import (
 )
 
 func TestGetCompletions_Integration(t *testing.T) {
-	// Known bugs:
-	// 1. Endpoint path uses "proposals" (plural) but SAP has "proposal" (singular) → 404
-	// 2. Accept header uses application/xml but SAP requires application/vnd.sap.as+xml → 406
-	// This test documents these bugs. It will pass once both are fixed.
+	// Tests code completion against the SAP system.
+	// Note: response XML parsing may fail if SAP returns asx:abap format
+	// instead of the expected <completions> format — that is a separate issue.
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
