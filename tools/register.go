@@ -38,6 +38,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 	registerUnitTestTools(s, client)
 	registerTransportTools(s, client)
 	registerLockTools(s, client, lockMap, selector)
+	registerPatchTools(s, client, lockMap, selector)
 	registerPrettyPrinterTools(s, client)
 	registerObjectTools(s, client)
 	registerCompletionTools(s, client)
