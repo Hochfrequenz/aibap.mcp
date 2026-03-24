@@ -49,7 +49,10 @@ func (c *httpClient) ActivateObjects(ctx context.Context, objectURIs []string) (
 	resp, err := c.doMutate(ctx, http.MethodPost,
 		"/sap/bc/adt/activation?method=activate&preauditRequested=true",
 		strings.NewReader(xml.Header+string(bodyXML)),
-		map[string]string{"Content-Type": contentTypeXML},
+		map[string]string{
+			"Content-Type": contentTypeXML,
+			"Accept":       "application/xml",
+		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("ActivateObjects: %w", err)

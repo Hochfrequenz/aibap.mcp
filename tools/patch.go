@@ -14,8 +14,8 @@ import (
 
 // PatchOp describes a single source-patch operation.
 type PatchOp struct {
-	// Op is one of: "insert", "replace", "delete", "search_replace".
-	Op string `json:"op"`
+	// Type is one of: "insert", "replace", "delete", "search_replace".
+	Type string `json:"type"`
 
 	// insert: insert Content after AfterLine (0 = before first line).
 	AfterLine int    `json:"after_line,omitempty"`
@@ -44,7 +44,7 @@ func lineDelta(oldSource, newSource string) int {
 
 // primaryKey returns the primary sort key for an op (used for bottom-up ordering).
 func primaryKey(op PatchOp) int {
-	switch op.Op {
+	switch op.Type {
 	case "insert":
 		return op.AfterLine
 	case "replace", "delete":
@@ -63,7 +63,7 @@ func ApplyPatchOps(source string, ops []PatchOp) (string, error) {
 	var lineOps []PatchOp
 	var srOps []PatchOp
 	for _, op := range ops {
-		if op.Op == "search_replace" {
+		if op.Type == "search_replace" {
 			srOps = append(srOps, op)
 		} else {
 			lineOps = append(lineOps, op)
@@ -115,7 +115,7 @@ func ApplyPatchOps(source string, ops []PatchOp) (string, error) {
 }
 
 func opStartLine(op PatchOp) int {
-	switch op.Op {
+	switch op.Type {
 	case "insert":
 		return op.AfterLine
 	default:
@@ -124,7 +124,7 @@ func opStartLine(op PatchOp) int {
 }
 
 func opEndLine(op PatchOp) int {
-	switch op.Op {
+	switch op.Type {
 	case "insert":
 		return op.AfterLine
 	case "replace", "delete":
@@ -151,7 +151,7 @@ func joinLines(lines []string) string {
 // Line numbers are 1-based.
 func applyLineOp(lines []string, op PatchOp) ([]string, error) {
 	n := len(lines)
-	switch op.Op {
+	switch op.Type {
 	case "insert":
 		// Insert content after line AfterLine (0 = before all lines).
 		afterIdx := op.AfterLine // content inserted at index afterIdx
@@ -186,7 +186,7 @@ func applyLineOp(lines []string, op PatchOp) ([]string, error) {
 		return newLines, nil
 
 	default:
-		return nil, fmt.Errorf("unknown op: %q", op.Op)
+		return nil, fmt.Errorf("unknown op: %q", op.Type)
 	}
 }
 
@@ -200,7 +200,7 @@ func registerPatchTools(s *server.MCPServer, client adt.Client, lockMap *adt.Loc
 		),
 		mcp.WithArray("operations",
 			mcp.Required(),
-			mcp.Description(`Array of patch operations. Each op has "op" field (insert/replace/delete/search_replace) plus op-specific fields.`),
+			mcp.Description(`Array of patch operations. Each has "type" field (insert/replace/delete/search_replace) plus op-specific fields.`),
 		),
 		mcp.WithString("transport",
 			mcp.Description("Transport request number (optional)"),

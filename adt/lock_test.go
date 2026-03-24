@@ -21,7 +21,7 @@ func TestLockObject(t *testing.T) {
 			t.Errorf("expected _action=LOCK, got %q", r.URL.Query().Get("_action"))
 		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("lock-handle-xyz"))
+		_, _ = w.Write([]byte(`<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>lock-handle-xyz</LOCK_HANDLE></DATA></asx:values></asx:abap>`))
 	}))
 	defer srv.Close()
 
@@ -53,7 +53,7 @@ func TestUnlockObject(t *testing.T) {
 	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
-	err := client.UnlockObject(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
+	err := client.UnlockObject(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "lock-handle-123")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -15,7 +15,7 @@ import (
 func TestApplyOpsInsert(t *testing.T) {
 	source := "line1\nline2\nline3"
 	ops := []tools.PatchOp{
-		{Op: "insert", AfterLine: 1, Content: "inserted"},
+		{Type: "insert", AfterLine: 1, Content: "inserted"},
 	}
 	got, err := tools.ApplyPatchOps(source, ops)
 	if err != nil {
@@ -30,7 +30,7 @@ func TestApplyOpsInsert(t *testing.T) {
 func TestApplyOpsInsertAtZero(t *testing.T) {
 	source := "line1\nline2"
 	ops := []tools.PatchOp{
-		{Op: "insert", AfterLine: 0, Content: "before"},
+		{Type: "insert", AfterLine: 0, Content: "before"},
 	}
 	got, err := tools.ApplyPatchOps(source, ops)
 	if err != nil {
@@ -45,7 +45,7 @@ func TestApplyOpsInsertAtZero(t *testing.T) {
 func TestApplyOpsReplace(t *testing.T) {
 	source := "line1\nline2\nline3\nline4"
 	ops := []tools.PatchOp{
-		{Op: "replace", FromLine: 2, ToLine: 3, Content: "new"},
+		{Type: "replace", FromLine: 2, ToLine: 3, Content: "new"},
 	}
 	got, err := tools.ApplyPatchOps(source, ops)
 	if err != nil {
@@ -60,7 +60,7 @@ func TestApplyOpsReplace(t *testing.T) {
 func TestApplyOpsDelete(t *testing.T) {
 	source := "line1\nline2\nline3\nline4"
 	ops := []tools.PatchOp{
-		{Op: "delete", FromLine: 2, ToLine: 3},
+		{Type: "delete", FromLine: 2, ToLine: 3},
 	}
 	got, err := tools.ApplyPatchOps(source, ops)
 	if err != nil {
@@ -75,7 +75,7 @@ func TestApplyOpsDelete(t *testing.T) {
 func TestApplyOpsSearchReplace(t *testing.T) {
 	source := "REPORT ZTEST.\nDATA: lv_x TYPE i."
 	ops := []tools.PatchOp{
-		{Op: "search_replace", Search: "ZTEST", Replace: "ZNEW"},
+		{Type: "search_replace", Search: "ZTEST", Replace: "ZNEW"},
 	}
 	got, err := tools.ApplyPatchOps(source, ops)
 	if err != nil {
@@ -90,7 +90,7 @@ func TestApplyOpsSearchReplace(t *testing.T) {
 func TestApplyOpsSearchReplaceAll(t *testing.T) {
 	source := "foo bar foo baz foo"
 	ops := []tools.PatchOp{
-		{Op: "search_replace", Search: "foo", Replace: "qux", All: true},
+		{Type: "search_replace", Search: "foo", Replace: "qux", All: true},
 	}
 	got, err := tools.ApplyPatchOps(source, ops)
 	if err != nil {
@@ -106,8 +106,8 @@ func TestApplyOpsMultiple(t *testing.T) {
 	// Two inserts: ops should be sorted descending by after_line so bottom-up application works.
 	source := "line1\nline2\nline3"
 	ops := []tools.PatchOp{
-		{Op: "insert", AfterLine: 1, Content: "after1"},
-		{Op: "insert", AfterLine: 2, Content: "after2"},
+		{Type: "insert", AfterLine: 1, Content: "after1"},
+		{Type: "insert", AfterLine: 2, Content: "after2"},
 	}
 	got, err := tools.ApplyPatchOps(source, ops)
 	if err != nil {
@@ -125,8 +125,8 @@ func TestApplyOpsMultiple(t *testing.T) {
 func TestApplyOpsOverlapRejected(t *testing.T) {
 	source := "line1\nline2\nline3\nline4"
 	ops := []tools.PatchOp{
-		{Op: "replace", FromLine: 1, ToLine: 3, Content: "new1"},
-		{Op: "replace", FromLine: 2, ToLine: 4, Content: "new2"},
+		{Type: "replace", FromLine: 1, ToLine: 3, Content: "new1"},
+		{Type: "replace", FromLine: 2, ToLine: 4, Content: "new2"},
 	}
 	_, err := tools.ApplyPatchOps(source, ops)
 	if err == nil {
@@ -160,7 +160,7 @@ func TestPatchSourceToolSearchReplace(t *testing.T) {
 		"object_uri": uri,
 		"operations": []interface{}{
 			map[string]interface{}{
-				"op":      "search_replace",
+				"type":      "search_replace",
 				"search":  "ZTEST",
 				"replace": "ZNEW",
 			},
@@ -208,7 +208,7 @@ func TestPatchSourceToolAutoLock(t *testing.T) {
 		"object_uri": uri,
 		"operations": []interface{}{
 			map[string]interface{}{
-				"op":      "search_replace",
+				"type":      "search_replace",
 				"search":  "ZTEST",
 				"replace": "ZAUTO",
 			},
@@ -265,7 +265,7 @@ func TestPatchSourceToolExplicitLockHandle(t *testing.T) {
 		"lock_handle": "explicit-handle",
 		"operations": []interface{}{
 			map[string]interface{}{
-				"op":      "search_replace",
+				"type":      "search_replace",
 				"search":  "ZTEST",
 				"replace": "ZEXPLICIT",
 			},
@@ -296,7 +296,7 @@ func TestPatchSourceToolGetSourceError(t *testing.T) {
 		"object_uri": uri,
 		"operations": []interface{}{
 			map[string]interface{}{
-				"op":      "search_replace",
+				"type":      "search_replace",
 				"search":  "x",
 				"replace": "y",
 			},
