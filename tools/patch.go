@@ -9,7 +9,6 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 )
 
 // Patch operation type constants.
@@ -199,7 +198,7 @@ func applyLineOp(lines []string, op PatchOp) ([]string, error) {
 }
 
 // registerPatchTools registers the patch_source MCP tool on the server.
-func registerPatchTools(s *server.MCPServer, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
+func registerPatchTools(s toolAdder, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("patch_source",
 		mcp.WithDescription("Apply patch operations to ABAP source code. Supports line-based (insert/replace/delete) and text-based (search_replace) operations. Automatically acquires a lock if none exists."),
 		mcp.WithString(paramObjectURI,
