@@ -20,11 +20,27 @@ type BreakpointsRequest struct {
 }
 
 // BreakpointRequest is a single breakpoint in a set-breakpoint request.
+// Uses custom MarshalXML to produce adtcore:-prefixed attributes that
+// Go's encoding/xml cannot generate from struct tags alone.
 type BreakpointRequest struct {
-	Kind string `xml:"kind,attr"`
-	URI  string `xml:"uri,attr"`  // adtcore:uri with #start=line,col
-	Type string `xml:"type,attr"` // adtcore:type e.g. PROG/P
-	Name string `xml:"name,attr"` // adtcore:name e.g. ZREPORT
+	Kind string // line, statement, etc.
+	URI  string // adtcore:uri with #start=line,col
+	Type string // adtcore:type e.g. PROG/P
+	Name string // adtcore:name e.g. ZREPORT
+}
+
+// MarshalXML writes a <breakpoint> element with adtcore:-prefixed attributes.
+func (b BreakpointRequest) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	start.Name = xml.Name{Local: "breakpoint"}
+	start.Attr = []xml.Attr{
+		{Name: xml.Name{Local: "kind"}, Value: b.Kind},
+		{Name: xml.Name{Local: "adtcore:uri"}, Value: b.URI},
+		{Name: xml.Name{Local: "adtcore:type"}, Value: b.Type},
+		{Name: xml.Name{Local: "adtcore:name"}, Value: b.Name},
+	}
+	e.EncodeToken(start)   //nolint:errcheck
+	e.EncodeToken(start.End()) //nolint:errcheck
+	return nil
 }
 
 // BreakpointsResponse is the XML response from POST /sap/bc/adt/debugger/breakpoints.
