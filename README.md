@@ -56,13 +56,51 @@ SAP ADT REST API  (/sap/bc/adt/...)
 - A user with developer authorizations (`S_ADT_RES`, `S_DEVELOP`) — or OAuth2 SSO (see below)
 - Go 1.26+ (to build from source)
 
-## Installation
+## Getting started
 
-### Download binary
+### 1. Download the binary
 
-Download the latest release for your platform from the [releases page](https://github.com/Hochfrequenz/mcp-server-abap/releases).
+Download the latest release for your platform from the [releases page](https://github.com/Hochfrequenz/mcp-server-abap/releases):
 
-### Build from source
+| Platform | File |
+|----------|------|
+| Windows | `mcp-server-abap-*-windows-amd64.zip` |
+| macOS (Intel) | `mcp-server-abap-*-darwin-amd64.tar.gz` |
+| macOS (Apple Silicon) | `mcp-server-abap-*-darwin-arm64.tar.gz` |
+| Linux | `mcp-server-abap-*-linux-amd64.tar.gz` |
+
+Extract the archive. You'll get a single `mcp-server-abap` executable (or `mcp-server-abap.exe` on Windows).
+
+### 2. Create `config.yaml`
+
+Create a file called `config.yaml` next to the binary (or anywhere you like):
+
+```yaml
+default_system: dev
+
+systems:
+  dev:
+    host: "https://your-sap-system:8000"
+    user: "YOUR_USER"
+    password: "YOUR_PASSWORD"
+    client: "100"
+    tls_skip_verify: false
+```
+
+### 3. Connect to Claude
+
+See [Usage with Claude](#usage-with-claude) below for copy-paste configuration snippets.
+
+### Alternative: Docker
+
+```bash
+docker pull ghcr.io/hochfrequenz/mcp-server-abap:latest
+docker run -i -v ./config.yaml:/config.yaml -e SAP_CONFIG_FILE=/config.yaml ghcr.io/hochfrequenz/mcp-server-abap
+```
+
+### Alternative: Build from source
+
+Requires Go 1.26+:
 
 ```bash
 git clone https://github.com/Hochfrequenz/mcp-server-abap.git

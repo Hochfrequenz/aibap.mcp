@@ -15,6 +15,12 @@ import (
 var version = "dev"
 
 func main() {
+	// Handle --version / -v flag
+	if len(os.Args) >= 2 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("mcp-server-abap %s\n", version)
+		return
+	}
+
 	// Handle login subcommand
 	if len(os.Args) >= 2 && os.Args[1] == "login" {
 		configPath := os.Getenv("SAP_CONFIG_FILE")

@@ -29,5 +29,5 @@ checksum:
 
 release:
   github:
-    owner: dachner
+    owner: Hochfrequenz
     name: mcp-server-abap
