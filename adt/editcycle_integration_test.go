@@ -4,73 +4,19 @@ package adt_test
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/Hochfrequenz/mcp-server-abap/adt"
 )
 
 const editCycleReportName = "Z_MCP_EDITCYCLE_TEST"
-const editCycleReportURI = "/sap/bc/adt/programs/programs/" + editCycleReportName
-
-// setupEditCycleReport creates a disposable $TMP program and registers cleanup.
-func setupEditCycleReport(t *testing.T, client adt.Client) string {
-	t.Helper()
-	ctx := context.Background()
-
-	err := client.CreateObject(ctx, "PROG", editCycleReportName, "$TMP",
-		fmt.Sprintf("Edit cycle integration test (%s)", time.Now().Format("2006-01-02")), "")
-	if err != nil {
-		if _, infoErr := client.GetObjectInfo(ctx, editCycleReportURI); infoErr != nil {
-			t.Fatalf("CreateObject %s failed and object does not exist: %v", editCycleReportName, err)
-		}
-		t.Logf("object %s already exists, reusing", editCycleReportName)
-	}
-
-	// Set initial source so the object is in a known state.
-	lockHandle, err := client.LockObject(ctx, editCycleReportURI)
-	if err != nil {
-		t.Fatalf("LockObject for setup failed: %v", err)
-	}
-	src, err := client.GetSource(ctx, editCycleReportURI)
-	if err != nil {
-		_ = client.UnlockObject(ctx, editCycleReportURI, lockHandle)
-		t.Fatalf("GetSource for setup failed: %v", err)
-	}
-	initialSource := "REPORT " + strings.ToLower(editCycleReportName) + ".\nWRITE: / 'initial'.\n"
-	_, err = client.SetSource(ctx, editCycleReportURI, initialSource, lockHandle, "", src.ETag)
-	if err != nil {
-		_ = client.UnlockObject(ctx, editCycleReportURI, lockHandle)
-		t.Fatalf("SetSource for setup failed: %v", err)
-	}
-	_ = client.UnlockObject(ctx, editCycleReportURI, lockHandle)
-
-	// Activate the initial source.
-	result, err := client.ActivateObjects(ctx, []string{editCycleReportURI})
-	if err != nil {
-		t.Fatalf("ActivateObjects for setup failed: %v", err)
-	}
-	if !result.Success {
-		t.Fatalf("activation of initial source failed: %d messages", len(result.Messages))
-	}
-
-	t.Cleanup(func() {
-		if err := client.DeleteObject(context.Background(), editCycleReportURI, "", ""); err != nil {
-			t.Logf("WARNING: cleanup failed to delete %s: %v", editCycleReportName, err)
-		}
-	})
-
-	return editCycleReportURI
-}
 
 // TestFullEditCycle_Integration exercises the complete safe edit workflow:
 // lock → get source → write → unlock → activate → verify → restore.
 // Uses a $TMP object so no transport is needed.
 func TestFullEditCycle_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
-	objectURI := setupEditCycleReport(t, client)
+	initialSource := "REPORT " + strings.ToLower(editCycleReportName) + ".\nWRITE: / 'initial'.\n"
+	objectURI := setupDisposableReport(t, client, editCycleReportName, initialSource)
 	ctx := context.Background()
 
 	// Step 1: Lock the object.
@@ -80,12 +26,10 @@ func TestFullEditCycle_Integration(t *testing.T) {
 	}
 	t.Logf("step 1: locked, handle=%s", lockHandle)
 
-	// Register unlock cleanup in case something fails mid-test.
-	unlocked := false
+	// Always unlock in cleanup. UnlockObject on an already-unlocked handle
+	// returns an ignorable error, so this is safe even after explicit unlock.
 	t.Cleanup(func() {
-		if !unlocked {
-			_ = client.UnlockObject(context.Background(), objectURI, lockHandle)
-		}
+		_ = client.UnlockObject(context.Background(), objectURI, lockHandle)
 	})
 
 	// Step 2: Get current source and ETag.
@@ -96,11 +40,13 @@ func TestFullEditCycle_Integration(t *testing.T) {
 	t.Logf("step 2: got source (%d bytes), ETag=%s", len(original.Source), original.ETag)
 
 	// Step 3: Write modified source.
-	// In ABAP, " starts an inline comment.
 	modifiedSource := "REPORT " + strings.ToLower(editCycleReportName) + ".\nWRITE: / 'modified by edit cycle test'.\n"
 	newETag, err := client.SetSource(ctx, objectURI, modifiedSource, lockHandle, "", original.ETag)
 	if err != nil {
 		t.Fatalf("step 3 (write source): %v", err)
+	}
+	if newETag == original.ETag {
+		t.Logf("step 3: NOTE — ETag unchanged after write")
 	}
 	t.Logf("step 3: wrote source, new ETag=%s", newETag)
 
@@ -109,7 +55,6 @@ func TestFullEditCycle_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("step 4 (unlock): %v", err)
 	}
-	unlocked = true
 	t.Logf("step 4: unlocked")
 
 	// TODO(#18): For objects in transportable packages, check transport
@@ -149,14 +94,16 @@ func TestFullEditCycle_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("step 7 (restore lock): %v", err)
 	}
+	t.Cleanup(func() {
+		_ = client.UnlockObject(context.Background(), objectURI, restoreLock)
+	})
+
 	restoreSrc, err := client.GetSource(ctx, objectURI)
 	if err != nil {
-		_ = client.UnlockObject(ctx, objectURI, restoreLock)
 		t.Fatalf("step 7 (restore get source): %v", err)
 	}
 	_, err = client.SetSource(ctx, objectURI, original.Source, restoreLock, "", restoreSrc.ETag)
 	if err != nil {
-		_ = client.UnlockObject(ctx, objectURI, restoreLock)
 		t.Fatalf("step 7 (restore write): %v", err)
 	}
 	_ = client.UnlockObject(ctx, objectURI, restoreLock)
