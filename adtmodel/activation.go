@@ -17,7 +17,7 @@ type ActivationObject struct {
 
 // ActivationMessages is the response from POST /sap/bc/adt/activation.
 type ActivationMessages struct {
-	XMLName  xml.Name               `xml:"messages"`
+	XMLName  xml.Name            `xml:"messages"`
 	Messages []ActivationMessage `xml:"message"`
 }
 
