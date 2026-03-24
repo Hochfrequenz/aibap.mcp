@@ -23,7 +23,7 @@ func (c *httpClient) GetCompletions(ctx context.Context, objectURI, source strin
 		strings.NewReader(source),
 		map[string]string{
 			"Content-Type": "text/plain; charset=utf-8",
-			"Accept":       "application/vnd.sap.as+xml",
+			"Accept":       "application/xml",
 		},
 	)
 	if err != nil {
@@ -37,6 +37,9 @@ func (c *httpClient) GetCompletions(ctx context.Context, objectURI, source strin
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("GetCompletions reading body: %w", err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 	var comps adtmodel.Completions
 	if err := xml.Unmarshal(data, &comps); err != nil {
