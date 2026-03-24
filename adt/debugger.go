@@ -175,3 +175,46 @@ func (d *DebugSession) Attach(ctx context.Context, debuggeeID string) error {
 	d.debuggeeID = debuggeeID
 	return nil
 }
+
+// Step executes a debug action: stepInto, stepOver, stepReturn, continue.
+func (d *DebugSession) Step(ctx context.Context, action string) ([]byte, error) {
+	path := fmt.Sprintf("/sap/bc/adt/debugger/actions?action=%s", action)
+	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
+		map[string]string{"Accept": "application/xml"})
+	if err != nil {
+		return nil, fmt.Errorf("Step: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// GetVariable reads a variable value from the debug session.
+func (d *DebugSession) GetVariable(ctx context.Context, name string) ([]byte, error) {
+	path := fmt.Sprintf("/sap/bc/adt/debugger/variables/%s/value", name)
+	resp, err := d.client.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	if err != nil {
+		return nil, fmt.Errorf("GetVariable: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// GetStack returns the current call stack.
+func (d *DebugSession) GetStack(ctx context.Context) ([]byte, error) {
+	resp, err := d.client.doRead(ctx, "/sap/bc/adt/debugger/systemareas/stack",
+		map[string]string{"Accept": "application/xml"})
+	if err != nil {
+		return nil, fmt.Errorf("GetStack: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(resp.Body)
+}

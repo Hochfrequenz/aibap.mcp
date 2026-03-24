@@ -174,3 +174,92 @@ func TestDebugSessionAttach(t *testing.T) {
 		t.Errorf("path missing debuggeeId: %s", gotPath)
 	}
 }
+
+func TestDebugSessionStep(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path == "/sap/bc/adt/debugger/actions" {
+			gotPath = r.URL.RequestURI()
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<step result="ok"/>`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
+
+	data, err := dbg.Step(context.Background(), "stepInto")
+	if err != nil {
+		t.Fatalf("Step: %v", err)
+	}
+	if !strings.Contains(gotPath, "action=stepInto") {
+		t.Errorf("path missing action: %s", gotPath)
+	}
+	if !strings.Contains(string(data), "step") {
+		t.Errorf("unexpected response: %s", data)
+	}
+}
+
+func TestDebugSessionGetVariable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path == "/sap/bc/adt/debugger/variables/LV_TEST/value" && r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<variable name="LV_TEST" value="hello"/>`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
+
+	data, err := dbg.GetVariable(context.Background(), "LV_TEST")
+	if err != nil {
+		t.Fatalf("GetVariable: %v", err)
+	}
+	if !strings.Contains(string(data), "LV_TEST") {
+		t.Errorf("unexpected response: %s", data)
+	}
+}
+
+func TestDebugSessionGetStack(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path == "/sap/bc/adt/debugger/systemareas/stack" && r.Method == http.MethodGet {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<stack><frame level="1" name="MAIN"/></stack>`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
+
+	data, err := dbg.GetStack(context.Background())
+	if err != nil {
+		t.Fatalf("GetStack: %v", err)
+	}
+	if !strings.Contains(string(data), "stack") {
+		t.Errorf("unexpected response: %s", data)
+	}
+}
