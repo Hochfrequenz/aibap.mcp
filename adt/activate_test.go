@@ -17,7 +17,7 @@ func TestActivateObjectSuccess(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/activation/activate" {
+		if r.URL.Path == "/sap/bc/adt/activation" {
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<?xml version="1.0"?><chkl:messages xmlns:chkl="http://www.sap.com/adt/checklist" xmlns:adtcore="http://www.sap.com/adt/core"/>`))
@@ -30,7 +30,7 @@ func TestActivateObjectSuccess(t *testing.T) {
 	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
-	result, err := client.ActivateObject(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
+	result, err := client.ActivateObjects(context.Background(), []string{"/sap/bc/adt/programs/programs/ZTEST"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestActivateObjectWithErrors(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/activation/activate" {
+		if r.URL.Path == "/sap/bc/adt/activation" {
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<?xml version="1.0"?>
@@ -67,7 +67,7 @@ func TestActivateObjectWithErrors(t *testing.T) {
 	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
-	result, err := client.ActivateObject(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
+	result, err := client.ActivateObjects(context.Background(), []string{"/sap/bc/adt/programs/programs/ZTEST"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

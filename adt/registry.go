@@ -99,8 +99,8 @@ func (r *ClientRegistry) GetSource(ctx context.Context, objectURI string) (*Sour
 func (r *ClientRegistry) SetSource(ctx context.Context, objectURI, source, lockHandle, transport, etag string) (string, error) {
 	return r.activeClient().SetSource(ctx, objectURI, source, lockHandle, transport, etag)
 }
-func (r *ClientRegistry) ActivateObject(ctx context.Context, objectURI string) (*ActivationResult, error) {
-	return r.activeClient().ActivateObject(ctx, objectURI)
+func (r *ClientRegistry) ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error) {
+	return r.activeClient().ActivateObjects(ctx, objectURIs)
 }
 func (r *ClientRegistry) SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error) {
 	return r.activeClient().SearchObjects(ctx, query, objectType, maxResults)

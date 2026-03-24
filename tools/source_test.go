@@ -18,7 +18,7 @@ const testObjectURI = "/sap/bc/adt/programs/programs/ZTEST"
 type mockClient struct {
 	getSourceFn      func(ctx context.Context, uri string) (*adt.SourceResult, error)
 	setSourceFn      func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
-	activateFn       func(ctx context.Context, uri string) (*adt.ActivationResult, error)
+	activateObjectsFn func(ctx context.Context, uris []string) (*adt.ActivationResult, error)
 	searchFn         func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
 	whereUsedFn      func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
 	browsePackageFn  func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
@@ -47,9 +47,9 @@ func (m *mockClient) SetSource(ctx context.Context, uri, source, lockHandle, tra
 	}
 	return "new-etag", nil
 }
-func (m *mockClient) ActivateObject(ctx context.Context, uri string) (*adt.ActivationResult, error) {
-	if m.activateFn != nil {
-		return m.activateFn(ctx, uri)
+func (m *mockClient) ActivateObjects(ctx context.Context, uris []string) (*adt.ActivationResult, error) {
+	if m.activateObjectsFn != nil {
+		return m.activateObjectsFn(ctx, uris)
 	}
 	return &adt.ActivationResult{Success: true}, nil
 }
@@ -243,9 +243,9 @@ func TestGetSourceToolError(t *testing.T) {
 
 func TestActivateObjectTool(t *testing.T) {
 	mock := &mockClient{
-		activateFn: func(ctx context.Context, uri string) (*adt.ActivationResult, error) {
-			if uri != testObjectURI {
-				t.Errorf("unexpected uri: %q", uri)
+		activateObjectsFn: func(ctx context.Context, uris []string) (*adt.ActivationResult, error) {
+			if len(uris) != 1 || uris[0] != testObjectURI {
+				t.Errorf("unexpected uris: %v", uris)
 			}
 			return &adt.ActivationResult{Success: true, Messages: []adt.ActivationMessage{}}, nil
 		},
@@ -261,7 +261,7 @@ func TestActivateObjectTool(t *testing.T) {
 
 func TestActivateObjectToolError(t *testing.T) {
 	mock := &mockClient{
-		activateFn: func(ctx context.Context, uri string) (*adt.ActivationResult, error) {
+		activateObjectsFn: func(ctx context.Context, uris []string) (*adt.ActivationResult, error) {
 			return nil, &adt.ADTError{StatusCode: 500, Message: "Activation failed"}
 		},
 	}

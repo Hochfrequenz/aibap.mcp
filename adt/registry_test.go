@@ -198,9 +198,9 @@ func TestRegistryDelegatesAllMethods(t *testing.T) {
 			t.Fatalf("SetSource: %v", err)
 		}
 	})
-	t.Run("ActivateObject", func(t *testing.T) {
-		if _, err := registry.ActivateObject(ctx, objURI); err != nil {
-			t.Fatalf("ActivateObject: %v", err)
+	t.Run("ActivateObjects", func(t *testing.T) {
+		if _, err := registry.ActivateObjects(ctx, []string{objURI}); err != nil {
+			t.Fatalf("ActivateObjects: %v", err)
 		}
 	})
 	t.Run("SearchObjects", func(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 type Client interface {
 	GetSource(ctx context.Context, objectURI string) (*SourceResult, error)
 	SetSource(ctx context.Context, objectURI, source, lockHandle, transport, etag string) (string, error)
-	ActivateObject(ctx context.Context, objectURI string) (*ActivationResult, error)
+	ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error)
 	SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error)
 	WhereUsed(ctx context.Context, objectURI string) ([]ObjectInfo, error)
 	BrowsePackage(ctx context.Context, packageName string) ([]ObjectInfo, error)
