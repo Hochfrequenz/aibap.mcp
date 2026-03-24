@@ -105,12 +105,13 @@ func TestRegistryDelegatesGetSource(t *testing.T) {
 // allEndpointsHandler returns an http.Handler that stubs all ADT endpoints.
 func allEndpointsHandler() http.Handler {
 	const (
-		emptyObjectRefs  = `<objectReferences></objectReferences>`
-		emptyMessages    = `<messages></messages>`
-		emptyRunResult   = `<runResult></runResult>`
-		emptyTransports  = `<root><workbenchRequests></workbenchRequests></root>`
-		emptyCompletions = `<completions></completions>`
-		activatePath     = "/sap/bc/adt/activation/activate"
+		emptyObjectRefs    = `<objectReferences></objectReferences>`
+		emptyNodeStructure = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><TREE_CONTENT></TREE_CONTENT></DATA></asx:values></asx:abap>`
+		emptyCheckReports  = `<chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun"/>`
+		emptyRunResult     = `<runResult></runResult>`
+		emptyTransports    = `<root><workbenchRequests></workbenchRequests></root>`
+		emptyCompletions   = `<completions></completions>`
+		activatePath       = "/sap/bc/adt/activation"
 	)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == csrfEndpoint {
@@ -130,20 +131,22 @@ func allEndpointsHandler() http.Handler {
 			}
 		case path == activatePath:
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(emptyMessages))
-		case path == "/sap/bc/adt/repository/informationsystem/search",
-			path == "/sap/bc/adt/repository/nodestructure":
+			_, _ = w.Write([]byte(`<chkl:messages xmlns:chkl="http://www.sap.com/abapxml/checklist"><chkl:properties checkExecuted="false" activationExecuted="false" generationExecuted="true"/></chkl:messages>`))
+		case path == "/sap/bc/adt/repository/informationsystem/search":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyObjectRefs))
+		case path == "/sap/bc/adt/repository/nodestructure":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(emptyNodeStructure))
 		case path == "/sap/bc/adt/repository/informationsystem/usageReferences":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences"><usageReferences:referencedObjects/></usageReferences:usageReferenceResult>`))
 		case path == "/sap/bc/adt/programs/programs/ZTEST":
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`<objectReference uri="/sap/bc/adt/programs/programs/ZTEST" type="PROG/P" name="ZTEST" description="" packageName=""></objectReference>`))
+			_, _ = w.Write([]byte(`<program:abapProgram adtcore:name="ZTEST" adtcore:type="PROG/P" adtcore:description="" xmlns:program="http://www.sap.com/adt/programs/programs" xmlns:adtcore="http://www.sap.com/adt/core"><adtcore:packageRef adtcore:name=""/></program:abapProgram>`))
 		case path == "/sap/bc/adt/checkruns":
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(emptyMessages))
+			_, _ = w.Write([]byte(emptyCheckReports))
 		case path == "/sap/bc/adt/abapunit/testruns":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyRunResult))

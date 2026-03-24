@@ -6,22 +6,42 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
+	"strconv"
 	"strings"
-
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
 
+type xmlCheckRunReports struct {
+	XMLName xml.Name            `xml:"checkRunReports"`
+	Reports []xmlCheckRunReport `xml:"checkReport"`
+}
+
+type xmlCheckRunReport struct {
+	Reporter   string            `xml:"reporter,attr"`
+	TriggerURI string            `xml:"triggeringUri,attr"`
+	Status     string            `xml:"status,attr"`
+	StatusText string            `xml:"statusText,attr"`
+	Messages   []xmlCheckMessage `xml:"checkMessageList>checkMessage"`
+}
+
+type xmlCheckMessage struct {
+	URI       string `xml:"uri,attr"`
+	Type      string `xml:"type,attr"`
+	ShortText string `xml:"shortText,attr"`
+}
+
 func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error) {
-	params := url.Values{}
-	params.Set("adtObjectUri", objectURI)
+	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
+		`<chkrun:checkObjectList xmlns:chkrun="http://www.sap.com/adt/checkrun" `+
+		`xmlns:adtcore="http://www.sap.com/adt/core">`+
+		`<chkrun:checkObject adtcore:uri="%s" chkrun:version="active"/>`+
+		`</chkrun:checkObjectList>`, objectURI)
 
 	resp, err := c.doMutate(ctx, http.MethodPost,
-		"/sap/bc/adt/checkruns?"+params.Encode(),
-		strings.NewReader(""),
+		"/sap/bc/adt/checkruns",
+		strings.NewReader(body),
 		map[string]string{
-			"Content-Type": contentTypeXML,
-			"Accept":       contentTypeXML,
+			"Content-Type": "application/vnd.sap.adt.checkobjects+xml",
+			"Accept":       "application/vnd.sap.adt.checkmessages+xml",
 		},
 	)
 	if err != nil {
@@ -33,17 +53,36 @@ func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]Synta
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var msgs adtmodel.CheckMessages
-	xml.Unmarshal(data, &msgs) //nolint:errcheck
+	var reports xmlCheckRunReports
+	xml.Unmarshal(data, &reports) //nolint:errcheck
 
-	result := make([]SyntaxMessage, len(msgs.Messages))
-	for i, m := range msgs.Messages {
-		result[i] = SyntaxMessage{
-			Type:   m.Type,
-			Text:   m.ShortText.Text,
-			Line:   m.Line,
-			Column: m.Column,
+	var result []SyntaxMessage
+	for _, report := range reports.Reports {
+		for _, m := range report.Messages {
+			line, col := parseMessagePosition(m.URI)
+			result = append(result, SyntaxMessage{
+				Type:   m.Type,
+				Text:   m.ShortText,
+				Line:   line,
+				Column: col,
+			})
 		}
 	}
 	return result, nil
+}
+
+// parseMessagePosition extracts line and column from a checkMessage URI fragment.
+// Format: ".../source/main#start=42,5" → line=42, col=5
+func parseMessagePosition(uri string) (int, int) {
+	idx := strings.Index(uri, "#start=")
+	if idx < 0 {
+		return 0, 0
+	}
+	parts := strings.SplitN(uri[idx+7:], ",", 2)
+	line, _ := strconv.Atoi(parts[0])
+	col := 0
+	if len(parts) == 2 {
+		col, _ = strconv.Atoi(parts[1])
+	}
+	return line, col
 }
