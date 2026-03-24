@@ -6,10 +6,9 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 )
 
-func registerCompletionTools(s *server.MCPServer, client adt.Client) {
+func registerCompletionTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("get_completions",
 		mcp.WithDescription("Get ABAP code completion proposals at a specific cursor position."),
 		mcp.WithString(paramObjectURI,

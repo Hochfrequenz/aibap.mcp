@@ -6,10 +6,9 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 )
 
-func registerRepositoryTools(s *server.MCPServer, client adt.Client) {
+func registerRepositoryTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("browse_package",
 		mcp.WithDescription("List all ABAP objects in a package."),
 		mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name, e.g. ZPACKAGE")),
