@@ -1,4 +1,4 @@
-package sapxml
+package adtmodel
 
 import (
 	"encoding/xml"

@@ -1,4 +1,4 @@
-# sapxml
+# adtmodel
 
 SAP ADT XML types and helpers. This package is designed to be extractable to a separate repository once stable.
 
