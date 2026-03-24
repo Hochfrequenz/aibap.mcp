@@ -7,9 +7,9 @@ import "encoding/xml"
 // Accept: application/vnd.sap.atc.customizing-v1+xml
 // Verified against S/4 HANA (srvhfuhana.sap.msp.local:44300) on 2026-03-24.
 type ATCCustomizing struct {
-	XMLName    xml.Name            `xml:"customizing"`
-	Properties []ATCProperty       `xml:"properties>property"`
-	Exemption  ATCExemption        `xml:"exemption"`
+	XMLName    xml.Name      `xml:"customizing"`
+	Properties []ATCProperty `xml:"properties>property"`
+	Exemption  ATCExemption  `xml:"exemption"`
 }
 
 // ATCProperty is a name-value pair from ATC customizing.
@@ -20,14 +20,14 @@ type ATCProperty struct {
 
 // ATCExemption contains exemption reasons and validities.
 type ATCExemption struct {
-	Reasons    []ATCReason    `xml:"reasons>reason"`
-	Validities []ATCValidity  `xml:"validities>validity"`
+	Reasons    []ATCReason   `xml:"reasons>reason"`
+	Validities []ATCValidity `xml:"validities>validity"`
 }
 
 // ATCReason is an exemption reason.
 type ATCReason struct {
-	ID                   string `xml:"id,attr"`
-	Title                string `xml:"title,attr"`
+	ID                     string `xml:"id,attr"`
+	Title                  string `xml:"title,attr"`
 	JustificationMandatory string `xml:"justificationMandatory,attr"`
 }
 
@@ -50,10 +50,10 @@ type ATCWorklistRun struct {
 // Accept: application/atc.worklist.v1+xml
 // NOTE: Not yet verified — depends on working ATC runs endpoint.
 type ATCWorklist struct {
-	XMLName       xml.Name     `xml:"worklist"`
-	ID            string       `xml:"id,attr"`
-	Timestamp     string       `xml:"timestamp,attr"`
-	ObjectSets    []ATCObject  `xml:"objects>object"`
+	XMLName    xml.Name    `xml:"worklist"`
+	ID         string      `xml:"id,attr"`
+	Timestamp  string      `xml:"timestamp,attr"`
+	ObjectSets []ATCObject `xml:"objects>object"`
 }
 
 // ATCObject is an object with ATC findings.
