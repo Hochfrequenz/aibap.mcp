@@ -2,7 +2,7 @@ BINARY=mcp-server-abap
 VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS=-ldflags "-X main.version=$(VERSION)"
 
-.PHONY: build build-all test lint release
+.PHONY: build build-all test integration-test lint release
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) .
@@ -15,7 +15,10 @@ build-all:
 	GOOS=darwin  GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY)-darwin-arm64 .
 
 test:
-	go test ./... -v
+	go test -v ./...
+
+integration-test:
+	go test -tags integration -v -count=1 ./adt/...
 
 lint:
 	golangci-lint run ./...
