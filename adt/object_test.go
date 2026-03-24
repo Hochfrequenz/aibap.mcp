@@ -50,15 +50,25 @@ func TestCreateObjectUnsupportedType(t *testing.T) {
 }
 
 func TestDeleteObject(t *testing.T) {
-	var gotPath, gotMethod string
+	var gotDeletePath, gotDeleteMethod, gotIfMatch, gotCorrNr string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		gotPath = r.URL.Path
-		gotMethod = r.Method
+		if r.Method == http.MethodGet {
+			// ETag fetch for optimistic locking
+			w.Header().Set("ETag", "etag-12345")
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<program:abapProgram xmlns:program="http://www.sap.com/adt/programs/programs" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="ZTEST" adtcore:type="PROG/P"/>`))
+			return
+		}
+		gotDeletePath = r.URL.Path
+		gotDeleteMethod = r.Method
+		gotIfMatch = r.Header.Get("If-Match")
+		gotCorrNr = r.URL.Query().Get("corrNr")
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer srv.Close()
@@ -66,14 +76,20 @@ func TestDeleteObject(t *testing.T) {
 	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
-	err := client.DeleteObject(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "DEVK900001")
+	err := client.DeleteObject(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "", "DEVK900001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gotMethod != http.MethodDelete {
-		t.Errorf("method: got %q", gotMethod)
+	if gotDeleteMethod != http.MethodDelete {
+		t.Errorf("method: got %q", gotDeleteMethod)
 	}
-	if gotPath != "/sap/bc/adt/programs/programs/ZTEST" {
-		t.Errorf("path: got %q", gotPath)
+	if gotDeletePath != "/sap/bc/adt/programs/programs/ZTEST" {
+		t.Errorf("path: got %q", gotDeletePath)
+	}
+	if gotIfMatch != "etag-12345" {
+		t.Errorf("If-Match: got %q, want %q", gotIfMatch, "etag-12345")
+	}
+	if gotCorrNr != "DEVK900001" {
+		t.Errorf("corrNr: got %q, want %q", gotCorrNr, "DEVK900001")
 	}
 }
