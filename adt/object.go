@@ -68,12 +68,15 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	return checkResponse(resp)
 }
 
-func (c *httpClient) DeleteObject(ctx context.Context, objectURI, transport string) error {
-	path := objectURI
+func (c *httpClient) DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error {
+	path := objectURI + "?lockHandle=" + lockHandle
 	if transport != "" {
-		path += "?corrNr=" + transport
+		path += "&corrNr=" + transport
 	}
-	resp, err := c.doMutate(ctx, http.MethodDelete, path, nil, nil)
+	headers := map[string]string{
+		"X-SAP-Lock-Handle": lockHandle,
+	}
+	resp, err := c.doMutate(ctx, http.MethodDelete, path, nil, headers)
 	if err != nil {
 		return fmt.Errorf("DeleteObject: %w", err)
 	}

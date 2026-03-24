@@ -50,7 +50,7 @@ func TestCreateObjectUnsupportedType(t *testing.T) {
 }
 
 func TestDeleteObject(t *testing.T) {
-	var gotPath, gotMethod string
+	var gotPath, gotMethod, gotLockHandle, gotCorrNr string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "token")
@@ -59,6 +59,8 @@ func TestDeleteObject(t *testing.T) {
 		}
 		gotPath = r.URL.Path
 		gotMethod = r.Method
+		gotLockHandle = r.URL.Query().Get("lockHandle")
+		gotCorrNr = r.URL.Query().Get("corrNr")
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer srv.Close()
@@ -66,7 +68,7 @@ func TestDeleteObject(t *testing.T) {
 	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
-	err := client.DeleteObject(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "DEVK900001")
+	err := client.DeleteObject(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "LOCK123", "DEVK900001")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -75,5 +77,11 @@ func TestDeleteObject(t *testing.T) {
 	}
 	if gotPath != "/sap/bc/adt/programs/programs/ZTEST" {
 		t.Errorf("path: got %q", gotPath)
+	}
+	if gotLockHandle != "LOCK123" {
+		t.Errorf("lockHandle: got %q, want %q", gotLockHandle, "LOCK123")
+	}
+	if gotCorrNr != "DEVK900001" {
+		t.Errorf("corrNr: got %q, want %q", gotCorrNr, "DEVK900001")
 	}
 }
