@@ -10,33 +10,86 @@ import (
 	"time"
 )
 
-type xmlUnitTestRunRequest struct {
-	XMLName xml.Name `xml:"aunit:run"`
-	NS      string   `xml:"xmlns:aunit,attr"`
-	NSCore  string   `xml:"xmlns:adtcore,attr"`
-	Timeout int      `xml:"adtcore:timeout,attr"`
-	Objects []xmlUnitTestObject
+// Request XML structs for aunit:runConfiguration format.
+type xmlRunConfiguration struct {
+	XMLName  xml.Name      `xml:"aunit:runConfiguration"`
+	NS       string        `xml:"xmlns:aunit,attr"`
+	External xmlExternal   `xml:"external"`
+	Options  xmlRunOptions `xml:"options"`
+	Objects  xmlObjectSets `xml:"adtcore:objectSets"`
 }
 
-type xmlUnitTestObject struct {
-	XMLName xml.Name `xml:"adtcore:objectReference"`
-	URI     string   `xml:"adtcore:uri,attr"`
+type xmlExternal struct {
+	Coverage xmlCoverage `xml:"coverage"`
 }
 
+type xmlCoverage struct {
+	Active string `xml:"active,attr"`
+}
+
+type xmlRunOptions struct {
+	URIType                   xmlValue             `xml:"uriType"`
+	TestDeterminationStrategy xmlTestDetermination `xml:"testDeterminationStrategy"`
+	TestRiskLevels            xmlRiskLevels        `xml:"testRiskLevels"`
+	TestDurations             xmlDurations         `xml:"testDurations"`
+}
+
+type xmlValue struct {
+	Value string `xml:"value,attr"`
+}
+
+type xmlTestDetermination struct {
+	SameProgram   string `xml:"sameProgram,attr"`
+	AssignedTests string `xml:"assignedTests,attr"`
+	PublicMethods string `xml:"publicMethods,attr"`
+}
+
+type xmlRiskLevels struct {
+	Harmless  string `xml:"harmless,attr"`
+	Dangerous string `xml:"dangerous,attr"`
+	Critical  string `xml:"critical,attr"`
+}
+
+type xmlDurations struct {
+	Short  string `xml:"short,attr"`
+	Medium string `xml:"medium,attr"`
+	Long   string `xml:"long,attr"`
+}
+
+type xmlObjectSets struct {
+	XMLName xml.Name     `xml:"adtcore:objectSets"`
+	NS      string       `xml:"xmlns:adtcore,attr"`
+	Set     xmlObjectSet `xml:"objectSet"`
+}
+
+type xmlObjectSet struct {
+	Kind       string             `xml:"kind,attr"`
+	References xmlAUnitObjectRefs `xml:"adtcore:objectReferences"`
+}
+
+type xmlAUnitObjectRefs struct {
+	Refs []xmlObjectRef `xml:"adtcore:objectReference"`
+}
+
+type xmlObjectRef struct {
+	URI string `xml:"adtcore:uri,attr"`
+}
+
+// Response XML structs.
 type xmlRunResult struct {
 	XMLName  xml.Name     `xml:"runResult"`
 	Programs []xmlProgram `xml:"program"`
 }
 
 type xmlProgram struct {
-	Classes []xmlTestClass `xml:"testClass"`
+	Classes []xmlTestClass `xml:"testClasses>testClass"`
 }
 
 type xmlTestClass struct {
 	Name         string          `xml:"name,attr"`
 	FailureCount int             `xml:"failureCount,attr"`
 	ErrorCount   int             `xml:"errorCount,attr"`
-	Methods      []xmlTestMethod `xml:"testMethod"`
+	Methods      []xmlTestMethod `xml:"testMethods>testMethod"`
 }
 
 type xmlTestMethod struct {
@@ -46,20 +99,38 @@ type xmlTestMethod struct {
 }
 
 type xmlAlert struct {
-	Type  string `xml:"type,attr"`
-	Title string `xml:"title"`
+	Kind     string `xml:"kind,attr"`
+	Severity string `xml:"severity,attr"`
+	Title    string `xml:"title"`
 }
 
 func (c *httpClient) RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds+5)*time.Second)
 	defer cancel()
 
-	body, err := xml.Marshal(xmlUnitTestRunRequest{
-		NS:      "http://www.sap.com/adt/aunit",
-		NSCore:  nsADTCore,
-		Timeout: timeoutSeconds * 1000,
-		Objects: []xmlUnitTestObject{{URI: objectURI}},
-	})
+	reqBody := xmlRunConfiguration{
+		NS: "http://www.sap.com/adt/aunit",
+		External: xmlExternal{
+			Coverage: xmlCoverage{Active: "false"},
+		},
+		Options: xmlRunOptions{
+			URIType:                   xmlValue{Value: "semantic"},
+			TestDeterminationStrategy: xmlTestDetermination{SameProgram: "true", AssignedTests: "false", PublicMethods: "false"},
+			TestRiskLevels:            xmlRiskLevels{Harmless: "true", Dangerous: "true", Critical: "true"},
+			TestDurations:             xmlDurations{Short: "true", Medium: "true", Long: "true"},
+		},
+		Objects: xmlObjectSets{
+			NS: nsADTCore,
+			Set: xmlObjectSet{
+				Kind: "inclusive",
+				References: xmlAUnitObjectRefs{
+					Refs: []xmlObjectRef{{URI: objectURI}},
+				},
+			},
+		},
+	}
+
+	body, err := xml.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("marshal unit test request: %w", err)
 	}
