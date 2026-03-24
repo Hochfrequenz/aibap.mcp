@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/dachner/mcp-server-abap/adt"
-	"github.com/dachner/mcp-server-abap/config"
+	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
 func TestSearchObjects(t *testing.T) {
@@ -55,19 +55,33 @@ func TestSearchObjects(t *testing.T) {
 
 func TestWhereUsed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		if r.URL.Path != "/sap/bc/adt/repository/informationsystem/usageReferences" {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		if r.URL.Query().Get("adtObjectUri") == "" {
-			t.Error("expected adtObjectUri parameter")
+		if r.Method != "POST" {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Query().Get("uri") == "" {
+			t.Error("expected uri parameter")
 		}
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`<?xml version="1.0"?>
-<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:objectReference adtcore:uri="/sap/bc/adt/programs/programs/ZCALLER" adtcore:type="PROG/P" adtcore:name="ZCALLER" adtcore:description="Caller"/>
-</adtcore:objectReferences>`))
+<usageReferences:usageReferenceResult xmlns:usageReferences="http://www.sap.com/adt/ris/usageReferences" xmlns:adtcore="http://www.sap.com/adt/core">
+  <usageReferences:referencedObjects>
+    <usageReferences:referencedObject uri="/sap/bc/adt/programs/programs/ZCALLER">
+      <usageReferences:adtObject adtcore:name="ZCALLER" adtcore:type="PROG/P" adtcore:description="Caller">
+        <adtcore:packageRef adtcore:name="ZPACKAGE"/>
+      </usageReferences:adtObject>
+    </usageReferences:referencedObject>
+  </usageReferences:referencedObjects>
+</usageReferences:usageReferenceResult>`))
 	}))
 	defer srv.Close()
 

@@ -33,22 +33,29 @@ type xmlActivationMessage struct {
 	} `xml:"shortTextElements"`
 }
 
-func (c *httpClient) ActivateObject(ctx context.Context, objectURI string) (*ActivationResult, error) {
+func (c *httpClient) ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error) {
+	objects := make([]xmlActivationObject, len(objectURIs))
+	for i, uri := range objectURIs {
+		objects[i] = xmlActivationObject{URI: uri}
+	}
 	bodyXML, err := xml.Marshal(xmlActivationRequest{
 		NS:      nsADTCore,
-		Objects: []xmlActivationObject{{URI: objectURI}},
+		Objects: objects,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("marshal activation request: %w", err)
 	}
 
 	resp, err := c.doMutate(ctx, http.MethodPost,
-		"/sap/bc/adt/activation/activate?method=activate&preauditRequested=true",
+		"/sap/bc/adt/activation?method=activate&preauditRequested=true",
 		strings.NewReader(xml.Header+string(bodyXML)),
-		map[string]string{"Content-Type": contentTypeXML},
+		map[string]string{
+			"Content-Type": contentTypeXML,
+			"Accept":       "application/xml",
+		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("ActivateObject: %w", err)
+		return nil, fmt.Errorf("ActivateObjects: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
