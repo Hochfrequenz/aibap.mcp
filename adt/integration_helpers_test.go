@@ -11,6 +11,10 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
+// testReportURI is the editable test report for lock/write/activate tests.
+// This object must exist on the SAP system; see testdata/integration_objects.md.
+const testReportURI = "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_REPORT"
+
 // newIntegrationClient creates a real ADT client from environment variables.
 // Do not log the returned client or its config — they contain credentials.
 func newIntegrationClient(t *testing.T) adt.Client {
