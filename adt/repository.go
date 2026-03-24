@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
 
 func (c *httpClient) BrowsePackage(ctx context.Context, packageName string) ([]ObjectInfo, error) {
@@ -38,11 +40,14 @@ func (c *httpClient) GetObjectInfo(ctx context.Context, objectURI string) (*Obje
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var ref xmlObjectReference
+	var ref adtmodel.ObjectReference
 	if err := xml.Unmarshal(data, &ref); err != nil {
 		return nil, fmt.Errorf("GetObjectInfo parsing: %w", err)
 	}
 
-	info := ObjectInfo(ref)
+	info := ObjectInfo{
+		URI: ref.URI, Type: ref.Type, Name: ref.Name,
+		Description: ref.Description, PackageName: ref.PackageName,
+	}
 	return &info, nil
 }
