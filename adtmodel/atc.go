@@ -66,10 +66,10 @@ type ATCObject struct {
 
 // ATCFinding is a single ATC check finding.
 type ATCFinding struct {
-	URI         string `xml:"uri,attr"`
-	Location    string `xml:"location,attr"`
-	Priority    string `xml:"priority,attr"`
-	CheckID     string `xml:"checkId,attr"`
-	CheckTitle  string `xml:"checkTitle,attr"`
+	URI          string `xml:"uri,attr"`
+	Location     string `xml:"location,attr"`
+	Priority     string `xml:"priority,attr"`
+	CheckID      string `xml:"checkId,attr"`
+	CheckTitle   string `xml:"checkTitle,attr"`
 	MessageTitle string `xml:"messageTitle,attr"`
 }
