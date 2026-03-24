@@ -18,11 +18,11 @@ type ActivationObject struct {
 // ActivationMessages is the response from POST /sap/bc/adt/activation.
 type ActivationMessages struct {
 	XMLName  xml.Name               `xml:"messages"`
-	Messages []ActivationMessageXML `xml:"message"`
+	Messages []ActivationMessage `xml:"message"`
 }
 
-// ActivationMessageXML is a single message in an activation response.
-type ActivationMessageXML struct {
+// ActivationMessage is a single message in an activation response.
+type ActivationMessage struct {
 	URI       string `xml:"uri,attr"`
 	Type      string `xml:"type,attr"`
 	ShortText struct {
