@@ -1,4 +1,4 @@
-package adt
+package sapxml
 
 import (
 	"encoding/xml"
@@ -9,7 +9,6 @@ import (
 // --- Unmarshal tests using real SAP response samples ---
 
 func TestUnmarshalASXData_LockResponse(t *testing.T) {
-	// Real lock response from SAP ADT.
 	raw := `<?xml version="1.0" encoding="utf-8"?>
 <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
@@ -25,12 +24,7 @@ func TestUnmarshalASXData_LockResponse(t *testing.T) {
   </asx:values>
 </asx:abap>`
 
-	type lockData struct {
-		LockHandle string `xml:"LOCK_HANDLE"`
-		CorrNr     string `xml:"CORRNR"`
-	}
-
-	got, err := UnmarshalASXData[lockData]([]byte(raw))
+	got, err := UnmarshalASXData[LockData]([]byte(raw))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -39,6 +33,9 @@ func TestUnmarshalASXData_LockResponse(t *testing.T) {
 	}
 	if got.CorrNr != "" {
 		t.Errorf("CorrNr: got %q, want empty", got.CorrNr)
+	}
+	if got.ModificationSupport != "ModificationsLoggedOnly" {
+		t.Errorf("ModificationSupport: got %q", got.ModificationSupport)
 	}
 }
 
@@ -69,19 +66,7 @@ func TestUnmarshalASXData_BrowsePackageResponse(t *testing.T) {
   </asx:values>
 </asx:abap>`
 
-	type repoNode struct {
-		ObjectType string `xml:"OBJECT_TYPE"`
-		ObjectName string `xml:"OBJECT_NAME"`
-		TechName   string `xml:"TECH_NAME"`
-		ObjectURI  string `xml:"OBJECT_URI"`
-		Expandable string `xml:"EXPANDABLE"`
-		NodeID     string `xml:"NODE_ID"`
-	}
-	type treeContent struct {
-		Nodes []repoNode `xml:"TREE_CONTENT>SEU_ADT_REPOSITORY_OBJ_NODE"`
-	}
-
-	got, err := UnmarshalASXData[treeContent]([]byte(raw))
+	got, err := UnmarshalASXData[PackageTreeContent]([]byte(raw))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -125,24 +110,7 @@ func TestUnmarshalASXData_TransportCheckResponse(t *testing.T) {
   </asx:values>
 </asx:abap>`
 
-	type reqHeader struct {
-		TrKorr     string `xml:"TRKORR"`
-		TrFunction string `xml:"TRFUNCTION"`
-		TrStatus   string `xml:"TRSTATUS"`
-		Text       string `xml:"AS4TEXT"`
-	}
-	type ctsRequest struct {
-		Header reqHeader `xml:"REQ_HEADER"`
-	}
-	type transportCheck struct {
-		PgmID      string       `xml:"PGMID"`
-		Object     string       `xml:"OBJECT"`
-		ObjectName string       `xml:"OBJECTNAME"`
-		Result     string       `xml:"RESULT"`
-		Requests   []ctsRequest `xml:"REQUESTS>CTS_REQUEST"`
-	}
-
-	got, err := UnmarshalASXData[transportCheck]([]byte(raw))
+	got, err := UnmarshalASXData[TransportCheckData]([]byte(raw))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -163,17 +131,8 @@ func TestUnmarshalASXData_TransportCheckResponse(t *testing.T) {
 	}
 }
 
-// --- Marshal tests ---
-
 func TestMarshalASXData_TransportCreateRequest(t *testing.T) {
-	type createTransport struct {
-		Category    string `xml:"CATEGORY"`
-		Target      string `xml:"TARGET"`
-		Description string `xml:"DESCRIPTION"`
-		DevClass    string `xml:"DEVCLASS"`
-	}
-
-	input := createTransport{
+	input := CreateTransportData{
 		Category:    "K",
 		Target:      "DUM",
 		Description: "My transport description",
@@ -185,22 +144,20 @@ func TestMarshalASXData_TransportCreateRequest(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	xml := string(data)
-	if !strings.Contains(xml, `xmlns:asx="http://www.sap.com/abapxml"`) {
+	xmlStr := string(data)
+	if !strings.Contains(xmlStr, `xmlns:asx="http://www.sap.com/abapxml"`) {
 		t.Error("missing asx namespace")
 	}
-	if !strings.Contains(xml, "<CATEGORY>K</CATEGORY>") {
+	if !strings.Contains(xmlStr, "<CATEGORY>K</CATEGORY>") {
 		t.Error("missing CATEGORY element")
 	}
-	if !strings.Contains(xml, "<DESCRIPTION>My transport description</DESCRIPTION>") {
+	if !strings.Contains(xmlStr, "<DESCRIPTION>My transport description</DESCRIPTION>") {
 		t.Error("missing DESCRIPTION element")
 	}
-	if !strings.Contains(xml, "<DEVCLASS>$TMP</DEVCLASS>") {
+	if !strings.Contains(xmlStr, "<DEVCLASS>$TMP</DEVCLASS>") {
 		t.Error("missing DEVCLASS element")
 	}
 }
-
-// --- Round-trip test ---
 
 func TestASXData_RoundTrip(t *testing.T) {
 	type simple struct {
@@ -226,8 +183,6 @@ func TestASXData_RoundTrip(t *testing.T) {
 		t.Errorf("Value: got %q, want %q", got.Value, original.Value)
 	}
 }
-
-// --- Edge cases ---
 
 func TestUnmarshalASXData_EmptyData(t *testing.T) {
 	raw := `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA/></asx:values></asx:abap>`
