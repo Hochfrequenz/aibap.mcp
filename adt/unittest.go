@@ -8,123 +8,31 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
-
-// Request XML structs for aunit:runConfiguration format.
-type xmlRunConfiguration struct {
-	XMLName  xml.Name      `xml:"aunit:runConfiguration"`
-	NS       string        `xml:"xmlns:aunit,attr"`
-	External xmlExternal   `xml:"external"`
-	Options  xmlRunOptions `xml:"options"`
-	Objects  xmlObjectSets `xml:"adtcore:objectSets"`
-}
-
-type xmlExternal struct {
-	Coverage xmlCoverage `xml:"coverage"`
-}
-
-type xmlCoverage struct {
-	Active string `xml:"active,attr"`
-}
-
-type xmlRunOptions struct {
-	URIType                   xmlValue             `xml:"uriType"`
-	TestDeterminationStrategy xmlTestDetermination `xml:"testDeterminationStrategy"`
-	TestRiskLevels            xmlRiskLevels        `xml:"testRiskLevels"`
-	TestDurations             xmlDurations         `xml:"testDurations"`
-}
-
-type xmlValue struct {
-	Value string `xml:"value,attr"`
-}
-
-type xmlTestDetermination struct {
-	SameProgram   string `xml:"sameProgram,attr"`
-	AssignedTests string `xml:"assignedTests,attr"`
-	PublicMethods string `xml:"publicMethods,attr"`
-}
-
-type xmlRiskLevels struct {
-	Harmless  string `xml:"harmless,attr"`
-	Dangerous string `xml:"dangerous,attr"`
-	Critical  string `xml:"critical,attr"`
-}
-
-type xmlDurations struct {
-	Short  string `xml:"short,attr"`
-	Medium string `xml:"medium,attr"`
-	Long   string `xml:"long,attr"`
-}
-
-type xmlObjectSets struct {
-	XMLName xml.Name     `xml:"adtcore:objectSets"`
-	NS      string       `xml:"xmlns:adtcore,attr"`
-	Set     xmlObjectSet `xml:"objectSet"`
-}
-
-type xmlObjectSet struct {
-	Kind       string             `xml:"kind,attr"`
-	References xmlAUnitObjectRefs `xml:"adtcore:objectReferences"`
-}
-
-type xmlAUnitObjectRefs struct {
-	Refs []xmlObjectRef `xml:"adtcore:objectReference"`
-}
-
-type xmlObjectRef struct {
-	URI string `xml:"adtcore:uri,attr"`
-}
-
-// Response XML structs.
-type xmlRunResult struct {
-	XMLName  xml.Name     `xml:"runResult"`
-	Programs []xmlProgram `xml:"program"`
-}
-
-type xmlProgram struct {
-	Classes []xmlTestClass `xml:"testClasses>testClass"`
-}
-
-type xmlTestClass struct {
-	Name         string          `xml:"name,attr"`
-	FailureCount int             `xml:"failureCount,attr"`
-	ErrorCount   int             `xml:"errorCount,attr"`
-	Methods      []xmlTestMethod `xml:"testMethods>testMethod"`
-}
-
-type xmlTestMethod struct {
-	Name          string     `xml:"name,attr"`
-	ExecutionTime float64    `xml:"executionTime,attr"`
-	Alerts        []xmlAlert `xml:"alerts>alert"`
-}
-
-type xmlAlert struct {
-	Kind     string `xml:"kind,attr"`
-	Severity string `xml:"severity,attr"`
-	Title    string `xml:"title"`
-}
 
 func (c *httpClient) RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds+5)*time.Second)
 	defer cancel()
 
-	reqBody := xmlRunConfiguration{
+	reqBody := adtmodel.RunConfiguration{
 		NS: "http://www.sap.com/adt/aunit",
-		External: xmlExternal{
-			Coverage: xmlCoverage{Active: "false"},
+		External: adtmodel.External{
+			Coverage: adtmodel.Coverage{Active: "false"},
 		},
-		Options: xmlRunOptions{
-			URIType:                   xmlValue{Value: "semantic"},
-			TestDeterminationStrategy: xmlTestDetermination{SameProgram: "true", AssignedTests: "false", PublicMethods: "false"},
-			TestRiskLevels:            xmlRiskLevels{Harmless: "true", Dangerous: "true", Critical: "true"},
-			TestDurations:             xmlDurations{Short: "true", Medium: "true", Long: "true"},
+		Options: adtmodel.RunOptions{
+			URIType:                   adtmodel.Value{Value: "semantic"},
+			TestDeterminationStrategy: adtmodel.TestDetermination{SameProgram: "true", AssignedTests: "false", PublicMethods: "false"},
+			TestRiskLevels:            adtmodel.RiskLevels{Harmless: "true", Dangerous: "true", Critical: "true"},
+			TestDurations:             adtmodel.Durations{Short: "true", Medium: "true", Long: "true"},
 		},
-		Objects: xmlObjectSets{
+		Objects: adtmodel.ObjectSets{
 			NS: nsADTCore,
-			Set: xmlObjectSet{
+			Set: adtmodel.ObjectSet{
 				Kind: "inclusive",
-				References: xmlAUnitObjectRefs{
-					Refs: []xmlObjectRef{{URI: objectURI}},
+				References: adtmodel.AUnitObjectRefs{
+					Refs: []adtmodel.ObjectRef{{URI: objectURI}},
 				},
 			},
 		},
@@ -152,7 +60,7 @@ func (c *httpClient) RunUnitTests(ctx context.Context, objectURI string, timeout
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var runResult xmlRunResult
+	var runResult adtmodel.RunResult
 	xml.Unmarshal(data, &runResult) //nolint:errcheck
 
 	result := &TestResult{}
