@@ -12,8 +12,7 @@ func TestSyntaxCheck_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// Use the fixture with an unused variable — SAP should return at least a warning.
-	const synWarnURI = "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_SYNWARN"
-	msgs, err := client.SyntaxCheck(ctx, synWarnURI)
+	msgs, err := client.SyntaxCheck(ctx, testSynWarnURI)
 	if err != nil {
 		t.Fatalf("SyntaxCheck failed: %v", err)
 	}
@@ -23,7 +22,7 @@ func TestSyntaxCheck_Integration(t *testing.T) {
 	if len(msgs) == 0 {
 		t.Fatal("expected at least one syntax message for fixture with unused variable, got 0")
 	}
-	t.Logf("got %d syntax messages for %s", len(msgs), synWarnURI)
+	t.Logf("got %d syntax messages for %s", len(msgs), testSynWarnURI)
 
 	for i, m := range msgs {
 		// Every message must have Type and Text populated.

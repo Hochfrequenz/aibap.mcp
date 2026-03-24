@@ -18,6 +18,9 @@ func TestGetTransportRequests_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTransportRequests failed: %v", err)
 	}
+	if len(transports) == 0 {
+		t.Fatal("expected at least one modifiable transport request, got 0")
+	}
 	t.Logf("got %d modifiable transport requests", len(transports))
 
 	// Verify returned transports have essential fields populated.
