@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
@@ -32,28 +33,12 @@ func (c *httpClient) BrowsePackage(ctx context.Context, packageName string) ([]O
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	return parseNodeStructure(data)
-}
-
-type xmlNodeStructure struct {
-	XMLName xml.Name               `xml:"abap"`
-	Nodes   []xmlNodeStructureNode `xml:"values>DATA>TREE_CONTENT>SEU_ADT_REPOSITORY_OBJ_NODE"`
-}
-
-type xmlNodeStructureNode struct {
-	ObjectType  string `xml:"OBJECT_TYPE"`
-	ObjectName  string `xml:"OBJECT_NAME"`
-	ObjectURI   string `xml:"OBJECT_URI"`
-	Description string `xml:"DESCRIPTION"`
-}
-
-func parseNodeStructure(data []byte) ([]ObjectInfo, error) {
-	var ns xmlNodeStructure
-	if err := xml.Unmarshal(data, &ns); err != nil {
-		return nil, fmt.Errorf("parsing node structure: %w", err)
+	tree, err := adtmodel.UnmarshalASXData[adtmodel.PackageTreeContent](data)
+	if err != nil {
+		return nil, fmt.Errorf("BrowsePackage parsing: %w", err)
 	}
-	result := make([]ObjectInfo, 0, len(ns.Nodes))
-	for _, n := range ns.Nodes {
+	result := make([]ObjectInfo, 0, len(tree.Nodes))
+	for _, n := range tree.Nodes {
 		if n.ObjectName == "" {
 			continue // skip empty root node
 		}
@@ -118,14 +103,15 @@ func (c *httpClient) GetObjectInfo(ctx context.Context, objectURI string) (*Obje
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var ref adtmodel.ObjectReference
-	if err := xml.Unmarshal(data, &ref); err != nil {
+	var obj adtmodel.GenericObjectInfo
+	if err := xml.Unmarshal(data, &obj); err != nil {
 		return nil, fmt.Errorf("GetObjectInfo parsing: %w", err)
 	}
 
-	info := ObjectInfo{
-		URI: ref.URI, Type: ref.Type, Name: ref.Name,
-		Description: ref.Description, PackageName: ref.PackageName,
-	}
-	return &info, nil
+	return &ObjectInfo{
+		Name:        obj.Name,
+		Type:        obj.Type,
+		Description: obj.Description,
+		PackageName: obj.PackageRef.Name,
+	}, nil
 }

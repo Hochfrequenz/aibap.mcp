@@ -38,3 +38,15 @@ type ADTObject struct {
 		Name string `xml:"name,attr"`
 	} `xml:"packageRef"`
 }
+
+// GenericObjectInfo parses metadata from any ADT object XML response.
+// All ADT object types share adtcore:name, adtcore:type, adtcore:description
+// attributes on the root element and an <adtcore:packageRef> child element.
+type GenericObjectInfo struct {
+	Name        string `xml:"name,attr"`
+	Type        string `xml:"type,attr"`
+	Description string `xml:"description,attr"`
+	PackageRef  struct {
+		Name string `xml:"name,attr"`
+	} `xml:"packageRef"`
+}

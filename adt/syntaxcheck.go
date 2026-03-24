@@ -8,26 +8,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
-
-type xmlCheckRunReports struct {
-	XMLName xml.Name            `xml:"checkRunReports"`
-	Reports []xmlCheckRunReport `xml:"checkReport"`
-}
-
-type xmlCheckRunReport struct {
-	Reporter   string            `xml:"reporter,attr"`
-	TriggerURI string            `xml:"triggeringUri,attr"`
-	Status     string            `xml:"status,attr"`
-	StatusText string            `xml:"statusText,attr"`
-	Messages   []xmlCheckMessage `xml:"checkMessageList>checkMessage"`
-}
-
-type xmlCheckMessage struct {
-	URI       string `xml:"uri,attr"`
-	Type      string `xml:"type,attr"`
-	ShortText string `xml:"shortText,attr"`
-}
 
 func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error) {
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
@@ -53,16 +36,19 @@ func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]Synta
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var msgs adtmodel.CheckMessages
-	xml.Unmarshal(data, &msgs) //nolint:errcheck
+	var reports adtmodel.CheckRunReports
+	xml.Unmarshal(data, &reports) //nolint:errcheck
 
-	result := make([]SyntaxMessage, len(msgs.Messages))
-	for i, m := range msgs.Messages {
-		result[i] = SyntaxMessage{
-			Type:   m.Type,
-			Text:   m.ShortText.Text,
-			Line:   m.Line,
-			Column: m.Column,
+	var result []SyntaxMessage
+	for _, report := range reports.Reports {
+		for _, m := range report.Messages {
+			line, col := parseMessagePosition(m.URI)
+			result = append(result, SyntaxMessage{
+				Type:   m.Type,
+				Text:   m.ShortText,
+				Line:   line,
+				Column: col,
+			})
 		}
 	}
 	return result, nil
