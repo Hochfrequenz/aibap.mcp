@@ -16,8 +16,8 @@ const testObjectURI = "/sap/bc/adt/programs/programs/ZTEST"
 
 // Shared test constants to satisfy goconst across the package.
 const (
-	testETagNew   = `"etag-new"`
-	testETagAfter = `"etag-after"`
+	testETagNew       = `"etag-new"`
+	testETagAfter     = `"etag-after"`
 	testLockHandle123 = "lock-handle-123"
 )
 

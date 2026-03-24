@@ -162,7 +162,7 @@ func TestPatchSourceToolSearchReplace(t *testing.T) {
 		"object_uri": uri,
 		"operations": []interface{}{
 			map[string]interface{}{
-				"type":      "search_replace",
+				"type":    "search_replace",
 				"search":  "ZTEST",
 				"replace": "ZNEW",
 			},
@@ -210,7 +210,7 @@ func TestPatchSourceToolAutoLock(t *testing.T) {
 		"object_uri": uri,
 		"operations": []interface{}{
 			map[string]interface{}{
-				"type":      "search_replace",
+				"type":    "search_replace",
 				"search":  "ZTEST",
 				"replace": "ZAUTO",
 			},
@@ -267,7 +267,7 @@ func TestPatchSourceToolExplicitLockHandle(t *testing.T) {
 		"lock_handle": "explicit-handle",
 		"operations": []interface{}{
 			map[string]interface{}{
-				"type":      "search_replace",
+				"type":    "search_replace",
 				"search":  "ZTEST",
 				"replace": "ZEXPLICIT",
 			},
@@ -298,7 +298,7 @@ func TestPatchSourceToolGetSourceError(t *testing.T) {
 		"object_uri": uri,
 		"operations": []interface{}{
 			map[string]interface{}{
-				"type":      "search_replace",
+				"type":    "search_replace",
 				"search":  "x",
 				"replace": "y",
 			},
