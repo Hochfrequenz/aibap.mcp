@@ -10,7 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-func registerSourceTools(s *server.MCPServer, client adt.Client) {
+func registerSourceTools(s *server.MCPServer, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("get_source",
 		mcp.WithDescription("Read ABAP source code from SAP. Returns source text and ETag for optimistic locking."),
 		mcp.WithString(paramObjectURI,
@@ -23,43 +23,12 @@ func registerSourceTools(s *server.MCPServer, client adt.Client) {
 		if err != nil {
 			return errorResult(err), nil
 		}
+		lockMap.UpdateETag(lockKey(selector, uri), result.ETag)
 		out, _ := json.Marshal(map[string]string{
 			"source": result.Source,
 			"etag":   result.ETag,
 		})
 		return mcp.NewToolResultText(string(out)), nil
-	})
-
-	s.AddTool(mcp.NewTool("set_source",
-		mcp.WithDescription("Write ABAP source code to SAP. Requires the ETag returned by get_source and the lock handle from lock_object."),
-		mcp.WithString(paramObjectURI,
-			mcp.Required(),
-			mcp.Description(descADTObjectURI),
-		),
-		mcp.WithString("source",
-			mcp.Required(),
-			mcp.Description("New ABAP source code"),
-		),
-		mcp.WithString("lock_handle",
-			mcp.Description("Lock handle from lock_object (required on most systems)"),
-		),
-		mcp.WithString("transport",
-			mcp.Description("Transport request number (required for non-local packages)"),
-		),
-		mcp.WithString("etag",
-			mcp.Required(),
-			mcp.Description("ETag value from get_source, passed verbatim including quotes"),
-		),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString(paramObjectURI, "")
-		source := req.GetString("source", "")
-		lockHandle := req.GetString("lock_handle", "")
-		transport := req.GetString("transport", "")
-		etag := req.GetString("etag", "")
-		if _, err := client.SetSource(ctx, uri, source, lockHandle, transport, etag); err != nil {
-			return errorResult(err), nil
-		}
-		return mcp.NewToolResultText("Source updated successfully"), nil
 	})
 }
 

@@ -13,13 +13,14 @@ import (
 
 func TestLockObjectTool(t *testing.T) {
 	var gotURI string
+	lockMap := adt.NewLockMap()
 	mock := &mockClient{
 		lockObjectFn: func(ctx context.Context, uri string) (string, error) {
 			gotURI = uri
 			return "lock-handle-123", nil
 		},
 	}
-	s := newTestServer(mock)
+	s := newTestServerWithLockMap(mock, lockMap)
 	result := callTool(t, s, "lock_object", map[string]interface{}{
 		"object_uri": testObjectURI,
 	})
@@ -33,6 +34,14 @@ func TestLockObjectTool(t *testing.T) {
 	text := firstText(result)
 	if text != "lock-handle-123" {
 		t.Errorf("result text = %q, want %q", text, "lock-handle-123")
+	}
+	// Lock map should be populated.
+	state, ok := lockMap.Get("dev:" + testObjectURI)
+	if !ok {
+		t.Fatal("expected lock map entry after lock_object")
+	}
+	if state.LockHandle != "lock-handle-123" {
+		t.Errorf("lock map handle: got %q, want %q", state.LockHandle, "lock-handle-123")
 	}
 }
 
@@ -55,13 +64,15 @@ func TestLockObjectToolError(t *testing.T) {
 
 func TestUnlockObjectTool(t *testing.T) {
 	var gotURI, gotHandle string
+	lockMap := adt.NewLockMap()
+	lockMap.Set("dev:"+testObjectURI, "handle123", "")
 	mock := &mockClient{
 		unlockObjectFn: func(ctx context.Context, uri, lockHandle string) error {
 			gotURI, gotHandle = uri, lockHandle
 			return nil
 		},
 	}
-	s := newTestServer(mock)
+	s := newTestServerWithLockMap(mock, lockMap)
 	result := callTool(t, s, "unlock_object", map[string]interface{}{
 		"object_uri":  testObjectURI,
 		"lock_handle": "handle123",
@@ -74,6 +85,49 @@ func TestUnlockObjectTool(t *testing.T) {
 	}
 	if gotHandle != "handle123" {
 		t.Errorf("lock_handle: got %q", gotHandle)
+	}
+	// Lock map entry should be cleared.
+	if _, ok := lockMap.Get("dev:" + testObjectURI); ok {
+		t.Error("expected lock map entry to be deleted after unlock_object")
+	}
+}
+
+func TestUnlockObjectToolFromLockMap(t *testing.T) {
+	var gotHandle string
+	lockMap := adt.NewLockMap()
+	lockMap.Set("dev:"+testObjectURI, "auto-handle-456", "")
+	mock := &mockClient{
+		unlockObjectFn: func(ctx context.Context, uri, lockHandle string) error {
+			gotHandle = lockHandle
+			return nil
+		},
+	}
+	s := newTestServerWithLockMap(mock, lockMap)
+	// Do NOT pass lock_handle — should be looked up from lock map automatically.
+	result := callTool(t, s, "unlock_object", map[string]interface{}{
+		"object_uri": testObjectURI,
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+	if gotHandle != "auto-handle-456" {
+		t.Errorf("lock_handle from map: got %q, want %q", gotHandle, "auto-handle-456")
+	}
+	// Lock map entry should be cleared.
+	if _, ok := lockMap.Get("dev:" + testObjectURI); ok {
+		t.Error("expected lock map entry to be deleted after unlock_object")
+	}
+}
+
+func TestUnlockObjectToolNoHandle(t *testing.T) {
+	mock := &mockClient{}
+	// Use an empty lock map — no entry for this URI.
+	s := newTestServerWithLockMap(mock, adt.NewLockMap())
+	result := callTool(t, s, "unlock_object", map[string]interface{}{
+		"object_uri": testObjectURI,
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true when no handle and nothing in lock map")
 	}
 }
 
@@ -475,26 +529,6 @@ func TestRunUnitTestsToolError(t *testing.T) {
 	s := newTestServer(mock)
 	result := callTool(t, s, "run_unit_tests", map[string]interface{}{
 		"object_uri": testObjectURI,
-	})
-	if !result.IsError {
-		t.Fatal("expected IsError=true")
-	}
-}
-
-// --- set_source error path ---
-
-func TestSetSourceToolError(t *testing.T) {
-	mock := &mockClient{
-		setSourceFn: func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error) {
-			return "", &adt.ADTError{StatusCode: 409, Message: "conflict"}
-		},
-	}
-	s := newTestServer(mock)
-	result := callTool(t, s, "set_source", map[string]interface{}{
-		"object_uri":  testObjectURI,
-		"source":      "REPORT Z.",
-		"lock_handle": "lh",
-		"etag":        `"abc"`,
 	})
 	if !result.IsError {
 		t.Fatal("expected IsError=true")

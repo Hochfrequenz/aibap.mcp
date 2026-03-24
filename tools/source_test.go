@@ -16,23 +16,23 @@ const testObjectURI = "/sap/bc/adt/programs/programs/ZTEST"
 
 // mockClient is a test double for adt.Client.
 type mockClient struct {
-	getSourceFn      func(ctx context.Context, uri string) (*adt.SourceResult, error)
-	setSourceFn      func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
+	getSourceFn       func(ctx context.Context, uri string) (*adt.SourceResult, error)
+	setSourceFn       func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
 	activateObjectsFn func(ctx context.Context, uris []string) (*adt.ActivationResult, error)
-	searchFn         func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
-	whereUsedFn      func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
-	browsePackageFn  func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
-	getObjectFn      func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
-	syntaxCheckFn    func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
-	runTestsFn       func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
-	getTransportFn   func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
-	addTransportFn   func(ctx context.Context, uri, transport string) error
-	lockObjectFn     func(ctx context.Context, uri string) (string, error)
-	unlockObjectFn   func(ctx context.Context, uri, lockHandle string) error
-	prettyPrintFn    func(ctx context.Context, source string) (string, error)
-	createObjectFn   func(ctx context.Context, objectType, name, pkg, desc, transport string) error
-	deleteObjectFn   func(ctx context.Context, uri, transport string) error
-	getCompletionsFn func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
+	searchFn          func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
+	whereUsedFn       func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
+	browsePackageFn   func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
+	getObjectFn       func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
+	syntaxCheckFn     func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
+	runTestsFn        func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
+	getTransportFn    func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
+	addTransportFn    func(ctx context.Context, uri, transport string) error
+	lockObjectFn      func(ctx context.Context, uri string) (string, error)
+	unlockObjectFn    func(ctx context.Context, uri, lockHandle string) error
+	prettyPrintFn     func(ctx context.Context, source string) (string, error)
+	createObjectFn    func(ctx context.Context, objectType, name, pkg, desc, transport string) error
+	deleteObjectFn    func(ctx context.Context, uri, transport string) error
+	getCompletionsFn  func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -139,13 +139,17 @@ func (m *mockClient) GetCompletions(ctx context.Context, uri, source string, lin
 }
 
 func newTestServer(client adt.Client) *server.MCPServer {
-	return newTestServerWithSelector(client, &mockSelector{})
+	return newTestServerWithSelector(client, &mockSelector{}, adt.NewLockMap())
 }
 
-func newTestServerWithSelector(client adt.Client, selector tools.SystemSelector) *server.MCPServer {
+func newTestServerWithSelector(client adt.Client, selector tools.SystemSelector, lockMap *adt.LockMap) *server.MCPServer {
 	s := server.NewMCPServer("test", "0.0.1")
-	tools.RegisterAll(s, client, selector)
+	tools.RegisterAllWithLockMap(s, client, selector, lockMap)
 	return s
+}
+
+func newTestServerWithLockMap(client adt.Client, lockMap *adt.LockMap) *server.MCPServer {
+	return newTestServerWithSelector(client, &mockSelector{}, lockMap)
 }
 
 // callTool invokes a tool via HandleMessage using JSON-RPC protocol.
@@ -238,6 +242,37 @@ func TestGetSourceToolError(t *testing.T) {
 
 	if !result.IsError {
 		t.Fatal("expected IsError=true")
+	}
+}
+
+func TestGetSourceUpdatesLockMapETag(t *testing.T) {
+	lockMap := adt.NewLockMap()
+	// Pre-populate with a lock entry (simulating a prior lock_object call).
+	lockMap.Set("dev:"+testObjectURI, "lock-handle-abc", "")
+
+	mock := &mockClient{
+		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
+			return &adt.SourceResult{Source: "REPORT ZTEST.", ETag: `"etag-new"`}, nil
+		},
+	}
+	s := newTestServerWithLockMap(mock, lockMap)
+
+	result := callTool(t, s, "get_source", map[string]interface{}{
+		"object_uri": testObjectURI,
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+
+	state, ok := lockMap.Get("dev:" + testObjectURI)
+	if !ok {
+		t.Fatal("expected lock map entry to exist after get_source")
+	}
+	if state.ETag != `"etag-new"` {
+		t.Errorf("ETag in lock map: got %q, want %q", state.ETag, `"etag-new"`)
+	}
+	if state.LockHandle != "lock-handle-abc" {
+		t.Errorf("LockHandle should be unchanged: got %q", state.LockHandle)
 	}
 }
 
@@ -369,39 +404,5 @@ func TestAddToTransportTool(t *testing.T) {
 	}
 	if gotTransport != "DEVK900123" {
 		t.Errorf("transport: got %q", gotTransport)
-	}
-}
-
-func TestSetSourceTool(t *testing.T) {
-	var gotURI, gotSource, gotLockHandle, gotETag string
-	mock := &mockClient{
-		setSourceFn: func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error) {
-			gotURI, gotSource, gotLockHandle, gotETag = uri, source, lockHandle, etag
-			return "new-etag", nil
-		},
-	}
-	s := newTestServer(mock)
-
-	result := callTool(t, s, "set_source", map[string]interface{}{
-		"object_uri":  testObjectURI,
-		"source":      "REPORT ZTEST.\nNEW.",
-		"lock_handle": "lock123",
-		"etag":        `"abc123"`,
-	})
-
-	if result.IsError {
-		t.Fatalf("unexpected error result")
-	}
-	if gotURI != testObjectURI {
-		t.Errorf("uri: got %q", gotURI)
-	}
-	if gotSource != "REPORT ZTEST.\nNEW." {
-		t.Errorf("source: got %q", gotSource)
-	}
-	if gotLockHandle != "lock123" {
-		t.Errorf("lock_handle: got %q", gotLockHandle)
-	}
-	if gotETag != `"abc123"` {
-		t.Errorf("etag: got %q", gotETag)
 	}
 }
