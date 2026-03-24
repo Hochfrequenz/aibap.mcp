@@ -9,10 +9,9 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 )
 
-func registerFileSourceTools(s *server.MCPServer, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
+func registerFileSourceTools(s toolAdder, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("set_source_from_file",
 		mcp.WithDescription("Upload ABAP source code from a local file to SAP. Auto-locks if needed."),
 		mcp.WithString(paramObjectURI,
