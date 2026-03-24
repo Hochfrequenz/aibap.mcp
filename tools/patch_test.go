@@ -10,6 +10,8 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/tools"
 )
 
+const fourLineSource = "line1\nline2\nline3\nline4"
+
 // ---- Unit tests for ApplyPatchOps ----
 
 func TestApplyOpsInsert(t *testing.T) {
@@ -43,7 +45,7 @@ func TestApplyOpsInsertAtZero(t *testing.T) {
 }
 
 func TestApplyOpsReplace(t *testing.T) {
-	source := "line1\nline2\nline3\nline4"
+	source := fourLineSource
 	ops := []tools.PatchOp{
 		{Type: "replace", FromLine: 2, ToLine: 3, Content: "new"},
 	}
@@ -58,7 +60,7 @@ func TestApplyOpsReplace(t *testing.T) {
 }
 
 func TestApplyOpsDelete(t *testing.T) {
-	source := "line1\nline2\nline3\nline4"
+	source := fourLineSource
 	ops := []tools.PatchOp{
 		{Type: "delete", FromLine: 2, ToLine: 3},
 	}
@@ -123,7 +125,7 @@ func TestApplyOpsMultiple(t *testing.T) {
 }
 
 func TestApplyOpsOverlapRejected(t *testing.T) {
-	source := "line1\nline2\nline3\nline4"
+	source := fourLineSource
 	ops := []tools.PatchOp{
 		{Type: "replace", FromLine: 1, ToLine: 3, Content: "new1"},
 		{Type: "replace", FromLine: 2, ToLine: 4, Content: "new2"},
@@ -151,7 +153,7 @@ func TestPatchSourceToolSearchReplace(t *testing.T) {
 		},
 		setSourceFn: func(ctx context.Context, u, source, lockHandle, transport, etag string) (string, error) {
 			gotSource = source
-			return `"etag-new"`, nil
+			return testETagNew, nil
 		},
 	}
 
@@ -180,8 +182,8 @@ func TestPatchSourceToolSearchReplace(t *testing.T) {
 	if !ok {
 		t.Fatal("lock map entry should still exist")
 	}
-	if state.ETag != `"etag-new"` {
-		t.Errorf("lock map ETag: got %q, want %q", state.ETag, `"etag-new"`)
+	if state.ETag != testETagNew {
+		t.Errorf("lock map ETag: got %q, want %q", state.ETag, testETagNew)
 	}
 }
 

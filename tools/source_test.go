@@ -14,6 +14,13 @@ import (
 
 const testObjectURI = "/sap/bc/adt/programs/programs/ZTEST"
 
+// Shared test constants to satisfy goconst across the package.
+const (
+	testETagNew   = `"etag-new"`
+	testETagAfter = `"etag-after"`
+	testLockHandle123 = "lock-handle-123"
+)
+
 // mockClient is a test double for adt.Client.
 type mockClient struct {
 	getSourceFn       func(ctx context.Context, uri string) (*adt.SourceResult, error)
@@ -252,7 +259,7 @@ func TestGetSourceUpdatesLockMapETag(t *testing.T) {
 
 	mock := &mockClient{
 		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
-			return &adt.SourceResult{Source: "REPORT ZTEST.", ETag: `"etag-new"`}, nil
+			return &adt.SourceResult{Source: "REPORT ZTEST.", ETag: testETagNew}, nil
 		},
 	}
 	s := newTestServerWithLockMap(mock, lockMap)
@@ -268,8 +275,8 @@ func TestGetSourceUpdatesLockMapETag(t *testing.T) {
 	if !ok {
 		t.Fatal("expected lock map entry to exist after get_source")
 	}
-	if state.ETag != `"etag-new"` {
-		t.Errorf("ETag in lock map: got %q, want %q", state.ETag, `"etag-new"`)
+	if state.ETag != testETagNew {
+		t.Errorf("ETag in lock map: got %q, want %q", state.ETag, testETagNew)
 	}
 	if state.LockHandle != "lock-handle-abc" {
 		t.Errorf("LockHandle should be unchanged: got %q", state.LockHandle)
