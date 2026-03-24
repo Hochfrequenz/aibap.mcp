@@ -147,6 +147,12 @@ func (m *mockClient) GetCompletions(ctx context.Context, uri, source string, lin
 func (m *mockClient) ExportPackage(ctx context.Context, packageName string) ([]byte, error) {
 	return nil, nil
 }
+func (m *mockClient) GetATCCustomizing(_ context.Context) (*adt.ATCCustomizingResult, error) {
+	return &adt.ATCCustomizingResult{Properties: map[string]string{}}, nil
+}
+func (m *mockClient) RunATCCheck(_ context.Context, _ []string) (*adt.ATCResult, error) {
+	return &adt.ATCResult{}, nil
+}
 
 func newTestServer(client adt.Client) *server.MCPServer {
 	return newTestServerWithSelector(client, &mockSelector{}, adt.NewLockMap())

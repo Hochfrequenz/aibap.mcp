@@ -147,3 +147,9 @@ func (r *ClientRegistry) GetCompletions(ctx context.Context, objectURI, source s
 func (r *ClientRegistry) ExportPackage(ctx context.Context, packageName string) ([]byte, error) {
 	return r.activeClient().ExportPackage(ctx, packageName)
 }
+func (r *ClientRegistry) GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error) {
+	return r.activeClient().GetATCCustomizing(ctx)
+}
+func (r *ClientRegistry) RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error) {
+	return r.activeClient().RunATCCheck(ctx, objectURIs)
+}
