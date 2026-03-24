@@ -167,18 +167,20 @@ systems:
 	}
 }
 
-func TestCallbackServerMissingCode(t *testing.T) {
+// callbackErrorHelper hits the callback server at the given path and asserts
+// that an error containing wantSubstr is returned on errCh.
+func callbackErrorHelper(t *testing.T, path, wantSubstr string) {
+	t.Helper()
 	ln, err := newLocalListener()
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
 	codeCh, errCh := startCallbackServer(ln)
 
-	// Hit the callback endpoint without a code param.
 	addr := ln.Addr().String()
-	resp, err := http.Get("http://" + addr + "/callback")
+	resp, err := http.Get("http://" + addr + path)
 	if err != nil {
-		t.Fatalf("GET /callback: %v", err)
+		t.Fatalf("GET %s: %v", path, err)
 	}
 	_ = resp.Body.Close()
 
@@ -188,8 +190,8 @@ func TestCallbackServerMissingCode(t *testing.T) {
 
 	select {
 	case e := <-errCh:
-		if !strings.Contains(e.Error(), "code") {
-			t.Errorf("error = %q, want it to mention 'code'", e.Error())
+		if !strings.Contains(e.Error(), wantSubstr) {
+			t.Errorf("error = %q, want it to contain %q", e.Error(), wantSubstr)
 		}
 	case <-codeCh:
 		t.Fatal("expected error, got code")
@@ -198,34 +200,12 @@ func TestCallbackServerMissingCode(t *testing.T) {
 	}
 }
 
+func TestCallbackServerMissingCode(t *testing.T) {
+	callbackErrorHelper(t, "/callback", "code")
+}
+
 func TestCallbackServerWithError(t *testing.T) {
-	ln, err := newLocalListener()
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	codeCh, errCh := startCallbackServer(ln)
-
-	addr := ln.Addr().String()
-	resp, err := http.Get("http://" + addr + "/callback?error=access_denied&error_description=User+denied+access")
-	if err != nil {
-		t.Fatalf("GET /callback: %v", err)
-	}
-	_ = resp.Body.Close()
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
-	}
-
-	select {
-	case e := <-errCh:
-		if !strings.Contains(e.Error(), "access_denied") {
-			t.Errorf("error = %q, want it to contain 'access_denied'", e.Error())
-		}
-	case <-codeCh:
-		t.Fatal("expected error, got code")
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for error")
-	}
+	callbackErrorHelper(t, "/callback?error=access_denied&error_description=User+denied+access", "access_denied")
 }
 
 func TestRunLoginExchangeFailure(t *testing.T) {
