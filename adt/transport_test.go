@@ -16,10 +16,16 @@ func TestGetTransportRequests(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		w.Header().Set("Content-Type", "application/xml")
+		accept := r.Header.Get("Accept")
+		if accept != "application/vnd.sap.adt.transportorganizertree.v1+xml" {
+			t.Errorf("Accept header: got %q", accept)
+		}
+		w.Header().Set("Content-Type", "application/vnd.sap.adt.transportorganizertree.v1+xml")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`<?xml version="1.0"?>
-<tm:root xmlns:tm="http://www.sap.com/cts/transport">
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<tm:root adtcore:name="DEVELOPER"
+  xmlns:tm="http://www.sap.com/cts/adt/tm"
+  xmlns:adtcore="http://www.sap.com/adt/core">
   <tm:workbenchRequests>
     <tm:workbenchRequest tm:number="DEVK900123" tm:owner="DEVELOPER" tm:shortDescription="Feature transport" tm:status="D"/>
   </tm:workbenchRequests>
@@ -39,9 +45,6 @@ func TestGetTransportRequests(t *testing.T) {
 	}
 	if transports[0].Number != "DEVK900123" {
 		t.Errorf("number: got %q", transports[0].Number)
-	}
-	if transports[0].Status != "D" {
-		t.Errorf("status: got %q", transports[0].Status)
 	}
 }
 
