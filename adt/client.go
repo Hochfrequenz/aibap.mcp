@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +19,7 @@ import (
 // Client defines all SAP ADT operations exposed as MCP tools.
 type Client interface {
 	GetSource(ctx context.Context, objectURI string) (*SourceResult, error)
-	SetSource(ctx context.Context, objectURI, source, lockHandle, etag string) error
+	SetSource(ctx context.Context, objectURI, source, lockHandle, transport, etag string) (string, error)
 	ActivateObject(ctx context.Context, objectURI string) (*ActivationResult, error)
 	SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error)
 	WhereUsed(ctx context.Context, objectURI string) ([]ObjectInfo, error)
@@ -29,7 +30,7 @@ type Client interface {
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
 	LockObject(ctx context.Context, objectURI string) (string, error)
-	UnlockObject(ctx context.Context, objectURI string) error
+	UnlockObject(ctx context.Context, objectURI, lockHandle string) error
 	PrettyPrint(ctx context.Context, source string) (string, error)
 	CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error
 	DeleteObject(ctx context.Context, objectURI, transport string) error
@@ -41,13 +42,13 @@ type httpClient struct {
 	http           *http.Client
 	mu             sync.Mutex
 	csrfToken      string
-	sessionCookies []*http.Cookie
 	accessToken    string                       // OAuth2 access token (empty = Basic Auth)
 	onTokenRefresh func(string) (string, error) // callback to refresh token, returns new access token
 }
 
 // NewClient creates a new ADT HTTP client configured from cfg.
 func NewClient(cfg config.SAPConfig) Client {
+	jar, _ := cookiejar.New(nil)
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: cfg.TLSSkipVerify, //nolint:gosec
@@ -58,6 +59,7 @@ func NewClient(cfg config.SAPConfig) Client {
 		http: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: transport,
+			Jar:       jar,
 		},
 	}
 }
@@ -65,6 +67,7 @@ func NewClient(cfg config.SAPConfig) Client {
 // NewClientWithToken creates a Client using Bearer token auth.
 // onRefresh is called with the current access token when a 401 occurs; it should return a new access token.
 func NewClientWithToken(cfg config.SAPConfig, accessToken string, onRefresh func(string) (string, error)) Client {
+	jar, _ := cookiejar.New(nil)
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: cfg.TLSSkipVerify, //nolint:gosec
@@ -75,6 +78,7 @@ func NewClientWithToken(cfg config.SAPConfig, accessToken string, onRefresh func
 		http: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: transport,
+			Jar:       jar,
 		},
 		accessToken:    accessToken,
 		onTokenRefresh: onRefresh,
@@ -100,7 +104,6 @@ func (c *httpClient) fetchCSRFToken(ctx context.Context) error {
 	io.Copy(io.Discard, resp.Body) //nolint:errcheck
 
 	c.csrfToken = resp.Header.Get("X-CSRF-Token")
-	c.sessionCookies = resp.Cookies()
 	return nil
 }
 
@@ -115,12 +118,6 @@ func (c *httpClient) setAuth(req *http.Request) {
 	}
 }
 
-func (c *httpClient) applySession(req *http.Request) {
-	for _, cookie := range c.sessionCookies {
-		req.AddCookie(cookie)
-	}
-}
-
 // doRead performs a GET request (no CSRF required), with re-auth retry on 401.
 func (c *httpClient) doRead(ctx context.Context, path string, headers map[string]string) (*http.Response, error) {
 	path = encodeNamespacePath(path)
@@ -130,9 +127,6 @@ func (c *httpClient) doRead(ctx context.Context, path string, headers map[string
 			return nil, err
 		}
 		c.setAuth(req)
-		c.mu.Lock()
-		c.applySession(req)
-		c.mu.Unlock()
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
@@ -200,10 +194,9 @@ func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.
 		}
 	}
 	token := c.csrfToken
-	cookies := c.sessionCookies
 	c.mu.Unlock()
 
-	resp, err := c.execMutate(ctx, method, path, newBody(), headers, token, cookies)
+	resp, err := c.execMutate(ctx, method, path, newBody(), headers, token)
 	if err != nil {
 		return nil, err
 	}
@@ -224,24 +217,20 @@ func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.
 			return nil, err
 		}
 		token = c.csrfToken
-		cookies = c.sessionCookies
 		c.mu.Unlock()
-		return c.execMutate(ctx, method, path, newBody(), headers, token, cookies)
+		return c.execMutate(ctx, method, path, newBody(), headers, token)
 	}
 
 	return resp, nil
 }
 
-func (c *httpClient) execMutate(ctx context.Context, method, path string, body io.Reader, headers map[string]string, csrfToken string, cookies []*http.Cookie) (*http.Response, error) {
+func (c *httpClient) execMutate(ctx context.Context, method, path string, body io.Reader, headers map[string]string, csrfToken string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.cfg.Host+path, body)
 	if err != nil {
 		return nil, err
 	}
 	c.setAuth(req)
 	req.Header.Set("X-CSRF-Token", csrfToken)
-	for _, cookie := range cookies {
-		req.AddCookie(cookie)
-	}
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
@@ -271,24 +260,27 @@ func encodeNamespacePath(path string) string {
 	if idx < 0 {
 		return path
 	}
-	// Everything before the // is the ADT prefix
-	prefix := path[:idx+1] // include one slash
-	rest := path[idx+1:]   // starts with /NAMESPACE/name...
-	// Find the closing namespace slash (second / after the namespace name)
+	// Separate query string before processing
+	query := ""
+	if qIdx := strings.IndexByte(path, '?'); qIdx >= 0 {
+		query = path[qIdx:]
+		path = path[:qIdx]
+	}
+	prefix := path[:idx+1]
+	rest := path[idx+1:]
 	endNS := strings.Index(rest[1:], "/")
 	if endNS < 0 {
-		return path // malformed, return as-is
+		return path + query
 	}
-	nsName := rest[1 : endNS+1] // e.g. "HFQ"
-	after := rest[endNS+2:]     // e.g. "REPORT/source/main" or "REPORT"
-	// Split object name from any suffix path (e.g. /source/main)
+	nsName := rest[1 : endNS+1]
+	after := rest[endNS+2:]
 	objName := after
 	suffix := ""
 	if slashIdx := strings.Index(after, "/"); slashIdx >= 0 {
 		objName = after[:slashIdx]
 		suffix = after[slashIdx:]
 	}
-	return prefix + "%2f" + strings.ToLower(nsName) + "%2f" + strings.ToLower(objName) + suffix
+	return prefix + "%2f" + strings.ToLower(nsName) + "%2f" + strings.ToLower(objName) + suffix + query
 }
 
 // checkResponse returns an *ADTError if the response status indicates failure.

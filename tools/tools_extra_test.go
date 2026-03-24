@@ -54,16 +54,17 @@ func TestLockObjectToolError(t *testing.T) {
 // --- unlock_object ---
 
 func TestUnlockObjectTool(t *testing.T) {
-	var gotURI string
+	var gotURI, gotHandle string
 	mock := &mockClient{
-		unlockObjectFn: func(ctx context.Context, uri string) error {
-			gotURI = uri
+		unlockObjectFn: func(ctx context.Context, uri, lockHandle string) error {
+			gotURI, gotHandle = uri, lockHandle
 			return nil
 		},
 	}
 	s := newTestServer(mock)
 	result := callTool(t, s, "unlock_object", map[string]interface{}{
-		"object_uri": testObjectURI,
+		"object_uri":  testObjectURI,
+		"lock_handle": "handle123",
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error result")
@@ -71,17 +72,21 @@ func TestUnlockObjectTool(t *testing.T) {
 	if gotURI != testObjectURI {
 		t.Errorf("uri: got %q, want %q", gotURI, testObjectURI)
 	}
+	if gotHandle != "handle123" {
+		t.Errorf("lock_handle: got %q", gotHandle)
+	}
 }
 
 func TestUnlockObjectToolError(t *testing.T) {
 	mock := &mockClient{
-		unlockObjectFn: func(ctx context.Context, uri string) error {
+		unlockObjectFn: func(ctx context.Context, uri, lockHandle string) error {
 			return &adt.ADTError{StatusCode: 400, Message: "unlock failed"}
 		},
 	}
 	s := newTestServer(mock)
 	result := callTool(t, s, "unlock_object", map[string]interface{}{
-		"object_uri": testObjectURI,
+		"object_uri":  testObjectURI,
+		"lock_handle": "handle123",
 	})
 	if !result.IsError {
 		t.Fatal("expected IsError=true")
@@ -480,8 +485,8 @@ func TestRunUnitTestsToolError(t *testing.T) {
 
 func TestSetSourceToolError(t *testing.T) {
 	mock := &mockClient{
-		setSourceFn: func(ctx context.Context, uri, source, lockHandle, etag string) error {
-			return &adt.ADTError{StatusCode: 409, Message: "conflict"}
+		setSourceFn: func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error) {
+			return "", &adt.ADTError{StatusCode: 409, Message: "conflict"}
 		},
 	}
 	s := newTestServer(mock)

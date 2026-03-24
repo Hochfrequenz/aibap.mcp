@@ -43,6 +43,9 @@ func registerSourceTools(s *server.MCPServer, client adt.Client) {
 		mcp.WithString("lock_handle",
 			mcp.Description("Lock handle from lock_object (required on most systems)"),
 		),
+		mcp.WithString("transport",
+			mcp.Description("Transport request number (required for non-local packages)"),
+		),
 		mcp.WithString("etag",
 			mcp.Required(),
 			mcp.Description("ETag value from get_source, passed verbatim including quotes"),
@@ -51,8 +54,9 @@ func registerSourceTools(s *server.MCPServer, client adt.Client) {
 		uri := req.GetString(paramObjectURI, "")
 		source := req.GetString("source", "")
 		lockHandle := req.GetString("lock_handle", "")
+		transport := req.GetString("transport", "")
 		etag := req.GetString("etag", "")
-		if err := client.SetSource(ctx, uri, source, lockHandle, etag); err != nil {
+		if _, err := client.SetSource(ctx, uri, source, lockHandle, transport, etag); err != nil {
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultText("Source updated successfully"), nil

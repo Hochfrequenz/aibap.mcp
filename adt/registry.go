@@ -96,8 +96,8 @@ func (r *ClientRegistry) activeClient() Client {
 func (r *ClientRegistry) GetSource(ctx context.Context, objectURI string) (*SourceResult, error) {
 	return r.activeClient().GetSource(ctx, objectURI)
 }
-func (r *ClientRegistry) SetSource(ctx context.Context, objectURI, source, lockHandle, etag string) error {
-	return r.activeClient().SetSource(ctx, objectURI, source, lockHandle, etag)
+func (r *ClientRegistry) SetSource(ctx context.Context, objectURI, source, lockHandle, transport, etag string) (string, error) {
+	return r.activeClient().SetSource(ctx, objectURI, source, lockHandle, transport, etag)
 }
 func (r *ClientRegistry) ActivateObject(ctx context.Context, objectURI string) (*ActivationResult, error) {
 	return r.activeClient().ActivateObject(ctx, objectURI)
@@ -129,8 +129,8 @@ func (r *ClientRegistry) AddToTransport(ctx context.Context, objectURI, transpor
 func (r *ClientRegistry) LockObject(ctx context.Context, objectURI string) (string, error) {
 	return r.activeClient().LockObject(ctx, objectURI)
 }
-func (r *ClientRegistry) UnlockObject(ctx context.Context, objectURI string) error {
-	return r.activeClient().UnlockObject(ctx, objectURI)
+func (r *ClientRegistry) UnlockObject(ctx context.Context, objectURI, lockHandle string) error {
+	return r.activeClient().UnlockObject(ctx, objectURI, lockHandle)
 }
 func (r *ClientRegistry) PrettyPrint(ctx context.Context, source string) (string, error) {
 	return r.activeClient().PrettyPrint(ctx, source)

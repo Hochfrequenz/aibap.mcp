@@ -194,7 +194,7 @@ func TestRegistryDelegatesAllMethods(t *testing.T) {
 		}
 	})
 	t.Run("SetSource", func(t *testing.T) {
-		if err := registry.SetSource(ctx, objURI, "REPORT ZTEST.", "", "e1"); err != nil {
+		if _, err := registry.SetSource(ctx, objURI, "REPORT ZTEST.", "", "", "e1"); err != nil {
 			t.Fatalf("SetSource: %v", err)
 		}
 	})
@@ -249,7 +249,7 @@ func TestRegistryDelegatesAllMethods(t *testing.T) {
 		}
 	})
 	t.Run("UnlockObject", func(t *testing.T) {
-		if err := registry.UnlockObject(ctx, objURI); err != nil {
+		if err := registry.UnlockObject(ctx, objURI, "handle"); err != nil {
 			t.Fatalf("UnlockObject: %v", err)
 		}
 	})

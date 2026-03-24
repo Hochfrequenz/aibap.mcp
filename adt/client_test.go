@@ -44,7 +44,7 @@ func TestCSRFTokenFetchedOnFirstMutate(t *testing.T) {
 	cfg := newTestConfig(srv.URL)
 	client := adt.NewClient(cfg)
 
-	err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.", "", `"etag123"`)
+	_, err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.", "", "", `"etag123"`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestCSRFTokenRefreshedOn403(t *testing.T) {
 	cfg := newTestConfig(srv.URL)
 	client := adt.NewClient(cfg)
 
-	err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.", "", `"etag123"`)
+	_, err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.", "", "", `"etag123"`)
 	if err != nil {
 		t.Fatalf("unexpected error after retry: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestReauthOn401(t *testing.T) {
 	cfg := newTestConfig(srv.URL)
 	client := adt.NewClient(cfg)
 
-	err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.", "", `"etag123"`)
+	_, err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.", "", "", `"etag123"`)
 	if err != nil {
 		t.Fatalf("unexpected error after re-auth: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestADTErrorParsed(t *testing.T) {
 	cfg := newTestConfig(srv.URL)
 	client := adt.NewClient(cfg)
 
-	err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.", "", `"etag123"`)
+	_, err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.", "", "", `"etag123"`)
 	if err == nil {
 		t.Fatal("expected error")
 	}

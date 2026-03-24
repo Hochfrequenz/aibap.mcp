@@ -17,7 +17,7 @@ const testObjectURI = "/sap/bc/adt/programs/programs/ZTEST"
 // mockClient is a test double for adt.Client.
 type mockClient struct {
 	getSourceFn      func(ctx context.Context, uri string) (*adt.SourceResult, error)
-	setSourceFn      func(ctx context.Context, uri, source, lockHandle, etag string) error
+	setSourceFn      func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
 	activateFn       func(ctx context.Context, uri string) (*adt.ActivationResult, error)
 	searchFn         func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
 	whereUsedFn      func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
@@ -28,7 +28,7 @@ type mockClient struct {
 	getTransportFn   func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
 	addTransportFn   func(ctx context.Context, uri, transport string) error
 	lockObjectFn     func(ctx context.Context, uri string) (string, error)
-	unlockObjectFn   func(ctx context.Context, uri string) error
+	unlockObjectFn   func(ctx context.Context, uri, lockHandle string) error
 	prettyPrintFn    func(ctx context.Context, source string) (string, error)
 	createObjectFn   func(ctx context.Context, objectType, name, pkg, desc, transport string) error
 	deleteObjectFn   func(ctx context.Context, uri, transport string) error
@@ -41,11 +41,11 @@ func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResu
 	}
 	return &adt.SourceResult{}, nil
 }
-func (m *mockClient) SetSource(ctx context.Context, uri, source, lockHandle, etag string) error {
+func (m *mockClient) SetSource(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error) {
 	if m.setSourceFn != nil {
-		return m.setSourceFn(ctx, uri, source, lockHandle, etag)
+		return m.setSourceFn(ctx, uri, source, lockHandle, transport, etag)
 	}
-	return nil
+	return "new-etag", nil
 }
 func (m *mockClient) ActivateObject(ctx context.Context, uri string) (*adt.ActivationResult, error) {
 	if m.activateFn != nil {
@@ -107,9 +107,9 @@ func (m *mockClient) LockObject(ctx context.Context, uri string) (string, error)
 	}
 	return "mock-lock-handle", nil
 }
-func (m *mockClient) UnlockObject(ctx context.Context, uri string) error {
+func (m *mockClient) UnlockObject(ctx context.Context, uri, lockHandle string) error {
 	if m.unlockObjectFn != nil {
-		return m.unlockObjectFn(ctx, uri)
+		return m.unlockObjectFn(ctx, uri, lockHandle)
 	}
 	return nil
 }
@@ -375,9 +375,9 @@ func TestAddToTransportTool(t *testing.T) {
 func TestSetSourceTool(t *testing.T) {
 	var gotURI, gotSource, gotLockHandle, gotETag string
 	mock := &mockClient{
-		setSourceFn: func(ctx context.Context, uri, source, lockHandle, etag string) error {
+		setSourceFn: func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error) {
 			gotURI, gotSource, gotLockHandle, gotETag = uri, source, lockHandle, etag
-			return nil
+			return "new-etag", nil
 		},
 	}
 	s := newTestServer(mock)
