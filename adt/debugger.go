@@ -98,3 +98,47 @@ func (d *DebugSession) SetBreakpoint(ctx context.Context, objectURI string, line
 	d.breakpoints[bp.ID] = bp.ID
 	return &BreakpointResult{ID: bp.ID}, nil
 }
+
+// ListenerResult holds the result of a debug listener call.
+type ListenerResult struct {
+	Status     string // "attached", "timeout"
+	DebuggeeID string
+}
+
+// StartListener starts a debug listener that blocks until a breakpoint
+// is hit or the timeout expires.
+func (d *DebugSession) StartListener(ctx context.Context, timeoutSeconds int) (*ListenerResult, error) {
+	path := fmt.Sprintf("/sap/bc/adt/debugger/listeners?debuggingMode=user&requestUser=%s&terminalId=%s&ideId=%s&timeout=%d",
+		d.user, d.terminalID, d.ideID, timeoutSeconds)
+
+	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
+		map[string]string{"Accept": "application/xml"})
+	if err != nil {
+		return nil, fmt.Errorf("StartListener: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	data, _ := io.ReadAll(resp.Body)
+	if len(data) == 0 {
+		return &ListenerResult{Status: "timeout"}, nil
+	}
+
+	return &ListenerResult{Status: "attached", DebuggeeID: string(data)}, nil
+}
+
+// StopListener stops the debug listener and cleans up breakpoints.
+func (d *DebugSession) StopListener(ctx context.Context) error {
+	path := fmt.Sprintf("/sap/bc/adt/debugger/listeners?debuggingMode=user&requestUser=%s&terminalId=%s&ideId=%s",
+		d.user, d.terminalID, d.ideID)
+
+	resp, err := d.client.doMutate(ctx, http.MethodDelete, path, nil, nil)
+	if err != nil {
+		return fmt.Errorf("StopListener: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	d.breakpoints = make(map[string]string)
+	return checkResponse(resp)
+}

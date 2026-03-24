@@ -47,3 +47,64 @@ func TestDebugSessionSetBreakpoint(t *testing.T) {
 		t.Errorf("body missing scope=external: %s", gotBody)
 	}
 }
+
+func TestDebugSessionStartListenerTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path == "/sap/bc/adt/debugger/listeners" {
+			// Simulate timeout — empty response
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
+
+	result, err := dbg.StartListener(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("StartListener: %v", err)
+	}
+	if result.Status != "timeout" {
+		t.Errorf("status: got %q, want timeout", result.Status)
+	}
+}
+
+func TestDebugSessionStopListener(t *testing.T) {
+	var gotMethod, gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path == "/sap/bc/adt/debugger/listeners" {
+			gotMethod = r.Method
+			gotPath = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
+
+	err := dbg.StopListener(context.Background())
+	if err != nil {
+		t.Fatalf("StopListener: %v", err)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Errorf("method: got %q, want DELETE", gotMethod)
+	}
+	if gotPath != "/sap/bc/adt/debugger/listeners" {
+		t.Errorf("path: got %q", gotPath)
+	}
+}
