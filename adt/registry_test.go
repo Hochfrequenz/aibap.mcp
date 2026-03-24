@@ -167,7 +167,7 @@ func allEndpointsHandler() http.Handler {
 			w.WriteHeader(http.StatusCreated)
 		case method == http.MethodDelete:
 			w.WriteHeader(http.StatusOK)
-		case path == "/sap/bc/adt/abapsource/codecompletion/proposals":
+		case path == "/sap/bc/adt/abapsource/codecompletion/proposal":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(emptyCompletions))
 		default:

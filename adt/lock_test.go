@@ -20,6 +20,9 @@ func TestLockObject(t *testing.T) {
 		if r.URL.Query().Get("_action") != "LOCK" {
 			t.Errorf("expected _action=LOCK, got %q", r.URL.Query().Get("_action"))
 		}
+		if accept := r.Header.Get("Accept"); accept != "application/vnd.sap.as+xml" {
+			t.Errorf("Accept header: got %q, want %q", accept, "application/vnd.sap.as+xml")
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>lock-handle-xyz</LOCK_HANDLE></DATA></asx:values></asx:abap>`))
 	}))

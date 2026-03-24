@@ -6,10 +6,9 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 )
 
-func registerLockTools(s *server.MCPServer, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
+func registerLockTools(s toolAdder, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("lock_object",
 		mcp.WithDescription("Lock an ABAP object for editing. Returns a lock handle. The handle is stored in the server lock map automatically."),
 		mcp.WithString(paramObjectURI,

@@ -6,10 +6,9 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 )
 
-func registerSearchTools(s *server.MCPServer, client adt.Client) {
+func registerSearchTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("search_objects",
 		mcp.WithDescription("Search for ABAP repository objects by name. Supports wildcards, e.g. ZREPORT*."),
 		mcp.WithString("query", mcp.Required(), mcp.Description("Search query, e.g. ZREPORT*")),

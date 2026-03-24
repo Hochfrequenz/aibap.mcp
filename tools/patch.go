@@ -9,7 +9,14 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+)
+
+// Patch operation type constants.
+const (
+	opInsert        = "insert"
+	opReplace       = "replace"
+	opDelete        = "delete"
+	opSearchReplace = "search_replace"
 )
 
 // PatchOp describes a single source-patch operation.
@@ -45,9 +52,9 @@ func lineDelta(oldSource, newSource string) int {
 // primaryKey returns the primary sort key for an op (used for bottom-up ordering).
 func primaryKey(op PatchOp) int {
 	switch op.Type {
-	case "insert":
+	case opInsert:
 		return op.AfterLine
-	case "replace", "delete":
+	case opReplace, opDelete:
 		return op.FromLine
 	default:
 		return 0
@@ -63,7 +70,7 @@ func ApplyPatchOps(source string, ops []PatchOp) (string, error) {
 	var lineOps []PatchOp
 	var srOps []PatchOp
 	for _, op := range ops {
-		if op.Type == "search_replace" {
+		if op.Type == opSearchReplace {
 			srOps = append(srOps, op)
 		} else {
 			lineOps = append(lineOps, op)
@@ -116,7 +123,7 @@ func ApplyPatchOps(source string, ops []PatchOp) (string, error) {
 
 func opStartLine(op PatchOp) int {
 	switch op.Type {
-	case "insert":
+	case opInsert:
 		return op.AfterLine
 	default:
 		return op.FromLine
@@ -125,9 +132,9 @@ func opStartLine(op PatchOp) int {
 
 func opEndLine(op PatchOp) int {
 	switch op.Type {
-	case "insert":
+	case opInsert:
 		return op.AfterLine
-	case "replace", "delete":
+	case opReplace, opDelete:
 		return op.ToLine
 	default:
 		return 0
@@ -152,7 +159,7 @@ func joinLines(lines []string) string {
 func applyLineOp(lines []string, op PatchOp) ([]string, error) {
 	n := len(lines)
 	switch op.Type {
-	case "insert":
+	case opInsert:
 		// Insert content after line AfterLine (0 = before all lines).
 		afterIdx := op.AfterLine // content inserted at index afterIdx
 		if afterIdx < 0 || afterIdx > n {
@@ -164,7 +171,7 @@ func applyLineOp(lines []string, op PatchOp) ([]string, error) {
 		newLines = append(newLines, lines[afterIdx:]...)
 		return newLines, nil
 
-	case "replace":
+	case opReplace:
 		from, to := op.FromLine, op.ToLine
 		if from < 1 || to < from || to > n {
 			return nil, fmt.Errorf("replace: from_line=%d to_line=%d out of range (1..%d)", from, to, n)
@@ -175,7 +182,7 @@ func applyLineOp(lines []string, op PatchOp) ([]string, error) {
 		newLines = append(newLines, lines[to:]...)
 		return newLines, nil
 
-	case "delete":
+	case opDelete:
 		from, to := op.FromLine, op.ToLine
 		if from < 1 || to < from || to > n {
 			return nil, fmt.Errorf("delete: from_line=%d to_line=%d out of range (1..%d)", from, to, n)
@@ -191,7 +198,7 @@ func applyLineOp(lines []string, op PatchOp) ([]string, error) {
 }
 
 // registerPatchTools registers the patch_source MCP tool on the server.
-func registerPatchTools(s *server.MCPServer, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
+func registerPatchTools(s toolAdder, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("patch_source",
 		mcp.WithDescription("Apply patch operations to ABAP source code. Supports line-based (insert/replace/delete) and text-based (search_replace) operations. Automatically acquires a lock if none exists."),
 		mcp.WithString(paramObjectURI,
