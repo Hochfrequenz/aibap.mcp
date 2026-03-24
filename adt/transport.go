@@ -35,7 +35,7 @@ func (c *httpClient) GetTransportRequests(ctx context.Context, user, status stri
 		path += "?" + params.Encode()
 	}
 
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": contentTypeXML})
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/vnd.sap.adt.transportorganizertree.v1+xml"})
 	if err != nil {
 		return nil, fmt.Errorf("GetTransportRequests: %w", err)
 	}
