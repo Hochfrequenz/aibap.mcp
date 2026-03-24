@@ -2,11 +2,12 @@ package adt
 
 import (
 	"context"
-	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
 
 func (c *httpClient) LockObject(ctx context.Context, objectURI string) (string, error) {
@@ -26,17 +27,10 @@ func (c *httpClient) LockObject(ctx context.Context, objectURI string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("LockObject reading body: %w", err)
 	}
-	// SAP returns: <asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><LOCK_HANDLE>…</LOCK_HANDLE></DATA></asx:values></asx:abap>
-	var lockResp struct {
-		XMLName xml.Name `xml:"abap"`
-		Values  struct {
-			Data struct {
-				LockHandle string `xml:"LOCK_HANDLE"`
-			} `xml:"DATA"`
-		} `xml:"values"`
-	}
-	if err := xml.Unmarshal(data, &lockResp); err == nil && lockResp.Values.Data.LockHandle != "" {
-		return lockResp.Values.Data.LockHandle, nil
+	// SAP returns asx:abap envelope with LockData
+	lockData, unmarshalErr := adtmodel.UnmarshalASXData[adtmodel.LockData](data)
+	if unmarshalErr == nil && lockData.LockHandle != "" {
+		return lockData.LockHandle, nil
 	}
 	// Fallback: if response is not XML, treat entire body as handle
 	handle := strings.TrimSpace(string(data))

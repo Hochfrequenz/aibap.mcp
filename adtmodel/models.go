@@ -23,13 +23,14 @@ type LockData struct {
 // Endpoint: POST /sap/bc/adt/repository/nodestructure
 // Verified: 2026-03-23 against srvhfuhana.sap.msp.local:44300
 type PackageNode struct {
-	ObjectType string `xml:"OBJECT_TYPE"`
-	ObjectName string `xml:"OBJECT_NAME"`
-	TechName   string `xml:"TECH_NAME"`
-	ObjectURI  string `xml:"OBJECT_URI"`
-	Expandable string `xml:"EXPANDABLE"`
-	Visibility string `xml:"VISIBILITY"`
-	NodeID     string `xml:"NODE_ID"`
+	ObjectType  string `xml:"OBJECT_TYPE"`
+	ObjectName  string `xml:"OBJECT_NAME"`
+	TechName    string `xml:"TECH_NAME"`
+	ObjectURI   string `xml:"OBJECT_URI"`
+	Description string `xml:"DESCRIPTION"`
+	Expandable  string `xml:"EXPANDABLE"`
+	Visibility  string `xml:"VISIBILITY"`
+	NodeID      string `xml:"NODE_ID"`
 }
 
 // PackageTreeContent is the DATA content of a BrowsePackage response.
