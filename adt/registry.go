@@ -91,7 +91,7 @@ func (r *ClientRegistry) activeClient() Client {
 	return r.clients[r.active]
 }
 
-// --- adt.Client delegation (all 11 methods) ---
+// --- adt.Client delegation ---
 
 func (r *ClientRegistry) GetSource(ctx context.Context, objectURI string) (*SourceResult, error) {
 	return r.activeClient().GetSource(ctx, objectURI)

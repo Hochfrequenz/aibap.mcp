@@ -46,10 +46,12 @@ func (c *httpClient) GetATCCustomizing(ctx context.Context) (*ATCCustomizingResu
 }
 
 func (c *httpClient) RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error) {
-	// Build object references XML.
+	// Build object references XML. Escape URIs to prevent XML injection.
 	var refs strings.Builder
 	for _, uri := range objectURIs {
-		fmt.Fprintf(&refs, `<adtcore:objectReference adtcore:uri="%s"/>`, uri)
+		var escaped strings.Builder
+		_ = xml.EscapeText(&escaped, []byte(uri))
+		fmt.Fprintf(&refs, `<adtcore:objectReference adtcore:uri="%s"/>`, escaped.String())
 	}
 
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
@@ -63,6 +65,9 @@ func (c *httpClient) RunATCCheck(ctx context.Context, objectURIs []string) (*ATC
 		`</atc:run>`, refs.String())
 
 	// Step 1: Trigger ATC run.
+	// clientWait=false means the server returns immediately. The worklist fetch
+	// below assumes the run completes near-instantly. If this proves unreliable
+	// on systems where it works, a polling loop may be needed.
 	resp, err := c.doMutate(ctx, http.MethodPost,
 		"/sap/bc/adt/atc/runs?clientWait=false",
 		strings.NewReader(body),
