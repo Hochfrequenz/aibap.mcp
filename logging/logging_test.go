@@ -3,7 +3,6 @@ package logging
 import (
 	"bytes"
 	"log/slog"
-	"os"
 	"strings"
 	"testing"
 )
@@ -66,10 +65,10 @@ func TestFanoutHandler_LevelFiltering(t *testing.T) {
 
 func TestSetup_DefaultsToTextStderr(t *testing.T) {
 	// Unset env vars to test defaults.
-	os.Unsetenv("LOG_FORMAT")
-	os.Unsetenv("LOG_LEVEL")
-	os.Unsetenv("PAPERTRAIL_HOST")
-	os.Unsetenv("PAPERTRAIL_PORT")
+	t.Setenv("LOG_FORMAT", "")
+	t.Setenv("LOG_LEVEL", "")
+	t.Setenv("PAPERTRAIL_HOST", "")
+	t.Setenv("PAPERTRAIL_PORT", "")
 
 	Setup()
 

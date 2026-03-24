@@ -83,7 +83,7 @@ func (h *papertrailHandler) Handle(ctx context.Context, r slog.Record) error {
 	if err := h.send([]byte(line)); err != nil {
 		// Reconnect and retry once.
 		if h.conn != nil {
-			h.conn.Close()
+			_ = h.conn.Close()
 			h.conn = nil
 		}
 		if err := h.connect(); err != nil {
