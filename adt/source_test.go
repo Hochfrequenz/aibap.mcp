@@ -38,7 +38,7 @@ func TestGetSource(t *testing.T) {
 }
 
 func TestSetSource(t *testing.T) {
-	var gotMethod, gotIfMatch, gotBody string
+	var gotMethod, gotIfMatch, gotContentType, gotBody string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == csrfEndpoint {
@@ -49,6 +49,7 @@ func TestSetSource(t *testing.T) {
 		if r.URL.Path == "/sap/bc/adt/programs/programs/ZTEST/source/main" {
 			gotMethod = r.Method
 			gotIfMatch = r.Header.Get("If-Match")
+			gotContentType = r.Header.Get("Content-Type")
 			body := make([]byte, r.ContentLength)
 			_, _ = r.Body.Read(body)
 			gotBody = string(body)
@@ -71,6 +72,9 @@ func TestSetSource(t *testing.T) {
 	}
 	if gotIfMatch != `"etag-abc123"` {
 		t.Errorf("If-Match: got %q", gotIfMatch)
+	}
+	if gotContentType != "text/plain; charset=utf-8" {
+		t.Errorf("Content-Type: got %q, want %q", gotContentType, "text/plain; charset=utf-8")
 	}
 	if gotBody != "REPORT ZTEST.\nNEW CODE." {
 		t.Errorf("body: got %q", gotBody)
