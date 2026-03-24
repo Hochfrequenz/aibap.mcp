@@ -6,10 +6,9 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 )
 
-func registerSyntaxCheckTools(s *server.MCPServer, client adt.Client) {
+func registerSyntaxCheckTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("syntax_check",
 		mcp.WithDescription("Run ABAP syntax check on an object. Returns list of syntax messages with line/column info."),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),

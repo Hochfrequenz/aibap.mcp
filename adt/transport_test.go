@@ -16,11 +16,10 @@ func TestGetTransportRequests(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		accept := r.Header.Get("Accept")
-		if accept != "application/vnd.sap.adt.transportorganizertree.v1+xml" {
-			t.Errorf("Accept header: got %q", accept)
+		if accept := r.Header.Get("Accept"); accept != "application/vnd.sap.adt.transportorganizertree.v1+xml" {
+			t.Errorf("Accept header: got %q, want %q", accept, "application/vnd.sap.adt.transportorganizertree.v1+xml")
 		}
-		w.Header().Set("Content-Type", "application/vnd.sap.adt.transportorganizertree.v1+xml")
+		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
 <tm:root adtcore:name="DEVELOPER"
