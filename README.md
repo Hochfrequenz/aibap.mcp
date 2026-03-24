@@ -19,7 +19,7 @@ Claude / AI assistant
         │  MCP (stdio)
         ▼
 mcp-server-abap
-        │  HTTP + Basic Auth + CSRF
+        │  HTTP + Basic Auth or OAuth2 + CSRF
         ▼
 SAP ADT REST API  (/sap/bc/adt/...)
         │
@@ -32,14 +32,20 @@ SAP ADT REST API  (/sap/bc/adt/...)
 | Tool | Description |
 |------|-------------|
 | `get_source` | Read ABAP source code of any object |
-| `set_source` | Write ABAP source code (requires ETag from `get_source`) |
+| `set_source` | Write ABAP source code (requires ETag and lock handle) |
+| `lock_object` | Lock an object for editing, returns a lock handle |
+| `unlock_object` | Unlock a previously locked object |
 | `activate_object` | Activate an ABAP object |
+| `create_object` | Create a new ABAP object (program, class, interface) |
+| `delete_object` | Delete an ABAP object |
 | `search_objects` | Search for objects by name pattern and type |
 | `where_used` | Find all usages of an object |
 | `browse_package` | List contents of a package |
 | `get_object_info` | Get object metadata (type, package, description) |
 | `syntax_check` | Run a syntax check |
 | `run_unit_tests` | Run ABAP Unit Tests |
+| `pretty_print` | Format ABAP source code using SAP Pretty Printer |
+| `get_completions` | Get code completion proposals at a cursor position |
 | `get_transport_requests` | List open or released transport requests |
 | `add_to_transport` | Assign an object to a transport request |
 | `select_system` | Switch the active SAP system |
@@ -47,8 +53,8 @@ SAP ADT REST API  (/sap/bc/adt/...)
 ## Requirements
 
 - SAP NetWeaver 7.40+ with ADT services active (transaction SICF: `/sap/bc/adt`)
-- A user with developer authorizations (`S_ADT_RES`, `S_DEVELOP`)
-- Go 1.23+ (to build from source)
+- A user with developer authorizations (`S_ADT_RES`, `S_DEVELOP`) — or OAuth2 SSO (see below)
+- Go 1.26+ (to build from source)
 
 ## Installation
 
@@ -78,40 +84,43 @@ default_system: dev
 systems:
   dev:
     host: "https://your-dev-system:8000"
-    client: "100"
     user: "YOUR_USER"
     password: "YOUR_PASSWORD"
+    client: "100"          # optional, omit to use SAP default client
     tls_skip_verify: false
   prod:
     host: "https://your-prod-system:8000"
-    client: "200"
     user: "YOUR_USER"
     password: "YOUR_PASSWORD"
 ```
+
+### OAuth2 / SSO
+
+For systems with SAML SSO, omit `user` and `password` to use OAuth2:
+
+```yaml
+systems:
+  prod:
+    host: "https://your-prod-system:8000"
+    # no user/password → OAuth2 mode
+    oauth2_client_id: "mcp-server-abap"  # optional, this is the default
+```
+
+Then authenticate via browser before starting the server:
+
+```bash
+mcp-server-abap login prod
+```
+
+This opens your browser for SAML authentication. After login, tokens are cached in `~/.config/mcp-server-abap/tokens.json` and refreshed automatically.
+
+**SAP prerequisites:** Register OAuth2 client `mcp-server-abap` in transaction `SOAUTH2` with grant type "Authorization Code" and redirect URI pattern `http://localhost:*`. SAML IdP trust must be configured in transaction `SAML2`.
 
 Alternatively, configure via environment variables:
 
 | Variable | Description |
 |----------|-------------|
 | `SAP_CONFIG_FILE` | Path to config.yaml (default: `./config.yaml`) |
-
-### Migrating from v0.x
-
-The `sap:` config key has been replaced with `systems:`. Wrap your existing config:
-
-```yaml
-# Old format:
-sap:
-  host: "..."
-  client: "100"
-
-# New format:
-default_system: default
-systems:
-  default:
-    host: "..."
-    client: "100"
-```
 
 ## Usage with Claude
 
@@ -150,7 +159,7 @@ You: Show me the source of class ZCL_MY_SERVICE
 Claude: [calls get_source] Here's the source...
 
 You: Fix the bug in method GET_DATA and activate the class
-Claude: [calls set_source, then activate_object] Done. Activation succeeded.
+Claude: [calls lock_object, set_source, activate_object, unlock_object] Done. Activation succeeded.
 
 You: Run the unit tests for this class
 Claude: [calls run_unit_tests] 5 tests passed, 0 failed.

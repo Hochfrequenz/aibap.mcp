@@ -3,5 +3,7 @@
 config.yaml
 sapadt-mcp
 sapadt-mcp.exe
+mcp-server-abap.exe
+*.out
 dist/
 .worktrees/
