@@ -7,10 +7,6 @@ import (
 	"testing"
 )
 
-// testReportURI is the editable test report for lock/write/activate tests.
-// This object must exist on the SAP system; see testdata/integration_objects.md.
-const testReportURI = "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_REPORT"
-
 func TestLockUnlock_Integration(t *testing.T) {
 	// Known bug: LockObject sends Accept: application/xml but SAP requires
 	// application/vnd.sap.as+xml → returns 406 Not Acceptable.
@@ -26,6 +22,11 @@ func TestLockUnlock_Integration(t *testing.T) {
 		t.Fatal("LockObject returned empty lock handle")
 	}
 	t.Logf("lock handle: %s", lockHandle)
+
+	// Ensure unlock even if explicit unlock assertion below fails.
+	t.Cleanup(func() {
+		_ = client.UnlockObject(context.Background(), testReportURI, lockHandle)
+	})
 
 	err = client.UnlockObject(ctx, testReportURI, lockHandle)
 	if err != nil {

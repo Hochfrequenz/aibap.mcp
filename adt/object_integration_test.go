@@ -4,6 +4,7 @@ package adt_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -16,32 +17,45 @@ func TestCreateObject_Integration(t *testing.T) {
 		objectName  = "Z_ADT_MCP_INTTEST_TMP"
 		packageName = "$TMP"
 		description = "Temporary integration test program"
+		objectURI   = "/sap/bc/adt/programs/programs/" + objectName
 	)
+
+	// Best-effort cleanup of leftovers from a previous failed run.
+	// DeleteObject currently fails (needs lockHandle, see #40), so this
+	// may not succeed. If it doesn't, the test will fail on CreateObject
+	// with "already exists" and needs manual SAP cleanup.
+	_ = client.DeleteObject(ctx, objectURI, "")
 
 	// Create the object.
 	err := client.CreateObject(ctx, objectType, objectName, packageName, description, "")
 	if err != nil {
-		// May fail if leftover from a previous run; log and skip.
-		t.Skipf("CreateObject failed (may be leftover from previous run): %v", err)
+		if strings.Contains(err.Error(), "already exists") {
+			t.Skipf("object %s already exists from a previous run; manual cleanup required: %v", objectName, err)
+		}
+		t.Fatalf("CreateObject failed: %v", err)
 	}
 	t.Logf("created %s %s in %s", objectType, objectName, packageName)
 
+	// Register cleanup — best-effort since DeleteObject is currently broken (#40).
+	t.Cleanup(func() {
+		_ = client.DeleteObject(context.Background(), objectURI, "")
+	})
+
 	// Verify the object exists by reading its source.
-	objectURI := "/sap/bc/adt/programs/programs/" + objectName
 	src, err := client.GetSource(ctx, objectURI)
 	if err != nil {
 		t.Fatalf("GetSource after create failed: %v", err)
 	}
 	t.Logf("source length after create: %d", len(src.Source))
+}
 
-	// NOTE: DeleteObject currently fails because SAP requires a lockHandle
-	// query parameter that our API doesn't pass. See issue to be filed.
-	// Manual cleanup: delete Z_ADT_MCP_INTTEST_TMP via SAP GUI or ADT.
-	err = client.DeleteObject(ctx, objectURI, "")
-	if err != nil {
-		t.Logf("DeleteObject failed (known bug — needs lockHandle param): %v", err)
-		t.Log("manual cleanup required: delete Z_ADT_MCP_INTTEST_TMP from SAP")
-	} else {
-		t.Log("deleted object successfully")
+func TestDeleteObject_NonExistentReturnsError(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	err := client.DeleteObject(ctx, "/sap/bc/adt/programs/programs/Z_ADT_MCP_DOES_NOT_EXIST_99", "")
+	if err == nil {
+		t.Fatal("expected error when deleting non-existent object, got nil")
 	}
+	t.Logf("delete non-existent correctly returned error: %v", err)
 }
