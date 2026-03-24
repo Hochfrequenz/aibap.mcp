@@ -17,13 +17,13 @@ func (c *httpClient) GetCompletions(ctx context.Context, objectURI, source strin
 	params.Set("uri", objectURI+"/source/main")
 	params.Set("line", strconv.Itoa(line))
 	params.Set("column", strconv.Itoa(column))
-	path := "/sap/bc/adt/abapsource/codecompletion/proposals?" + params.Encode()
+	path := "/sap/bc/adt/abapsource/codecompletion/proposal?" + params.Encode()
 
 	resp, err := c.doMutate(ctx, "POST", path,
 		strings.NewReader(source),
 		map[string]string{
 			"Content-Type": "text/plain; charset=utf-8",
-			"Accept":       contentTypeXML,
+			"Accept":       "application/vnd.sap.as+xml",
 		},
 	)
 	if err != nil {
