@@ -165,6 +165,27 @@ You: Run the unit tests for this class
 Claude: [calls run_unit_tests] 5 tests passed, 0 failed.
 ```
 
+## Development
+
+### Unit tests
+
+```bash
+go test ./...
+```
+
+### Integration tests
+
+Integration tests run against a real SAP system and are excluded from CI.
+They require the `integration` build tag and SAP credentials:
+
+```bash
+cp .env.example .env   # fill in your credentials
+source .env
+go test -tags integration ./adt/...
+```
+
+See `testdata/integration_objects.md` for required SAP test fixtures.
+
 ## Contributing
 
 Issues and pull requests welcome. This is a community project — if your SAP system exposes additional ADT endpoints you'd like to see supported, open an issue.
