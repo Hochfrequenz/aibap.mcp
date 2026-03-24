@@ -105,13 +105,13 @@ func TestRegistryDelegatesGetSource(t *testing.T) {
 // allEndpointsHandler returns an http.Handler that stubs all ADT endpoints.
 func allEndpointsHandler() http.Handler {
 	const (
-		emptyObjectRefs  = `<objectReferences></objectReferences>`
+		emptyObjectRefs    = `<objectReferences></objectReferences>`
 		emptyNodeStructure = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><TREE_CONTENT></TREE_CONTENT></DATA></asx:values></asx:abap>`
-		emptyCheckReports = `<chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun"/>`
-		emptyRunResult   = `<runResult></runResult>`
-		emptyTransports  = `<root><workbenchRequests></workbenchRequests></root>`
-		emptyCompletions = `<completions></completions>`
-		activatePath     = "/sap/bc/adt/activation"
+		emptyCheckReports  = `<chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun"/>`
+		emptyRunResult     = `<runResult></runResult>`
+		emptyTransports    = `<root><workbenchRequests></workbenchRequests></root>`
+		emptyCompletions   = `<completions></completions>`
+		activatePath       = "/sap/bc/adt/activation"
 	)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == csrfEndpoint {
