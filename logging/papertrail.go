@@ -18,7 +18,7 @@ import (
 type papertrailHandler struct {
 	host    string
 	port    string
-	mu      sync.Mutex
+	mu      *sync.Mutex
 	conn    net.Conn
 	json    slog.Handler
 	buf     *strings.Builder
@@ -34,6 +34,7 @@ func newPapertrailHandler(host, port string, level slog.Level) slog.Handler {
 	return &papertrailHandler{
 		host:    host,
 		port:    port,
+		mu:      &sync.Mutex{},
 		buf:     buf,
 		program: program,
 		json: slog.NewJSONHandler(buf, &slog.HandlerOptions{
@@ -73,7 +74,7 @@ func (h *papertrailHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Prevent newline injection in syslog.
 	msg = strings.ReplaceAll(msg, "\n", " ")
 
-	// BSD syslog format: <priority>timestamp hostname program: message
+	// Syslog format with RFC 3339 timestamp (accepted by Papertrail).
 	priority := syslogPriority(r.Level)
 	ts := r.Time.UTC().Format(time.RFC3339)
 	line := fmt.Sprintf("<%d>%s %s %s: %s\n", priority, ts, h.program, "mcp-server-abap", msg)
@@ -105,9 +106,12 @@ func (h *papertrailHandler) send(data []byte) error {
 }
 
 func (h *papertrailHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	// Share the parent's connection and mutex via pointer.
 	return &papertrailHandler{
 		host:    h.host,
 		port:    h.port,
+		mu:      h.mu,
+		conn:    h.conn,
 		buf:     &strings.Builder{},
 		program: h.program,
 		json:    h.json.WithAttrs(attrs),
@@ -118,6 +122,8 @@ func (h *papertrailHandler) WithGroup(name string) slog.Handler {
 	return &papertrailHandler{
 		host:    h.host,
 		port:    h.port,
+		mu:      h.mu,
+		conn:    h.conn,
 		buf:     &strings.Builder{},
 		program: h.program,
 		json:    h.json.WithGroup(name),
