@@ -2,8 +2,10 @@ package adt_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
@@ -18,6 +20,14 @@ func TestRunUnitTests(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/sap/bc/adt/abapunit/testruns" {
+			body, _ := io.ReadAll(r.Body)
+			reqBody := string(body)
+			if !strings.Contains(reqBody, "aunit:runConfiguration") {
+				t.Error("request body missing aunit:runConfiguration root element")
+			}
+			if !strings.Contains(reqBody, "objectSet") {
+				t.Error("request body missing objectSet element")
+			}
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<?xml version="1.0"?>
