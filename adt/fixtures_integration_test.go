@@ -189,4 +189,3 @@ func setFixtureSource(ctx context.Context, client adt.Client, f fixtureObject) e
 	}
 	return nil
 }
-
