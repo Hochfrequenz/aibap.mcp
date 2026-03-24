@@ -8,22 +8,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
-
-type xmlCheckMessages struct {
-	XMLName  xml.Name          `xml:"messages"`
-	Messages []xmlCheckMessage `xml:"message"`
-}
-
-type xmlCheckMessage struct {
-	Type      string `xml:"type,attr"`
-	TypeText  string `xml:"typeText,attr"`
-	ShortText struct {
-		Text string `xml:"shortText"`
-	} `xml:"shortTextElements"`
-	Line   int `xml:"line"`
-	Column int `xml:"column"`
-}
 
 func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error) {
 	params := url.Values{}
@@ -46,7 +33,7 @@ func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]Synta
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var msgs xmlCheckMessages
+	var msgs adtmodel.CheckMessages
 	xml.Unmarshal(data, &msgs) //nolint:errcheck
 
 	result := make([]SyntaxMessage, len(msgs.Messages))
