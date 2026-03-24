@@ -1,7 +1,10 @@
 package tools
 
 import (
+	"context"
+
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -27,21 +30,37 @@ func RegisterAll(s *server.MCPServer, client adt.Client, selector SystemSelector
 	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap())
 }
 
+// toolAdder is the subset of server.MCPServer used by register functions.
+type toolAdder interface {
+	AddTool(tool mcp.Tool, handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error))
+}
+
+// loggingServer wraps MCPServer.AddTool to inject logging middleware.
+type loggingServer struct {
+	inner    *server.MCPServer
+	selector SystemSelector
+}
+
+func (ls *loggingServer) AddTool(tool mcp.Tool, handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	ls.inner.AddTool(tool, withLogging(tool.Name, ls.selector, handler))
+}
+
 // RegisterAllWithLockMap registers all SAP ADT MCP tools using a provided lock map.
 // Use this when you need to pre-populate or inspect the lock map (e.g. in tests).
 func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap) {
-	registerSourceTools(s, client, lockMap, selector)
-	registerActivateTools(s, client)
-	registerSearchTools(s, client)
-	registerRepositoryTools(s, client)
-	registerSyntaxCheckTools(s, client)
-	registerUnitTestTools(s, client)
-	registerTransportTools(s, client)
-	registerLockTools(s, client, lockMap, selector)
-	registerPatchTools(s, client, lockMap, selector)
-	registerPrettyPrinterTools(s, client)
-	registerObjectTools(s, client)
-	registerCompletionTools(s, client)
-	registerSystemTools(s, selector)
-	registerFileSourceTools(s, client, lockMap, selector)
+	ls := &loggingServer{inner: s, selector: selector}
+	registerSourceTools(ls, client, lockMap, selector)
+	registerActivateTools(ls, client)
+	registerSearchTools(ls, client)
+	registerRepositoryTools(ls, client)
+	registerSyntaxCheckTools(ls, client)
+	registerUnitTestTools(ls, client)
+	registerTransportTools(ls, client)
+	registerLockTools(ls, client, lockMap, selector)
+	registerPatchTools(ls, client, lockMap, selector)
+	registerPrettyPrinterTools(ls, client)
+	registerObjectTools(ls, client)
+	registerCompletionTools(ls, client)
+	registerSystemTools(ls, selector)
+	registerFileSourceTools(ls, client, lockMap, selector)
 }

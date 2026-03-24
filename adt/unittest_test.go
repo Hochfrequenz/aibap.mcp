@@ -2,8 +2,10 @@ package adt_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
@@ -18,17 +20,27 @@ func TestRunUnitTests(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/sap/bc/adt/abapunit/testruns" {
+			body, _ := io.ReadAll(r.Body)
+			reqBody := string(body)
+			if !strings.Contains(reqBody, "aunit:runConfiguration") {
+				t.Error("request body missing aunit:runConfiguration root element")
+			}
+			if !strings.Contains(reqBody, "objectSet") {
+				t.Error("request body missing objectSet element")
+			}
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <aunit:runResult xmlns:aunit="http://www.sap.com/adt/aunit" xmlns:adtcore="http://www.sap.com/adt/core">
   <program adtcore:uri="/sap/bc/adt/classes/classes/ZCL_TEST" adtcore:name="ZCL_TEST">
-    <testClass adtcore:name="ZCL_TEST" aunit:testCount="2" aunit:errorCount="0" aunit:failureCount="1">
-      <testMethod adtcore:name="TEST_PASS" aunit:executionTime="0.001"><alerts/></testMethod>
-      <testMethod adtcore:name="TEST_FAIL" aunit:executionTime="0.002">
-        <alerts><alert aunit:type="failedAssertion" aunit:severity="critical"><title>Assertion failed</title></alert></alerts>
-      </testMethod>
-    </testClass>
+    <testClasses><testClass adtcore:name="ZCL_TEST" aunit:testCount="2" aunit:errorCount="0" aunit:failureCount="1">
+      <testMethods>
+        <testMethod adtcore:name="TEST_PASS" executionTime="0.001"><alerts/></testMethod>
+        <testMethod adtcore:name="TEST_FAIL" executionTime="0.002">
+          <alerts><alert kind="failedAssertion" severity="critical"><title>Assertion failed</title></alert></alerts>
+        </testMethod>
+      </testMethods>
+    </testClass></testClasses>
   </program>
 </aunit:runResult>`))
 			return

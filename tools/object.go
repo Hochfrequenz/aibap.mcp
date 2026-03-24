@@ -5,10 +5,9 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 )
 
-func registerObjectTools(s *server.MCPServer, client adt.Client) {
+func registerObjectTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("create_object",
 		mcp.WithDescription("Create a new ABAP object (program, class, or interface)."),
 		mcp.WithString("object_type",
