@@ -12,6 +12,12 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
+const (
+	testDebuggerListenersPath = "/sap/bc/adt/debugger/listeners"
+	testDebuggerPath          = "/sap/bc/adt/debugger"
+	testAcceptASXML           = "application/vnd.sap.as+xml"
+)
+
 func TestDebugSessionSetBreakpoint(t *testing.T) {
 	var gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +61,7 @@ func TestDebugSessionStartListenerTimeout(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger/listeners" {
+		if r.URL.Path == testDebuggerListenersPath {
 			// Simulate timeout — empty response
 			w.WriteHeader(http.StatusOK)
 			return
@@ -84,7 +90,7 @@ func TestDebugSessionStopListener(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger/listeners" {
+		if r.URL.Path == testDebuggerListenersPath {
 			gotMethod = r.Method
 			gotPath = r.URL.Path
 			w.WriteHeader(http.StatusOK)
@@ -104,7 +110,7 @@ func TestDebugSessionStopListener(t *testing.T) {
 	if gotMethod != http.MethodDelete {
 		t.Errorf("method: got %q, want DELETE", gotMethod)
 	}
-	if gotPath != "/sap/bc/adt/debugger/listeners" {
+	if gotPath != testDebuggerListenersPath {
 		t.Errorf("path: got %q", gotPath)
 	}
 }
@@ -117,7 +123,7 @@ func TestDebugSessionGetDebuggeeSessions(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "getDebuggeeSessions" {
+		if r.URL.Path == testDebuggerPath && r.URL.Query().Get("method") == "getDebuggeeSessions" {
 			gotPath = r.URL.Path
 			gotAccept = r.Header.Get("Accept")
 			w.WriteHeader(http.StatusOK)
@@ -135,10 +141,10 @@ func TestDebugSessionGetDebuggeeSessions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDebuggeeSessions: %v", err)
 	}
-	if gotPath != "/sap/bc/adt/debugger" {
+	if gotPath != testDebuggerPath {
 		t.Errorf("path: got %q", gotPath)
 	}
-	if gotAccept != "application/vnd.sap.as+xml" {
+	if gotAccept != testAcceptASXML {
 		t.Errorf("accept: got %q", gotAccept)
 	}
 	if !strings.Contains(string(data), "session") {
@@ -154,7 +160,7 @@ func TestDebugSessionAttach(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "attach" {
+		if r.URL.Path == testDebuggerPath && r.URL.Query().Get("method") == "attach" {
 			gotPath = r.URL.RequestURI()
 			w.WriteHeader(http.StatusOK)
 			return
