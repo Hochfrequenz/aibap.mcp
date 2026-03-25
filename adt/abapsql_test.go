@@ -58,7 +58,7 @@ func TestFilterNonMandtKeys(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := filterNonMandtKeys(tt.keys)
+			got := FilterNonMandtKeys(tt.keys)
 			if len(got) != len(tt.expected) {
 				t.Fatalf("expected %v, got %v", tt.expected, got)
 			}
@@ -197,7 +197,7 @@ func TestBuildExportSQL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := buildExportSQL(tt.table, tt.allKeys, tt.lastValues)
+			got, err := BuildExportSQL(tt.table, tt.allKeys, tt.lastValues)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
