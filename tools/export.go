@@ -79,7 +79,9 @@ func writeExport(data []byte, outputDir, packageName string, asFolder bool) (str
 }
 
 // matchesAnyPattern checks if name matches any of the given wildcard patterns.
-// Patterns use filepath.Match syntax: * matches any sequence of characters, ? matches one.
+// Patterns use filepath.Match syntax: * matches any sequence of non-separator characters,
+// ? matches one non-separator character. For ABAP package names (no path separators) this
+// behaves like a standard glob.
 func matchesAnyPattern(name string, patterns []string) bool {
 	upper := strings.ToUpper(name)
 	for _, p := range patterns {
@@ -91,18 +93,23 @@ func matchesAnyPattern(name string, patterns []string) bool {
 }
 
 // parsePatternList splits a comma-separated pattern string into trimmed, non-empty patterns.
-func parsePatternList(s string) []string {
+func parsePatternList(s string) ([]string, error) {
 	if s == "" {
-		return nil
+		return nil, nil
 	}
 	var result []string
 	for _, p := range strings.Split(s, ",") {
 		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
+		if p == "" {
+			continue
 		}
+		// Validate pattern syntax.
+		if _, err := filepath.Match(p, ""); err != nil {
+			return nil, fmt.Errorf("invalid pattern %q: %w", p, err)
+		}
+		result = append(result, p)
 	}
-	return result
+	return result, nil
 }
 
 func registerExportTools(s toolAdder, client adt.Client) {
@@ -180,8 +187,14 @@ func registerExportTools(s toolAdder, client adt.Client) {
 		outputDir := req.GetString("output_dir", "")
 		extract := req.GetBool("extract", false)
 		maxPackages := req.GetInt("max_packages", 100)
-		excludePatterns := parsePatternList(req.GetString("exclude_patterns", ""))
-		includePatterns := parsePatternList(req.GetString("include_patterns", ""))
+		excludePatterns, err := parsePatternList(req.GetString("exclude_patterns", ""))
+		if err != nil {
+			return errorResult(fmt.Errorf("exclude_patterns: %w", err)), nil
+		}
+		includePatterns, err := parsePatternList(req.GetString("include_patterns", ""))
+		if err != nil {
+			return errorResult(fmt.Errorf("include_patterns: %w", err)), nil
+		}
 
 		if outputDir == "" {
 			return errorResult(fmt.Errorf("output_dir must not be empty")), nil
@@ -242,6 +255,9 @@ func registerExportTools(s toolAdder, client adt.Client) {
 		results := make([]exportResult, 0, len(packages))
 		exported := 0
 		for _, pkg := range packages {
+			if ctx.Err() != nil {
+				break
+			}
 			name := strings.ToUpper(pkg.Name)
 			data, err := client.ExportPackage(ctx, name)
 			if err != nil {

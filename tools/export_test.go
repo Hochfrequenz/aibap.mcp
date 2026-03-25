@@ -58,7 +58,10 @@ func TestParsePatternList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parsePatternList(tt.input)
+			got, err := parsePatternList(tt.input)
+			if err != nil {
+				t.Fatalf("parsePatternList(%q) unexpected error: %v", tt.input, err)
+			}
 			if len(got) != len(tt.want) {
 				t.Fatalf("parsePatternList(%q) = %v (len %d), want %v (len %d)", tt.input, got, len(got), tt.want, len(tt.want))
 			}
@@ -69,6 +72,14 @@ func TestParsePatternList(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParsePatternList_Invalid(t *testing.T) {
+	_, err := parsePatternList("[invalid")
+	if err == nil {
+		t.Fatal("expected error for malformed pattern, got nil")
+	}
+	t.Logf("correctly rejected: %v", err)
 }
 
 func TestFilteringLogic(t *testing.T) {
