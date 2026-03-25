@@ -39,7 +39,7 @@ func (b BreakpointRequest) MarshalXML(e *xml.Encoder, start xml.StartElement) er
 		{Name: xml.Name{Local: "adtcore:type"}, Value: b.Type},
 		{Name: xml.Name{Local: "adtcore:name"}, Value: b.Name},
 	}
-	e.EncodeToken(start)   //nolint:errcheck
+	e.EncodeToken(start)       //nolint:errcheck
 	e.EncodeToken(start.End()) //nolint:errcheck
 	return nil
 }
