@@ -23,7 +23,7 @@ func (c *httpClient) GetCompletions(ctx context.Context, objectURI, source strin
 		strings.NewReader(source),
 		map[string]string{
 			"Content-Type": "text/plain; charset=utf-8",
-			"Accept":       "application/xml",
+			"Accept":       "application/vnd.sap.as+xml",
 		},
 	)
 	if err != nil {
