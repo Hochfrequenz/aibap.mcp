@@ -40,3 +40,10 @@ jobs:
           ./mcp-server-abap${{ runner.os == 'Windows' && '.exe' || '' }} --version
           ./mcp-server-abap${{ runner.os == 'Windows' && '.exe' || '' }} --version | grep -q "smoke-test"
         shell: bash
+
+      - name: Upload binary
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-server-abap-windows-amd64.exe
+          path: mcp-server-abap.exe
