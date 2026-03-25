@@ -119,8 +119,8 @@ func TestDiscoverTables(t *testing.T) {
 	if !strings.Contains(capturedSQL, "AS4LOCAL = 'A'") {
 		t.Errorf("expected SQL to filter AS4LOCAL, got: %s", capturedSQL)
 	}
-	if capturedMaxRows != defaultPageSize {
-		t.Errorf("expected maxRows=%d, got %d", defaultPageSize, capturedMaxRows)
+	if capturedMaxRows != 200000 {
+		t.Errorf("expected maxRows=200000, got %d", capturedMaxRows)
 	}
 
 	// Verify results.

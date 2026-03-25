@@ -60,7 +60,7 @@ func discoverTables(ctx context.Context, client adt.Client) ([]string, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
 	defer cancel()
 
-	result, err := client.RunQuery(queryCtx, sql, defaultPageSize)
+	result, err := client.RunQuery(queryCtx, sql, 200000) // ~70K customizing tables, 200K gives headroom
 	if err != nil {
 		return nil, fmt.Errorf("discoverTables: %w", err)
 	}
@@ -142,7 +142,7 @@ func exportTable(ctx context.Context, client adt.Client, table string, keys []st
 	var lastValues []string
 
 	for {
-		sqlStr, err := adt.BuildExportSQL(table, keys, lastValues)
+		sqlStr, err := adt.BuildExportSQL(table, keys, paginateKeys, lastValues)
 		if err != nil {
 			return nil, fmt.Errorf("build SQL for %s: %w", table, err)
 		}
@@ -204,6 +204,10 @@ func extractKeyValues(columns []adt.QueryColumn, keys []string, row []string) []
 
 // RunExport performs a full customizing table export.
 func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*ExportSummary, error) {
+	// Create cancellable context — writer errors cancel all workers.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	startedAt := time.Now()
 
 	// Apply defaults.
@@ -307,7 +311,8 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 			exported++
 			if wErr := writer.WriteTable(result); wErr != nil {
 				writerErr = wErr
-				log.Printf("ERROR: write failed for %s: %v", result.TableName, wErr)
+				log.Printf("ERROR: write failed for %s: %v — cancelling workers", result.TableName, wErr)
+				cancel() // Stop all workers
 			}
 		}
 

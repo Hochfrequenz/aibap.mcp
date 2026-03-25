@@ -143,12 +143,13 @@ func TestBuildPaginationWhere(t *testing.T) {
 
 func TestBuildExportSQL(t *testing.T) {
 	tests := []struct {
-		name       string
-		table      string
-		allKeys    []string
-		lastValues []string
-		expected   string
-		wantErr    bool
+		name         string
+		table        string
+		allKeys      []string
+		paginateKeys []string
+		lastValues   []string
+		expected     string
+		wantErr      bool
 	}{
 		{
 			name:     "first page no lastValues",
@@ -157,18 +158,20 @@ func TestBuildExportSQL(t *testing.T) {
 			expected: "SELECT * FROM T001 ORDER BY MANDT, BUKRS",
 		},
 		{
-			name:       "page 2 with lastValues",
-			table:      "T001",
-			allKeys:    []string{"MANDT", "BUKRS"},
-			lastValues: []string{"0001"},
-			expected:   "SELECT * FROM T001 WHERE BUKRS > '0001' ORDER BY MANDT, BUKRS",
+			name:         "page 2 with lastValues",
+			table:        "T001",
+			allKeys:      []string{"MANDT", "BUKRS"},
+			paginateKeys: []string{"BUKRS"},
+			lastValues:   []string{"0001"},
+			expected:     "SELECT * FROM T001 WHERE BUKRS > '0001' ORDER BY MANDT, BUKRS",
 		},
 		{
-			name:       "MANDT plus two business keys",
-			table:      "T001W",
-			allKeys:    []string{"MANDT", "WERKS", "BWKEY"},
-			lastValues: []string{"1000", "1000"},
-			expected:   "SELECT * FROM T001W WHERE WERKS > '1000' OR ( WERKS = '1000' AND BWKEY > '1000' ) ORDER BY MANDT, WERKS, BWKEY",
+			name:         "MANDT plus two business keys",
+			table:        "T001W",
+			allKeys:      []string{"MANDT", "WERKS", "BWKEY"},
+			paginateKeys: []string{"WERKS", "BWKEY"},
+			lastValues:   []string{"1000", "1000"},
+			expected:     "SELECT * FROM T001W WHERE WERKS > '1000' OR ( WERKS = '1000' AND BWKEY > '1000' ) ORDER BY MANDT, WERKS, BWKEY",
 		},
 		{
 			name:     "no keys at all",
@@ -197,7 +200,7 @@ func TestBuildExportSQL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := BuildExportSQL(tt.table, tt.allKeys, tt.lastValues)
+			got, err := BuildExportSQL(tt.table, tt.allKeys, tt.paginateKeys, tt.lastValues)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
