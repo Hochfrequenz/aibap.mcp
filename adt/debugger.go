@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
@@ -129,6 +130,12 @@ type ListenerResult struct {
 func (d *DebugSession) StartListener(ctx context.Context, timeoutSeconds int) (*ListenerResult, error) {
 	path := fmt.Sprintf("/sap/bc/adt/debugger/listeners?debuggingMode=user&requestUser=%s&terminalId=%s&ideId=%s&timeout=%d",
 		d.user, d.terminalID, d.ideID, timeoutSeconds)
+
+	// The listener long-polls for up to timeoutSeconds. Temporarily increase
+	// the HTTP client timeout so it doesn't cancel the request prematurely.
+	origTimeout := d.client.http.Timeout
+	d.client.http.Timeout = time.Duration(timeoutSeconds+10) * time.Second
+	defer func() { d.client.http.Timeout = origTimeout }()
 
 	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
 		map[string]string{"Accept": "application/vnd.sap.as+xml"})
