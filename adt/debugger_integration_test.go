@@ -34,10 +34,9 @@ func TestDebugSetBreakpoint_Integration(t *testing.T) {
 // 2. Start listener (long poll)
 // 3. Trigger code execution via unit test runner
 // 4. Listener wakes up with debuggee session
-// 5. Attach to debugger
-//
-// Note: Step/Variables/Stack require RFC (stateful session) and are not
-// yet supported over HTTP. See docs/debugger-investigation.md.
+// 5. Attach to debugger (stateful HTTP session)
+// 6. Step over (stateful HTTP session)
+// 7. Continue to release debuggee
 func TestDebugFullFlow_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	user := os.Getenv("SAP_INTEGRATION_USER")
@@ -70,12 +69,13 @@ func TestDebugFullFlow_Integration(t *testing.T) {
 		listenerCh <- listenerOut{r, err}
 	}()
 
-	// 3. Give listener time to register, then trigger execution
+	// 3. Give listener time to register, then trigger execution in background.
+	// RunUnitTests blocks until the debuggee finishes, so it must run concurrently.
 	time.Sleep(2 * time.Second)
 	t.Log("running unit tests to trigger breakpoint...")
-	_, err = client.RunUnitTests(ctx, testReportURI, 60)
-	// RunUnitTests will block until the debuggee times out or is continued.
-	// We don't check its result here — the listener result is what matters.
+	go func() {
+		_, _ = client.RunUnitTests(ctx, testReportURI, 60)
+	}()
 
 	// 4. Wait for listener
 	lo := <-listenerCh
@@ -90,16 +90,43 @@ func TestDebugFullFlow_Integration(t *testing.T) {
 	}
 	t.Logf("listener attached: debuggeeID=%q", lo.result.DebuggeeID)
 
-	// 5. Attach
+	// 5. Attach (stateful — keeps work process for step/variables/stack)
 	err = dbg.Attach(ctx, lo.result.DebuggeeID)
 	if err != nil {
 		t.Fatalf("Attach: %v", err)
 	}
 	t.Log("attached to debugger successfully")
 
-	// Step/Variables/Stack require RFC stateful session — not yet supported.
-	// See docs/debugger-investigation.md for details.
-	t.Log("NOTE: step/variables/stack require RFC and are not tested here")
+	// 6. Step over (uses X-sap-adt-sessiontype: stateful)
+	stepData, err := dbg.Step(ctx, "stepOver")
+	if err != nil {
+		t.Fatalf("Step: %v", err)
+	}
+	stepResp := string(stepData)
+	if !strings.Contains(stepResp, "dbg:step") {
+		t.Errorf("step response missing dbg:step element: %s", stepResp)
+	}
+	t.Logf("step OK: %d bytes", len(stepData))
+
+	// 7. Get stack (stateful, via debugger main endpoint)
+	stackData, err := dbg.GetStack(ctx)
+	if err != nil {
+		t.Fatalf("GetStack: %v", err)
+	}
+	t.Logf("stack OK: %d bytes: %s", len(stackData), string(stackData))
+
+	// 8. Get variable (stateful, via debugger main endpoint)
+	varData, err := dbg.GetVariable(ctx, "LV_VAL")
+	if err != nil {
+		t.Fatalf("GetVariable: %v", err)
+	}
+	t.Logf("variable OK: %d bytes: %s", len(varData), string(varData))
+
+	// 9. Continue to let the debuggee finish (otherwise unit test runner blocks)
+	_, err = dbg.Step(ctx, "stepContinue")
+	if err != nil {
+		t.Logf("continue: %v (may fail if debuggee already terminated)", err)
+	}
 }
 
 // ensureTestReportWithTestClass creates or updates the test report to include

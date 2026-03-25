@@ -189,7 +189,7 @@ func TestDebugSessionStep(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger/actions" {
+		if r.URL.Path == testDebuggerPath && r.URL.Query().Get("method") == "stepInto" {
 			gotPath = r.URL.RequestURI()
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<step result="ok"/>`))
@@ -206,8 +206,8 @@ func TestDebugSessionStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Step: %v", err)
 	}
-	if !strings.Contains(gotPath, "action=stepInto") {
-		t.Errorf("path missing action: %s", gotPath)
+	if !strings.Contains(gotPath, "method=stepInto") {
+		t.Errorf("path missing method: %s", gotPath)
 	}
 	if !strings.Contains(string(data), "step") {
 		t.Errorf("unexpected response: %s", data)
@@ -221,9 +221,10 @@ func TestDebugSessionGetVariable(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger/variables/LV_TEST/value" && r.Method == http.MethodGet {
+		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "getVariableValue" && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`<variable name="LV_TEST" value="hello"/>`))
+			_, _ = w.Write([]byte(`hello`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -237,7 +238,7 @@ func TestDebugSessionGetVariable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetVariable: %v", err)
 	}
-	if !strings.Contains(string(data), "LV_TEST") {
+	if !strings.Contains(string(data), "hello") {
 		t.Errorf("unexpected response: %s", data)
 	}
 }
@@ -249,7 +250,7 @@ func TestDebugSessionGetStack(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger/systemareas/stack" && r.Method == http.MethodGet {
+		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "getStack" && r.Method == http.MethodPost {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<stack><frame level="1" name="MAIN"/></stack>`))
 			return
