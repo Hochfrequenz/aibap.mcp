@@ -20,6 +20,9 @@ func newSQLiteWriter(dbPath string) (*sqliteWriter, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 
+	// Single-connection mode: prevents SQLITE_BUSY from connection pool contention.
+	db.SetMaxOpenConns(1)
+
 	// WAL mode for write performance during export.
 	// Compacted back to DELETE mode on Close() via VACUUM.
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
@@ -30,6 +33,11 @@ func newSQLiteWriter(dbPath string) (*sqliteWriter, error) {
 	if _, err := db.Exec("PRAGMA synchronous=NORMAL"); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("set synchronous: %w", err)
+	}
+	// Busy timeout: retry on lock contention instead of failing immediately.
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("set busy_timeout: %w", err)
 	}
 
 	const createMetadata = `CREATE TABLE IF NOT EXISTS "_metadata" (
