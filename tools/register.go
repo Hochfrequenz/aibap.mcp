@@ -66,4 +66,5 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 	registerFileSourceTools(ls, client, lockMap, selector)
 	registerDebuggerTools(ls, client, selector)
 	registerExportTools(ls, client)
+	registerCustomizingTools(ls, client)
 }
