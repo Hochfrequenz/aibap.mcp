@@ -49,7 +49,7 @@ func NewWriter(outputDir string) (*Writer, error) {
 
 	// Enable WAL mode for better performance.
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("set WAL mode: %w", err)
 	}
 
@@ -64,7 +64,7 @@ func NewWriter(outputDir string) (*Writer, error) {
 		PRIMARY KEY ("table_name", "column_name")
 	)`
 	if _, err := db.Exec(createMetadata); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("create _metadata table: %w", err)
 	}
 
@@ -173,7 +173,7 @@ func (w *Writer) insertRows(tx *sql.Tx, result *TableExportResult) error {
 	if err != nil {
 		return fmt.Errorf("prepare insert: %w", err)
 	}
-	defer prepared.Close()
+	defer func() { _ = prepared.Close() }()
 
 	for _, row := range result.Rows {
 		vals := make([]interface{}, len(row))

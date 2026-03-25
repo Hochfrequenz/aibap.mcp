@@ -38,7 +38,7 @@ func TestNewWriter_CreatesDBAndDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	// Verify customizing.db exists.
 	dbPath := filepath.Join(dir, "customizing.db")
@@ -69,7 +69,7 @@ func TestWriteTable_WithRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	result := testResult()
 	if err := w.WriteTable(result); err != nil {
@@ -146,7 +146,7 @@ func TestWriteTable_EmptyTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	result := &TableExportResult{
 		TableName: "T002",
@@ -196,7 +196,7 @@ func TestWriteTable_NamespaceTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	result := &TableExportResult{
 		TableName: "/HFQ/TABLE",
@@ -235,7 +235,7 @@ func TestWriteTable_PrimaryKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	result := testResult()
 	if err := w.WriteTable(result); err != nil {
@@ -272,7 +272,7 @@ func TestWriteTable_PersistsAfterClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var count int
 	if err := db.QueryRow(`SELECT COUNT(*) FROM "T001"`).Scan(&count); err != nil {
