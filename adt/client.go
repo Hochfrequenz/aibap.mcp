@@ -43,6 +43,7 @@ type Client interface {
 type httpClient struct {
 	cfg            config.SAPConfig
 	http           *http.Client
+	httpLong       *http.Client // long-timeout client for large queries; shares transport + cookie jar
 	mu             sync.Mutex
 	csrfToken      string
 	accessToken    string                       // OAuth2 access token (empty = Basic Auth)
@@ -64,6 +65,11 @@ func NewClient(cfg config.SAPConfig) Client {
 			Transport: transport,
 			Jar:       jar,
 		},
+		httpLong: &http.Client{
+			Timeout:   0, // no timeout; caller controls via context deadline
+			Transport: transport,
+			Jar:       jar,
+		},
 	}
 }
 
@@ -80,6 +86,11 @@ func NewClientWithToken(cfg config.SAPConfig, accessToken string, onRefresh func
 		cfg: cfg,
 		http: &http.Client{
 			Timeout:   30 * time.Second,
+			Transport: transport,
+			Jar:       jar,
+		},
+		httpLong: &http.Client{
+			Timeout:   0, // no timeout; caller controls via context deadline
 			Transport: transport,
 			Jar:       jar,
 		},
@@ -227,7 +238,71 @@ func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.
 	return resp, nil
 }
 
+// doMutateLong is like doMutate but uses the long-timeout HTTP client (httpLong).
+// It is safe for concurrent use by multiple goroutines. Intended for long-running
+// queries (e.g., RunQuery) where the caller controls the deadline via context.
+func (c *httpClient) doMutateLong(ctx context.Context, method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
+	path = encodeNamespacePath(path)
+	var bodyBytes []byte
+	if body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(body)
+		if err != nil {
+			return nil, fmt.Errorf("buffering request body: %w", err)
+		}
+	}
+	newBody := func() io.Reader {
+		if bodyBytes == nil {
+			return nil
+		}
+		return bytes.NewReader(bodyBytes)
+	}
+
+	c.mu.Lock()
+	if c.csrfToken == "" {
+		if err := c.fetchCSRFToken(ctx); err != nil {
+			c.mu.Unlock()
+			return nil, err
+		}
+	}
+	token := c.csrfToken
+	c.mu.Unlock()
+
+	resp, err := c.execMutateWith(ctx, c.httpLong, method, path, newBody(), headers, token)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
+		_ = resp.Body.Close()
+		c.mu.Lock()
+		if resp.StatusCode == http.StatusUnauthorized && c.onTokenRefresh != nil {
+			newToken, err := c.onTokenRefresh(c.accessToken)
+			if err != nil {
+				c.mu.Unlock()
+				return nil, fmt.Errorf("token refresh failed: %w", err)
+			}
+			c.accessToken = newToken
+		}
+		if err := c.fetchCSRFToken(ctx); err != nil {
+			c.mu.Unlock()
+			return nil, err
+		}
+		token = c.csrfToken
+		c.mu.Unlock()
+		return c.execMutateWith(ctx, c.httpLong, method, path, newBody(), headers, token)
+	}
+
+	return resp, nil
+}
+
 func (c *httpClient) execMutate(ctx context.Context, method, path string, body io.Reader, headers map[string]string, csrfToken string) (*http.Response, error) {
+	return c.execMutateWith(ctx, c.http, method, path, body, headers, csrfToken)
+}
+
+// execMutateWith builds and executes a mutating request using the given *http.Client.
+// This allows callers to choose between the default (30s timeout) and long-timeout client.
+func (c *httpClient) execMutateWith(ctx context.Context, hc *http.Client, method, path string, body io.Reader, headers map[string]string, csrfToken string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.cfg.Host+path, body)
 	if err != nil {
 		return nil, err
@@ -237,7 +312,7 @@ func (c *httpClient) execMutate(ctx context.Context, method, path string, body i
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	return c.http.Do(req)
+	return hc.Do(req)
 }
 
 // parseADTError reads an XML error response body and returns an *ADTError.
