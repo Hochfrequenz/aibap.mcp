@@ -240,11 +240,10 @@ func (d *DebugSession) Step(ctx context.Context, action string) ([]byte, error) 
 // in the stateful HTTP session. The separate GET /debugger/variables/ endpoint
 // uses a different ICF handler that doesn't share the stateful work process.
 func (d *DebugSession) GetVariable(ctx context.Context, name string) ([]byte, error) {
-	path := fmt.Sprintf("/sap/bc/adt/debugger?method=getVariables&variableName=%s", name)
+	path := fmt.Sprintf("/sap/bc/adt/debugger?method=getVariableValue&variableName=%s", name)
 	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
 		map[string]string{
-			"Accept":                "application/vnd.sap.as+xml",
-			"Content-Type":          "application/vnd.sap.as+xml",
+			"Accept":                "text/plain",
 			"X-sap-adt-sessiontype": "stateful",
 		})
 	if err != nil {

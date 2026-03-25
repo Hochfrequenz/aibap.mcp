@@ -221,9 +221,10 @@ func TestDebugSessionGetVariable(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "getVariables" && r.Method == http.MethodPost {
+		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "getVariableValue" && r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "text/plain")
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`<variable name="LV_TEST" value="hello"/>`))
+			_, _ = w.Write([]byte(`hello`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -237,7 +238,7 @@ func TestDebugSessionGetVariable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetVariable: %v", err)
 	}
-	if !strings.Contains(string(data), "LV_TEST") {
+	if !strings.Contains(string(data), "hello") {
 		t.Errorf("unexpected response: %s", data)
 	}
 }
