@@ -3,6 +3,7 @@ package custexport
 import (
 	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"strings"
@@ -142,6 +143,8 @@ func (sw *sqliteWriter) createTable(tx *sql.Tx, result *TableExportResult) error
 	return err
 }
 
+// insertMetadata records column info in _metadata. The synthetic _row_hash column
+// is intentionally excluded — it is not an ABAP column but a comparison helper.
 func (sw *sqliteWriter) insertMetadata(tx *sql.Tx, result *TableExportResult) error {
 	const stmt = `INSERT OR REPLACE INTO "_metadata" ("table_name", "column_name", "position", "abap_type", "description", "is_key") VALUES (?, ?, ?, ?, ?, ?)`
 	for i, col := range result.Columns {
@@ -188,18 +191,28 @@ func (sw *sqliteWriter) insertRows(tx *sql.Tx, result *TableExportResult) error 
 		}
 	}
 
+	var lenBuf [4]byte // for length-prefixed encoding
+
 	for rowIdx, row := range result.Rows {
 		if len(row) != numCols {
 			return fmt.Errorf("row %d has %d values, expected %d columns", rowIdx, len(row), numCols)
 		}
 
-		// Compute SHA256 of non-key column values.
-		h := sha256.New()
-		for _, idx := range nonKeyIndices {
-			h.Write([]byte(row[idx]))
-			h.Write([]byte{0}) // separator
+		// Compute SHA256 of non-key column values using length-prefixed encoding.
+		// Length-prefix prevents collisions: "AB"+"C" and "A"+"BC" produce different hashes.
+		// If all columns are keys, store NULL (no non-key data to hash).
+		var hash any
+		if len(nonKeyIndices) > 0 {
+			h := sha256.New()
+			for _, idx := range nonKeyIndices {
+				v := []byte(row[idx])
+				binary.BigEndian.PutUint32(lenBuf[:], uint32(len(v)))
+				h.Write(lenBuf[:])
+				h.Write(v)
+			}
+			hash = h.Sum(nil)
 		}
-		hash := h.Sum(nil)
+		// hash is nil (SQL NULL) when there are no non-key columns
 
 		vals := make([]any, numCols+1)
 		for i, v := range row {
