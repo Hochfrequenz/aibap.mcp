@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+
 	"strings"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
@@ -24,6 +24,9 @@ type TableExportResult struct {
 }
 
 // Writer writes table export results to SQLite + JSON.
+// NOT goroutine-safe — must be called from a single goroutine.
+// The export orchestrator uses a dedicated writer goroutine that
+// receives results via a channel and calls WriteTable sequentially.
 type Writer struct {
 	db        *sql.DB
 	jsonDir   string
@@ -132,7 +135,11 @@ func (w *Writer) createTable(tx *sql.Tx, result *TableExportResult) error {
 		}
 	}
 
-	ddl := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %q (%s", result.TableName, strings.Join(colDefs, ", "))
+	// Drop existing table to avoid stale data on re-runs.
+	if _, err := tx.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %q", result.TableName)); err != nil {
+		return fmt.Errorf("drop table %s: %w", result.TableName, err)
+	}
+	ddl := fmt.Sprintf("CREATE TABLE %q (%s", result.TableName, strings.Join(colDefs, ", "))
 	if len(keyColumns) > 0 {
 		ddl += fmt.Sprintf(", PRIMARY KEY (%s)", strings.Join(keyColumns, ", "))
 	}
@@ -175,13 +182,17 @@ func (w *Writer) insertRows(tx *sql.Tx, result *TableExportResult) error {
 	}
 	defer func() { _ = prepared.Close() }()
 
-	for _, row := range result.Rows {
-		vals := make([]interface{}, len(row))
+	numCols := len(result.Columns)
+	for rowIdx, row := range result.Rows {
+		if len(row) != numCols {
+			return fmt.Errorf("row %d has %d values, expected %d columns", rowIdx, len(row), numCols)
+		}
+		vals := make([]any, numCols)
 		for i, v := range row {
 			vals[i] = v
 		}
 		if _, err := prepared.Exec(vals...); err != nil {
-			return fmt.Errorf("insert row: %w", err)
+			return fmt.Errorf("insert row %d: %w", rowIdx, err)
 		}
 	}
 	return nil
@@ -216,13 +227,6 @@ func (w *Writer) writeJSON(result *TableExportResult) error {
 			IsKey:       col.IsKey,
 		}
 	}
-
-	// Build sorted column names for consistent key ordering.
-	sortedNames := make([]string, len(result.Columns))
-	for i, col := range result.Columns {
-		sortedNames[i] = col.Name
-	}
-	sort.Strings(sortedNames)
 
 	rows := make([]jsonRow, len(result.Rows))
 	for i, row := range result.Rows {
