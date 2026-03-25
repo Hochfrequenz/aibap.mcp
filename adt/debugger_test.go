@@ -189,7 +189,7 @@ func TestDebugSessionStep(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "stepInto" {
+		if r.URL.Path == testDebuggerPath && r.URL.Query().Get("method") == "stepInto" {
 			gotPath = r.URL.RequestURI()
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<step result="ok"/>`))
