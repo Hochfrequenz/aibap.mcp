@@ -3,6 +3,7 @@ package custexport
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	_ "modernc.org/sqlite"
@@ -10,8 +11,11 @@ import (
 
 // sqliteWriter handles all SQLite database operations for the customizing export.
 type sqliteWriter struct {
-	db *sql.DB
+	db           *sql.DB
+	tablesWritten int
 }
+
+const vacuumInterval = 5000 // VACUUM every N tables to keep file size manageable
 
 func newSQLiteWriter(dbPath string) (*sqliteWriter, error) {
 	db, err := sql.Open("sqlite", dbPath)
@@ -19,9 +23,16 @@ func newSQLiteWriter(dbPath string) (*sqliteWriter, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 
+	// WAL mode for write performance during export.
+	// Compacted back to DELETE mode on Close() via VACUUM.
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("set WAL mode: %w", err)
+	}
+	// Synchronous=NORMAL is safe with WAL and much faster than FULL.
+	if _, err := db.Exec("PRAGMA synchronous=NORMAL"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("set synchronous: %w", err)
 	}
 
 	const createMetadata = `CREATE TABLE IF NOT EXISTS "_metadata" (
@@ -41,11 +52,17 @@ func newSQLiteWriter(dbPath string) (*sqliteWriter, error) {
 	return &sqliteWriter{db: db}, nil
 }
 
+// Close compacts the database (VACUUM) and switches from WAL to DELETE journal
+// mode for portability, then closes the connection. The VACUUM reclaims space
+// from DROP TABLE + recreate cycles and can significantly reduce file size.
 func (sw *sqliteWriter) Close() error {
-	if sw.db != nil {
-		return sw.db.Close()
+	if sw.db == nil {
+		return nil
 	}
-	return nil
+	// Switch to DELETE mode (removes -wal and -shm files) and compact.
+	_, _ = sw.db.Exec("PRAGMA journal_mode=DELETE")
+	_, _ = sw.db.Exec("VACUUM")
+	return sw.db.Close()
 }
 
 // WriteTable creates the table, inserts metadata, and inserts all rows in a transaction.
@@ -68,7 +85,16 @@ func (sw *sqliteWriter) WriteTable(result *TableExportResult) error {
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	sw.tablesWritten++
+	if sw.tablesWritten%vacuumInterval == 0 {
+		log.Printf("[sqlite] VACUUM after %d tables", sw.tablesWritten)
+		_, _ = sw.db.Exec("VACUUM")
+	}
+	return nil
 }
 
 func (sw *sqliteWriter) createTable(tx *sql.Tx, result *TableExportResult) error {
