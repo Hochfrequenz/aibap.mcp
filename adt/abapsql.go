@@ -34,7 +34,7 @@ func FilterNonMandtKeys(keys []string) []string {
 	return result
 }
 
-// escapeValue escapes single quotes in a SQL string value by doubling them.
+// EscapeValue escapes single quotes in a SQL string value by doubling them.
 // This is sufficient for ABAP Open SQL where single-quote doubling is the only
 // escape mechanism. NOT safe for general SQL engines (backslash escapes, etc.).
 func EscapeValue(v string) string {

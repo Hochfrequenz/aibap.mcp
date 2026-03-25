@@ -11,11 +11,8 @@ import (
 
 // sqliteWriter handles all SQLite database operations for the customizing export.
 type sqliteWriter struct {
-	db            *sql.DB
-	tablesWritten int
+	db *sql.DB
 }
-
-const vacuumInterval = 5000 // VACUUM every N tables to keep file size manageable
 
 func newSQLiteWriter(dbPath string) (*sqliteWriter, error) {
 	db, err := sql.Open("sqlite", dbPath)
@@ -53,15 +50,17 @@ func newSQLiteWriter(dbPath string) (*sqliteWriter, error) {
 }
 
 // Close compacts the database (VACUUM) and switches from WAL to DELETE journal
-// mode for portability, then closes the connection. The VACUUM reclaims space
-// from DROP TABLE + recreate cycles and can significantly reduce file size.
+// mode for portability, then closes the connection.
+// VACUUM runs first while still in WAL mode (faster than in DELETE mode),
+// then journal_mode=DELETE checkpoints the WAL and removes -wal/-shm files.
 func (sw *sqliteWriter) Close() error {
 	if sw.db == nil {
 		return nil
 	}
-	// Switch to DELETE mode (removes -wal and -shm files) and compact.
+	if _, err := sw.db.Exec("VACUUM"); err != nil {
+		log.Printf("WARNING: VACUUM failed: %v", err)
+	}
 	_, _ = sw.db.Exec("PRAGMA journal_mode=DELETE")
-	_, _ = sw.db.Exec("VACUUM")
 	return sw.db.Close()
 }
 
@@ -85,16 +84,7 @@ func (sw *sqliteWriter) WriteTable(result *TableExportResult) error {
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	sw.tablesWritten++
-	if sw.tablesWritten%vacuumInterval == 0 {
-		log.Printf("[sqlite] VACUUM after %d tables", sw.tablesWritten)
-		_, _ = sw.db.Exec("VACUUM")
-	}
-	return nil
+	return tx.Commit()
 }
 
 func (sw *sqliteWriter) createTable(tx *sql.Tx, result *TableExportResult) error {
