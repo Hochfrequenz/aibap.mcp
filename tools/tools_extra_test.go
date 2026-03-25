@@ -248,7 +248,7 @@ func TestCreateObjectToolError(t *testing.T) {
 func TestDeleteObjectTool(t *testing.T) {
 	var gotURI, gotTransport string
 	mock := &mockClient{
-		deleteObjectFn: func(ctx context.Context, uri, transport string) error {
+		deleteObjectFn: func(ctx context.Context, uri, lockHandle, transport string) error {
 			gotURI, gotTransport = uri, transport
 			return nil
 		},
@@ -271,7 +271,7 @@ func TestDeleteObjectTool(t *testing.T) {
 
 func TestDeleteObjectToolError(t *testing.T) {
 	mock := &mockClient{
-		deleteObjectFn: func(ctx context.Context, uri, transport string) error {
+		deleteObjectFn: func(ctx context.Context, uri, lockHandle, transport string) error {
 			return &adt.ADTError{StatusCode: 404, Message: "not found"}
 		},
 	}

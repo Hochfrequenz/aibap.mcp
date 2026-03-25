@@ -138,9 +138,12 @@ func (r *ClientRegistry) PrettyPrint(ctx context.Context, source string) (string
 func (r *ClientRegistry) CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error {
 	return r.activeClient().CreateObject(ctx, objectType, name, packageName, description, transport)
 }
-func (r *ClientRegistry) DeleteObject(ctx context.Context, objectURI, transport string) error {
-	return r.activeClient().DeleteObject(ctx, objectURI, transport)
+func (r *ClientRegistry) DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error {
+	return r.activeClient().DeleteObject(ctx, objectURI, lockHandle, transport)
 }
 func (r *ClientRegistry) GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error) {
 	return r.activeClient().GetCompletions(ctx, objectURI, source, line, column)
+}
+func (r *ClientRegistry) ExportPackage(ctx context.Context, packageName string) ([]byte, error) {
+	return r.activeClient().ExportPackage(ctx, packageName)
 }

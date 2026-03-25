@@ -33,8 +33,9 @@ type Client interface {
 	UnlockObject(ctx context.Context, objectURI, lockHandle string) error
 	PrettyPrint(ctx context.Context, source string) (string, error)
 	CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error
-	DeleteObject(ctx context.Context, objectURI, transport string) error
+	DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error
 	GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error)
+	ExportPackage(ctx context.Context, packageName string) ([]byte, error)
 }
 
 type httpClient struct {

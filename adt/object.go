@@ -68,12 +68,29 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	return checkResponse(resp)
 }
 
-func (c *httpClient) DeleteObject(ctx context.Context, objectURI, transport string) error {
+func (c *httpClient) DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error {
 	path := objectURI
 	if transport != "" {
 		path += "?corrNr=" + transport
 	}
-	resp, err := c.doMutate(ctx, http.MethodDelete, path, nil, nil)
+	// Use optimistic locking via If-Match header: SAP locks internally and deletes.
+	// The pessimistic path (lockHandle query param) fails on some systems because
+	// CL_ADT_ENQUEUE=>READ doesn't find the REST-session lock.
+	// Fetch the ETag from the object URI itself (not /source/main).
+	accept := acceptHeaderForURI(objectURI)
+	etagResp, err := c.doRead(ctx, objectURI, map[string]string{"Accept": accept})
+	if err != nil {
+		return fmt.Errorf("DeleteObject fetch ETag: %w", err)
+	}
+	etag := etagResp.Header.Get("ETag")
+	_ = etagResp.Body.Close()
+	if etag == "" {
+		return fmt.Errorf("DeleteObject: no ETag returned for %s", objectURI)
+	}
+	headers := map[string]string{
+		"If-Match": etag,
+	}
+	resp, err := c.doMutate(ctx, http.MethodDelete, path, nil, headers)
 	if err != nil {
 		return fmt.Errorf("DeleteObject: %w", err)
 	}

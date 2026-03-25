@@ -38,7 +38,7 @@ type mockClient struct {
 	unlockObjectFn    func(ctx context.Context, uri, lockHandle string) error
 	prettyPrintFn     func(ctx context.Context, source string) (string, error)
 	createObjectFn    func(ctx context.Context, objectType, name, pkg, desc, transport string) error
-	deleteObjectFn    func(ctx context.Context, uri, transport string) error
+	deleteObjectFn    func(ctx context.Context, uri, lockHandle, transport string) error
 	getCompletionsFn  func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
 }
 
@@ -132,9 +132,9 @@ func (m *mockClient) CreateObject(ctx context.Context, objectType, name, pkg, de
 	}
 	return nil
 }
-func (m *mockClient) DeleteObject(ctx context.Context, uri, transport string) error {
+func (m *mockClient) DeleteObject(ctx context.Context, uri, lockHandle, transport string) error {
 	if m.deleteObjectFn != nil {
-		return m.deleteObjectFn(ctx, uri, transport)
+		return m.deleteObjectFn(ctx, uri, lockHandle, transport)
 	}
 	return nil
 }
@@ -142,6 +142,9 @@ func (m *mockClient) GetCompletions(ctx context.Context, uri, source string, lin
 	if m.getCompletionsFn != nil {
 		return m.getCompletionsFn(ctx, uri, source, line, column)
 	}
+	return nil, nil
+}
+func (m *mockClient) ExportPackage(ctx context.Context, packageName string) ([]byte, error) {
 	return nil, nil
 }
 
