@@ -78,27 +78,48 @@ func discoverTables(ctx context.Context, client adt.Client) ([]string, error) {
 	return tables, nil
 }
 
-// fetchAllKeys bulk-queries DD03L for key fields of all active tables.
+// fetchAllKeys bulk-queries DD03L for key fields of the given tables.
 // Returns a map of table name to ordered list of key field names.
-func fetchAllKeys(ctx context.Context, client adt.Client) (map[string][]string, error) {
-	sql := "SELECT TABNAME, FIELDNAME, POSITION FROM DD03L WHERE KEYFLAG = 'X' AND AS4LOCAL = 'A' ORDER BY TABNAME, POSITION"
-	queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
-	defer cancel()
-
-	result, err := client.RunQuery(queryCtx, sql, 200000)
-	if err != nil {
-		return nil, fmt.Errorf("fetchAllKeys: %w", err)
-	}
-
+// Fetches in batches to handle the full set of customizing tables (~70K).
+func fetchAllKeys(ctx context.Context, client adt.Client, tables []string) (map[string][]string, error) {
 	keys := make(map[string][]string)
-	for _, row := range result.Rows {
-		if len(row) < 2 {
-			continue
+
+	// Process in batches — DD03L has 1M+ key field rows total,
+	// but we only need keys for our specific tables.
+	batchSize := 50 // Keep SQL body short to stay within ADT endpoint limits
+	for i := 0; i < len(tables); i += batchSize {
+		end := i + batchSize
+		if end > len(tables) {
+			end = len(tables)
 		}
-		tabname := strings.TrimSpace(row[0])
-		fieldname := strings.TrimSpace(row[1])
-		if tabname != "" && fieldname != "" {
-			keys[tabname] = append(keys[tabname], fieldname)
+		batch := tables[i:end]
+
+		// Build IN clause with escaped table names.
+		inValues := make([]string, len(batch))
+		for j, t := range batch {
+			inValues[j] = "'" + adt.EscapeValue(t) + "'"
+		}
+		sql := fmt.Sprintf(
+			"SELECT TABNAME, FIELDNAME, POSITION FROM DD03L WHERE TABNAME IN (%s) AND KEYFLAG = 'X' AND AS4LOCAL = 'A' ORDER BY TABNAME, POSITION",
+			strings.Join(inValues, ","),
+		)
+
+		queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
+		result, err := client.RunQuery(queryCtx, sql, 200000)
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("fetchAllKeys batch %d: %w", i/batchSize, err)
+		}
+
+		for _, row := range result.Rows {
+			if len(row) < 2 {
+				continue
+			}
+			tabname := strings.TrimSpace(row[0])
+			fieldname := strings.TrimSpace(row[1])
+			if tabname != "" && fieldname != "" {
+				keys[tabname] = append(keys[tabname], fieldname)
+			}
 		}
 	}
 	return keys, nil
@@ -213,7 +234,7 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 	}
 
 	// Fetch all keys.
-	allKeys, err := fetchAllKeys(ctx, client)
+	allKeys, err := fetchAllKeys(ctx, client, tables)
 	if err != nil {
 		return nil, fmt.Errorf("fetch keys: %w", err)
 	}

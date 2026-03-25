@@ -161,7 +161,7 @@ func TestFetchAllKeys(t *testing.T) {
 		},
 	}
 
-	keys, err := fetchAllKeys(context.Background(), client)
+	keys, err := fetchAllKeys(context.Background(), client, []string{"T001", "T005"})
 	if err != nil {
 		t.Fatalf("fetchAllKeys: %v", err)
 	}

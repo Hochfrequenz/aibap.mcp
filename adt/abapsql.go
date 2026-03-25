@@ -37,7 +37,7 @@ func FilterNonMandtKeys(keys []string) []string {
 // escapeValue escapes single quotes in a SQL string value by doubling them.
 // This is sufficient for ABAP Open SQL where single-quote doubling is the only
 // escape mechanism. NOT safe for general SQL engines (backslash escapes, etc.).
-func escapeValue(v string) string {
+func EscapeValue(v string) string {
 	return strings.ReplaceAll(v, "'", "''")
 }
 
@@ -61,10 +61,10 @@ func buildPaginationWhere(keys, lastValues []string) string {
 		var parts []string
 		// All preceding keys are equal.
 		for j := 0; j < i; j++ {
-			parts = append(parts, fmt.Sprintf("%s = '%s'", keys[j], escapeValue(lastValues[j])))
+			parts = append(parts, fmt.Sprintf("%s = '%s'", keys[j], EscapeValue(lastValues[j])))
 		}
 		// The i-th key is strictly greater.
-		parts = append(parts, fmt.Sprintf("%s > '%s'", keys[i], escapeValue(lastValues[i])))
+		parts = append(parts, fmt.Sprintf("%s > '%s'", keys[i], EscapeValue(lastValues[i])))
 
 		if len(parts) == 1 {
 			terms = append(terms, parts[0])
