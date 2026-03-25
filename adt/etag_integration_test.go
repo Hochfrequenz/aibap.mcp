@@ -4,63 +4,12 @@ package adt_test
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/Hochfrequenz/mcp-server-abap/adt"
 )
 
-// etagTestReportName is a unique program name for the ETag tests.
-// Lives in $TMP so no transport request is needed.
 const etagTestReportName = "Z_MCP_ETAG_TEST"
-const etagTestReportURI = "/sap/bc/adt/programs/programs/" + etagTestReportName
-
-// setupETagTestReport creates a disposable $TMP program for the ETag tests
-// and registers cleanup to delete it. Returns the object URI.
-func setupETagTestReport(t *testing.T, client adt.Client) string {
-	t.Helper()
-	ctx := context.Background()
-
-	// Create in $TMP — no transport required.
-	err := client.CreateObject(ctx, "PROG", etagTestReportName, "$TMP",
-		fmt.Sprintf("ETag integration test (%s)", time.Now().Format("2006-01-02")), "")
-	if err != nil {
-		// Object may already exist from a previous aborted run — try to use it.
-		if _, infoErr := client.GetObjectInfo(ctx, etagTestReportURI); infoErr != nil {
-			t.Fatalf("CreateObject %s failed and object does not exist: %v", etagTestReportName, err)
-		}
-		t.Logf("object %s already exists, reusing", etagTestReportName)
-	}
-
-	// Set initial source.
-	lockHandle, err := client.LockObject(ctx, etagTestReportURI)
-	if err != nil {
-		t.Fatalf("LockObject for setup failed: %v", err)
-	}
-	src, err := client.GetSource(ctx, etagTestReportURI)
-	if err != nil {
-		_ = client.UnlockObject(ctx, etagTestReportURI, lockHandle)
-		t.Fatalf("GetSource for setup failed: %v", err)
-	}
-	initialSource := "REPORT " + strings.ToLower(etagTestReportName) + ".\nWRITE: / 'etag test'.\n"
-	_, err = client.SetSource(ctx, etagTestReportURI, initialSource, lockHandle, "", src.ETag)
-	if err != nil {
-		_ = client.UnlockObject(ctx, etagTestReportURI, lockHandle)
-		t.Fatalf("SetSource for setup failed: %v", err)
-	}
-	_ = client.UnlockObject(ctx, etagTestReportURI, lockHandle)
-
-	// Register cleanup: delete the object after the test.
-	t.Cleanup(func() {
-		if err := client.DeleteObject(context.Background(), etagTestReportURI, "", ""); err != nil {
-			t.Logf("WARNING: cleanup failed to delete %s: %v", etagTestReportName, err)
-		}
-	})
-
-	return etagTestReportURI
-}
 
 // TestSetSource_StaleETag_ReturnsError verifies that SAP rejects a write when
 // the ETag is stale (object modified since the ETag was obtained). This proves
@@ -75,7 +24,8 @@ func setupETagTestReport(t *testing.T, client adt.Client) string {
 //  6. Restore original source and unlock
 func TestSetSource_StaleETag_ReturnsError(t *testing.T) {
 	client := newIntegrationClient(t)
-	objectURI := setupETagTestReport(t, client)
+	initialSource := "REPORT " + strings.ToLower(etagTestReportName) + ".\nWRITE: / 'etag test'.\n"
+	objectURI := setupDisposableReport(t, client, etagTestReportName, initialSource)
 	ctx := context.Background()
 
 	// Step 1: Lock the test object.
@@ -145,7 +95,8 @@ func TestSetSource_StaleETag_ReturnsError(t *testing.T) {
 // (fresh) ETag succeeds. This is the positive counterpart to the stale ETag test.
 func TestSetSource_FreshETag_Succeeds(t *testing.T) {
 	client := newIntegrationClient(t)
-	objectURI := setupETagTestReport(t, client)
+	initialSource := "REPORT " + strings.ToLower(etagTestReportName) + ".\nWRITE: / 'etag test'.\n"
+	objectURI := setupDisposableReport(t, client, etagTestReportName, initialSource)
 	ctx := context.Background()
 
 	// Lock the object.
