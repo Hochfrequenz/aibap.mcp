@@ -17,10 +17,11 @@ import (
 
 // ExportConfig holds parameters for RunExport.
 type ExportConfig struct {
-	OutputDir string
-	Tables    []string // specific tables, or nil for all customizing tables
-	PageSize  int      // rows per page (default 100000)
-	Workers   int      // parallel workers (default 10, max 20)
+	OutputDir    string
+	Tables       []string // specific tables, or nil for all customizing tables
+	CustomerOnly bool     // if true, only export tables that were actually transported (E071K)
+	PageSize     int      // rows per page (default 100000)
+	Workers      int      // parallel workers (default 20, max 40)
 }
 
 // ExportSummary is the result of a full export run.
@@ -83,6 +84,48 @@ func discoverTables(ctx context.Context, client adt.Client) ([]string, error) {
 	}
 	sort.Strings(tables)
 	return tables, nil
+}
+
+// discoverCustomerTables returns only customizing tables that were actually
+// modified and transported (appear in E071K with PGMID='R3TR' OBJECT='TABU').
+// This filters ~57K tables down to ~34K that someone actually configured,
+// excluding SAP-delivered bulk data (SLO migration, conversion rules, etc.).
+func discoverCustomerTables(ctx context.Context, client adt.Client) ([]string, error) {
+	// Get all transported table names from E071K.
+	sql := "SELECT DISTINCT OBJNAME FROM E071K WHERE PGMID = 'R3TR' AND OBJECT = 'TABU' ORDER BY OBJNAME"
+	queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
+	defer cancel()
+
+	result, err := client.RunQuery(queryCtx, sql, 200000)
+	if err != nil {
+		return nil, fmt.Errorf("discoverCustomerTables (E071K): %w", err)
+	}
+
+	transported := make(map[string]bool, len(result.Rows))
+	for _, row := range result.Rows {
+		if len(row) > 0 {
+			transported[strings.TrimSpace(row[0])] = true
+		}
+	}
+
+	// Get all customizing tables (delivery class C only — G is SAP-protected).
+	allTables, err := discoverTables(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
+	// Intersect: customizing tables that were actually transported.
+	var customerTables []string
+	for _, t := range allTables {
+		if transported[t] {
+			customerTables = append(customerTables, t)
+		}
+	}
+
+	log.Printf("Customer customizing: %d tables transported (E071K) ∩ %d customizing (DD02L) = %d tables",
+		len(transported), len(allTables), len(customerTables))
+
+	return customerTables, nil
 }
 
 // fetchTableKeys queries DD03L for key fields of a single table.
@@ -227,6 +270,12 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 		tables = make([]string, len(cfg.Tables))
 		copy(tables, cfg.Tables)
 		sort.Strings(tables)
+	} else if cfg.CustomerOnly {
+		var err error
+		tables, err = discoverCustomerTables(ctx, client)
+		if err != nil {
+			return nil, fmt.Errorf("discover customer tables: %w", err)
+		}
 	} else {
 		var err error
 		tables, err = discoverTables(ctx, client)
