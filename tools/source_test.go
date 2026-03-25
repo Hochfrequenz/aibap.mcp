@@ -144,6 +144,9 @@ func (m *mockClient) GetCompletions(ctx context.Context, uri, source string, lin
 	}
 	return nil, nil
 }
+func (m *mockClient) ExportPackage(ctx context.Context, packageName string) ([]byte, error) {
+	return nil, nil
+}
 
 func newTestServer(client adt.Client) *server.MCPServer {
 	return newTestServerWithSelector(client, &mockSelector{}, adt.NewLockMap())
