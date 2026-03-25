@@ -18,6 +18,10 @@ import (
 // Created automatically by TestMain via setupFixtures.
 const testReportURI = "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_REPORT"
 
+// testSynWarnURI is a report with an unused variable, guaranteed to produce syntax warnings.
+// Created automatically by TestMain via setupFixtures.
+const testSynWarnURI = "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_SYNWARN"
+
 // integrationConfig builds a SAPConfig from environment variables.
 func integrationConfig() config.SAPConfig {
 	return config.SAPConfig{

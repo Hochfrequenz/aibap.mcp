@@ -144,3 +144,6 @@ func (r *ClientRegistry) DeleteObject(ctx context.Context, objectURI, lockHandle
 func (r *ClientRegistry) GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error) {
 	return r.activeClient().GetCompletions(ctx, objectURI, source, line, column)
 }
+func (r *ClientRegistry) ExportPackage(ctx context.Context, packageName string) ([]byte, error) {
+	return r.activeClient().ExportPackage(ctx, packageName)
+}
