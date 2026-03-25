@@ -56,7 +56,7 @@ const (
 
 // discoverTables queries DD02L for active customizing tables (CONTFLAG C or G).
 func discoverTables(ctx context.Context, client adt.Client) ([]string, error) {
-	sql := "SELECT TABNAME, CONTFLAG FROM DD02L WHERE CONTFLAG IN ('C','G') AND AS4LOCAL = 'A' AND AS4VERS = '0000' ORDER BY TABNAME"
+	sql := "SELECT TABNAME, CONTFLAG FROM DD02L WHERE CONTFLAG IN ('C','G') AND TABCLASS = 'TRANSP' AND AS4LOCAL = 'A' AND AS4VERS = '0000' ORDER BY TABNAME"
 	queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
 	defer cancel()
 
@@ -278,9 +278,10 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 				Table: result.TableName,
 				Error: result.Error.Error(),
 			})
+		} else if writerErr != nil {
+			// Writer already failed — skip writes, just drain results.
 		} else if len(result.Rows) == 0 {
 			empty++
-			// Still write empty tables for schema.
 			if wErr := writer.WriteTable(result); wErr != nil {
 				log.Printf("WARNING: write error for empty table %s: %v", result.TableName, wErr)
 			}
@@ -290,7 +291,7 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 			if wErr := writer.WriteTable(result); wErr != nil {
 				writerErr = wErr
 				log.Printf("ERROR: write failed for %s: %v — cancelling workers", result.TableName, wErr)
-				cancel() // Stop all workers
+				cancel()
 			}
 		}
 
