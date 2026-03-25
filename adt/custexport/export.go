@@ -87,12 +87,21 @@ func discoverTables(ctx context.Context, client adt.Client) ([]string, error) {
 }
 
 // discoverCustomerTables returns only customizing tables that were actually
-// modified and transported (appear in E071K with PGMID='R3TR' OBJECT='TABU').
-// This filters ~57K tables down to ~34K that someone actually configured,
-// excluding SAP-delivered bulk data (SLO migration, conversion rules, etc.).
+// modified and transported. Queries E071K transport keys for objects of type
+// TABU (table contents), CDAT (view cluster data via SM34), VDAT (view data
+// via SM30), and TDAT (table data, client-independent).
+//
+// Known limitations:
+//   - Only transported customizing is captured. Local changes in $TMP or local
+//     requests are invisible. For dev systems, use customer_only=false instead.
+//   - CDAT/VDAT entries use the view/cluster name, not the underlying table name.
+//     We include them as-is — some will match DD02L (when the view name equals
+//     the table name), others won't (filtered out by the intersection).
+//     This is an 80/20 heuristic, not a guarantee of completeness.
 func discoverCustomerTables(ctx context.Context, client adt.Client) ([]string, error) {
-	// Get all transported table names from E071K.
-	sql := "SELECT DISTINCT OBJNAME FROM E071K WHERE PGMID = 'R3TR' AND OBJECT = 'TABU' ORDER BY OBJNAME"
+	// Get all transported table/view names from E071K.
+	// TABU = table contents, CDAT = view cluster (SM34), VDAT = view data (SM30), TDAT = table data.
+	sql := "SELECT DISTINCT OBJNAME FROM E071K WHERE PGMID = 'R3TR' AND OBJECT IN ('TABU','CDAT','VDAT','TDAT') ORDER BY OBJNAME"
 	queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
 	defer cancel()
 
@@ -108,7 +117,9 @@ func discoverCustomerTables(ctx context.Context, client adt.Client) ([]string, e
 		}
 	}
 
-	// Get all customizing tables (delivery class C only — G is SAP-protected).
+	// Get all customizing tables (delivery class C and G).
+	// G (protected) is included because customers can add entries to G tables,
+	// and those entries appear in E071K when transported.
 	allTables, err := discoverTables(ctx, client)
 	if err != nil {
 		return nil, err
