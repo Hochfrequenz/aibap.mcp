@@ -6,7 +6,7 @@ before:
 
 builds:
   - id: mcp-server-abap
-    binary: mcp-server-abap
+    binary: mcp-server-abap-{{ .Version }}
     ldflags:
       - -X main.version={{.Version}}
     goos:
@@ -29,5 +29,5 @@ checksum:
 
 release:
   github:
-    owner: dachner
+    owner: Hochfrequenz
     name: mcp-server-abap
