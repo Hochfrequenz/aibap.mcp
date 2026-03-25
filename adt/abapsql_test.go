@@ -84,7 +84,7 @@ func TestEscapeValue(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := escapeValue(tt.input)
+			got := EscapeValue(tt.input)
 			if got != tt.expected {
 				t.Errorf("expected %q, got %q", tt.expected, got)
 			}
