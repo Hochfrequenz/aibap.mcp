@@ -46,9 +46,16 @@ type TableError struct {
 }
 
 const (
-	defaultPageSize    = 100000
-	defaultWorkers     = 10
-	maxWorkers         = 20
+	defaultPageSize = 100000
+	// defaultWorkers is the default number of parallel export workers.
+	// Benchmarked on srvhfuhana (2026-03-25, 500 tables, per-table key fetch):
+	//   10 workers: 2.7 tables/sec → ~5.8h for 57K tables
+	//   20 workers: 4.5 tables/sec → ~3.5h for 57K tables (sweet spot)
+	//   30 workers: 4.3 tables/sec → no improvement, SAP saturated
+	//   40 workers: 4.3 tables/sec → no improvement
+	// Each worker does 2 sequential HTTP requests per table (DD03L keys + data).
+	defaultWorkers     = 20
+	maxWorkers         = 40
 	maxKeysForPaginate = 4
 	perQueryTimeout    = 120 * time.Second
 	progressInterval   = 100
