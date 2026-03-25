@@ -22,6 +22,9 @@ func TestRunQuery_RejectNonSelect(t *testing.T) {
 		{"empty", ""},
 		{"whitespace only", "   "},
 		{"lowercase delete", "delete from T001"},
+		{"multi-statement semicolon", "SELECT * FROM T001; DROP TABLE T001"},
+		{"semicolon in select", "SELECT 1 FROM DUMMY; DELETE FROM USR02"},
+		{"select with trailing semicolon", "SELECT * FROM T001;"},
 	}
 
 	for _, tt := range tests {

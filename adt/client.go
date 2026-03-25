@@ -183,66 +183,20 @@ func (c *httpClient) doRead(ctx context.Context, path string, headers map[string
 }
 
 // doMutate performs a POST/PUT/DELETE with CSRF token and retry on 403/401.
-// Body is buffered so it can be replayed on retry.
+// Uses the default HTTP client (30-second timeout).
 func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
-	path = encodeNamespacePath(path)
-	var bodyBytes []byte
-	if body != nil {
-		var err error
-		bodyBytes, err = io.ReadAll(body)
-		if err != nil {
-			return nil, fmt.Errorf("buffering request body: %w", err)
-		}
-	}
-	newBody := func() io.Reader {
-		if bodyBytes == nil {
-			return nil
-		}
-		return bytes.NewReader(bodyBytes)
-	}
-
-	c.mu.Lock()
-	if c.csrfToken == "" {
-		if err := c.fetchCSRFToken(ctx); err != nil {
-			c.mu.Unlock()
-			return nil, err
-		}
-	}
-	token := c.csrfToken
-	c.mu.Unlock()
-
-	resp, err := c.execMutate(ctx, method, path, newBody(), headers, token)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
-		_ = resp.Body.Close()
-		c.mu.Lock()
-		if resp.StatusCode == http.StatusUnauthorized && c.onTokenRefresh != nil {
-			newToken, err := c.onTokenRefresh(c.accessToken)
-			if err != nil {
-				c.mu.Unlock()
-				return nil, fmt.Errorf("token refresh failed: %w", err)
-			}
-			c.accessToken = newToken
-		}
-		if err := c.fetchCSRFToken(ctx); err != nil {
-			c.mu.Unlock()
-			return nil, err
-		}
-		token = c.csrfToken
-		c.mu.Unlock()
-		return c.execMutate(ctx, method, path, newBody(), headers, token)
-	}
-
-	return resp, nil
+	return c.doMutateWith(ctx, c.http, method, path, body, headers)
 }
 
 // doMutateLong is like doMutate but uses the long-timeout HTTP client (httpLong).
-// It is safe for concurrent use by multiple goroutines. Intended for long-running
-// queries (e.g., RunQuery) where the caller controls the deadline via context.
+// Intended for long-running queries where the caller controls the deadline via context.
 func (c *httpClient) doMutateLong(ctx context.Context, method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
+	return c.doMutateWith(ctx, c.httpLong, method, path, body, headers)
+}
+
+// doMutateWith performs a POST/PUT/DELETE with CSRF token and retry on 403/401,
+// using the given HTTP client. Body is buffered so it can be replayed on retry.
+func (c *httpClient) doMutateWith(ctx context.Context, hc *http.Client, method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
 	path = encodeNamespacePath(path)
 	var bodyBytes []byte
 	if body != nil {
@@ -269,7 +223,7 @@ func (c *httpClient) doMutateLong(ctx context.Context, method, path string, body
 	token := c.csrfToken
 	c.mu.Unlock()
 
-	resp, err := c.execMutateWith(ctx, c.httpLong, method, path, newBody(), headers, token)
+	resp, err := c.execMutateWith(ctx, hc, method, path, newBody(), headers, token)
 	if err != nil {
 		return nil, err
 	}
@@ -291,14 +245,10 @@ func (c *httpClient) doMutateLong(ctx context.Context, method, path string, body
 		}
 		token = c.csrfToken
 		c.mu.Unlock()
-		return c.execMutateWith(ctx, c.httpLong, method, path, newBody(), headers, token)
+		return c.execMutateWith(ctx, hc, method, path, newBody(), headers, token)
 	}
 
 	return resp, nil
-}
-
-func (c *httpClient) execMutate(ctx context.Context, method, path string, body io.Reader, headers map[string]string, csrfToken string) (*http.Response, error) {
-	return c.execMutateWith(ctx, c.http, method, path, body, headers, csrfToken)
 }
 
 // execMutateWith builds and executes a mutating request using the given *http.Client.

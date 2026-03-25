@@ -7,21 +7,46 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
 
+// validateSelectOnly checks that sql is a single SELECT statement.
+// Rejects multi-statement (semicolons) and non-SELECT keywords at the start.
+func validateSelectOnly(sql string) error {
+	if sql == "" {
+		return fmt.Errorf("empty SQL statement")
+	}
+	upper := strings.ToUpper(sql)
+	if !strings.HasPrefix(upper, "SELECT") {
+		return fmt.Errorf("only SELECT statements are allowed, got: %s",
+			strings.SplitN(sql, " ", 2)[0])
+	}
+	if strings.Contains(sql, ";") {
+		return fmt.Errorf("multi-statement SQL is not allowed (semicolons forbidden)")
+	}
+	return nil
+}
+
 // RunQuery executes a read-only SQL query via the ADT data preview endpoint.
-// Only SELECT statements are allowed; anything else is rejected.
+// Only single SELECT statements are allowed; anything else is rejected.
+// If the caller's context has no deadline, a 5-minute timeout is applied.
 func (c *httpClient) RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error) {
 	trimmed := strings.TrimSpace(sql)
-	if !strings.HasPrefix(strings.ToUpper(trimmed), "SELECT") {
-		return nil, fmt.Errorf("RunQuery: only SELECT statements are allowed, got: %s",
-			strings.SplitN(trimmed, " ", 2)[0])
+	if err := validateSelectOnly(trimmed); err != nil {
+		return nil, fmt.Errorf("RunQuery: %w", err)
 	}
 
 	if maxRows <= 0 {
 		maxRows = 1000
+	}
+
+	// Apply default timeout if caller didn't set one.
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
 	}
 
 	path := fmt.Sprintf("/sap/bc/adt/datapreview/freestyle?rowNumber=%d", maxRows)
