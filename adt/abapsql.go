@@ -22,9 +22,9 @@ func validateIdentifier(name string) error {
 	return nil
 }
 
-// filterNonMandtKeys returns key fields excluding MANDT.
+// FilterNonMandtKeys returns key fields excluding MANDT.
 // The comparison is case-insensitive because SAP metadata may use varying cases.
-func filterNonMandtKeys(keys []string) []string {
+func FilterNonMandtKeys(keys []string) []string {
 	result := make([]string, 0, len(keys))
 	for _, k := range keys {
 		if !strings.EqualFold(k, "MANDT") {
@@ -75,12 +75,12 @@ func buildPaginationWhere(keys, lastValues []string) string {
 	return strings.Join(terms, " OR ")
 }
 
-// buildExportSQL generates the SELECT statement for exporting a customizing table.
+// BuildExportSQL generates the SELECT statement for exporting a customizing table.
 //
 // The ORDER BY includes all key fields (including MANDT) for deterministic output.
 // If lastValues is provided, a WHERE clause is added for key-based pagination
 // using only the non-MANDT keys (SAP handles MANDT at the connection level).
-func buildExportSQL(table string, allKeys []string, lastValues []string) (string, error) {
+func BuildExportSQL(table string, allKeys []string, lastValues []string) (string, error) {
 	if err := validateIdentifier(table); err != nil {
 		return "", fmt.Errorf("invalid table name: %w", err)
 	}
@@ -95,7 +95,7 @@ func buildExportSQL(table string, allKeys []string, lastValues []string) (string
 	sb.WriteString(table)
 
 	if len(lastValues) > 0 {
-		paginationKeys := filterNonMandtKeys(allKeys)
+		paginationKeys := FilterNonMandtKeys(allKeys)
 		where := buildPaginationWhere(paginationKeys, lastValues)
 		if where != "" {
 			sb.WriteString(" WHERE ")
