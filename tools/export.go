@@ -78,6 +78,33 @@ func writeExport(data []byte, outputDir, packageName string, asFolder bool) (str
 	return filename, len(data), nil
 }
 
+// matchesAnyPattern checks if name matches any of the given wildcard patterns.
+// Patterns use filepath.Match syntax: * matches any sequence of characters, ? matches one.
+func matchesAnyPattern(name string, patterns []string) bool {
+	upper := strings.ToUpper(name)
+	for _, p := range patterns {
+		if matched, _ := filepath.Match(strings.ToUpper(p), upper); matched {
+			return true
+		}
+	}
+	return false
+}
+
+// parsePatternList splits a comma-separated pattern string into trimmed, non-empty patterns.
+func parsePatternList(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var result []string
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
 func registerExportTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("export_package",
 		mcp.WithDescription(
@@ -119,6 +146,130 @@ func registerExportTools(s toolAdder, client adt.Client) {
 			"path":           path,
 			"zip_size_bytes": size,
 			"format":         formatLabel(extract),
+		})
+		return mcp.NewToolResultText(string(out)), nil
+	})
+
+	s.AddTool(mcp.NewTool("export_packages",
+		mcp.WithDescription(
+			"Export multiple ABAP packages matching a search pattern to disk (read-only). "+
+				"Searches SAP for packages matching the pattern, then exports each to the output directory. "+
+				"The pattern is sent to SAP (e.g. Z*) and supports SAP wildcards. "+
+				"Use include_patterns and exclude_patterns for local filtering AFTER the SAP search returns results. "+
+				"Example: pattern=Z*, exclude_patterns=ZCERE_*,ZTEST* exports all Z-packages except ZCERE_* and ZTEST*. "+
+				"Requires the companion ABAP package: https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT"),
+		mcp.WithString("pattern", mcp.Required(),
+			mcp.Description("Package search pattern sent to SAP (wildcards: * and ?), e.g. Z* or Z_MY_*. "+
+				"This is a server-side search — use a broad pattern and refine with include/exclude_patterns locally.")),
+		mcp.WithString("output_dir", mcp.Required(),
+			mcp.Description("Directory to write exports into. Must already exist. Use an absolute path.")),
+		mcp.WithBoolean("extract", mcp.Required(),
+			mcp.Description("true = extract each package as folder with abapGit directory structure. "+
+				"false = save each as a .zip file.")),
+		mcp.WithNumber("max_packages",
+			mcp.Description("Maximum number of packages to search for on SAP side (default: 100). "+
+				"Increase for broad patterns like Z*.")),
+		mcp.WithString("exclude_patterns",
+			mcp.Description("Comma-separated wildcard patterns for local filtering. Packages matching ANY of these are skipped. "+
+				"Applied AFTER the SAP search. Example: ZCERE_*,ZTEST* excludes all ZCERE and ZTEST packages.")),
+		mcp.WithString("include_patterns",
+			mcp.Description("Comma-separated wildcard patterns for local filtering. If set, ONLY packages matching at least one pattern are exported. "+
+				"Applied AFTER the SAP search, BEFORE exclude_patterns. Example: Z_MY_*,Z_OTHER_*")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		pattern := req.GetString("pattern", "")
+		outputDir := req.GetString("output_dir", "")
+		extract := req.GetBool("extract", false)
+		maxPackages := req.GetInt("max_packages", 100)
+		excludePatterns := parsePatternList(req.GetString("exclude_patterns", ""))
+		includePatterns := parsePatternList(req.GetString("include_patterns", ""))
+
+		if outputDir == "" {
+			return errorResult(fmt.Errorf("output_dir must not be empty")), nil
+		}
+		info, err := os.Stat(outputDir)
+		if err != nil || !info.IsDir() {
+			return errorResult(fmt.Errorf("output_dir %q does not exist or is not a directory", outputDir)), nil
+		}
+
+		// Search for packages matching the pattern (DEVC/K = package object type).
+		packages, err := client.SearchObjects(ctx, pattern, "DEVC/K", maxPackages)
+		if err != nil {
+			return errorResult(fmt.Errorf("searching packages: %w", err)), nil
+		}
+		if len(packages) == 0 {
+			out, _ := json.Marshal(map[string]any{
+				"pattern":  pattern,
+				"exported": 0,
+				"message":  "no packages found matching pattern",
+			})
+			return mcp.NewToolResultText(string(out)), nil
+		}
+
+		// Apply local include/exclude filters.
+		foundTotal := len(packages)
+		if len(includePatterns) > 0 || len(excludePatterns) > 0 {
+			filtered := make([]adt.ObjectInfo, 0, len(packages))
+			for _, pkg := range packages {
+				if len(includePatterns) > 0 && !matchesAnyPattern(pkg.Name, includePatterns) {
+					continue
+				}
+				if len(excludePatterns) > 0 && matchesAnyPattern(pkg.Name, excludePatterns) {
+					continue
+				}
+				filtered = append(filtered, pkg)
+			}
+			packages = filtered
+		}
+
+		if len(packages) == 0 {
+			out, _ := json.Marshal(map[string]any{
+				"pattern":             pattern,
+				"found_before_filter": foundTotal,
+				"exported":            0,
+				"message":             "all packages excluded by include/exclude filters",
+			})
+			return mcp.NewToolResultText(string(out)), nil
+		}
+
+		type exportResult struct {
+			Package  string `json:"package"`
+			Path     string `json:"path,omitempty"`
+			Size     int    `json:"zip_size_bytes,omitempty"`
+			Error    string `json:"error,omitempty"`
+			Exported bool   `json:"exported"`
+		}
+
+		results := make([]exportResult, 0, len(packages))
+		exported := 0
+		for _, pkg := range packages {
+			name := strings.ToUpper(pkg.Name)
+			data, err := client.ExportPackage(ctx, name)
+			if err != nil {
+				results = append(results, exportResult{
+					Package: name, Error: err.Error(),
+				})
+				continue
+			}
+			path, size, err := writeExport(data, outputDir, name, extract)
+			if err != nil {
+				results = append(results, exportResult{
+					Package: name, Error: err.Error(),
+				})
+				continue
+			}
+			exported++
+			results = append(results, exportResult{
+				Package: name, Path: path, Size: size, Exported: true,
+			})
+		}
+
+		out, _ := json.Marshal(map[string]any{
+			"pattern":             pattern,
+			"found_before_filter": foundTotal,
+			"found_after_filter":  len(packages),
+			"exported":            exported,
+			"format":              formatLabel(extract),
+			"results":             results,
 		})
 		return mcp.NewToolResultText(string(out)), nil
 	})
