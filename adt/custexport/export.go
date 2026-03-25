@@ -137,6 +137,17 @@ func exportTable(ctx context.Context, client adt.Client, table string, keys []st
 		pages++
 		if pages == 1 {
 			columns = result.Columns
+			// The ADT data preview endpoint returns keyAttribute=false for all columns.
+			// Mark key columns using the DD03L key info we already have.
+			keySet := make(map[string]bool, len(keys))
+			for _, k := range keys {
+				keySet[k] = true
+			}
+			for i := range columns {
+				if keySet[columns[i].Name] {
+					columns[i].IsKey = true
+				}
+			}
 		}
 
 		allRows = append(allRows, result.Rows...)
