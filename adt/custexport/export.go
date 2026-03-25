@@ -17,10 +17,11 @@ import (
 
 // ExportConfig holds parameters for RunExport.
 type ExportConfig struct {
-	OutputDir string
-	Tables    []string // specific tables, or nil for all customizing tables
-	PageSize  int      // rows per page (default 100000)
-	Workers   int      // parallel workers (default 10, max 20)
+	OutputDir    string
+	Tables       []string // specific tables, or nil for all customizing tables
+	CustomerOnly bool     // if true, only export tables that were actually transported (E071K)
+	PageSize     int      // rows per page (default 100000)
+	Workers      int      // parallel workers (default 20, max 40)
 }
 
 // ExportSummary is the result of a full export run.
@@ -83,6 +84,59 @@ func discoverTables(ctx context.Context, client adt.Client) ([]string, error) {
 	}
 	sort.Strings(tables)
 	return tables, nil
+}
+
+// discoverCustomerTables returns only customizing tables that were actually
+// modified and transported. Queries E071K transport keys for objects of type
+// TABU (table contents), CDAT (view cluster data via SM34), VDAT (view data
+// via SM30), and TDAT (table data, client-independent).
+//
+// Known limitations:
+//   - Only transported customizing is captured. Local changes in $TMP or local
+//     requests are invisible. For dev systems, use customer_only=false instead.
+//   - CDAT/VDAT entries use the view/cluster name, not the underlying table name.
+//     We include them as-is — some will match DD02L (when the view name equals
+//     the table name), others won't (filtered out by the intersection).
+//     This is an 80/20 heuristic, not a guarantee of completeness.
+func discoverCustomerTables(ctx context.Context, client adt.Client) ([]string, error) {
+	// Get all transported table/view names from E071K.
+	// TABU = table contents, CDAT = view cluster (SM34), VDAT = view data (SM30), TDAT = table data.
+	sql := "SELECT DISTINCT OBJNAME FROM E071K WHERE PGMID = 'R3TR' AND OBJECT IN ('TABU','CDAT','VDAT','TDAT') ORDER BY OBJNAME"
+	queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
+	defer cancel()
+
+	result, err := client.RunQuery(queryCtx, sql, 200000)
+	if err != nil {
+		return nil, fmt.Errorf("discoverCustomerTables (E071K): %w", err)
+	}
+
+	transported := make(map[string]bool, len(result.Rows))
+	for _, row := range result.Rows {
+		if len(row) > 0 {
+			transported[strings.TrimSpace(row[0])] = true
+		}
+	}
+
+	// Get all customizing tables (delivery class C and G).
+	// G (protected) is included because customers can add entries to G tables,
+	// and those entries appear in E071K when transported.
+	allTables, err := discoverTables(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
+	// Intersect: customizing tables that were actually transported.
+	var customerTables []string
+	for _, t := range allTables {
+		if transported[t] {
+			customerTables = append(customerTables, t)
+		}
+	}
+
+	log.Printf("Customer customizing: %d tables transported (E071K) ∩ %d customizing (DD02L) = %d tables",
+		len(transported), len(allTables), len(customerTables))
+
+	return customerTables, nil
 }
 
 // fetchTableKeys queries DD03L for key fields of a single table.
@@ -227,6 +281,12 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 		tables = make([]string, len(cfg.Tables))
 		copy(tables, cfg.Tables)
 		sort.Strings(tables)
+	} else if cfg.CustomerOnly {
+		var err error
+		tables, err = discoverCustomerTables(ctx, client)
+		if err != nil {
+			return nil, fmt.Errorf("discover customer tables: %w", err)
+		}
 	} else {
 		var err error
 		tables, err = discoverTables(ctx, client)
