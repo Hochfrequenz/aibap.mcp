@@ -204,10 +204,11 @@ func (d *DebugSession) GetDebuggeeSessions(ctx context.Context) ([]byte, error) 
 }
 
 // Attach attaches to an active debuggee session.
+// Uses X-sap-adt-sessiontype: stateful to keep the work process for subsequent calls.
 func (d *DebugSession) Attach(ctx context.Context, debuggeeID string) error {
 	path := fmt.Sprintf("/sap/bc/adt/debugger?method=attach&debuggeeId=%s", debuggeeID)
 	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
-		map[string]string{"Accept": "application/xml"})
+		map[string]string{"Accept": "application/xml", "X-sap-adt-sessiontype": "stateful"})
 	if err != nil {
 		return fmt.Errorf("Attach: %w", err)
 	}
@@ -221,9 +222,9 @@ func (d *DebugSession) Attach(ctx context.Context, debuggeeID string) error {
 
 // Step executes a debug action: stepInto, stepOver, stepReturn, continue.
 func (d *DebugSession) Step(ctx context.Context, action string) ([]byte, error) {
-	path := fmt.Sprintf("/sap/bc/adt/debugger/actions?action=%s", action)
+	path := fmt.Sprintf("/sap/bc/adt/debugger?method=%s", action)
 	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
-		map[string]string{"Accept": "application/xml"})
+		map[string]string{"Accept": "application/xml", "X-sap-adt-sessiontype": "stateful"})
 	if err != nil {
 		return nil, fmt.Errorf("Step: %w", err)
 	}
@@ -237,7 +238,7 @@ func (d *DebugSession) Step(ctx context.Context, action string) ([]byte, error) 
 // GetVariable reads a variable value from the debug session.
 func (d *DebugSession) GetVariable(ctx context.Context, name string) ([]byte, error) {
 	path := fmt.Sprintf("/sap/bc/adt/debugger/variables/%s/value", name)
-	resp, err := d.client.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	resp, err := d.client.doRead(ctx, path, map[string]string{"Accept": "application/xml", "X-sap-adt-sessiontype": "stateful"})
 	if err != nil {
 		return nil, fmt.Errorf("GetVariable: %w", err)
 	}
@@ -251,7 +252,7 @@ func (d *DebugSession) GetVariable(ctx context.Context, name string) ([]byte, er
 // GetStack returns the current call stack.
 func (d *DebugSession) GetStack(ctx context.Context) ([]byte, error) {
 	resp, err := d.client.doRead(ctx, "/sap/bc/adt/debugger/systemareas/stack",
-		map[string]string{"Accept": "application/xml"})
+		map[string]string{"Accept": "application/xml", "X-sap-adt-sessiontype": "stateful"})
 	if err != nil {
 		return nil, fmt.Errorf("GetStack: %w", err)
 	}

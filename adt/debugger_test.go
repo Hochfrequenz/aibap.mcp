@@ -189,7 +189,7 @@ func TestDebugSessionStep(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger/actions" {
+		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "stepInto" {
 			gotPath = r.URL.RequestURI()
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<step result="ok"/>`))
@@ -206,8 +206,8 @@ func TestDebugSessionStep(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Step: %v", err)
 	}
-	if !strings.Contains(gotPath, "action=stepInto") {
-		t.Errorf("path missing action: %s", gotPath)
+	if !strings.Contains(gotPath, "method=stepInto") {
+		t.Errorf("path missing method: %s", gotPath)
 	}
 	if !strings.Contains(string(data), "step") {
 		t.Errorf("unexpected response: %s", data)
