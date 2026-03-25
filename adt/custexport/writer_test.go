@@ -57,7 +57,7 @@ func TestNewWriter_CreatesDBAndDir(t *testing.T) {
 
 	// Verify _metadata table exists.
 	var name string
-	err = w.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='_metadata'`).Scan(&name)
+	err = w.sqlite.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='_metadata'`).Scan(&name)
 	if err != nil {
 		t.Fatalf("_metadata table not found: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestWriteTable_WithRows(t *testing.T) {
 
 	// Verify SQLite rows.
 	var count int
-	if err := w.db.QueryRow(`SELECT COUNT(*) FROM "T001"`).Scan(&count); err != nil {
+	if err := w.sqlite.db.QueryRow(`SELECT COUNT(*) FROM "T001"`).Scan(&count); err != nil {
 		t.Fatalf("count rows: %v", err)
 	}
 	if count != 2 {
@@ -87,7 +87,7 @@ func TestWriteTable_WithRows(t *testing.T) {
 
 	// Verify a specific row.
 	var butxt string
-	err = w.db.QueryRow(`SELECT "BUTXT" FROM "T001" WHERE "BUKRS" = '1000'`).Scan(&butxt)
+	err = w.sqlite.db.QueryRow(`SELECT "BUTXT" FROM "T001" WHERE "BUKRS" = '1000'`).Scan(&butxt)
 	if err != nil {
 		t.Fatalf("query row: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestWriteTable_WithRows(t *testing.T) {
 
 	// Verify _metadata entries.
 	var metaCount int
-	err = w.db.QueryRow(`SELECT COUNT(*) FROM "_metadata" WHERE "table_name" = 'T001'`).Scan(&metaCount)
+	err = w.sqlite.db.QueryRow(`SELECT COUNT(*) FROM "_metadata" WHERE "table_name" = 'T001'`).Scan(&metaCount)
 	if err != nil {
 		t.Fatalf("count metadata: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestWriteTable_WithRows(t *testing.T) {
 
 	// Verify metadata content.
 	var isKey int
-	err = w.db.QueryRow(`SELECT "is_key" FROM "_metadata" WHERE "table_name" = 'T001' AND "column_name" = 'MANDT'`).Scan(&isKey)
+	err = w.sqlite.db.QueryRow(`SELECT "is_key" FROM "_metadata" WHERE "table_name" = 'T001' AND "column_name" = 'MANDT'`).Scan(&isKey)
 	if err != nil {
 		t.Fatalf("query metadata: %v", err)
 	}
@@ -162,14 +162,14 @@ func TestWriteTable_EmptyTable(t *testing.T) {
 
 	// Verify table exists in SQLite.
 	var name string
-	err = w.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='T002'`).Scan(&name)
+	err = w.sqlite.db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='T002'`).Scan(&name)
 	if err != nil {
 		t.Fatalf("table T002 not found: %v", err)
 	}
 
 	// Verify no rows.
 	var count int
-	if err := w.db.QueryRow(`SELECT COUNT(*) FROM "T002"`).Scan(&count); err != nil {
+	if err := w.sqlite.db.QueryRow(`SELECT COUNT(*) FROM "T002"`).Scan(&count); err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	if count != 0 {
@@ -221,7 +221,7 @@ func TestWriteTable_NamespaceTable(t *testing.T) {
 
 	// Verify SQLite table with namespace name.
 	var count int
-	if err := w.db.QueryRow(`SELECT COUNT(*) FROM "/HFQ/TABLE"`).Scan(&count); err != nil {
+	if err := w.sqlite.db.QueryRow(`SELECT COUNT(*) FROM "/HFQ/TABLE"`).Scan(&count); err != nil {
 		t.Fatalf("query namespace table: %v", err)
 	}
 	if count != 1 {
@@ -243,7 +243,7 @@ func TestWriteTable_PrimaryKey(t *testing.T) {
 	}
 
 	// Inserting a duplicate key should fail.
-	_, err = w.db.Exec(`INSERT INTO "T001" ("MANDT", "BUKRS", "BUTXT") VALUES ('100', '1000', 'Duplicate')`)
+	_, err = w.sqlite.db.Exec(`INSERT INTO "T001" ("MANDT", "BUKRS", "BUTXT") VALUES ('100', '1000', 'Duplicate')`)
 	if err == nil {
 		t.Error("expected PRIMARY KEY violation, got nil error")
 	}
