@@ -108,7 +108,21 @@ func TestDebugFullFlow_Integration(t *testing.T) {
 	}
 	t.Logf("step OK: %d bytes", len(stepData))
 
-	// 7. Continue to let the debuggee finish (otherwise unit test runner blocks)
+	// 7. Get stack (stateful, via debugger main endpoint)
+	stackData, err := dbg.GetStack(ctx)
+	if err != nil {
+		t.Fatalf("GetStack: %v", err)
+	}
+	t.Logf("stack OK: %d bytes: %s", len(stackData), string(stackData))
+
+	// 8. Get variable (stateful, via debugger main endpoint)
+	varData, err := dbg.GetVariable(ctx, "LV_VAL")
+	if err != nil {
+		t.Fatalf("GetVariable: %v", err)
+	}
+	t.Logf("variable OK: %d bytes: %s", len(varData), string(varData))
+
+	// 9. Continue to let the debuggee finish (otherwise unit test runner blocks)
 	_, err = dbg.Step(ctx, "stepContinue")
 	if err != nil {
 		t.Logf("continue: %v (may fail if debuggee already terminated)", err)

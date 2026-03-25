@@ -221,7 +221,7 @@ func TestDebugSessionGetVariable(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger/variables/LV_TEST/value" && r.Method == http.MethodGet {
+		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "getVariables" && r.Method == http.MethodPost {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<variable name="LV_TEST" value="hello"/>`))
 			return
@@ -249,7 +249,7 @@ func TestDebugSessionGetStack(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		if r.URL.Path == "/sap/bc/adt/debugger/systemareas/stack" && r.Method == http.MethodGet {
+		if r.URL.Path == "/sap/bc/adt/debugger" && r.URL.Query().Get("method") == "getStack" && r.Method == http.MethodPost {
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<stack><frame level="1" name="MAIN"/></stack>`))
 			return
