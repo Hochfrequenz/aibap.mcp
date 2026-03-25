@@ -74,6 +74,28 @@ type CompletionItem struct {
 	Description string
 }
 
+// ATCCustomizingResult holds ATC configuration from the SAP system.
+type ATCCustomizingResult struct {
+	SystemCheckVariant string
+	Properties         map[string]string
+}
+
+// ATCFinding represents a single ATC check finding.
+type ATCFinding struct {
+	ObjectURI    string
+	Priority     string // 1=error, 2=warning, 3=info
+	CheckID      string
+	CheckTitle   string
+	MessageTitle string
+	Location     string // e.g. line number reference
+}
+
+// ATCResult is returned by RunATCCheck.
+type ATCResult struct {
+	WorklistID string
+	Findings   []ATCFinding
+}
+
 // ADTError is returned when SAP ADT responds with an error status.
 type ADTError struct {
 	StatusCode int
