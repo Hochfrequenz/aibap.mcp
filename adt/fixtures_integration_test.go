@@ -89,7 +89,10 @@ ENDCLASS.
 	},
 }
 
-// TestMain runs setup before and cleanup after all integration tests.
+// TestMain runs setup before all integration tests.
+// Test fixtures are persistent — they are created if missing but never deleted,
+// because deleting objects in transportable packages leaves them locked in the
+// transport system and prevents recreation on the next run.
 func TestMain(m *testing.M) {
 	if os.Getenv("SAP_INTEGRATION_HOST") == "" {
 		// Not an integration run — just execute tests normally (they'll skip).
@@ -105,12 +108,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	code := m.Run()
-
-	fmt.Println("=== Integration test cleanup: removing fixtures ===")
-	cleanupFixtures(ctx, client)
-
-	os.Exit(code)
+	os.Exit(m.Run())
 }
 
 // newIntegrationClientFromEnv creates a client without *testing.T (for TestMain).
@@ -130,9 +128,16 @@ func setupFixtures(ctx context.Context, client adt.Client) error {
 			continue
 		}
 
-		// Create.
+		// Create. If it fails (e.g. object locked in a transport from a previous
+		// run), warn and continue — tests that need this object will skip/fail
+		// individually rather than blocking the entire suite.
 		if err := client.CreateObject(ctx, f.objType, f.name, "$TMP", f.description, ""); err != nil {
-			return fmt.Errorf("create %s %s: %w", f.objType, f.name, err)
+			if _, infoErr := client.GetObjectInfo(ctx, f.objectURI); infoErr == nil {
+				fmt.Printf("  [exists, create skipped] %s %s: %v\n", f.objType, f.name, err)
+				continue
+			}
+			fmt.Printf("  [unavailable] %s %s: %v\n", f.objType, f.name, err)
+			continue
 		}
 		fmt.Printf("  [created] %s %s\n", f.objType, f.name)
 
@@ -183,18 +188,4 @@ func setFixtureSource(ctx context.Context, client adt.Client, f fixtureObject) e
 		return fmt.Errorf("set source: %w", err)
 	}
 	return nil
-}
-
-// cleanupFixtures deletes all test fixture objects in reverse order.
-// Uses optimistic locking (ETag) internally — no explicit lock needed.
-func cleanupFixtures(ctx context.Context, client adt.Client) {
-	for i := len(testFixtures) - 1; i >= 0; i-- {
-		f := testFixtures[i]
-		err := client.DeleteObject(ctx, f.objectURI, "", "")
-		if err != nil {
-			fmt.Printf("  [cleanup skip] %s: %v\n", f.name, err)
-		} else {
-			fmt.Printf("  [deleted] %s %s\n", f.objType, f.name)
-		}
-	}
 }
