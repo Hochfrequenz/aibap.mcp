@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
@@ -130,6 +131,12 @@ func (d *DebugSession) StartListener(ctx context.Context, timeoutSeconds int) (*
 	path := fmt.Sprintf("/sap/bc/adt/debugger/listeners?debuggingMode=user&requestUser=%s&terminalId=%s&ideId=%s&timeout=%d",
 		d.user, d.terminalID, d.ideID, timeoutSeconds)
 
+	// The listener long-polls for up to timeoutSeconds. Temporarily increase
+	// the HTTP client timeout so it doesn't cancel the request prematurely.
+	origTimeout := d.client.http.Timeout
+	d.client.http.Timeout = time.Duration(timeoutSeconds+10) * time.Second
+	defer func() { d.client.http.Timeout = origTimeout }()
+
 	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
 		map[string]string{"Accept": "application/vnd.sap.as+xml"})
 	if err != nil {
@@ -197,10 +204,11 @@ func (d *DebugSession) GetDebuggeeSessions(ctx context.Context) ([]byte, error) 
 }
 
 // Attach attaches to an active debuggee session.
+// Uses X-sap-adt-sessiontype: stateful to keep the work process for subsequent calls.
 func (d *DebugSession) Attach(ctx context.Context, debuggeeID string) error {
 	path := fmt.Sprintf("/sap/bc/adt/debugger?method=attach&debuggeeId=%s", debuggeeID)
 	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
-		map[string]string{"Accept": "application/xml"})
+		map[string]string{"Accept": "application/xml", "X-sap-adt-sessiontype": "stateful"})
 	if err != nil {
 		return fmt.Errorf("Attach: %w", err)
 	}
@@ -214,9 +222,9 @@ func (d *DebugSession) Attach(ctx context.Context, debuggeeID string) error {
 
 // Step executes a debug action: stepInto, stepOver, stepReturn, continue.
 func (d *DebugSession) Step(ctx context.Context, action string) ([]byte, error) {
-	path := fmt.Sprintf("/sap/bc/adt/debugger/actions?action=%s", action)
+	path := fmt.Sprintf("/sap/bc/adt/debugger?method=%s", action)
 	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
-		map[string]string{"Accept": "application/xml"})
+		map[string]string{"Accept": "application/xml", "X-sap-adt-sessiontype": "stateful"})
 	if err != nil {
 		return nil, fmt.Errorf("Step: %w", err)
 	}
@@ -228,9 +236,16 @@ func (d *DebugSession) Step(ctx context.Context, action string) ([]byte, error) 
 }
 
 // GetVariable reads a variable value from the debug session.
+// Uses the debugger main endpoint (POST /debugger?method=getVariables) to stay
+// in the stateful HTTP session. The separate GET /debugger/variables/ endpoint
+// uses a different ICF handler that doesn't share the stateful work process.
 func (d *DebugSession) GetVariable(ctx context.Context, name string) ([]byte, error) {
-	path := fmt.Sprintf("/sap/bc/adt/debugger/variables/%s/value", name)
-	resp, err := d.client.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	path := fmt.Sprintf("/sap/bc/adt/debugger?method=getVariableValue&variableName=%s", name)
+	resp, err := d.client.doMutate(ctx, http.MethodPost, path, nil,
+		map[string]string{
+			"Accept":                "text/plain",
+			"X-sap-adt-sessiontype": "stateful",
+		})
 	if err != nil {
 		return nil, fmt.Errorf("GetVariable: %w", err)
 	}
@@ -242,9 +257,11 @@ func (d *DebugSession) GetVariable(ctx context.Context, name string) ([]byte, er
 }
 
 // GetStack returns the current call stack.
+// Uses the debugger main endpoint (POST /debugger?method=getStack) to stay
+// in the stateful HTTP session.
 func (d *DebugSession) GetStack(ctx context.Context) ([]byte, error) {
-	resp, err := d.client.doRead(ctx, "/sap/bc/adt/debugger/systemareas/stack",
-		map[string]string{"Accept": "application/xml"})
+	resp, err := d.client.doMutate(ctx, http.MethodPost, "/sap/bc/adt/debugger?method=getStack", nil,
+		map[string]string{"Accept": "application/xml", "X-sap-adt-sessiontype": "stateful"})
 	if err != nil {
 		return nil, fmt.Errorf("GetStack: %w", err)
 	}
