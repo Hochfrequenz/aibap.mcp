@@ -38,6 +38,9 @@ func (c *httpClient) GetCompletions(ctx context.Context, objectURI, source strin
 	if err != nil {
 		return nil, fmt.Errorf("GetCompletions reading body: %w", err)
 	}
+	if len(data) == 0 {
+		return nil, nil
+	}
 	var comps adtmodel.Completions
 	if err := xml.Unmarshal(data, &comps); err != nil {
 		return nil, fmt.Errorf("GetCompletions parsing: %w", err)
