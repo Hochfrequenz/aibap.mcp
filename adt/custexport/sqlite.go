@@ -11,7 +11,7 @@ import (
 
 // sqliteWriter handles all SQLite database operations for the customizing export.
 type sqliteWriter struct {
-	db           *sql.DB
+	db            *sql.DB
 	tablesWritten int
 }
 
