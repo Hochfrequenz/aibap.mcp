@@ -22,9 +22,9 @@ func validateIdentifier(name string) error {
 	return nil
 }
 
-// filterNonMandtKeys returns key fields excluding MANDT.
+// FilterNonMandtKeys returns key fields excluding MANDT.
 // The comparison is case-insensitive because SAP metadata may use varying cases.
-func filterNonMandtKeys(keys []string) []string {
+func FilterNonMandtKeys(keys []string) []string {
 	result := make([]string, 0, len(keys))
 	for _, k := range keys {
 		if !strings.EqualFold(k, "MANDT") {
@@ -34,10 +34,10 @@ func filterNonMandtKeys(keys []string) []string {
 	return result
 }
 
-// escapeValue escapes single quotes in a SQL string value by doubling them.
+// EscapeValue escapes single quotes in a SQL string value by doubling them.
 // This is sufficient for ABAP Open SQL where single-quote doubling is the only
 // escape mechanism. NOT safe for general SQL engines (backslash escapes, etc.).
-func escapeValue(v string) string {
+func EscapeValue(v string) string {
 	return strings.ReplaceAll(v, "'", "''")
 }
 
@@ -61,10 +61,10 @@ func buildPaginationWhere(keys, lastValues []string) string {
 		var parts []string
 		// All preceding keys are equal.
 		for j := 0; j < i; j++ {
-			parts = append(parts, fmt.Sprintf("%s = '%s'", keys[j], escapeValue(lastValues[j])))
+			parts = append(parts, fmt.Sprintf("%s = '%s'", keys[j], EscapeValue(lastValues[j])))
 		}
 		// The i-th key is strictly greater.
-		parts = append(parts, fmt.Sprintf("%s > '%s'", keys[i], escapeValue(lastValues[i])))
+		parts = append(parts, fmt.Sprintf("%s > '%s'", keys[i], EscapeValue(lastValues[i])))
 
 		if len(parts) == 1 {
 			terms = append(terms, parts[0])
@@ -75,12 +75,17 @@ func buildPaginationWhere(keys, lastValues []string) string {
 	return strings.Join(terms, " OR ")
 }
 
-// buildExportSQL generates the SELECT statement for exporting a customizing table.
+// BuildExportSQL generates the SELECT statement for exporting a customizing table.
 //
-// The ORDER BY includes all key fields (including MANDT) for deterministic output.
-// If lastValues is provided, a WHERE clause is added for key-based pagination
-// using only the non-MANDT keys (SAP handles MANDT at the connection level).
-func buildExportSQL(table string, allKeys []string, lastValues []string) (string, error) {
+// allKeys: all key fields including MANDT (used for ORDER BY).
+// paginateKeys: non-MANDT keys used for pagination WHERE clause (may be truncated
+//
+//	to maxKeysForPaginate by the caller). Must NOT include MANDT.
+//
+// lastValues: values from the last row for pagination. Must match paginateKeys length.
+//
+//	Pass nil for the first page.
+func BuildExportSQL(table string, allKeys []string, paginateKeys []string, lastValues []string) (string, error) {
 	if err := validateIdentifier(table); err != nil {
 		return "", fmt.Errorf("invalid table name: %w", err)
 	}
@@ -89,14 +94,18 @@ func buildExportSQL(table string, allKeys []string, lastValues []string) (string
 			return "", fmt.Errorf("invalid key column: %w", err)
 		}
 	}
+	for _, k := range paginateKeys {
+		if err := validateIdentifier(k); err != nil {
+			return "", fmt.Errorf("invalid pagination key: %w", err)
+		}
+	}
 
 	var sb strings.Builder
 	sb.WriteString("SELECT * FROM ")
 	sb.WriteString(table)
 
-	if len(lastValues) > 0 {
-		paginationKeys := filterNonMandtKeys(allKeys)
-		where := buildPaginationWhere(paginationKeys, lastValues)
+	if len(lastValues) > 0 && len(paginateKeys) > 0 {
+		where := buildPaginationWhere(paginateKeys, lastValues)
 		if where != "" {
 			sb.WriteString(" WHERE ")
 			sb.WriteString(where)

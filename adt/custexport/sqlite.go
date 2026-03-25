@@ -3,6 +3,7 @@ package custexport
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	_ "modernc.org/sqlite"
@@ -19,9 +20,16 @@ func newSQLiteWriter(dbPath string) (*sqliteWriter, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 
+	// WAL mode for write performance during export.
+	// Compacted back to DELETE mode on Close() via VACUUM.
 	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("set WAL mode: %w", err)
+	}
+	// Synchronous=NORMAL is safe with WAL and much faster than FULL.
+	if _, err := db.Exec("PRAGMA synchronous=NORMAL"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("set synchronous: %w", err)
 	}
 
 	const createMetadata = `CREATE TABLE IF NOT EXISTS "_metadata" (
@@ -41,11 +49,19 @@ func newSQLiteWriter(dbPath string) (*sqliteWriter, error) {
 	return &sqliteWriter{db: db}, nil
 }
 
+// Close compacts the database (VACUUM) and switches from WAL to DELETE journal
+// mode for portability, then closes the connection.
+// VACUUM runs first while still in WAL mode (faster than in DELETE mode),
+// then journal_mode=DELETE checkpoints the WAL and removes -wal/-shm files.
 func (sw *sqliteWriter) Close() error {
-	if sw.db != nil {
-		return sw.db.Close()
+	if sw.db == nil {
+		return nil
 	}
-	return nil
+	if _, err := sw.db.Exec("VACUUM"); err != nil {
+		log.Printf("WARNING: VACUUM failed: %v", err)
+	}
+	_, _ = sw.db.Exec("PRAGMA journal_mode=DELETE")
+	return sw.db.Close()
 }
 
 // WriteTable creates the table, inserts metadata, and inserts all rows in a transaction.
