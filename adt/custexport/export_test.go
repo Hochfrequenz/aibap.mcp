@@ -137,50 +137,36 @@ func TestDiscoverTables(t *testing.T) {
 
 func TestFetchAllKeys(t *testing.T) {
 	client := &mockClient{
-		runQueryFn: func(_ context.Context, sql string, maxRows int) (*adt.QueryResult, error) {
-			if maxRows != 200000 {
-				t.Errorf("expected maxRows=200000, got %d", maxRows)
-			}
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
 			if !strings.Contains(sql, "DD03L") {
 				t.Errorf("expected SQL to query DD03L, got: %s", sql)
 			}
+			if !strings.Contains(sql, "'T001'") {
+				t.Errorf("expected SQL to filter for T001, got: %s", sql)
+			}
 			return &adt.QueryResult{
 				Columns: []adt.QueryColumn{
-					{Name: "TABNAME", Type: "C"},
 					{Name: "FIELDNAME", Type: "C"},
 					{Name: "POSITION", Type: "N"},
 				},
 				Rows: [][]string{
-					{"T001", "MANDT", "0001"},
-					{"T001", "BUKRS", "0002"},
-					{"T002", "MANDT", "0001"},
-					{"T002", "SPRAS", "0002"},
-					{"T002", "LAND1", "0003"},
+					{"MANDT", "0001"},
+					{"BUKRS", "0002"},
 				},
 			}, nil
 		},
 	}
 
-	keys, err := fetchAllKeys(context.Background(), client, []string{"T001", "T005"})
+	keys, err := fetchTableKeys(context.Background(), client, "T001")
 	if err != nil {
-		t.Fatalf("fetchAllKeys: %v", err)
+		t.Fatalf("fetchTableKeys: %v", err)
 	}
 
 	if len(keys) != 2 {
-		t.Fatalf("expected keys for 2 tables, got %d", len(keys))
+		t.Fatalf("expected 2 keys for T001, got %d", len(keys))
 	}
-
-	t001Keys := keys["T001"]
-	if len(t001Keys) != 2 {
-		t.Fatalf("expected 2 keys for T001, got %d", len(t001Keys))
-	}
-	if t001Keys[0] != "MANDT" || t001Keys[1] != "BUKRS" {
-		t.Errorf("T001 keys: expected [MANDT BUKRS], got %v", t001Keys)
-	}
-
-	t002Keys := keys["T002"]
-	if len(t002Keys) != 3 {
-		t.Fatalf("expected 3 keys for T002, got %d", len(t002Keys))
+	if keys[0] != "MANDT" || keys[1] != "BUKRS" {
+		t.Errorf("T001 keys: expected [MANDT BUKRS], got %v", keys)
 	}
 }
 

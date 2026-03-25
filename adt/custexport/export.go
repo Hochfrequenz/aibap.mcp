@@ -78,47 +78,27 @@ func discoverTables(ctx context.Context, client adt.Client) ([]string, error) {
 	return tables, nil
 }
 
-// fetchAllKeys bulk-queries DD03L for key fields of the given tables.
-// Returns a map of table name to ordered list of key field names.
-// Fetches in batches to handle the full set of customizing tables (~70K).
-func fetchAllKeys(ctx context.Context, client adt.Client, tables []string) (map[string][]string, error) {
-	keys := make(map[string][]string)
+// fetchTableKeys queries DD03L for key fields of a single table.
+// Called by each worker just before exporting the table.
+func fetchTableKeys(ctx context.Context, client adt.Client, table string) ([]string, error) {
+	sql := fmt.Sprintf(
+		"SELECT FIELDNAME, POSITION FROM DD03L WHERE TABNAME = '%s' AND KEYFLAG = 'X' AND AS4LOCAL = 'A' ORDER BY POSITION",
+		adt.EscapeValue(table),
+	)
+	queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
+	defer cancel()
 
-	// Process in batches — DD03L has 1M+ key field rows total,
-	// but we only need keys for our specific tables.
-	batchSize := 50 // Keep SQL body short to stay within ADT endpoint limits
-	for i := 0; i < len(tables); i += batchSize {
-		end := i + batchSize
-		if end > len(tables) {
-			end = len(tables)
-		}
-		batch := tables[i:end]
+	result, err := client.RunQuery(queryCtx, sql, 1000)
+	if err != nil {
+		return nil, fmt.Errorf("fetchTableKeys %s: %w", table, err)
+	}
 
-		// Build IN clause with escaped table names.
-		inValues := make([]string, len(batch))
-		for j, t := range batch {
-			inValues[j] = "'" + adt.EscapeValue(t) + "'"
-		}
-		sql := fmt.Sprintf(
-			"SELECT TABNAME, FIELDNAME, POSITION FROM DD03L WHERE TABNAME IN (%s) AND KEYFLAG = 'X' AND AS4LOCAL = 'A' ORDER BY TABNAME, POSITION",
-			strings.Join(inValues, ","),
-		)
-
-		queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
-		result, err := client.RunQuery(queryCtx, sql, 200000)
-		cancel()
-		if err != nil {
-			return nil, fmt.Errorf("fetchAllKeys batch %d: %w", i/batchSize, err)
-		}
-
-		for _, row := range result.Rows {
-			if len(row) < 2 {
-				continue
-			}
-			tabname := strings.TrimSpace(row[0])
-			fieldname := strings.TrimSpace(row[1])
-			if tabname != "" && fieldname != "" {
-				keys[tabname] = append(keys[tabname], fieldname)
+	var keys []string
+	for _, row := range result.Rows {
+		if len(row) > 0 {
+			name := strings.TrimSpace(row[0])
+			if name != "" {
+				keys = append(keys, name)
 			}
 		}
 	}
@@ -237,12 +217,6 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 		}
 	}
 
-	// Fetch all keys.
-	allKeys, err := fetchAllKeys(ctx, client, tables)
-	if err != nil {
-		return nil, fmt.Errorf("fetch keys: %w", err)
-	}
-
 	// Create writer.
 	writer, err := NewWriter(cfg.OutputDir)
 	if err != nil {
@@ -267,7 +241,11 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 		go func() {
 			defer wg.Done()
 			for table := range workCh {
-				keys := allKeys[table]
+				keys, kErr := fetchTableKeys(ctx, client, table)
+				if kErr != nil {
+					resultCh <- &TableExportResult{TableName: table, Error: kErr}
+					continue
+				}
 				result, err := exportTable(ctx, client, table, keys, pageSize)
 				if err != nil {
 					resultCh <- &TableExportResult{
