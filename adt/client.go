@@ -38,6 +38,7 @@ type Client interface {
 	ExportPackage(ctx context.Context, packageName string) ([]byte, error)
 	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
 	RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error)
+	RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error)
 }
 
 type httpClient struct {

@@ -153,3 +153,6 @@ func (r *ClientRegistry) GetATCCustomizing(ctx context.Context) (*ATCCustomizing
 func (r *ClientRegistry) RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error) {
 	return r.activeClient().RunATCCheck(ctx, objectURIs)
 }
+func (r *ClientRegistry) RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error) {
+	return r.activeClient().RunQuery(ctx, sql, maxRows)
+}

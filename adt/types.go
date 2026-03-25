@@ -96,6 +96,22 @@ type ATCResult struct {
 	Findings   []ATCFinding
 }
 
+// QueryResult holds the result of a SQL query via ADT data preview.
+type QueryResult struct {
+	Columns     []QueryColumn
+	Rows        [][]string // row-major: Rows[rowIdx][colIdx]
+	TotalRows   int
+	ExecutionMs float64
+}
+
+// QueryColumn describes a single column in a query result.
+type QueryColumn struct {
+	Name        string
+	Type        string // ABAP type: C, N, D, T, P, I, etc.
+	Description string
+	IsKey       bool
+}
+
 // ADTError is returned when SAP ADT responds with an error status.
 type ADTError struct {
 	StatusCode int
