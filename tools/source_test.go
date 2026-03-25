@@ -153,6 +153,9 @@ func (m *mockClient) GetATCCustomizing(_ context.Context) (*adt.ATCCustomizingRe
 func (m *mockClient) RunATCCheck(_ context.Context, _ []string) (*adt.ATCResult, error) {
 	return &adt.ATCResult{}, nil
 }
+func (m *mockClient) RunQuery(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+	return nil, nil
+}
 
 func newTestServer(client adt.Client) *server.MCPServer {
 	return newTestServerWithSelector(client, &mockSelector{}, adt.NewLockMap())
