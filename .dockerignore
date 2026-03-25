@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+.env
+.env.example
+.claude
+*.md
+Makefile
+.goreleaser.yaml
+testdata
+docs

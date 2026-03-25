@@ -35,11 +35,16 @@ type Client interface {
 	CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error
 	DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error
 	GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error)
+	ExportPackage(ctx context.Context, packageName string) ([]byte, error)
+	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
+	RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error)
+	RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error)
 }
 
 type httpClient struct {
 	cfg            config.SAPConfig
 	http           *http.Client
+	httpLong       *http.Client // long-timeout client for large queries; shares transport + cookie jar
 	mu             sync.Mutex
 	csrfToken      string
 	accessToken    string                       // OAuth2 access token (empty = Basic Auth)
@@ -61,6 +66,11 @@ func NewClient(cfg config.SAPConfig) Client {
 			Transport: transport,
 			Jar:       jar,
 		},
+		httpLong: &http.Client{
+			Timeout:   0, // no timeout; caller controls via context deadline
+			Transport: transport,
+			Jar:       jar,
+		},
 	}
 }
 
@@ -77,6 +87,11 @@ func NewClientWithToken(cfg config.SAPConfig, accessToken string, onRefresh func
 		cfg: cfg,
 		http: &http.Client{
 			Timeout:   30 * time.Second,
+			Transport: transport,
+			Jar:       jar,
+		},
+		httpLong: &http.Client{
+			Timeout:   0, // no timeout; caller controls via context deadline
 			Transport: transport,
 			Jar:       jar,
 		},
@@ -168,8 +183,20 @@ func (c *httpClient) doRead(ctx context.Context, path string, headers map[string
 }
 
 // doMutate performs a POST/PUT/DELETE with CSRF token and retry on 403/401.
-// Body is buffered so it can be replayed on retry.
+// Uses the default HTTP client (30-second timeout).
 func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
+	return c.doMutateWith(ctx, c.http, method, path, body, headers)
+}
+
+// doMutateLong is like doMutate but uses the long-timeout HTTP client (httpLong).
+// Intended for long-running queries where the caller controls the deadline via context.
+func (c *httpClient) doMutateLong(ctx context.Context, method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
+	return c.doMutateWith(ctx, c.httpLong, method, path, body, headers)
+}
+
+// doMutateWith performs a POST/PUT/DELETE with CSRF token and retry on 403/401,
+// using the given HTTP client. Body is buffered so it can be replayed on retry.
+func (c *httpClient) doMutateWith(ctx context.Context, hc *http.Client, method, path string, body io.Reader, headers map[string]string) (*http.Response, error) {
 	path = encodeNamespacePath(path)
 	var bodyBytes []byte
 	if body != nil {
@@ -196,7 +223,7 @@ func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.
 	token := c.csrfToken
 	c.mu.Unlock()
 
-	resp, err := c.execMutate(ctx, method, path, newBody(), headers, token)
+	resp, err := c.execMutateWith(ctx, hc, method, path, newBody(), headers, token)
 	if err != nil {
 		return nil, err
 	}
@@ -218,13 +245,15 @@ func (c *httpClient) doMutate(ctx context.Context, method, path string, body io.
 		}
 		token = c.csrfToken
 		c.mu.Unlock()
-		return c.execMutate(ctx, method, path, newBody(), headers, token)
+		return c.execMutateWith(ctx, hc, method, path, newBody(), headers, token)
 	}
 
 	return resp, nil
 }
 
-func (c *httpClient) execMutate(ctx context.Context, method, path string, body io.Reader, headers map[string]string, csrfToken string) (*http.Response, error) {
+// execMutateWith builds and executes a mutating request using the given *http.Client.
+// This allows callers to choose between the default (30s timeout) and long-timeout client.
+func (c *httpClient) execMutateWith(ctx context.Context, hc *http.Client, method, path string, body io.Reader, headers map[string]string, csrfToken string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.cfg.Host+path, body)
 	if err != nil {
 		return nil, err
@@ -234,7 +263,7 @@ func (c *httpClient) execMutate(ctx context.Context, method, path string, body i
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
-	return c.http.Do(req)
+	return hc.Do(req)
 }
 
 // parseADTError reads an XML error response body and returns an *ADTError.

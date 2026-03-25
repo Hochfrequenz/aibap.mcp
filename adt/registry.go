@@ -91,7 +91,7 @@ func (r *ClientRegistry) activeClient() Client {
 	return r.clients[r.active]
 }
 
-// --- adt.Client delegation (all 11 methods) ---
+// --- adt.Client delegation ---
 
 func (r *ClientRegistry) GetSource(ctx context.Context, objectURI string) (*SourceResult, error) {
 	return r.activeClient().GetSource(ctx, objectURI)
@@ -143,4 +143,16 @@ func (r *ClientRegistry) DeleteObject(ctx context.Context, objectURI, lockHandle
 }
 func (r *ClientRegistry) GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error) {
 	return r.activeClient().GetCompletions(ctx, objectURI, source, line, column)
+}
+func (r *ClientRegistry) ExportPackage(ctx context.Context, packageName string) ([]byte, error) {
+	return r.activeClient().ExportPackage(ctx, packageName)
+}
+func (r *ClientRegistry) GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error) {
+	return r.activeClient().GetATCCustomizing(ctx)
+}
+func (r *ClientRegistry) RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error) {
+	return r.activeClient().RunATCCheck(ctx, objectURIs)
+}
+func (r *ClientRegistry) RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error) {
+	return r.activeClient().RunQuery(ctx, sql, maxRows)
 }
