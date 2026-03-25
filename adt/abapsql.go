@@ -77,10 +77,15 @@ func buildPaginationWhere(keys, lastValues []string) string {
 
 // BuildExportSQL generates the SELECT statement for exporting a customizing table.
 //
-// The ORDER BY includes all key fields (including MANDT) for deterministic output.
-// If lastValues is provided, a WHERE clause is added for key-based pagination
-// using only the non-MANDT keys (SAP handles MANDT at the connection level).
-func BuildExportSQL(table string, allKeys []string, lastValues []string) (string, error) {
+// allKeys: all key fields including MANDT (used for ORDER BY).
+// paginateKeys: non-MANDT keys used for pagination WHERE clause (may be truncated
+//
+//	to maxKeysForPaginate by the caller). Must NOT include MANDT.
+//
+// lastValues: values from the last row for pagination. Must match paginateKeys length.
+//
+//	Pass nil for the first page.
+func BuildExportSQL(table string, allKeys []string, paginateKeys []string, lastValues []string) (string, error) {
 	if err := validateIdentifier(table); err != nil {
 		return "", fmt.Errorf("invalid table name: %w", err)
 	}
@@ -89,14 +94,18 @@ func BuildExportSQL(table string, allKeys []string, lastValues []string) (string
 			return "", fmt.Errorf("invalid key column: %w", err)
 		}
 	}
+	for _, k := range paginateKeys {
+		if err := validateIdentifier(k); err != nil {
+			return "", fmt.Errorf("invalid pagination key: %w", err)
+		}
+	}
 
 	var sb strings.Builder
 	sb.WriteString("SELECT * FROM ")
 	sb.WriteString(table)
 
-	if len(lastValues) > 0 {
-		paginationKeys := FilterNonMandtKeys(allKeys)
-		where := buildPaginationWhere(paginationKeys, lastValues)
+	if len(lastValues) > 0 && len(paginateKeys) > 0 {
+		where := buildPaginationWhere(paginateKeys, lastValues)
 		if where != "" {
 			sb.WriteString(" WHERE ")
 			sb.WriteString(where)
