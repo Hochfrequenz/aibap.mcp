@@ -36,6 +36,8 @@ type Client interface {
 	DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error
 	GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error)
 	ExportPackage(ctx context.Context, packageName string) ([]byte, error)
+	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
+	RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error)
 }
 
 type httpClient struct {

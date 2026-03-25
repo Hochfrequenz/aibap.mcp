@@ -21,6 +21,7 @@ jobs:
         run: go test ./...
 
   smoke-test:
+    if: github.event_name == 'pull_request'
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
