@@ -354,3 +354,48 @@ func TestExportCustomizing_IncludeTables(t *testing.T) {
 
 	t.Logf("summary: %d exported, %d errors", summary.ExportedTables, len(summary.Errors))
 }
+
+func TestExportCustomizing_LongKeyPagination(t *testing.T) {
+	client := newClient(t)
+	ctx := context.Background()
+	outputDir := t.TempDir()
+
+	// /SLOAP/MD_FIELDT has 4 non-MANDT GUID keys (~130K rows).
+	// The OR-chain pagination SQL exceeds the ~300 char limit with 4 keys.
+	// The fix dynamically reduces pagination keys until the SQL fits.
+	summary, err := custexport.RunExport(ctx, client, custexport.ExportConfig{
+		OutputDir: outputDir,
+		Tables:    []string{"/SLOAP/MD_FIELDT"},
+		PageSize:  1000,
+		Workers:   1,
+	})
+	if err != nil {
+		t.Fatalf("RunExport failed: %v", err)
+	}
+
+	for _, e := range summary.Errors {
+		t.Errorf("unexpected error for %s: %s", e.Table, e.Error)
+	}
+
+	if summary.ExportedTables != 1 {
+		t.Errorf("expected 1 exported table, got %d", summary.ExportedTables)
+	}
+
+	// Verify pagination worked (table has ~130K rows, page_size=1000).
+	dbPath := filepath.Join(outputDir, "customizing.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var rowCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM "/SLOAP/MD_FIELDT"`).Scan(&rowCount); err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	t.Logf("/SLOAP/MD_FIELDT: %d rows in SQLite (page_size=1000)", rowCount)
+
+	if rowCount <= 1000 {
+		t.Errorf("expected more than 1000 rows (pagination should have fetched all), got %d", rowCount)
+	}
+}
