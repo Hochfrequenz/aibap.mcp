@@ -14,17 +14,11 @@ A community-built [MCP (Model Context Protocol)](https://modelcontextprotocol.io
 
 The server connects to your SAP system via the **SAP ADT (ABAP Development Tools) REST API** — the same HTTP API that ABAP Development Tools for Eclipse uses under the hood. No SAP GUI, no RFC, no additional middleware required.
 
-```
-Claude / AI assistant
-        │  MCP (stdio)
-        ▼
-mcp-server-abap
-        │  HTTP + Basic Auth or OAuth2 + CSRF
-        ▼
-SAP ADT REST API  (/sap/bc/adt/...)
-        │
-        ▼
-    SAP System
+```mermaid
+graph TD
+    A["Claude / AI assistant"] -->|"MCP (stdio)"| B["mcp-server-abap"]
+    B -->|"HTTP + Basic Auth or OAuth2 + CSRF"| C["SAP ADT REST API<br/>/sap/bc/adt/..."]
+    C --> D["SAP System"]
 ```
 
 ## Available tools
