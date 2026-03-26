@@ -155,3 +155,33 @@ func TestParseDataPreviewResult(t *testing.T) {
 		}
 	})
 }
+
+func TestSanitizeXML(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"clean XML passes through", "<root>hello</root>", "<root>hello</root>"},
+		{"strips U+000F", "abc\x0Fdef", "abcdef"},
+		{"strips null byte", "abc\x00def", "abcdef"},
+		{"strips mixed control chars", "\x01\x02\x03hello\x0E\x0Fworld\x1F", "helloworld"},
+		{"preserves tab", "hello\tworld", "hello\tworld"},
+		{"preserves newline", "hello\nworld", "hello\nworld"},
+		{"preserves carriage return", "hello\rworld", "hello\rworld"},
+		{"preserves all allowed controls", "\x09\x0A\x0Dtext", "\x09\x0A\x0Dtext"},
+		{"preserves UTF-8 umlauts", "Ä Ö Ü ä ö ü ß", "Ä Ö Ü ä ö ü ß"},
+		{"preserves 3-byte UTF-8", "日本語", "日本語"},
+		{"empty input", "", ""},
+		{"only control chars", "\x00\x01\x02\x0F", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := string(sanitizeXML([]byte(tt.input)))
+			if got != tt.want {
+				t.Errorf("sanitizeXML(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
