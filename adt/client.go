@@ -44,13 +44,14 @@ type Client interface {
 }
 
 type httpClient struct {
-	cfg            config.SAPConfig
-	http           *http.Client
-	httpLong       *http.Client // long-timeout client for large queries; shares transport + cookie jar
-	mu             sync.Mutex
-	csrfToken      string
-	accessToken    string                       // OAuth2 access token (empty = Basic Auth)
-	onTokenRefresh func(string) (string, error) // callback to refresh token, returns new access token
+	cfg              config.SAPConfig
+	http             *http.Client
+	httpLong         *http.Client // long-timeout client for large queries; shares transport + cookie jar
+	mu               sync.Mutex
+	csrfToken        string
+	hasSecureCookies bool                         // true if SAP sets Secure cookies on an HTTP connection
+	accessToken      string                       // OAuth2 access token (empty = Basic Auth)
+	onTokenRefresh   func(string) (string, error) // callback to refresh token, returns new access token
 }
 
 // NewClient creates a new ADT HTTP client configured from cfg.
@@ -126,7 +127,24 @@ func (c *httpClient) fetchCSRFToken(ctx context.Context) error {
 	io.Copy(io.Discard, resp.Body) //nolint:errcheck
 
 	c.csrfToken = resp.Header.Get("X-CSRF-Token")
+	c.hasSecureCookies = hasSecureCookieOnHTTP(c.cfg.Host, resp.Header)
 	return nil
+}
+
+// hasSecureCookieOnHTTP returns true if the response sets a cookie with the
+// Secure flag while the connection uses plain HTTP. This combination silently
+// breaks CSRF validation on S4 systems because the client never sends the
+// cookie back.
+func hasSecureCookieOnHTTP(host string, header http.Header) bool {
+	if strings.HasPrefix(host, "https://") {
+		return false
+	}
+	for _, setCookie := range header.Values("Set-Cookie") {
+		if strings.Contains(strings.ToLower(setCookie), "; secure") {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *httpClient) setAuth(req *http.Request) {
@@ -261,8 +279,20 @@ func (c *httpClient) doMutateWith(ctx context.Context, hc *http.Client, method, 
 			return nil, err
 		}
 		token = c.csrfToken
+		secureCookies := c.hasSecureCookies
 		c.mu.Unlock()
-		return c.execMutateWith(ctx, hc, method, path, newBody(), headers, token)
+
+		retryResp, err := c.execMutateWith(ctx, hc, method, path, newBody(), headers, token)
+		if err != nil {
+			return nil, err
+		}
+		if retryResp.StatusCode == http.StatusForbidden && secureCookies {
+			_ = retryResp.Body.Close()
+			return nil, fmt.Errorf("CSRF token validation failed after retry — the SAP system sets Secure cookies " +
+				"but the connection uses plain HTTP, so session cookies are silently dropped. " +
+				"Change the host URL from http:// to https:// to fix this")
+		}
+		return retryResp, nil
 	}
 
 	return resp, nil
