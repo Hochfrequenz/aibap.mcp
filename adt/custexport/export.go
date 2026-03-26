@@ -59,10 +59,11 @@ const (
 	// Each worker does 2 sequential HTTP requests per table (DD03L keys + data).
 	defaultWorkers = 20
 	maxWorkers     = 40
-	// ADT data preview endpoint rejects SQL bodies longer than ~300 chars.
-	// Verified on srvhfuhana S/4HANA, errors: "Literals across more than one line"
-	// or grammar errors. 280 gives 20-char safety margin. See issue #93.
-	maxSQLLength     = 280
+	// ADT data preview endpoint rejects SQL bodies longer than ~255 chars.
+	// Empirically determined: TA23HOTELS with 261-char SQL got truncated to
+	// "PROPERT" (cutting "PROPERTY"), and 303-char SQL caused grammar errors.
+	// 250 is conservative. See issues #93, #94.
+	maxSQLLength     = 250
 	perQueryTimeout  = 120 * time.Second
 	progressInterval = 100
 )
@@ -209,6 +210,10 @@ func exportTable(ctx context.Context, client adt.Client, table string, keys []st
 		if len(paginateKeys) < origKeyCount {
 			log.Printf("[export] %s: reduced pagination keys from %d to %d (SQL was %d chars, limit %d)",
 				table, origKeyCount, len(paginateKeys), len(sqlStr), maxSQLLength)
+		}
+		if len(sqlStr) > maxSQLLength {
+			log.Printf("[export] WARNING: %s SQL still %d chars after key reduction (limit %d), query may fail",
+				table, len(sqlStr), maxSQLLength)
 		}
 
 		queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
