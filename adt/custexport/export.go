@@ -324,7 +324,7 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 	}
 
 	// Create writer.
-	writer, err := NewWriter(cfg.OutputDir)
+	writer, err := NewWriter(cfg.OutputDir, cfg.Client)
 	if err != nil {
 		return nil, fmt.Errorf("create writer: %w", err)
 	}

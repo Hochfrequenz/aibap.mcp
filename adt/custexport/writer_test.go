@@ -34,16 +34,16 @@ func testResult() *TableExportResult {
 
 func TestNewWriter_CreatesDBAndDir(t *testing.T) {
 	dir := t.TempDir()
-	w, err := NewWriter(dir)
+	w, err := NewWriter(dir, "100")
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
 	defer func() { _ = w.Close() }()
 
 	// Verify customizing.db exists.
-	dbPath := filepath.Join(dir, "customizing.db")
+	dbPath := filepath.Join(dir, "customizing_100.db")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		t.Error("customizing.db not created")
+		t.Error("customizing_100.db not created")
 	}
 
 	// Verify json/ directory exists.
@@ -63,9 +63,24 @@ func TestNewWriter_CreatesDBAndDir(t *testing.T) {
 	}
 }
 
+func TestNewWriter_EmptyClient_FallbackFilename(t *testing.T) {
+	dir := t.TempDir()
+	w, err := NewWriter(dir, "")
+	if err != nil {
+		t.Fatalf("NewWriter failed: %v", err)
+	}
+	defer func() { _ = w.Close() }()
+
+	// Empty client should fall back to "customizing.db".
+	dbPath := filepath.Join(dir, "customizing.db")
+	if _, err := os.Stat(dbPath); err != nil {
+		t.Error("customizing.db not created (expected fallback for empty client)")
+	}
+}
+
 func TestWriteTable_WithRows(t *testing.T) {
 	dir := t.TempDir()
-	w, err := NewWriter(dir)
+	w, err := NewWriter(dir, "100")
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
@@ -142,7 +157,7 @@ func TestWriteTable_WithRows(t *testing.T) {
 
 func TestWriteTable_EmptyTable(t *testing.T) {
 	dir := t.TempDir()
-	w, err := NewWriter(dir)
+	w, err := NewWriter(dir, "100")
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
@@ -192,7 +207,7 @@ func TestWriteTable_EmptyTable(t *testing.T) {
 
 func TestWriteTable_NamespaceTable(t *testing.T) {
 	dir := t.TempDir()
-	w, err := NewWriter(dir)
+	w, err := NewWriter(dir, "100")
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
@@ -231,7 +246,7 @@ func TestWriteTable_NamespaceTable(t *testing.T) {
 
 func TestWriteTable_PrimaryKey(t *testing.T) {
 	dir := t.TempDir()
-	w, err := NewWriter(dir)
+	w, err := NewWriter(dir, "100")
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
@@ -253,7 +268,7 @@ func TestWriteTable_PersistsAfterClose(t *testing.T) {
 	dir := t.TempDir()
 
 	// Write data and close.
-	w, err := NewWriter(dir)
+	w, err := NewWriter(dir, "100")
 	if err != nil {
 		t.Fatalf("NewWriter: %v", err)
 	}
@@ -267,7 +282,7 @@ func TestWriteTable_PersistsAfterClose(t *testing.T) {
 	}
 
 	// Reopen and verify.
-	dbPath := filepath.Join(dir, "customizing.db")
+	dbPath := filepath.Join(dir, "customizing_100.db")
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		t.Fatalf("reopen db: %v", err)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,10 +72,14 @@ func TestExportCustomizing_SmallTableSet(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Verify customizing.db exists.
-	dbPath := filepath.Join(outputDir, "customizing.db")
+	// Verify customizing_{client}.db exists.
+	dbName := "customizing.db"
+	if sapClient != "" {
+		dbName = fmt.Sprintf("customizing_%s.db", sapClient)
+	}
+	dbPath := filepath.Join(outputDir, dbName)
 	if _, err := os.Stat(dbPath); err != nil {
-		t.Fatalf("customizing.db not found: %v", err)
+		t.Fatalf("%s not found: %v", dbName, err)
 	}
 
 	// Verify json/ directory has one JSON file per table.
