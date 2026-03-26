@@ -139,8 +139,18 @@ func (c *httpClient) setAuth(req *http.Request) {
 	}
 }
 
-// doRead performs a GET request (no CSRF required), with re-auth retry on 401.
+// doRead performs a GET request with the default HTTP client (30-second timeout).
 func (c *httpClient) doRead(ctx context.Context, path string, headers map[string]string) (*http.Response, error) {
+	return c.doReadWith(ctx, c.http, path, headers)
+}
+
+// doReadLong performs a GET request with the long-timeout HTTP client.
+// Use for operations that may take minutes (e.g., exporting large packages).
+func (c *httpClient) doReadLong(ctx context.Context, path string, headers map[string]string) (*http.Response, error) {
+	return c.doReadWith(ctx, c.httpLong, path, headers)
+}
+
+func (c *httpClient) doReadWith(ctx context.Context, hc *http.Client, path string, headers map[string]string) (*http.Response, error) {
 	path = encodeNamespacePath(path)
 	makeReq := func() (*http.Request, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.Host+path, nil)
@@ -158,7 +168,7 @@ func (c *httpClient) doRead(ctx context.Context, path string, headers map[string
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.http.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +193,7 @@ func (c *httpClient) doRead(ctx context.Context, path string, headers map[string
 		if err != nil {
 			return nil, err
 		}
-		return c.http.Do(req2)
+		return hc.Do(req2)
 	}
 	return resp, nil
 }
