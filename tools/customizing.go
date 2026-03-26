@@ -17,16 +17,19 @@ func registerCustomizingTools(s toolAdder, client adt.Client) {
 		mcp.WithDescription(
 			"Export SAP customizing tables to SQLite database + JSON files on disk "+
 				"(read-only, no changes on SAP side). "+
+				"IMPORTANT: exports only the connected client's data (MANDT). "+
+				"Client-dependent tables are filtered by the SAP connection automatically. "+
+				"The output filename includes the client number (e.g. customizing_100.db). "+
 				"By default exports ALL customizing tables (delivery class C+G, ~57K tables, ~3.5 hours). "+
 				"Set customer_only=true to export only tables that were actually configured and transported "+
-				"(~34K tables, excludes SAP-delivered bulk data like SLO migration and conversion rules). "+
+				"(~16K tables, excludes SAP-delivered bulk data like SLO migration and conversion rules). "+
 				"Output goes directly to disk — nothing is sent through the LLM context."),
 		mcp.WithString("output_dir", mcp.Required(),
 			mcp.Description("Directory to write the export into. Must already exist. Use an absolute path.")),
 		mcp.WithBoolean("customer_only",
 			mcp.Description("If true, only export tables that were actually modified and transported "+
 				"(intersection of DD02L customizing tables and E071K transport keys). "+
-				"Filters ~57K tables down to ~34K. Excludes SAP infrastructure tables "+
+				"Filters ~57K tables down to ~16K. Excludes SAP infrastructure tables "+
 				"(SLO migration, conversion rules, messaging platform) that bloat the export. "+
 				"Recommended for cross-system comparison.")),
 		mcp.WithString("tables",
