@@ -65,6 +65,33 @@ func TestCreateAndDeleteObject_Integration(t *testing.T) {
 	}
 }
 
+func TestCreatePackage_Integration(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+	cfg := integrationConfig()
+
+	const pkgName = "Z_ADT_MCP_INTTEST_PKG"
+
+	err := client.CreatePackage(ctx, pkgName, "Integration test package",
+		cfg.User, "HOME", "ZS4U", "")
+	if err != nil {
+		// Package may already exist from a previous run.
+		if _, browseErr := client.BrowsePackage(ctx, pkgName); browseErr != nil {
+			t.Fatalf("CreatePackage failed and package does not exist: %v", err)
+		}
+		t.Logf("package %s already exists, reusing", pkgName)
+	} else {
+		t.Logf("created package %s", pkgName)
+	}
+
+	// Verify it exists via BrowsePackage.
+	objects, err := client.BrowsePackage(ctx, pkgName)
+	if err != nil {
+		t.Fatalf("BrowsePackage after create failed: %v", err)
+	}
+	t.Logf("package %s is browsable, contains %d objects", pkgName, len(objects))
+}
+
 func TestDeleteObject_NonExistentReturnsError(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()

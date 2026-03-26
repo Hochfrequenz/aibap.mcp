@@ -132,6 +132,9 @@ func (m *mockClient) CreateObject(ctx context.Context, objectType, name, pkg, de
 	}
 	return nil
 }
+func (m *mockClient) CreatePackage(context.Context, string, string, string, string, string, string) error {
+	return nil
+}
 func (m *mockClient) DeleteObject(ctx context.Context, uri, lockHandle, transport string) error {
 	if m.deleteObjectFn != nil {
 		return m.deleteObjectFn(ctx, uri, lockHandle, transport)
