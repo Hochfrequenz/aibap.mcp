@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,10 +52,13 @@ func TestExportCustomizing_SmallTableSet(t *testing.T) {
 
 	tables := []string{"T001", "T005", "T006", "TVARVC", "T000"}
 
+	host, sapClient := client.SystemInfo()
 	summary, err := custexport.RunExport(ctx, client, custexport.ExportConfig{
 		OutputDir: outputDir,
 		Tables:    tables,
 		Workers:   1,
+		System:    host,
+		Client:    sapClient,
 	})
 	if err != nil {
 		t.Fatalf("RunExport failed: %v", err)
@@ -68,10 +72,14 @@ func TestExportCustomizing_SmallTableSet(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Verify customizing.db exists.
-	dbPath := filepath.Join(outputDir, "customizing.db")
+	// Verify customizing_{client}.db exists.
+	dbName := "customizing.db"
+	if sapClient != "" {
+		dbName = fmt.Sprintf("customizing_%s.db", sapClient)
+	}
+	dbPath := filepath.Join(outputDir, dbName)
 	if _, err := os.Stat(dbPath); err != nil {
-		t.Fatalf("customizing.db not found: %v", err)
+		t.Fatalf("%s not found: %v", dbName, err)
 	}
 
 	// Verify json/ directory has one JSON file per table.
@@ -137,8 +145,16 @@ func TestExportCustomizing_SmallTableSet(t *testing.T) {
 		t.Errorf("exported(%d) + empty(%d) != total(%d)",
 			fileSummary.ExportedTables, fileSummary.EmptyTables, len(tables))
 	}
+	// Verify system and client are populated (#90).
+	if fileSummary.System == "" {
+		t.Error("export_summary.json has empty 'system' field")
+	}
+	if fileSummary.Client == "" {
+		t.Error("export_summary.json has empty 'client' field")
+	}
 
-	t.Logf("export summary: %d tables, %d exported, %d empty, %d total rows",
+	t.Logf("export summary: system=%s client=%s, %d tables, %d exported, %d empty, %d total rows",
+		fileSummary.System, fileSummary.Client,
 		fileSummary.TotalTables, fileSummary.ExportedTables, fileSummary.EmptyTables, fileSummary.TotalRows)
 }
 
@@ -280,4 +296,111 @@ func TestExportCustomizing_Pagination(t *testing.T) {
 	}
 
 	t.Logf("T006: %d rows across %d pages (page_size=%d)", jt.TotalRows, jt.Pages, pageSize)
+}
+
+func TestExportCustomizing_IncludeTables(t *testing.T) {
+	client := newClient(t)
+	ctx := context.Background()
+	outputDir := t.TempDir()
+
+	// /US4G/BITCAT_RD and /US4G/CDLIST_D have .INCLUDE pseudo-fields in DD03L
+	// that previously caused "invalid key column" errors. Verify they export now.
+	tables := []string{"/US4G/BITCAT_RD", "/US4G/CDLIST_D"}
+
+	summary, err := custexport.RunExport(ctx, client, custexport.ExportConfig{
+		OutputDir: outputDir,
+		Tables:    tables,
+		PageSize:  100000,
+		Workers:   1,
+	})
+	if err != nil {
+		t.Fatalf("RunExport failed: %v", err)
+	}
+
+	// Verify zero errors — these tables should export cleanly after the .INCLUDE fix.
+	if len(summary.Errors) > 0 {
+		for _, e := range summary.Errors {
+			t.Errorf("unexpected error for %s: %s", e.Table, e.Error)
+		}
+	}
+
+	// Verify both tables have JSON files.
+	for _, table := range tables {
+		jsonName := strings.ReplaceAll(table, "/", "#") + ".json"
+		jsonPath := filepath.Join(outputDir, "json", jsonName)
+		if _, err := os.Stat(jsonPath); err != nil {
+			t.Errorf("missing JSON for %s: %v", table, err)
+			continue
+		}
+		t.Logf("%s exported successfully", table)
+	}
+
+	// Verify SQLite has the tables with PRIMARY KEY.
+	dbPath := filepath.Join(outputDir, "customizing.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	for _, table := range tables {
+		var ddl string
+		err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE name = ?`, table).Scan(&ddl)
+		if err != nil {
+			t.Errorf("%s: not found in SQLite: %v", table, err)
+			continue
+		}
+		if !strings.Contains(ddl, "PRIMARY KEY") {
+			t.Errorf("%s: expected PRIMARY KEY in SQLite DDL, got: %s", table, ddl)
+		} else {
+			t.Logf("%s: has PRIMARY KEY", table)
+		}
+	}
+
+	t.Logf("summary: %d exported, %d errors", summary.ExportedTables, len(summary.Errors))
+}
+
+func TestExportCustomizing_LongKeyPagination(t *testing.T) {
+	client := newClient(t)
+	ctx := context.Background()
+	outputDir := t.TempDir()
+
+	// /SLOAP/MD_FIELDT has 4 non-MANDT GUID keys (~130K rows).
+	// The OR-chain pagination SQL exceeds the ~300 char limit with 4 keys.
+	// The fix dynamically reduces pagination keys until the SQL fits.
+	summary, err := custexport.RunExport(ctx, client, custexport.ExportConfig{
+		OutputDir: outputDir,
+		Tables:    []string{"/SLOAP/MD_FIELDT"},
+		PageSize:  1000,
+		Workers:   1,
+	})
+	if err != nil {
+		t.Fatalf("RunExport failed: %v", err)
+	}
+
+	for _, e := range summary.Errors {
+		t.Errorf("unexpected error for %s: %s", e.Table, e.Error)
+	}
+
+	if summary.ExportedTables != 1 {
+		t.Errorf("expected 1 exported table, got %d", summary.ExportedTables)
+	}
+
+	// Verify pagination worked (table has ~130K rows, page_size=1000).
+	dbPath := filepath.Join(outputDir, "customizing.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var rowCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM "/SLOAP/MD_FIELDT"`).Scan(&rowCount); err != nil {
+		t.Fatalf("count rows: %v", err)
+	}
+	t.Logf("/SLOAP/MD_FIELDT: %d rows in SQLite (page_size=1000)", rowCount)
+
+	if rowCount <= 1000 {
+		t.Errorf("expected more than 1000 rows (pagination should have fetched all), got %d", rowCount)
+	}
 }

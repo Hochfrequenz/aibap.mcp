@@ -8,9 +8,6 @@ import (
 )
 
 func TestGetCompletions_Integration(t *testing.T) {
-	// Tests code completion against the SAP system.
-	// Note: response XML parsing may fail if SAP returns asx:abap format
-	// instead of the expected <completions> format — that is a separate issue.
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
@@ -22,6 +19,8 @@ func TestGetCompletions_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCompletions failed: %v", err)
 	}
+	// Some SAP systems return empty completions (service not configured).
+	// This is not an error — just log the result.
 	t.Logf("got %d completions", len(completions))
 
 	for i, c := range completions {

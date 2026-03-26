@@ -85,6 +85,9 @@ func (m *mockClient) GetATCCustomizing(context.Context) (*adt.ATCCustomizingResu
 func (m *mockClient) RunATCCheck(context.Context, []string) (*adt.ATCResult, error) {
 	panic("not implemented")
 }
+func (m *mockClient) SystemInfo() (string, string) {
+	return "https://mock.example.com:443", "100"
+}
 
 func TestDiscoverTables(t *testing.T) {
 	var capturedSQL string
@@ -170,6 +173,36 @@ func TestFetchAllKeys(t *testing.T) {
 	}
 	if keys[0] != "MANDT" || keys[1] != "BUKRS" {
 		t.Errorf("T001 keys: expected [MANDT BUKRS], got %v", keys)
+	}
+}
+
+func TestFetchTableKeys_SkipsPseudoFields(t *testing.T) {
+	client := &mockClient{
+		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+			return &adt.QueryResult{
+				Columns: []adt.QueryColumn{
+					{Name: "FIELDNAME", Type: "C"},
+					{Name: "POSITION", Type: "N"},
+				},
+				Rows: [][]string{
+					{"MANDT", "0001"},
+					{".INCLUDE", "0002"},
+					{"GRDB_ITEM_SCEN", "0003"},
+					{".APPEND", "0004"},
+				},
+			}, nil
+		},
+	}
+
+	keys, err := fetchTableKeys(context.Background(), client, "SOMETABLE")
+	if err != nil {
+		t.Fatalf("fetchTableKeys: %v", err)
+	}
+	if len(keys) != 2 {
+		t.Fatalf("expected 2 keys (MANDT, GRDB_ITEM_SCEN), got %d: %v", len(keys), keys)
+	}
+	if keys[0] != "MANDT" || keys[1] != "GRDB_ITEM_SCEN" {
+		t.Errorf("expected [MANDT GRDB_ITEM_SCEN], got %v", keys)
 	}
 }
 
@@ -402,6 +435,8 @@ func TestRunExport_EndToEnd(t *testing.T) {
 		Tables:    []string{"T001"},
 		PageSize:  100,
 		Workers:   1,
+		System:    "https://mock.example.com:443",
+		Client:    "100",
 	}
 
 	summary, err := RunExport(context.Background(), client, cfg)
@@ -423,5 +458,11 @@ func TestRunExport_EndToEnd(t *testing.T) {
 	}
 	if summary.Workers != 1 {
 		t.Errorf("expected workers=1, got %d", summary.Workers)
+	}
+	if summary.System != "https://mock.example.com:443" {
+		t.Errorf("expected system %q, got %q", "https://mock.example.com:443", summary.System)
+	}
+	if summary.Client != "100" {
+		t.Errorf("expected client %q, got %q", "100", summary.Client)
 	}
 }

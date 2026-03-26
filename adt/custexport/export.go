@@ -17,10 +17,13 @@ import (
 
 // ExportConfig holds parameters for RunExport.
 type ExportConfig struct {
-	OutputDir string
-	Tables    []string // specific tables, or nil for all customizing tables
-	PageSize  int      // rows per page (default 100000)
-	Workers   int      // parallel workers (default 10, max 20)
+	OutputDir    string
+	Tables       []string // specific tables, or nil for all customizing tables
+	CustomerOnly bool     // if true, only export tables that were actually transported (E071K)
+	PageSize     int      // rows per page (default 100000)
+	Workers      int      // parallel workers (default 20, max 40)
+	System       string   // SAP system identifier (e.g. host URL) for export_summary.json
+	Client       string   // SAP client number for export_summary.json
 }
 
 // ExportSummary is the result of a full export run.
@@ -46,12 +49,23 @@ type TableError struct {
 }
 
 const (
-	defaultPageSize    = 100000
-	defaultWorkers     = 10
-	maxWorkers         = 20
-	maxKeysForPaginate = 4
-	perQueryTimeout    = 120 * time.Second
-	progressInterval   = 100
+	defaultPageSize = 100000
+	// defaultWorkers is the default number of parallel export workers.
+	// Benchmarked on srvhfuhana (2026-03-25, 500 tables, per-table key fetch):
+	//   10 workers: 2.7 tables/sec → ~5.8h for 57K tables
+	//   20 workers: 4.5 tables/sec → ~3.5h for 57K tables (sweet spot)
+	//   30 workers: 4.3 tables/sec → no improvement, SAP saturated
+	//   40 workers: 4.3 tables/sec → no improvement
+	// Each worker does 2 sequential HTTP requests per table (DD03L keys + data).
+	defaultWorkers = 20
+	maxWorkers     = 40
+	// ADT data preview endpoint rejects SQL bodies longer than ~255 chars.
+	// Empirically determined: TA23HOTELS with 261-char SQL got truncated to
+	// "PROPERT" (cutting "PROPERTY"), and 303-char SQL caused grammar errors.
+	// 250 is conservative. See issues #93, #94.
+	maxSQLLength     = 250
+	perQueryTimeout  = 120 * time.Second
+	progressInterval = 100
 )
 
 // discoverTables queries DD02L for active customizing tables (CONTFLAG C or G).
@@ -78,6 +92,59 @@ func discoverTables(ctx context.Context, client adt.Client) ([]string, error) {
 	return tables, nil
 }
 
+// discoverCustomerTables returns only customizing tables that were actually
+// modified and transported. Queries E071K transport keys for objects of type
+// TABU (table contents), CDAT (view cluster data via SM34), VDAT (view data
+// via SM30), and TDAT (table data, client-independent).
+//
+// Known limitations:
+//   - Only transported customizing is captured. Local changes in $TMP or local
+//     requests are invisible. For dev systems, use customer_only=false instead.
+//   - CDAT/VDAT entries use the view/cluster name, not the underlying table name.
+//     We include them as-is — some will match DD02L (when the view name equals
+//     the table name), others won't (filtered out by the intersection).
+//     This is an 80/20 heuristic, not a guarantee of completeness.
+func discoverCustomerTables(ctx context.Context, client adt.Client) ([]string, error) {
+	// Get all transported table/view names from E071K.
+	// TABU = table contents, CDAT = view cluster (SM34), VDAT = view data (SM30), TDAT = table data.
+	sql := "SELECT DISTINCT OBJNAME FROM E071K WHERE PGMID = 'R3TR' AND OBJECT IN ('TABU','CDAT','VDAT','TDAT') ORDER BY OBJNAME"
+	queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
+	defer cancel()
+
+	result, err := client.RunQuery(queryCtx, sql, 200000)
+	if err != nil {
+		return nil, fmt.Errorf("discoverCustomerTables (E071K): %w", err)
+	}
+
+	transported := make(map[string]bool, len(result.Rows))
+	for _, row := range result.Rows {
+		if len(row) > 0 {
+			transported[strings.TrimSpace(row[0])] = true
+		}
+	}
+
+	// Get all customizing tables (delivery class C and G).
+	// G (protected) is included because customers can add entries to G tables,
+	// and those entries appear in E071K when transported.
+	allTables, err := discoverTables(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
+	// Intersect: customizing tables that were actually transported.
+	var customerTables []string
+	for _, t := range allTables {
+		if transported[t] {
+			customerTables = append(customerTables, t)
+		}
+	}
+
+	log.Printf("Customer customizing: %d tables transported (E071K) ∩ %d customizing (DD02L) = %d tables",
+		len(transported), len(allTables), len(customerTables))
+
+	return customerTables, nil
+}
+
 // fetchTableKeys queries DD03L for key fields of a single table.
 // Called by each worker just before exporting the table.
 func fetchTableKeys(ctx context.Context, client adt.Client, table string) ([]string, error) {
@@ -97,7 +164,9 @@ func fetchTableKeys(ctx context.Context, client adt.Client, table string) ([]str
 	for _, row := range result.Rows {
 		if len(row) > 0 {
 			name := strings.TrimSpace(row[0])
-			if name != "" {
+			// Skip DDIC pseudo-fields like .INCLUDE and .APPEND — these are
+			// metadata markers for include structures, not real column names.
+			if name != "" && !strings.HasPrefix(name, ".") {
 				keys = append(keys, name)
 			}
 		}
@@ -110,11 +179,10 @@ func fetchTableKeys(ctx context.Context, client adt.Client, table string) ([]str
 func exportTable(ctx context.Context, client adt.Client, table string, keys []string, pageSize int) (*TableExportResult, error) {
 	nonMandtKeys := adt.FilterNonMandtKeys(keys)
 
-	// Limit pagination keys to first maxKeysForPaginate for tables with many keys.
+	// Start with all non-MANDT keys for pagination. The OR-chain WHERE clause
+	// grows with more keys — if the SQL exceeds the ADT endpoint's ~300 char limit,
+	// we reduce keys dynamically when building the pagination SQL.
 	paginateKeys := nonMandtKeys
-	if len(paginateKeys) > maxKeysForPaginate {
-		paginateKeys = paginateKeys[:maxKeysForPaginate]
-	}
 
 	var allRows [][]string
 	var columns []adt.QueryColumn
@@ -125,6 +193,27 @@ func exportTable(ctx context.Context, client adt.Client, table string, keys []st
 		sqlStr, err := adt.BuildExportSQL(table, keys, paginateKeys, lastValues)
 		if err != nil {
 			return nil, fmt.Errorf("build SQL for %s: %w", table, err)
+		}
+
+		// ADT endpoint has a ~300 char SQL length limit. If the OR-chain
+		// pagination WHERE clause makes it too long, reduce pagination keys.
+		// The reduction persists across pages (if page 2 needed it, page 3 will too).
+		origKeyCount := len(paginateKeys)
+		for len(sqlStr) > maxSQLLength && len(paginateKeys) > 1 {
+			paginateKeys = paginateKeys[:len(paginateKeys)-1]
+			lastValues = lastValues[:len(paginateKeys)] // trim to match
+			sqlStr, err = adt.BuildExportSQL(table, keys, paginateKeys, lastValues)
+			if err != nil {
+				return nil, fmt.Errorf("build SQL for %s (reduced keys): %w", table, err)
+			}
+		}
+		if len(paginateKeys) < origKeyCount {
+			log.Printf("[export] %s: reduced pagination keys from %d to %d (SQL was %d chars, limit %d)",
+				table, origKeyCount, len(paginateKeys), len(sqlStr), maxSQLLength)
+		}
+		if len(sqlStr) > maxSQLLength {
+			log.Printf("[export] WARNING: %s SQL still %d chars after key reduction (limit %d), query may fail",
+				table, len(sqlStr), maxSQLLength)
 		}
 
 		queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
@@ -220,6 +309,12 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 		tables = make([]string, len(cfg.Tables))
 		copy(tables, cfg.Tables)
 		sort.Strings(tables)
+	} else if cfg.CustomerOnly {
+		var err error
+		tables, err = discoverCustomerTables(ctx, client)
+		if err != nil {
+			return nil, fmt.Errorf("discover customer tables: %w", err)
+		}
 	} else {
 		var err error
 		tables, err = discoverTables(ctx, client)
@@ -229,7 +324,7 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 	}
 
 	// Create writer.
-	writer, err := NewWriter(cfg.OutputDir)
+	writer, err := NewWriter(cfg.OutputDir, cfg.Client)
 	if err != nil {
 		return nil, fmt.Errorf("create writer: %w", err)
 	}
@@ -318,6 +413,8 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 
 	finishedAt := time.Now()
 	summary := &ExportSummary{
+		System:         cfg.System,
+		Client:         cfg.Client,
 		StartedAt:      startedAt.UTC().Format(time.RFC3339),
 		FinishedAt:     finishedAt.UTC().Format(time.RFC3339),
 		DurationSecs:   finishedAt.Sub(startedAt).Seconds(),

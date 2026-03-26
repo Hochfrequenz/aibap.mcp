@@ -159,3 +159,6 @@ func (r *ClientRegistry) RunATCCheck(ctx context.Context, objectURIs []string) (
 func (r *ClientRegistry) RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error) {
 	return r.activeClient().RunQuery(ctx, sql, maxRows)
 }
+func (r *ClientRegistry) SystemInfo() (host, client string) {
+	return r.activeClient().SystemInfo()
+}
