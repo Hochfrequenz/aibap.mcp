@@ -21,28 +21,106 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools
+## Available tools (35)
+
+<details>
+<summary><strong>Source code</strong> (5 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `get_source` | Read ABAP source code of any object |
-| `set_source` | Write ABAP source code (requires ETag and lock handle) |
-| `lock_object` | Lock an object for editing, returns a lock handle |
-| `unlock_object` | Unlock a previously locked object |
-| `activate_object` | Activate an ABAP object |
-| `create_object` | Create a new ABAP object (program, class, interface) |
-| `delete_object` | Delete an ABAP object |
+| `set_source_from_file` | Write ABAP source from a local file |
+| `patch_source` | Apply incremental edits to source code |
+| `pretty_print` | Format ABAP source code using SAP Pretty Printer |
+| `get_completions` | Get code completion proposals at a cursor position |
+
+</details>
+
+<details>
+<summary><strong>Objects and packages</strong> (6 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
 | `search_objects` | Search for objects by name pattern and type |
 | `where_used` | Find all usages of an object |
 | `browse_package` | List contents of a package |
 | `get_object_info` | Get object metadata (type, package, description) |
+| `create_object` | Create a new ABAP object (program, class, interface) |
+| `delete_object` | Delete an ABAP object |
+
+</details>
+
+<details>
+<summary><strong>Locking and activation</strong> (4 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `lock_object` | Lock an object for editing, returns a lock handle |
+| `unlock_object` | Unlock a previously locked object |
+| `activate_object` | Activate a single ABAP object |
+| `activate_objects` | Activate multiple objects at once |
+
+</details>
+
+<details>
+<summary><strong>Testing and quality</strong> (4 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
 | `syntax_check` | Run a syntax check |
 | `run_unit_tests` | Run ABAP Unit Tests |
-| `pretty_print` | Format ABAP source code using SAP Pretty Printer |
-| `get_completions` | Get code completion proposals at a cursor position |
+| `run_atc_check` | Run ATC (ABAP Test Cockpit) checks |
+| `get_atc_customizing` | Get ATC check variant configuration |
+
+</details>
+
+<details>
+<summary><strong>Transport management</strong> (2 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
 | `get_transport_requests` | List open or released transport requests |
 | `add_to_transport` | Assign an object to a transport request |
-| `select_system` | Switch the active SAP system |
+
+</details>
+
+<details>
+<summary><strong>Export</strong> (3 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `export_package` | Export an ABAP package as abapGit ZIP or folder ([requires companion](https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT)) |
+| `export_packages` | Bulk export with wildcard patterns and include/exclude filters |
+| `export_customizing` | Export all customizing tables to SQLite + JSON (read-only, ~16K tables with `customer_only`) |
+
+</details>
+
+<details>
+<summary><strong>Debugging</strong> (10 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `debug_start` | Start a debug session |
+| `debug_stop` | Stop a debug session |
+| `debug_attach` | Attach to a running debug session |
+| `debug_step` | Step into/over/out in debugger |
+| `debug_set_breakpoint` | Set a breakpoint |
+| `debug_remove_breakpoint` | Remove a breakpoint |
+| `debug_set_watchpoint` | Set a watchpoint on a variable |
+| `debug_get_variable` | Read a variable value |
+| `debug_get_stack` | Get the call stack |
+| `debug_get_sessions` | List active debug sessions |
+
+</details>
+
+<details>
+<summary><strong>System</strong> (1 tool)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `select_system` | Switch the active SAP system (multi-system config) |
+
+</details>
 
 ## Requirements
 
