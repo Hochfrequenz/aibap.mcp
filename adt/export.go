@@ -51,7 +51,7 @@ func (c *httpClient) exportPackageWithFolderLogic(ctx context.Context, pkg, fold
 	}
 	path := "/sap/bc/adt/abapgit/export/packages?" + params.Encode()
 
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/zip"})
+	resp, err := c.doReadLong(ctx, path, map[string]string{"Accept": "application/zip"})
 	if err != nil {
 		return nil, fmt.Errorf("ExportPackage: %w", err)
 	}
