@@ -57,11 +57,14 @@ const (
 	//   30 workers: 4.3 tables/sec → no improvement, SAP saturated
 	//   40 workers: 4.3 tables/sec → no improvement
 	// Each worker does 2 sequential HTTP requests per table (DD03L keys + data).
-	defaultWorkers     = 20
-	maxWorkers         = 40
-	maxKeysForPaginate = 4
-	perQueryTimeout    = 120 * time.Second
-	progressInterval   = 100
+	defaultWorkers = 20
+	maxWorkers     = 40
+	// ADT data preview endpoint rejects SQL bodies longer than ~300 chars.
+	// Verified on srvhfuhana S/4HANA, errors: "Literals across more than one line"
+	// or grammar errors. 280 gives 20-char safety margin. See issue #93.
+	maxSQLLength     = 280
+	perQueryTimeout  = 120 * time.Second
+	progressInterval = 100
 )
 
 // discoverTables queries DD02L for active customizing tables (CONTFLAG C or G).
@@ -175,11 +178,10 @@ func fetchTableKeys(ctx context.Context, client adt.Client, table string) ([]str
 func exportTable(ctx context.Context, client adt.Client, table string, keys []string, pageSize int) (*TableExportResult, error) {
 	nonMandtKeys := adt.FilterNonMandtKeys(keys)
 
-	// Limit pagination keys to first maxKeysForPaginate for tables with many keys.
+	// Start with all non-MANDT keys for pagination. The OR-chain WHERE clause
+	// grows with more keys — if the SQL exceeds the ADT endpoint's ~300 char limit,
+	// we reduce keys dynamically when building the pagination SQL.
 	paginateKeys := nonMandtKeys
-	if len(paginateKeys) > maxKeysForPaginate {
-		paginateKeys = paginateKeys[:maxKeysForPaginate]
-	}
 
 	var allRows [][]string
 	var columns []adt.QueryColumn
@@ -190,6 +192,23 @@ func exportTable(ctx context.Context, client adt.Client, table string, keys []st
 		sqlStr, err := adt.BuildExportSQL(table, keys, paginateKeys, lastValues)
 		if err != nil {
 			return nil, fmt.Errorf("build SQL for %s: %w", table, err)
+		}
+
+		// ADT endpoint has a ~300 char SQL length limit. If the OR-chain
+		// pagination WHERE clause makes it too long, reduce pagination keys.
+		// The reduction persists across pages (if page 2 needed it, page 3 will too).
+		origKeyCount := len(paginateKeys)
+		for len(sqlStr) > maxSQLLength && len(paginateKeys) > 1 {
+			paginateKeys = paginateKeys[:len(paginateKeys)-1]
+			lastValues = lastValues[:len(paginateKeys)] // trim to match
+			sqlStr, err = adt.BuildExportSQL(table, keys, paginateKeys, lastValues)
+			if err != nil {
+				return nil, fmt.Errorf("build SQL for %s (reduced keys): %w", table, err)
+			}
+		}
+		if len(paginateKeys) < origKeyCount {
+			log.Printf("[export] %s: reduced pagination keys from %d to %d (SQL was %d chars, limit %d)",
+				table, origKeyCount, len(paginateKeys), len(sqlStr), maxSQLLength)
 		}
 
 		queryCtx, cancel := context.WithTimeout(ctx, perQueryTimeout)
