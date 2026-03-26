@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -139,6 +140,35 @@ func TestADTErrorParsed(t *testing.T) {
 	}
 	if adtErr.Message != "Object not found" {
 		t.Errorf("message: got %q", adtErr.Message)
+	}
+}
+
+func TestSecureCookieOnHTTPDetected(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			// Simulate S4 behavior: set cookie with Secure flag over HTTP
+			w.Header().Add("Set-Cookie", "sap-XSRF_S4U_100=abc123; path=/; secure; HttpOnly")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		// Always return 403 — simulates CSRF failure due to missing cookie
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	cfg := newTestConfig(srv.URL) // httptest uses http://, not https://
+	client := adt.NewClient(cfg)
+
+	_, err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.", "", "", `"etag123"`)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "Secure cookies") {
+		t.Errorf("expected secure cookie hint in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "https://") {
+		t.Errorf("expected https suggestion in error, got: %v", err)
 	}
 }
 
