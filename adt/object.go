@@ -68,6 +68,39 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	return checkResponse(resp)
 }
 
+func (c *httpClient) CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error {
+	body, err := xml.Marshal(adtmodel.CreatePackage{
+		NSPak:       "http://www.sap.com/adt/packages",
+		NSCore:      nsADTCore,
+		Name:        strings.ToUpper(name),
+		Type:        "DEVC/K",
+		Description: description,
+		Responsible: strings.ToUpper(responsible),
+		Attributes:  adtmodel.PakAttributes{PackageType: "development"},
+		Transport: adtmodel.PakTransport{
+			SoftwareComponent: adtmodel.PakNamedItem{Name: softwareComponent},
+			TransportLayer:    adtmodel.PakNamedItem{Name: transportLayer},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("CreatePackage marshal: %w", err)
+	}
+
+	path := "/sap/bc/adt/packages"
+	if transport != "" {
+		path += "?corrNr=" + transport
+	}
+	resp, err := c.doMutate(ctx, http.MethodPost, path,
+		strings.NewReader(xml.Header+string(body)),
+		map[string]string{"Content-Type": "application/vnd.sap.adt.packages.v2+xml"},
+	)
+	if err != nil {
+		return fmt.Errorf("CreatePackage: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return checkResponse(resp)
+}
+
 func (c *httpClient) DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error {
 	path := objectURI
 	if transport != "" {

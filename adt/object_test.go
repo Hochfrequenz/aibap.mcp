@@ -2,8 +2,10 @@ package adt_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
@@ -46,6 +48,78 @@ func TestCreateObjectUnsupportedType(t *testing.T) {
 	err := client.CreateObject(context.Background(), "TABL", "ZTABLE", "ZPACKAGE", "Table", "")
 	if err == nil {
 		t.Fatal("expected error for unsupported type")
+	}
+}
+
+func TestCreatePackage(t *testing.T) {
+	var gotPath, gotMethod, gotContentType, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		gotPath = r.URL.Path
+		gotMethod = r.Method
+		gotContentType = r.Header.Get("Content-Type")
+		body, _ := io.ReadAll(r.Body)
+		gotBody = string(body)
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	err := client.CreatePackage(context.Background(), "Z_MY_PKG", "My Package", "TESTUSER", "HOME", "ZS4U", "DEVK900001")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotMethod != http.MethodPost {
+		t.Errorf("method: got %q, want POST", gotMethod)
+	}
+	if gotPath != "/sap/bc/adt/packages" {
+		t.Errorf("path: got %q", gotPath)
+	}
+	if gotContentType != "application/vnd.sap.adt.packages.v2+xml" {
+		t.Errorf("content-type: got %q", gotContentType)
+	}
+	if !strings.Contains(gotBody, `adtcore:name="Z_MY_PKG"`) {
+		t.Errorf("body missing package name: %s", gotBody)
+	}
+	if !strings.Contains(gotBody, `adtcore:responsible="TESTUSER"`) {
+		t.Errorf("body missing responsible: %s", gotBody)
+	}
+	if !strings.Contains(gotBody, `pak:name="HOME"`) {
+		t.Errorf("body missing softwareComponent: %s", gotBody)
+	}
+	if !strings.Contains(gotBody, `pak:name="ZS4U"`) {
+		t.Errorf("body missing transportLayer: %s", gotBody)
+	}
+}
+
+func TestCreatePackageWithoutTransport(t *testing.T) {
+	var gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		gotQuery = r.URL.RawQuery
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	err := client.CreatePackage(context.Background(), "z_tmp_pkg", "Temp", "testuser", "", "", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotQuery != "" {
+		t.Errorf("expected no query params for local package, got %q", gotQuery)
 	}
 }
 

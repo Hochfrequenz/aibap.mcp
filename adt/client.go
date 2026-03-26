@@ -35,6 +35,7 @@ type Client interface {
 	CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error
 	DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error
 	GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error)
+	CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error
 	ExportPackage(ctx context.Context, packageName string) ([]byte, error)
 	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
 	RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error)
