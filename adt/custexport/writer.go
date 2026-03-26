@@ -28,8 +28,9 @@ type Writer struct {
 	jsonDir string
 }
 
-// NewWriter creates a Writer. Creates customizing.db and json/ subdirectory.
-func NewWriter(outputDir string) (*Writer, error) {
+// NewWriter creates a Writer. Creates customizing_{client}.db and json/ subdirectory.
+// If client is empty, falls back to "customizing.db".
+func NewWriter(outputDir string, client string) (*Writer, error) {
 	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create output dir: %w", err)
 	}
@@ -39,7 +40,11 @@ func NewWriter(outputDir string) (*Writer, error) {
 		return nil, fmt.Errorf("create json dir: %w", err)
 	}
 
-	dbPath := filepath.Join(outputDir, "customizing.db")
+	dbName := "customizing.db"
+	if client != "" {
+		dbName = fmt.Sprintf("customizing_%s.db", client)
+	}
+	dbPath := filepath.Join(outputDir, dbName)
 	sw, err := newSQLiteWriter(dbPath)
 	if err != nil {
 		return nil, err
