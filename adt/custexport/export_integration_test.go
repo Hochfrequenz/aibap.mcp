@@ -302,10 +302,10 @@ func TestExportCustomizing_IncludeTables(t *testing.T) {
 		t.Fatalf("RunExport failed: %v", err)
 	}
 
-	// Verify no .INCLUDE errors.
-	for _, e := range summary.Errors {
-		if strings.Contains(e.Error, ".INCLUDE") {
-			t.Errorf("table %s still has .INCLUDE error: %s", e.Table, e.Error)
+	// Verify zero errors — these tables should export cleanly after the .INCLUDE fix.
+	if len(summary.Errors) > 0 {
+		for _, e := range summary.Errors {
+			t.Errorf("unexpected error for %s: %s", e.Table, e.Error)
 		}
 	}
 
@@ -330,15 +330,15 @@ func TestExportCustomizing_IncludeTables(t *testing.T) {
 
 	for _, table := range tables {
 		var ddl string
-		err := db.QueryRow(fmt.Sprintf(`SELECT sql FROM sqlite_master WHERE name = '%s'`, table)).Scan(&ddl)
+		err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE name = ?`, table).Scan(&ddl)
 		if err != nil {
 			t.Errorf("%s: not found in SQLite: %v", table, err)
 			continue
 		}
-		if strings.Contains(ddl, "PRIMARY KEY") {
-			t.Logf("%s: has PRIMARY KEY in SQLite", table)
+		if !strings.Contains(ddl, "PRIMARY KEY") {
+			t.Errorf("%s: expected PRIMARY KEY in SQLite DDL, got: %s", table, ddl)
 		} else {
-			t.Logf("%s: no PRIMARY KEY (may have only MANDT as key)", table)
+			t.Logf("%s: has PRIMARY KEY", table)
 		}
 	}
 

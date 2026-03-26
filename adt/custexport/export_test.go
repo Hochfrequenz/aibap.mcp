@@ -170,6 +170,36 @@ func TestFetchAllKeys(t *testing.T) {
 	}
 }
 
+func TestFetchTableKeys_SkipsPseudoFields(t *testing.T) {
+	client := &mockClient{
+		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+			return &adt.QueryResult{
+				Columns: []adt.QueryColumn{
+					{Name: "FIELDNAME", Type: "C"},
+					{Name: "POSITION", Type: "N"},
+				},
+				Rows: [][]string{
+					{"MANDT", "0001"},
+					{".INCLUDE", "0002"},
+					{"GRDB_ITEM_SCEN", "0003"},
+					{".APPEND", "0004"},
+				},
+			}, nil
+		},
+	}
+
+	keys, err := fetchTableKeys(context.Background(), client, "SOMETABLE")
+	if err != nil {
+		t.Fatalf("fetchTableKeys: %v", err)
+	}
+	if len(keys) != 2 {
+		t.Fatalf("expected 2 keys (MANDT, GRDB_ITEM_SCEN), got %d: %v", len(keys), keys)
+	}
+	if keys[0] != "MANDT" || keys[1] != "GRDB_ITEM_SCEN" {
+		t.Errorf("expected [MANDT GRDB_ITEM_SCEN], got %v", keys)
+	}
+}
+
 func TestExportTable_SinglePage(t *testing.T) {
 	client := &mockClient{
 		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
