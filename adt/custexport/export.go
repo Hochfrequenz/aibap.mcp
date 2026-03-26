@@ -22,6 +22,8 @@ type ExportConfig struct {
 	CustomerOnly bool     // if true, only export tables that were actually transported (E071K)
 	PageSize     int      // rows per page (default 100000)
 	Workers      int      // parallel workers (default 20, max 40)
+	System       string   // SAP system identifier (e.g. host URL) for export_summary.json
+	Client       string   // SAP client number for export_summary.json
 }
 
 // ExportSummary is the result of a full export run.
@@ -387,6 +389,8 @@ func RunExport(ctx context.Context, client adt.Client, cfg ExportConfig) (*Expor
 
 	finishedAt := time.Now()
 	summary := &ExportSummary{
+		System:         cfg.System,
+		Client:         cfg.Client,
 		StartedAt:      startedAt.UTC().Format(time.RFC3339),
 		FinishedAt:     finishedAt.UTC().Format(time.RFC3339),
 		DurationSecs:   finishedAt.Sub(startedAt).Seconds(),

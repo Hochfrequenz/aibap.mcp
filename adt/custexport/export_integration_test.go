@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,10 +51,13 @@ func TestExportCustomizing_SmallTableSet(t *testing.T) {
 
 	tables := []string{"T001", "T005", "T006", "TVARVC", "T000"}
 
+	host, sapClient := client.SystemInfo()
 	summary, err := custexport.RunExport(ctx, client, custexport.ExportConfig{
 		OutputDir: outputDir,
 		Tables:    tables,
 		Workers:   1,
+		System:    host,
+		Client:    sapClient,
 	})
 	if err != nil {
 		t.Fatalf("RunExport failed: %v", err)
@@ -138,8 +140,16 @@ func TestExportCustomizing_SmallTableSet(t *testing.T) {
 		t.Errorf("exported(%d) + empty(%d) != total(%d)",
 			fileSummary.ExportedTables, fileSummary.EmptyTables, len(tables))
 	}
+	// Verify system and client are populated (#90).
+	if fileSummary.System == "" {
+		t.Error("export_summary.json has empty 'system' field")
+	}
+	if fileSummary.Client == "" {
+		t.Error("export_summary.json has empty 'client' field")
+	}
 
-	t.Logf("export summary: %d tables, %d exported, %d empty, %d total rows",
+	t.Logf("export summary: system=%s client=%s, %d tables, %d exported, %d empty, %d total rows",
+		fileSummary.System, fileSummary.Client,
 		fileSummary.TotalTables, fileSummary.ExportedTables, fileSummary.EmptyTables, fileSummary.TotalRows)
 }
 
