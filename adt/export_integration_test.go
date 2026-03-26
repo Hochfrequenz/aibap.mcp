@@ -211,6 +211,37 @@ func TestExportPackage_BulkWithExclude(t *testing.T) {
 	}
 }
 
+func TestExportPackage_FullFolderLogicRetry(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	// These packages have sub-packages that don't follow PREFIX naming.
+	// They previously failed with "Try using the folder logic FULL".
+	// Now ExportPackage auto-retries with folderLogic=FULL.
+	exported := 0
+	for _, pkg := range []string{"ZCERE_PLAYGROUND", "ZCERE_PATTERN", "ZCEREBRICKS"} {
+		data, err := client.ExportPackage(ctx, pkg)
+		if err != nil {
+			// Package may not exist on this system — skip, don't fail.
+			if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "does not exist") {
+				t.Logf("%s: not found on this system, skipping", pkg)
+				continue
+			}
+			t.Errorf("%s: expected auto-retry with FULL to succeed, got: %v", pkg, err)
+			continue
+		}
+		if len(data) == 0 {
+			t.Errorf("%s: exported empty ZIP", pkg)
+			continue
+		}
+		t.Logf("%s: exported %d bytes", pkg, len(data))
+		exported++
+	}
+	if exported == 0 {
+		t.Skip("none of the ZCERE test packages exist on this system")
+	}
+}
+
 func TestExportPackage_NonExistent(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
