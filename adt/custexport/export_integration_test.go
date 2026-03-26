@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -280,4 +281,66 @@ func TestExportCustomizing_Pagination(t *testing.T) {
 	}
 
 	t.Logf("T006: %d rows across %d pages (page_size=%d)", jt.TotalRows, jt.Pages, pageSize)
+}
+
+func TestExportCustomizing_IncludeTables(t *testing.T) {
+	client := newClient(t)
+	ctx := context.Background()
+	outputDir := t.TempDir()
+
+	// /US4G/BITCAT_RD and /US4G/CDLIST_D have .INCLUDE pseudo-fields in DD03L
+	// that previously caused "invalid key column" errors. Verify they export now.
+	tables := []string{"/US4G/BITCAT_RD", "/US4G/CDLIST_D"}
+
+	summary, err := custexport.RunExport(ctx, client, custexport.ExportConfig{
+		OutputDir: outputDir,
+		Tables:    tables,
+		PageSize:  100000,
+		Workers:   1,
+	})
+	if err != nil {
+		t.Fatalf("RunExport failed: %v", err)
+	}
+
+	// Verify no .INCLUDE errors.
+	for _, e := range summary.Errors {
+		if strings.Contains(e.Error, ".INCLUDE") {
+			t.Errorf("table %s still has .INCLUDE error: %s", e.Table, e.Error)
+		}
+	}
+
+	// Verify both tables have JSON files.
+	for _, table := range tables {
+		jsonName := strings.ReplaceAll(table, "/", "#") + ".json"
+		jsonPath := filepath.Join(outputDir, "json", jsonName)
+		if _, err := os.Stat(jsonPath); err != nil {
+			t.Errorf("missing JSON for %s: %v", table, err)
+			continue
+		}
+		t.Logf("%s exported successfully", table)
+	}
+
+	// Verify SQLite has the tables with PRIMARY KEY.
+	dbPath := filepath.Join(outputDir, "customizing.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	for _, table := range tables {
+		var ddl string
+		err := db.QueryRow(fmt.Sprintf(`SELECT sql FROM sqlite_master WHERE name = '%s'`, table)).Scan(&ddl)
+		if err != nil {
+			t.Errorf("%s: not found in SQLite: %v", table, err)
+			continue
+		}
+		if strings.Contains(ddl, "PRIMARY KEY") {
+			t.Logf("%s: has PRIMARY KEY in SQLite", table)
+		} else {
+			t.Logf("%s: no PRIMARY KEY (may have only MANDT as key)", table)
+		}
+	}
+
+	t.Logf("summary: %d exported, %d errors", summary.ExportedTables, len(summary.Errors))
 }

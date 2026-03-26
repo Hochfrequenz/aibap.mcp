@@ -158,7 +158,9 @@ func fetchTableKeys(ctx context.Context, client adt.Client, table string) ([]str
 	for _, row := range result.Rows {
 		if len(row) > 0 {
 			name := strings.TrimSpace(row[0])
-			if name != "" {
+			// Skip DDIC pseudo-fields like .INCLUDE and .APPEND — these are
+			// metadata markers for include structures, not real column names.
+			if name != "" && !strings.HasPrefix(name, ".") {
 				keys = append(keys, name)
 			}
 		}
