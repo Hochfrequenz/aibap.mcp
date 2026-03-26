@@ -98,6 +98,11 @@ func (c *httpClient) CreatePackage(ctx context.Context, name, description, respo
 		return fmt.Errorf("CreatePackage: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == 404 {
+		return fmt.Errorf("CreatePackage: the /sap/bc/adt/packages endpoint is not available on this SAP system — " +
+			"package creation via ADT REST requires S/4HANA or a recent ABAP Platform version. " +
+			"On older ECC systems, create the package manually via transaction SE80 or SE21, then use it in CreateObject")
+	}
 	return checkResponse(resp)
 }
 
