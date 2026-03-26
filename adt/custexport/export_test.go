@@ -82,6 +82,9 @@ func (m *mockClient) GetATCCustomizing(context.Context) (*adt.ATCCustomizingResu
 func (m *mockClient) RunATCCheck(context.Context, []string) (*adt.ATCResult, error) {
 	panic("not implemented")
 }
+func (m *mockClient) SystemInfo() (string, string) {
+	return "https://mock.example.com:443", "100"
+}
 
 func TestDiscoverTables(t *testing.T) {
 	var capturedSQL string
@@ -429,6 +432,8 @@ func TestRunExport_EndToEnd(t *testing.T) {
 		Tables:    []string{"T001"},
 		PageSize:  100,
 		Workers:   1,
+		System:    "https://mock.example.com:443",
+		Client:    "100",
 	}
 
 	summary, err := RunExport(context.Background(), client, cfg)
@@ -450,5 +455,11 @@ func TestRunExport_EndToEnd(t *testing.T) {
 	}
 	if summary.Workers != 1 {
 		t.Errorf("expected workers=1, got %d", summary.Workers)
+	}
+	if summary.System != "https://mock.example.com:443" {
+		t.Errorf("expected system %q, got %q", "https://mock.example.com:443", summary.System)
+	}
+	if summary.Client != "100" {
+		t.Errorf("expected client %q, got %q", "100", summary.Client)
 	}
 }

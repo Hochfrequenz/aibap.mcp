@@ -70,12 +70,15 @@ func registerCustomizingTools(s toolAdder, client adt.Client) {
 			workers = 40
 		}
 
+		host, sapClient := client.SystemInfo()
 		cfg := custexport.ExportConfig{
 			OutputDir:    outputDir,
 			Tables:       tables,
 			CustomerOnly: customerOnly,
 			PageSize:     pageSize,
 			Workers:      workers,
+			System:       host,
+			Client:       sapClient,
 		}
 
 		summary, err := custexport.RunExport(ctx, client, cfg)

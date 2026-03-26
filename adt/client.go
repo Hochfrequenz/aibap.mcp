@@ -39,6 +39,7 @@ type Client interface {
 	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
 	RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error)
 	RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error)
+	SystemInfo() (host, client string) // returns the SAP system host and client number
 }
 
 type httpClient struct {
@@ -98,6 +99,11 @@ func NewClientWithToken(cfg config.SAPConfig, accessToken string, onRefresh func
 		accessToken:    accessToken,
 		onTokenRefresh: onRefresh,
 	}
+}
+
+// SystemInfo returns the SAP system host URL and client number.
+func (c *httpClient) SystemInfo() (host, client string) {
+	return c.cfg.Host, c.cfg.Client
 }
 
 // fetchCSRFToken performs the CSRF preflight GET and caches the token and session cookies.
