@@ -69,12 +69,31 @@ func (c *httpClient) RunQuery(ctx context.Context, sql string, maxRows int) (*Qu
 		return nil, fmt.Errorf("RunQuery: reading response: %w", err)
 	}
 
+	// Sanitize: SAP data may contain control characters (e.g. U+000F) that are
+	// illegal in XML 1.0. Strip them before parsing to avoid xml.Unmarshal errors.
+	body = sanitizeXML(body)
+
 	var dpResult adtmodel.DataPreviewResult
 	if err := xml.Unmarshal(body, &dpResult); err != nil {
 		return nil, fmt.Errorf("RunQuery: parsing XML: %w", err)
 	}
 
 	return transposeDataPreview(&dpResult)
+}
+
+// sanitizeXML strips C0 control characters (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F) that are
+// illegal in XML 1.0, while preserving tab (0x09), newline (0x0A), and carriage return (0x0D).
+// Operates on raw bytes — safe for UTF-8 since multi-byte continuation bytes are always >= 0x80.
+// SAP data can contain control characters (e.g. U+000F in TA23HOTELS) that break xml.Unmarshal.
+func sanitizeXML(data []byte) []byte {
+	clean := make([]byte, 0, len(data))
+	for _, b := range data {
+		if b == 0x09 || b == 0x0A || b == 0x0D || b >= 0x20 {
+			clean = append(clean, b)
+		}
+		// Drop bytes 0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F
+	}
+	return clean
 }
 
 // transposeDataPreview converts column-oriented DataPreviewResult to
