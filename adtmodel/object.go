@@ -44,20 +44,20 @@ type PackageRef struct {
 // CreatePackage is the XML body for creating an ABAP package (DEVC).
 // Content-Type must be application/vnd.sap.adt.packages.v2+xml.
 type CreatePackage struct {
-	XMLName              xml.Name              `xml:"pak:package"`
-	NSPak                string                `xml:"xmlns:pak,attr"`
-	NSCore               string                `xml:"xmlns:adtcore,attr"`
-	Name                 string                `xml:"adtcore:name,attr"`
-	Type                 string                `xml:"adtcore:type,attr"`
-	Description          string                `xml:"adtcore:description,attr"`
-	Responsible          string                `xml:"adtcore:responsible,attr"`
-	Attributes           PakAttributes         `xml:"pak:attributes"`
-	SuperPackage         PakSuperPackage       `xml:"pak:superPackage"`
-	ApplicationComponent PakAppComponent       `xml:"pak:applicationComponent"`
-	Transport            PakTransport          `xml:"pak:transport"`
-	UseAccesses          PakEmpty              `xml:"pak:useAccesses"`
-	PackageInterfaces    PakEmpty              `xml:"pak:packageInterfaces"`
-	SubPackages          PakEmpty              `xml:"pak:subPackages"`
+	XMLName              xml.Name        `xml:"pak:package"`
+	NSPak                string          `xml:"xmlns:pak,attr"`
+	NSCore               string          `xml:"xmlns:adtcore,attr"`
+	Name                 string          `xml:"adtcore:name,attr"`
+	Type                 string          `xml:"adtcore:type,attr"`
+	Description          string          `xml:"adtcore:description,attr"`
+	Responsible          string          `xml:"adtcore:responsible,attr"`
+	Attributes           PakAttributes   `xml:"pak:attributes"`
+	SuperPackage         PakSuperPackage `xml:"pak:superPackage"`
+	ApplicationComponent PakAppComponent `xml:"pak:applicationComponent"`
+	Transport            PakTransport    `xml:"pak:transport"`
+	UseAccesses          PakEmpty        `xml:"pak:useAccesses"`
+	PackageInterfaces    PakEmpty        `xml:"pak:packageInterfaces"`
+	SubPackages          PakEmpty        `xml:"pak:subPackages"`
 }
 
 // PakAttributes holds package attributes like packageType.
