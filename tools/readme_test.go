@@ -43,7 +43,7 @@ func readmeToolNames(t *testing.T) []string {
 	if err != nil {
 		t.Fatalf("open README.md: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Match table rows with backtick-quoted tool names: | `name` | ... |
 	re := regexp.MustCompile("^\\|\\s*`([a-z_]+)`\\s*\\|")
@@ -117,7 +117,7 @@ func TestReadmeToolCount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open README.md: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	re := regexp.MustCompile(`## Available tools \((\d+)\)`)
 	scanner := bufio.NewScanner(f)
