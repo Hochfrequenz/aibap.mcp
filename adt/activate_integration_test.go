@@ -25,6 +25,24 @@ func TestActivateObjects_Clean_Integration(t *testing.T) {
 	}
 }
 
+func TestGetInactiveObjects_Integration(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	objects, err := client.GetInactiveObjects(ctx)
+	if err != nil {
+		t.Fatalf("GetInactiveObjects: %v", err)
+	}
+	t.Logf("got %d inactive objects", len(objects))
+	for i, o := range objects {
+		if i >= 10 {
+			t.Logf("  ... and %d more", len(objects)-10)
+			break
+		}
+		t.Logf("  [%d] %s (%s) %s", i, o.Name, o.Type, o.URI)
+	}
+}
+
 func TestActivateObjects_WithErrors_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
