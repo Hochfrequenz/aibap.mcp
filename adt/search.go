@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 func parseObjectReferences(data []byte) ([]ObjectInfo, error) {
-	var refs adtmodel.ObjectReferences
+	var refs adtxml.ObjectReferences
 	if err := xml.Unmarshal(data, &refs); err != nil {
 		return nil, fmt.Errorf("parsing object references: %w", err)
 	}
@@ -82,7 +82,7 @@ func (c *httpClient) WhereUsed(ctx context.Context, objectURI string) ([]ObjectI
 }
 
 func parseUsageReferences(data []byte) ([]ObjectInfo, error) {
-	var result adtmodel.UsageReferenceResult
+	var result adtxml.UsageReferenceResult
 	if err := xml.Unmarshal(data, &result); err != nil {
 		return nil, fmt.Errorf("parsing usage references: %w", err)
 	}

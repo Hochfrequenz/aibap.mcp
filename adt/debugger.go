@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 // DebugSession manages a stateful ABAP debug session via ADT REST endpoints.
@@ -63,7 +63,7 @@ type BreakpointResult struct {
 // which is required for the listener to detect debug events.
 func (d *DebugSession) SetBreakpoint(ctx context.Context, objectURI string, line int, objectType, objectName string) (*BreakpointResult, error) {
 	uri := fmt.Sprintf("%s#start=%d,0", objectURI, line)
-	reqBody := adtmodel.BreakpointsRequest{
+	reqBody := adtxml.BreakpointsRequest{
 		NSDebug:       "http://www.sap.com/adt/debugger",
 		NSCore:        nsADTCore,
 		Scope:         "external",
@@ -72,7 +72,7 @@ func (d *DebugSession) SetBreakpoint(ctx context.Context, objectURI string, line
 		TerminalID:    d.terminalID,
 		IdeID:         d.ideID,
 		SyncMode:      "full",
-		Breakpoints: []adtmodel.BreakpointRequest{{
+		Breakpoints: []adtxml.BreakpointRequest{{
 			Kind: "line",
 			URI:  uri,
 			Type: objectType,
@@ -101,7 +101,7 @@ func (d *DebugSession) SetBreakpoint(ctx context.Context, objectURI string, line
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var bpResp adtmodel.BreakpointsResponse
+	var bpResp adtxml.BreakpointsResponse
 	if err := xml.Unmarshal(data, &bpResp); err != nil {
 		return nil, fmt.Errorf("SetBreakpoint unmarshal: %w", err)
 	}

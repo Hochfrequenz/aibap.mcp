@@ -2,7 +2,7 @@
 //
 // This package is designed to be extractable to a separate repository once stable.
 // Only add types here that have been verified against a real SAP system.
-package adtmodel
+package adtxml
 
 import (
 	"encoding/xml"
