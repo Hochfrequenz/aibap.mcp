@@ -39,6 +39,11 @@ type LockClient interface {
 	UnlockObject(ctx context.Context, objectURI, lockHandle string) error
 }
 
+// DocuClient provides ABAP documentation.
+type DocuClient interface {
+	GetABAPDoc(ctx context.Context, keyword string) (string, error)
+}
+
 // SearchClient provides object discovery.
 type SearchClient interface {
 	SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error)
@@ -85,6 +90,7 @@ type Client interface {
 	SourceClient
 	ObjectClient
 	LockClient
+	DocuClient
 	SearchClient
 	QualityClient
 	TransportClient

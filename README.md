@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (36)
+## Available tools (37)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -72,6 +72,7 @@ graph TD
 | `run_unit_tests` | Run ABAP Unit Tests |
 | `run_atc_check` | Run ATC (ABAP Test Cockpit) checks |
 | `get_atc_customizing` | Get ATC check variant configuration |
+| `get_abap_doc` | Look up ABAP keyword documentation |
 
 </details>
 
