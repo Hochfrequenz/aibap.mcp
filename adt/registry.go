@@ -171,3 +171,6 @@ func (r *ClientRegistry) RunQuery(ctx context.Context, sql string, maxRows int) 
 func (r *ClientRegistry) SystemInfo() (host, client string) {
 	return r.activeClient().SystemInfo()
 }
+func (r *ClientRegistry) Logout(ctx context.Context) error {
+	return r.activeClient().Logout(ctx)
+}

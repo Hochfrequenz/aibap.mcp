@@ -171,6 +171,7 @@ func (m *mockClient) ReleaseTransport(context.Context, string) error {
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
+func (m *mockClient) Logout(context.Context) error { return nil }
 
 func newTestServer(client adt.Client) *server.MCPServer {
 	return newTestServerWithSelector(client, &mockSelector{}, adt.NewLockMap())
