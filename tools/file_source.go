@@ -11,7 +11,10 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerFileSourceTools(s toolAdder, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
+func registerFileSourceTools(s toolAdder, client interface {
+	adt.SourceClient
+	adt.LockClient
+}, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("set_source_from_file",
 		mcp.WithDescription("Upload ABAP source code from a local file to SAP. Auto-locks if needed."),
 		mcp.WithString(paramObjectURI,

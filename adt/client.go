@@ -16,34 +16,79 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
-// Client defines all SAP ADT operations exposed as MCP tools.
-type Client interface {
+// SourceClient reads and writes ABAP source code.
+type SourceClient interface {
 	GetSource(ctx context.Context, objectURI string) (*SourceResult, error)
 	SetSource(ctx context.Context, objectURI, source, lockHandle, transport, etag string) (string, error)
+	PrettyPrint(ctx context.Context, source string) (string, error)
+	GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error)
+}
+
+// ObjectClient manages ABAP object lifecycle.
+type ObjectClient interface {
+	CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error
+	CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error
+	DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error
 	ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error)
+}
+
+// LockClient handles object locking.
+type LockClient interface {
+	LockObject(ctx context.Context, objectURI string) (string, error)
+	UnlockObject(ctx context.Context, objectURI, lockHandle string) error
+}
+
+// SearchClient provides object discovery.
+type SearchClient interface {
 	SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error)
 	WhereUsed(ctx context.Context, objectURI string) ([]ObjectInfo, error)
 	BrowsePackage(ctx context.Context, packageName string) ([]ObjectInfo, error)
 	GetObjectInfo(ctx context.Context, objectURI string) (*ObjectInfo, error)
+}
+
+// QualityClient runs checks and tests.
+type QualityClient interface {
 	SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error)
 	RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error)
+	RunATCCheck(ctx context.Context, objectURIs []string, checkVariant string) (*ATCResult, error)
+	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
+}
+
+// TransportClient manages CTS transports.
+type TransportClient interface {
 	CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error)
 	CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error)
 	ReleaseTransport(ctx context.Context, transportNumber string) error
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
-	LockObject(ctx context.Context, objectURI string) (string, error)
-	UnlockObject(ctx context.Context, objectURI, lockHandle string) error
-	PrettyPrint(ctx context.Context, source string) (string, error)
-	CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error
-	DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error
-	GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error)
-	CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error
+}
+
+// ExportClient handles package exports.
+type ExportClient interface {
 	ExportPackage(ctx context.Context, packageName string) ([]byte, error)
-	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
-	RunATCCheck(ctx context.Context, objectURIs []string, checkVariant string) (*ATCResult, error)
+}
+
+// QueryClient runs data queries.
+type QueryClient interface {
 	RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error)
-	SystemInfo() (host, client string) // returns the SAP system host and client number
+}
+
+// SystemClient provides system metadata.
+type SystemClient interface {
+	SystemInfo() (host, client string)
+}
+
+// Client is the full ADT client combining all capabilities.
+type Client interface {
+	SourceClient
+	ObjectClient
+	LockClient
+	SearchClient
+	QualityClient
+	TransportClient
+	ExportClient
+	QueryClient
+	SystemClient
 }
 
 type httpClient struct {

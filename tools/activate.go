@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerActivateTools(s toolAdder, client adt.Client) {
+func registerActivateTools(s toolAdder, client adt.ObjectClient) {
 	s.AddTool(mcp.NewTool("activate_objects",
 		mcp.WithDescription("Activate one or more ABAP objects in SAP."),
 		mcp.WithArray("object_uris",

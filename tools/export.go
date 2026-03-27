@@ -11,7 +11,10 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerExportTools(s toolAdder, client adt.Client) {
+func registerExportTools(s toolAdder, client interface {
+	adt.ExportClient
+	adt.SearchClient
+}) {
 	s.AddTool(mcp.NewTool("export_package",
 		mcp.WithDescription(
 			"Export an ABAP package as an abapGit-compatible ZIP or folder on disk (read-only, no changes on SAP side). "+

@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerTransportTools(s toolAdder, client adt.Client) {
+func registerTransportTools(s toolAdder, client adt.TransportClient) {
 	s.AddTool(mcp.NewTool("get_transport_requests",
 		mcp.WithDescription("List CTS transport requests on the configured SAP system. Status: D=modifiable, L=released."),
 		mcp.WithString("user", mcp.Description("Filter by owner username")),

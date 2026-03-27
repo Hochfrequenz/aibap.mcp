@@ -7,7 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerPrettyPrinterTools(s toolAdder, client adt.Client) {
+func registerPrettyPrinterTools(s toolAdder, client adt.SourceClient) {
 	s.AddTool(mcp.NewTool("pretty_print",
 		mcp.WithDescription("Format ABAP source code using the SAP Pretty Printer."),
 		mcp.WithString("source",
