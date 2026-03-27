@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/Hochfrequenz/mcp-server-abap/adt/custexport"
@@ -58,20 +57,10 @@ func registerCustomizingTools(s toolAdder, client adt.Client) {
 		}
 
 		// Parse comma-separated table list.
-		var tables []string
-		if tablesStr != "" {
-			for _, t := range strings.Split(tablesStr, ",") {
-				t = strings.TrimSpace(t)
-				if t != "" {
-					tables = append(tables, strings.ToUpper(t))
-				}
-			}
-		}
+		tables := custexport.ParseTableList(tablesStr)
 
-		// Cap workers.
-		if workers > 40 {
-			workers = 40
-		}
+		// Clamp workers to valid range.
+		workers = custexport.ClampWorkers(workers)
 
 		host, sapClient := client.SystemInfo()
 		cfg := custexport.ExportConfig{

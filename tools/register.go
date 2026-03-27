@@ -20,11 +20,6 @@ type SystemSelector interface {
 	ActiveName() string
 }
 
-// lockKey returns the key used to store lock state in the lock map.
-func lockKey(selector SystemSelector, objectURI string) string {
-	return selector.ActiveName() + ":" + objectURI
-}
-
 // RegisterAll registers all SAP ADT MCP tools on the given server.
 func RegisterAll(s *server.MCPServer, client adt.Client, selector SystemSelector) {
 	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap())
