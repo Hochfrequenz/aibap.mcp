@@ -85,6 +85,9 @@ func (m *mockClient) GetATCCustomizing(context.Context) (*adt.ATCCustomizingResu
 func (m *mockClient) RunATCCheck(context.Context, []string) (*adt.ATCResult, error) {
 	panic("not implemented")
 }
+func (m *mockClient) CreateTransport(context.Context, string, string, string, string) (string, error) {
+	panic("not implemented")
+}
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }

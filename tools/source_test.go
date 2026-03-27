@@ -96,6 +96,9 @@ func (m *mockClient) RunUnitTests(ctx context.Context, uri string, timeout int) 
 	}
 	return &adt.TestResult{}, nil
 }
+func (m *mockClient) CreateTransport(context.Context, string, string, string, string) (string, error) {
+	return "DEVK999999", nil
+}
 func (m *mockClient) GetTransportRequests(ctx context.Context, user, status string) ([]adt.TransportRequest, error) {
 	if m.getTransportFn != nil {
 		return m.getTransportFn(ctx, user, status)
