@@ -120,6 +120,9 @@ func (r *ClientRegistry) SyntaxCheck(ctx context.Context, objectURI string) ([]S
 func (r *ClientRegistry) RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error) {
 	return r.activeClient().RunUnitTests(ctx, objectURI, timeoutSeconds)
 }
+func (r *ClientRegistry) CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error) {
+	return r.activeClient().CreateTransport(ctx, category, target, description, devClass)
+}
 func (r *ClientRegistry) GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error) {
 	return r.activeClient().GetTransportRequests(ctx, user, status)
 }
