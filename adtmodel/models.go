@@ -65,6 +65,15 @@ type TransportCheckHeader struct {
 	Text       string `xml:"AS4TEXT"`
 }
 
+// TransportCheckRequest is the DATA content for a transport check request.
+// Endpoint: POST /sap/bc/adt/cts/transportchecks
+type TransportCheckRequest struct {
+	PgmID      string `xml:"PGMID"`
+	Object     string `xml:"OBJECT"`
+	ObjectName string `xml:"OBJECTNAME"`
+	Operation  string `xml:"OPERATION"`
+}
+
 // CreateTransportData is the DATA content for creating a transport request.
 // Endpoint: POST /sap/bc/adt/cts/transports
 // Verified: 2026-03-23 against srvhfuhana.sap.msp.local:44300

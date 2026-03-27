@@ -68,6 +68,18 @@ type TransportRequest struct {
 	Status      string // "D" = modifiable, "L" = released
 }
 
+// TransportCheckResult is returned by CheckTransport.
+type TransportCheckResult struct {
+	PgmID      string             // R3TR, LIMU, etc.
+	Object     string             // PROG, CLAS, INTF, etc.
+	ObjectName string             // object name
+	DevClass   string             // package
+	Result     string             // S=success, E=error
+	Recording  bool               // true if object can be recorded
+	Requests   []TransportRequest // available transport requests
+	Messages   []string           // informational/error messages
+}
+
 // CompletionItem represents a single code completion proposal.
 type CompletionItem struct {
 	Text        string
