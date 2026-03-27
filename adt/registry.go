@@ -108,6 +108,9 @@ func (r *ClientRegistry) GetInactiveObjects(ctx context.Context) ([]ObjectInfo, 
 func (r *ClientRegistry) GetABAPDoc(ctx context.Context, keyword string) (string, error) {
 	return r.activeClient().GetABAPDoc(ctx, keyword)
 }
+func (r *ClientRegistry) NavigateToDefinition(ctx context.Context, sourceURI string) (string, error) {
+	return r.activeClient().NavigateToDefinition(ctx, sourceURI)
+}
 func (r *ClientRegistry) SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error) {
 	return r.activeClient().SearchObjects(ctx, query, objectType, maxResults)
 }

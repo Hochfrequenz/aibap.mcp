@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (37)
+## Available tools (38)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -43,6 +43,7 @@ graph TD
 |------|-------------|
 | `search_objects` | Search for objects by name pattern and type |
 | `where_used` | Find all usages of an object |
+| `navigate_to_definition` | Go to definition of a source reference |
 | `browse_package` | List contents of a package |
 | `get_object_info` | Get object metadata (type, package, description) |
 | `create_object` | Create a new ABAP object (program, class, interface) |
