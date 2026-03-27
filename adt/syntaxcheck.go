@@ -16,7 +16,7 @@ func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]Synta
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
 		`<chkrun:checkObjectList xmlns:chkrun="http://www.sap.com/adt/checkrun" `+
 		`xmlns:adtcore="http://www.sap.com/adt/core">`+
-		`<chkrun:checkObject adtcore:uri="%s" chkrun:version="active"/>`+
+		`<chkrun:checkObject adtcore:uri="%s" chkrun:version="inactive"/>`+
 		`</chkrun:checkObjectList>`, objectURI)
 
 	resp, err := c.doMutate(ctx, http.MethodPost,
