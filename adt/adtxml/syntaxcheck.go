@@ -1,4 +1,4 @@
-package adtmodel
+package adtxml
 
 import "encoding/xml"
 

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 func (c *httpClient) LockObject(ctx context.Context, objectURI string) (string, error) {
@@ -28,7 +28,7 @@ func (c *httpClient) LockObject(ctx context.Context, objectURI string) (string, 
 		return "", fmt.Errorf("LockObject reading body: %w", err)
 	}
 	// SAP returns asx:abap envelope with LockData
-	lockData, unmarshalErr := adtmodel.UnmarshalASXData[adtmodel.LockData](data)
+	lockData, unmarshalErr := adtxml.UnmarshalASXData[adtxml.LockData](data)
 	if unmarshalErr == nil && lockData.LockHandle != "" {
 		return lockData.LockHandle, nil
 	}

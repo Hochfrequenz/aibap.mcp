@@ -9,17 +9,17 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 func (c *httpClient) CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error) {
-	reqData := adtmodel.TransportCheckRequest{
+	reqData := adtxml.TransportCheckRequest{
 		PgmID:      strings.ToUpper(pgmID),
 		Object:     strings.ToUpper(object),
 		ObjectName: strings.ToUpper(objectName),
 		Operation:  "I",
 	}
-	body, err := adtmodel.MarshalASXData(reqData)
+	body, err := adtxml.MarshalASXData(reqData)
 	if err != nil {
 		return nil, fmt.Errorf("CheckTransport marshal: %w", err)
 	}
@@ -45,7 +45,7 @@ func (c *httpClient) CheckTransport(ctx context.Context, pgmID, object, objectNa
 		return nil, fmt.Errorf("CheckTransport reading body: %w", err)
 	}
 
-	checkData, err := adtmodel.UnmarshalASXData[adtmodel.TransportCheckData](data)
+	checkData, err := adtxml.UnmarshalASXData[adtxml.TransportCheckData](data)
 	if err != nil {
 		return nil, fmt.Errorf("CheckTransport parsing: %w", err)
 	}
@@ -69,13 +69,13 @@ func (c *httpClient) CheckTransport(ctx context.Context, pgmID, object, objectNa
 }
 
 func (c *httpClient) CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error) {
-	reqData := adtmodel.CreateTransportData{
+	reqData := adtxml.CreateTransportData{
 		Category:    strings.ToUpper(category),
 		Target:      strings.ToUpper(target),
 		Description: description,
 		DevClass:    strings.ToUpper(devClass),
 	}
-	body, err := adtmodel.MarshalASXData(reqData)
+	body, err := adtxml.MarshalASXData(reqData)
 	if err != nil {
 		return "", fmt.Errorf("CreateTransport marshal: %w", err)
 	}
@@ -100,7 +100,7 @@ func (c *httpClient) CreateTransport(ctx context.Context, category, target, desc
 
 	data, _ := io.ReadAll(resp.Body)
 	if len(data) > 0 {
-		asxData, err := adtmodel.UnmarshalASXData[struct {
+		asxData, err := adtxml.UnmarshalASXData[struct {
 			TrKorr string `xml:"TRKORR"`
 		}](data)
 		if err == nil && asxData.TrKorr != "" {
@@ -146,7 +146,7 @@ func (c *httpClient) GetTransportRequests(ctx context.Context, user, status stri
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var root adtmodel.TransportRoot
+	var root adtxml.TransportRoot
 	if err := xml.Unmarshal(data, &root); err != nil {
 		return nil, fmt.Errorf("GetTransportRequests parsing: %w", err)
 	}
@@ -162,7 +162,7 @@ func (c *httpClient) GetTransportRequests(ctx context.Context, user, status stri
 }
 
 func (c *httpClient) AddToTransport(ctx context.Context, objectURI, transport string) error {
-	body, err := xml.Marshal(adtmodel.TransportComponent{
+	body, err := xml.Marshal(adtxml.TransportComponent{
 		NSCore:    nsADTCore,
 		ObjectURI: objectURI,
 	})

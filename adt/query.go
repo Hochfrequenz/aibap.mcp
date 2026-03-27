@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 // validateSelectOnly checks that sql is a single SELECT statement.
@@ -73,7 +73,7 @@ func (c *httpClient) RunQuery(ctx context.Context, sql string, maxRows int) (*Qu
 	// illegal in XML 1.0. Strip them before parsing to avoid xml.Unmarshal errors.
 	body = sanitizeXML(body)
 
-	var dpResult adtmodel.DataPreviewResult
+	var dpResult adtxml.DataPreviewResult
 	if err := xml.Unmarshal(body, &dpResult); err != nil {
 		return nil, fmt.Errorf("RunQuery: parsing XML: %w", err)
 	}
@@ -98,7 +98,7 @@ func sanitizeXML(data []byte) []byte {
 
 // transposeDataPreview converts column-oriented DataPreviewResult to
 // row-oriented QueryResult.
-func transposeDataPreview(dp *adtmodel.DataPreviewResult) (*QueryResult, error) {
+func transposeDataPreview(dp *adtxml.DataPreviewResult) (*QueryResult, error) {
 	numCols := len(dp.Columns)
 	if numCols == 0 {
 		totalRows, _ := strconv.Atoi(dp.TotalRows)
