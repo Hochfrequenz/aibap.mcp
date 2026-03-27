@@ -77,26 +77,33 @@ func (c *httpClient) GetInactiveObjects(ctx context.Context) ([]ObjectInfo, erro
 	}
 
 	var root struct {
-		Objects []struct {
-			URI         string `xml:"uri,attr"`
-			Type        string `xml:"type,attr"`
-			Name        string `xml:"name,attr"`
-			Description string `xml:"description,attr"`
-			ParentURI   string `xml:"parentUri,attr"`
+		Entries []struct {
+			Object struct {
+				Ref struct {
+					URI         string `xml:"uri,attr"`
+					Type        string `xml:"type,attr"`
+					Name        string `xml:"name,attr"`
+					PackageName string `xml:"packageName,attr"`
+				} `xml:"ref"`
+			} `xml:"object"`
 		} `xml:"entry"`
 	}
 	if err := xml.Unmarshal(data, &root); err != nil {
 		return nil, fmt.Errorf("GetInactiveObjects parsing: %w", err)
 	}
 
-	result := make([]ObjectInfo, len(root.Objects))
-	for i, o := range root.Objects {
-		result[i] = ObjectInfo{
-			URI:         o.URI,
-			Type:        o.Type,
-			Name:        o.Name,
-			Description: o.Description,
+	var result []ObjectInfo
+	for _, e := range root.Entries {
+		ref := e.Object.Ref
+		if ref.Name == "" {
+			continue // skip entries without an object (transport-only entries)
 		}
+		result = append(result, ObjectInfo{
+			URI:         ref.URI,
+			Type:        ref.Type,
+			Name:        ref.Name,
+			PackageName: ref.PackageName,
+		})
 	}
 	return result, nil
 }
