@@ -70,7 +70,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_start",
-		mcp.WithDescription("Set a breakpoint and start the debug listener. Blocks until the breakpoint is hit or timeout expires."),
+		mcp.WithDescription("Set a breakpoint and start the debug listener. Blocks until the breakpoint is hit or timeout expires. To trigger the breakpoint, run unit tests (run_unit_tests) in a separate call. External breakpoints only trigger in HTTP/ICF sessions, not SAP GUI."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
 			mcp.Description("ADT object URI, e.g. /sap/bc/adt/programs/programs/zreport/source/main"),
@@ -173,7 +173,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_step",
-		mcp.WithDescription("Execute a debug step action."),
+		mcp.WithDescription("Execute a debug step action (stepInto, stepOver, stepReturn, or continue). Requires an active debug session via debug_start + debug_attach."),
 		mcp.WithString("action",
 			mcp.Required(),
 			mcp.Description("Step action: stepInto, stepOver, stepReturn, or continue"),
