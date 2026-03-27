@@ -168,6 +168,7 @@ func (m *mockClient) RunQuery(_ context.Context, _ string, _ int) (*adt.QueryRes
 func (m *mockClient) ReleaseTransport(context.Context, string) error {
 	return nil
 }
+func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { return "", nil }
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
