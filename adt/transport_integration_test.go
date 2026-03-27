@@ -7,6 +7,32 @@ import (
 	"testing"
 )
 
+func TestCheckTransport_Integration(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	result, err := client.CheckTransport(ctx, "R3TR", "PROG", "Z_ADT_MCP_TEST_REPORT")
+	if err != nil {
+		t.Fatalf("CheckTransport failed: %v", err)
+	}
+
+	t.Logf("Result=%s Recording=%v DevClass=%s", result.Result, result.Recording, result.DevClass)
+	t.Logf("Available transports: %d", len(result.Requests))
+	for i, r := range result.Requests {
+		if i >= 5 {
+			break
+		}
+		t.Logf("  %s (%s) — %s", r.Number, r.Status, r.Description)
+	}
+
+	if result.Result == "" {
+		t.Error("expected non-empty Result")
+	}
+	if result.ObjectName != "Z_ADT_MCP_TEST_REPORT" {
+		t.Errorf("ObjectName: got %q", result.ObjectName)
+	}
+}
+
 func TestCreateTransport_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()

@@ -96,6 +96,9 @@ func (m *mockClient) RunUnitTests(ctx context.Context, uri string, timeout int) 
 	}
 	return &adt.TestResult{}, nil
 }
+func (m *mockClient) CheckTransport(context.Context, string, string, string) (*adt.TransportCheckResult, error) {
+	return &adt.TransportCheckResult{}, nil
+}
 func (m *mockClient) CreateTransport(context.Context, string, string, string, string) (string, error) {
 	return "DEVK999999", nil
 }
@@ -156,7 +159,7 @@ func (m *mockClient) ExportPackage(ctx context.Context, packageName string) ([]b
 func (m *mockClient) GetATCCustomizing(_ context.Context) (*adt.ATCCustomizingResult, error) {
 	return &adt.ATCCustomizingResult{Properties: map[string]string{}}, nil
 }
-func (m *mockClient) RunATCCheck(_ context.Context, _ []string) (*adt.ATCResult, error) {
+func (m *mockClient) RunATCCheck(_ context.Context, _ []string, _ string) (*adt.ATCResult, error) {
 	return &adt.ATCResult{}, nil
 }
 func (m *mockClient) RunQuery(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {

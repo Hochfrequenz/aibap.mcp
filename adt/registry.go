@@ -126,6 +126,9 @@ func (r *ClientRegistry) CreateTransport(ctx context.Context, category, target, 
 func (r *ClientRegistry) GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error) {
 	return r.activeClient().GetTransportRequests(ctx, user, status)
 }
+func (r *ClientRegistry) CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error) {
+	return r.activeClient().CheckTransport(ctx, pgmID, object, objectName)
+}
 func (r *ClientRegistry) AddToTransport(ctx context.Context, objectURI, transport string) error {
 	return r.activeClient().AddToTransport(ctx, objectURI, transport)
 }
@@ -156,8 +159,8 @@ func (r *ClientRegistry) ExportPackage(ctx context.Context, packageName string) 
 func (r *ClientRegistry) GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error) {
 	return r.activeClient().GetATCCustomizing(ctx)
 }
-func (r *ClientRegistry) RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error) {
-	return r.activeClient().RunATCCheck(ctx, objectURIs)
+func (r *ClientRegistry) RunATCCheck(ctx context.Context, objectURIs []string, checkVariant string) (*ATCResult, error) {
+	return r.activeClient().RunATCCheck(ctx, objectURIs, checkVariant)
 }
 func (r *ClientRegistry) RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error) {
 	return r.activeClient().RunQuery(ctx, sql, maxRows)

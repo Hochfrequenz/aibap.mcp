@@ -12,6 +12,62 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
 )
 
+func (c *httpClient) CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error) {
+	reqData := adtmodel.TransportCheckRequest{
+		PgmID:      strings.ToUpper(pgmID),
+		Object:     strings.ToUpper(object),
+		ObjectName: strings.ToUpper(objectName),
+		Operation:  "I",
+	}
+	body, err := adtmodel.MarshalASXData(reqData)
+	if err != nil {
+		return nil, fmt.Errorf("CheckTransport marshal: %w", err)
+	}
+
+	resp, err := c.doMutate(ctx, http.MethodPost,
+		"/sap/bc/adt/cts/transportchecks",
+		strings.NewReader(string(body)),
+		map[string]string{
+			"Content-Type": "application/vnd.sap.as+xml; charset=utf-8; dataname=com.sap.adt.transport.CheckObjects",
+			"Accept":       "application/vnd.sap.as+xml",
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("CheckTransport: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("CheckTransport reading body: %w", err)
+	}
+
+	checkData, err := adtmodel.UnmarshalASXData[adtmodel.TransportCheckData](data)
+	if err != nil {
+		return nil, fmt.Errorf("CheckTransport parsing: %w", err)
+	}
+
+	result := &TransportCheckResult{
+		PgmID:      checkData.PgmID,
+		Object:     checkData.Object,
+		ObjectName: checkData.ObjectName,
+		DevClass:   checkData.DevClass,
+		Result:     checkData.Result,
+		Recording:  checkData.Recording == "X",
+	}
+	for _, req := range checkData.Requests {
+		result.Requests = append(result.Requests, TransportRequest{
+			Number:      req.Header.TrKorr,
+			Description: req.Header.Text,
+			Status:      req.Header.TrStatus,
+		})
+	}
+	return result, nil
+}
+
 func (c *httpClient) CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error) {
 	reqData := adtmodel.CreateTransportData{
 		Category:    strings.ToUpper(category),

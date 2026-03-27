@@ -27,6 +27,7 @@ type Client interface {
 	GetObjectInfo(ctx context.Context, objectURI string) (*ObjectInfo, error)
 	SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error)
 	RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error)
+	CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error)
 	CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error)
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
@@ -39,7 +40,7 @@ type Client interface {
 	CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error
 	ExportPackage(ctx context.Context, packageName string) ([]byte, error)
 	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
-	RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error)
+	RunATCCheck(ctx context.Context, objectURIs []string, checkVariant string) (*ATCResult, error)
 	RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error)
 	SystemInfo() (host, client string) // returns the SAP system host and client number
 }
