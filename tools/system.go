@@ -8,7 +8,7 @@ import (
 
 func registerSystemTools(s toolAdder, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("select_system",
-		mcp.WithDescription("Switch the active SAP system for all subsequent tool calls. Returns the active system name and host."),
+		mcp.WithDescription("Switch the active SAP system for all subsequent tool calls. System names are defined in the server's sap-adt-config.yaml (e.g. 'hfq', 's4u'). Returns the active system name and host URL."),
 		mcp.WithString("system",
 			mcp.Required(),
 			mcp.Description("Name of the system to activate, as defined in config.yaml (e.g. \"dev\", \"prod\")"),

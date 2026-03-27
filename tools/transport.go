@@ -25,7 +25,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 	})
 
 	s.AddTool(mcp.NewTool("add_to_transport",
-		mcp.WithDescription("Assign an ABAP object to a CTS transport request."),
+		mcp.WithDescription("Record an ABAP object into a CTS transport task. The transport parameter should be a task number (not the parent transport). Use check_transport to find available tasks."),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number, e.g. DEVK900123")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
