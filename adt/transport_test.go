@@ -10,6 +10,71 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
+func TestCheckTransport(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path != "/sap/bc/adt/cts/transportchecks" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/vnd.sap.as+xml")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+    <DATA>
+      <PGMID>R3TR</PGMID>
+      <OBJECT>PROG</OBJECT>
+      <OBJECTNAME>ZTEST</OBJECTNAME>
+      <OPERATION>I</OPERATION>
+      <DEVCLASS>ZPACKAGE</DEVCLASS>
+      <RESULT>S</RESULT>
+      <RECORDING>X</RECORDING>
+      <REQUESTS>
+        <CTS_REQUEST>
+          <REQ_HEADER>
+            <TRKORR>DEVK900001</TRKORR>
+            <TRFUNCTION>K</TRFUNCTION>
+            <TRSTATUS>D</TRSTATUS>
+            <AS4TEXT>My transport</AS4TEXT>
+          </REQ_HEADER>
+        </CTS_REQUEST>
+      </REQUESTS>
+    </DATA>
+  </asx:values>
+</asx:abap>`))
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	result, err := client.CheckTransport(context.Background(), "R3TR", "PROG", "ZTEST")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Result != "S" {
+		t.Errorf("Result: got %q, want S", result.Result)
+	}
+	if !result.Recording {
+		t.Error("expected Recording=true")
+	}
+	if result.DevClass != "ZPACKAGE" {
+		t.Errorf("DevClass: got %q", result.DevClass)
+	}
+	if len(result.Requests) != 1 {
+		t.Fatalf("expected 1 request, got %d", len(result.Requests))
+	}
+	if result.Requests[0].Number != "DEVK900001" {
+		t.Errorf("transport number: got %q", result.Requests[0].Number)
+	}
+}
+
 func TestGetTransportRequests(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/sap/bc/adt/cts/transportrequests" {

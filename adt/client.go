@@ -27,6 +27,7 @@ type Client interface {
 	GetObjectInfo(ctx context.Context, objectURI string) (*ObjectInfo, error)
 	SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error)
 	RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error)
+	CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error)
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
 	LockObject(ctx context.Context, objectURI string) (string, error)
