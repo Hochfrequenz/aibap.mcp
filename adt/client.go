@@ -38,7 +38,7 @@ type Client interface {
 	CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error
 	ExportPackage(ctx context.Context, packageName string) ([]byte, error)
 	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
-	RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error)
+	RunATCCheck(ctx context.Context, objectURIs []string, checkVariant string) (*ATCResult, error)
 	RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error)
 	SystemInfo() (host, client string) // returns the SAP system host and client number
 }

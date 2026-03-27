@@ -45,7 +45,7 @@ func (c *httpClient) GetATCCustomizing(ctx context.Context) (*ATCCustomizingResu
 	return result, nil
 }
 
-func (c *httpClient) RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error) {
+func (c *httpClient) RunATCCheck(ctx context.Context, objectURIs []string, checkVariant string) (*ATCResult, error) {
 	// Build object references XML. Escape URIs to prevent XML injection.
 	var refs strings.Builder
 	for _, uri := range objectURIs {
@@ -54,52 +54,43 @@ func (c *httpClient) RunATCCheck(ctx context.Context, objectURIs []string) (*ATC
 		fmt.Fprintf(&refs, `<adtcore:objectReference adtcore:uri="%s"/>`, escaped.String())
 	}
 
+	variantAttr := ""
+	if checkVariant != "" {
+		var escaped strings.Builder
+		_ = xml.EscapeText(&escaped, []byte(checkVariant))
+		variantAttr = fmt.Sprintf(` checkVariant="%s"`, escaped.String())
+	}
+
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
 		`<atc:run xmlns:atc="http://www.sap.com/adt/atc" `+
-		`xmlns:adtcore="http://www.sap.com/adt/core" maximumVerdicts="100">`+
+		`xmlns:adtcore="http://www.sap.com/adt/core" maximumVerdicts="100"%s>`+
 		`<objectSets>`+
 		`<objectSet kind="inclusive">`+
-		`%s`+
+		`<adtcore:objectReferences>%s</adtcore:objectReferences>`+
 		`</objectSet>`+
 		`</objectSets>`+
-		`</atc:run>`, refs.String())
+		`</atc:run>`, variantAttr, refs.String())
 
-	// Step 1: Trigger ATC run.
-	// clientWait=false means the server returns immediately. The worklist fetch
-	// below assumes the run completes near-instantly. If this proves unreliable
-	// on systems where it works, a polling loop may be needed.
+	// Step 1: Trigger ATC run with a worklist to collect results.
+	const worklistID = "0000000000"
 	resp, err := c.doMutate(ctx, http.MethodPost,
-		"/sap/bc/adt/atc/runs?clientWait=false",
+		"/sap/bc/adt/atc/runs?clientWait=false&worklistId="+worklistID,
 		strings.NewReader(body),
 		map[string]string{
-			"Content-Type": "application/vnd.sap.atc.run.parameters.v1+xml",
-			"Accept":       "application/vnd.sap.atc.run.result.v1+xml",
+			"Content-Type": "application/xml",
+			"Accept":       "application/xml",
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("RunATCCheck: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	_ = resp.Body.Close()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("RunATCCheck reading run result: %w", err)
-	}
-
-	var runResult adtmodel.ATCWorklistRun
-	if err := xml.Unmarshal(data, &runResult); err != nil {
-		return nil, fmt.Errorf("RunATCCheck parsing run result: %w", err)
-	}
-
-	if runResult.WorklistID == "" {
-		return nil, fmt.Errorf("RunATCCheck: no worklist ID in response")
-	}
-
 	// Step 2: Fetch worklist results.
-	wlResp, err := c.doRead(ctx, "/sap/bc/adt/atc/worklists/"+runResult.WorklistID, map[string]string{
+	wlResp, err := c.doRead(ctx, "/sap/bc/adt/atc/worklists/"+worklistID, map[string]string{
 		"Accept": "application/atc.worklist.v1+xml",
 	})
 	if err != nil {
