@@ -9,7 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerSourceTools(s toolAdder, client adt.Client, lockMap *adt.LockMap, selector SystemSelector) {
+func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("get_source",
 		mcp.WithDescription("Read ABAP source code from SAP. Returns source text and ETag for optimistic locking."),
 		mcp.WithString(paramObjectURI,

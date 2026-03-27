@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerATCTools(s toolAdder, client adt.Client) {
+func registerATCTools(s toolAdder, client adt.QualityClient) {
 	s.AddTool(mcp.NewTool("get_atc_customizing",
 		mcp.WithDescription("Get ATC (ABAP Test Cockpit) configuration including check variant and exemption reasons."),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

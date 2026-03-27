@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerSyntaxCheckTools(s toolAdder, client adt.Client) {
+func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 	s.AddTool(mcp.NewTool("syntax_check",
 		mcp.WithDescription("Run ABAP syntax check on an object. Returns list of syntax messages with line/column info."),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),

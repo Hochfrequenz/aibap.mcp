@@ -20,7 +20,11 @@ func (m *mockLocker) LockObject(_ context.Context, _ string) (string, error) {
 	return m.handle, m.err
 }
 
-// mockReader implements adt.SourceReader for testing.
+func (m *mockLocker) UnlockObject(_ context.Context, _, _ string) error {
+	return nil
+}
+
+// mockReader implements adt.SourceClient for testing.
 type mockReader struct {
 	result *adt.SourceResult
 	err    error
@@ -30,6 +34,18 @@ type mockReader struct {
 func (m *mockReader) GetSource(_ context.Context, _ string) (*adt.SourceResult, error) {
 	m.called = true
 	return m.result, m.err
+}
+
+func (m *mockReader) SetSource(_ context.Context, _, _, _, _, _ string) (string, error) {
+	return "", nil
+}
+
+func (m *mockReader) PrettyPrint(_ context.Context, _ string) (string, error) {
+	return "", nil
+}
+
+func (m *mockReader) GetCompletions(_ context.Context, _, _ string, _, _ int) ([]adt.CompletionItem, error) {
+	return nil, nil
 }
 
 func TestLockMapSetAndGet(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerObjectTools(s toolAdder, client adt.Client) {
+func registerObjectTools(s toolAdder, client adt.ObjectClient) {
 	s.AddTool(mcp.NewTool("create_object",
 		mcp.WithDescription("Create a new ABAP object (program, class, or interface)."),
 		mcp.WithString("object_type",
