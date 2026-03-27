@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error) {
@@ -36,7 +36,7 @@ func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]Synta
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var reports adtmodel.CheckRunReports
+	var reports adtxml.CheckRunReports
 	xml.Unmarshal(data, &reports) //nolint:errcheck
 
 	var result []SyntaxMessage

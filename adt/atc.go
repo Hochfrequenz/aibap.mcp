@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 func (c *httpClient) GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error) {
@@ -28,7 +28,7 @@ func (c *httpClient) GetATCCustomizing(ctx context.Context) (*ATCCustomizingResu
 		return nil, fmt.Errorf("GetATCCustomizing reading body: %w", err)
 	}
 
-	var cust adtmodel.ATCCustomizing
+	var cust adtxml.ATCCustomizing
 	if err := xml.Unmarshal(data, &cust); err != nil {
 		return nil, fmt.Errorf("GetATCCustomizing parsing: %w", err)
 	}
@@ -106,7 +106,7 @@ func (c *httpClient) RunATCCheck(ctx context.Context, objectURIs []string, check
 		return nil, fmt.Errorf("RunATCCheck reading worklist: %w", err)
 	}
 
-	var worklist adtmodel.ATCWorklist
+	var worklist adtxml.ATCWorklist
 	if err := xml.Unmarshal(wlData, &worklist); err != nil {
 		return nil, fmt.Errorf("RunATCCheck parsing worklist: %w", err)
 	}

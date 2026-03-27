@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 func TestRunQuery_RejectNonSelect(t *testing.T) {
@@ -39,7 +39,7 @@ func TestRunQuery_RejectNonSelect(t *testing.T) {
 
 func TestParseDataPreviewResult(t *testing.T) {
 	t.Run("zero columns", func(t *testing.T) {
-		dp := &adtmodel.DataPreviewResult{
+		dp := &adtxml.DataPreviewResult{
 			TotalRows:          "0",
 			QueryExecutionTime: "1.5",
 		}
@@ -59,18 +59,18 @@ func TestParseDataPreviewResult(t *testing.T) {
 	})
 
 	t.Run("one column", func(t *testing.T) {
-		dp := &adtmodel.DataPreviewResult{
+		dp := &adtxml.DataPreviewResult{
 			TotalRows:          "2",
 			QueryExecutionTime: "3.14",
-			Columns: []adtmodel.DataPreviewColumn{
+			Columns: []adtxml.DataPreviewColumn{
 				{
-					Metadata: adtmodel.DataPreviewMetadata{
+					Metadata: adtxml.DataPreviewMetadata{
 						Name:         "BUKRS",
 						Type:         "C",
 						Description:  "Company Code",
 						KeyAttribute: "true",
 					},
-					DataSet: adtmodel.DataPreviewDataSet{
+					DataSet: adtxml.DataPreviewDataSet{
 						Data: []string{"0001", "0002"},
 					},
 				},
@@ -104,27 +104,27 @@ func TestParseDataPreviewResult(t *testing.T) {
 	})
 
 	t.Run("two columns", func(t *testing.T) {
-		dp := &adtmodel.DataPreviewResult{
+		dp := &adtxml.DataPreviewResult{
 			TotalRows:          "3",
 			QueryExecutionTime: "42.0",
-			Columns: []adtmodel.DataPreviewColumn{
+			Columns: []adtxml.DataPreviewColumn{
 				{
-					Metadata: adtmodel.DataPreviewMetadata{
+					Metadata: adtxml.DataPreviewMetadata{
 						Name: "BUKRS",
 						Type: "C",
 					},
-					DataSet: adtmodel.DataPreviewDataSet{
+					DataSet: adtxml.DataPreviewDataSet{
 						Data: []string{"0001", "0002", "0003"},
 					},
 				},
 				{
-					Metadata: adtmodel.DataPreviewMetadata{
+					Metadata: adtxml.DataPreviewMetadata{
 						Name:         "BUTXT",
 						Type:         "C",
 						Description:  "Company Name",
 						KeyAttribute: "false",
 					},
-					DataSet: adtmodel.DataPreviewDataSet{
+					DataSet: adtxml.DataPreviewDataSet{
 						Data: []string{"SAP AG", "Hochfrequenz", "Test Corp"},
 					},
 				},

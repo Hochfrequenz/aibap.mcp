@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 var objectTypeMap = map[string]struct {
@@ -31,20 +31,20 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 
 	var body []byte
 	var err error
-	pkgRef := adtmodel.PackageRef{Name: packageName}
+	pkgRef := adtxml.PackageRef{Name: packageName}
 	switch strings.ToUpper(objectType) {
 	case "PROG":
-		body, err = xml.Marshal(adtmodel.CreateProgram{
+		body, err = xml.Marshal(adtxml.CreateProgram{
 			NSProgram: "http://www.sap.com/adt/programs/programs", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
 	case "CLAS":
-		body, err = xml.Marshal(adtmodel.CreateClass{
+		body, err = xml.Marshal(adtxml.CreateClass{
 			NSClass: "http://www.sap.com/adt/oo/classes", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
 	case "INTF":
-		body, err = xml.Marshal(adtmodel.CreateInterface{
+		body, err = xml.Marshal(adtxml.CreateInterface{
 			NSIntf: "http://www.sap.com/adt/oo/interfaces", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
@@ -69,17 +69,17 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 }
 
 func (c *httpClient) CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error {
-	body, err := xml.Marshal(adtmodel.CreatePackage{
+	body, err := xml.Marshal(adtxml.CreatePackage{
 		NSPak:       "http://www.sap.com/adt/packages",
 		NSCore:      nsADTCore,
 		Name:        strings.ToUpper(name),
 		Type:        "DEVC/K",
 		Description: description,
 		Responsible: strings.ToUpper(responsible),
-		Attributes:  adtmodel.PakAttributes{PackageType: "development"},
-		Transport: adtmodel.PakTransport{
-			SoftwareComponent: adtmodel.PakNamedItem{Name: softwareComponent},
-			TransportLayer:    adtmodel.PakNamedItem{Name: transportLayer},
+		Attributes:  adtxml.PakAttributes{PackageType: "development"},
+		Transport: adtxml.PakTransport{
+			SoftwareComponent: adtxml.PakNamedItem{Name: softwareComponent},
+			TransportLayer:    adtxml.PakNamedItem{Name: transportLayer},
 		},
 	})
 	if err != nil {

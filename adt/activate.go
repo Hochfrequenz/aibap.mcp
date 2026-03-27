@@ -8,15 +8,15 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 func (c *httpClient) ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error) {
-	objects := make([]adtmodel.ActivationObject, len(objectURIs))
+	objects := make([]adtxml.ActivationObject, len(objectURIs))
 	for i, uri := range objectURIs {
-		objects[i] = adtmodel.ActivationObject{URI: uri}
+		objects[i] = adtxml.ActivationObject{URI: uri}
 	}
-	bodyXML, err := xml.Marshal(adtmodel.ActivationRequest{
+	bodyXML, err := xml.Marshal(adtxml.ActivationRequest{
 		NS:      nsADTCore,
 		Objects: objects,
 	})
@@ -42,7 +42,7 @@ func (c *httpClient) ActivateObjects(ctx context.Context, objectURIs []string) (
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var msgs adtmodel.ActivationMessages
+	var msgs adtxml.ActivationMessages
 	xml.Unmarshal(data, &msgs) //nolint:errcheck
 
 	result := &ActivationResult{Success: true}
