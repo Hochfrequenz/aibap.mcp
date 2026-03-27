@@ -97,6 +97,7 @@ func (m *mockClient) CreateTransport(context.Context, string, string, string, st
 func (m *mockClient) ReleaseTransport(context.Context, string) error {
 	panic("not implemented")
 }
+func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { panic("not implemented") }
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
