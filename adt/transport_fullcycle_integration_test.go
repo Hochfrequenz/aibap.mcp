@@ -7,17 +7,90 @@ import (
 	"testing"
 )
 
+// Tests in this file create, modify, and release transport requests on the
+// SAP system. They are excluded from normal integration runs and require:
+//
+//	go test ./adt/ -tags 'integration transport' -v
+
+func TestCreateTransport_Integration(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP integration test", "Z_ADT_MCP_TEST")
+	if err != nil {
+		t.Fatalf("CreateTransport failed: %v", err)
+	}
+	if trNumber == "" {
+		t.Fatal("expected non-empty transport number")
+	}
+	if len(trNumber) != 10 {
+		t.Errorf("expected 10-char transport number (e.g. S4UK900001), got %q", trNumber)
+	}
+	t.Logf("created transport: %s", trNumber)
+}
+
+func TestReleaseTransport_Integration(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP release test", "Z_ADT_MCP_TEST")
+	if err != nil {
+		t.Fatalf("CreateTransport failed: %v", err)
+	}
+	t.Logf("created transport: %s", trNumber)
+
+	err = client.ReleaseTransport(ctx, trNumber)
+	if err != nil {
+		t.Fatalf("ReleaseTransport failed: %v", err)
+	}
+	t.Logf("released transport: %s", trNumber)
+}
+
+func TestAddToTransport_Integration(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP AddToTransport test", "Z_ADT_MCP_TEST")
+	if err != nil {
+		t.Fatalf("CreateTransport: %v", err)
+	}
+	t.Logf("created transport: %s", trNumber)
+	t.Cleanup(func() { _ = client.ReleaseTransport(context.Background(), trNumber) })
+
+	const objName = "Z_ADT_MCP_TR_ADD_TST"
+	objectURI := "/sap/bc/adt/programs/programs/" + objName
+	err = client.CreateObject(ctx, "PROG", objName, "Z_ADT_MCP_TEST", "Transport add test", trNumber)
+	if err != nil {
+		if _, infoErr := client.GetObjectInfo(ctx, objectURI); infoErr != nil {
+			t.Fatalf("CreateObject failed and object does not exist: %v", err)
+		}
+		t.Logf("object %s already exists, reusing", objName)
+	} else {
+		t.Logf("created %s in Z_ADT_MCP_TEST", objName)
+	}
+
+	check, err := client.CheckTransport(ctx, "R3TR", "PROG", objName)
+	if err != nil {
+		t.Fatalf("CheckTransport: %v", err)
+	}
+	if len(check.Requests) == 0 {
+		t.Skip("no transport requests available")
+	}
+
+	taskNumber := check.Requests[0].Number
+	err = client.AddToTransport(ctx, objectURI, taskNumber)
+	if err != nil {
+		t.Fatalf("AddToTransport: %v", err)
+	}
+	t.Logf("added %s to %s", objectURI, taskNumber)
+}
+
 // TestTransportFullCycle_Integration tests the complete transport lifecycle:
 // 1. Create transport
 // 2. Create a program in a real package (assigned to transport)
 // 3. CheckTransport to verify the object is recordable
 // 4. Delete the program
 // 5. Release the transport
-//
-// This test creates real transports on the SAP system and is excluded from
-// normal integration test runs. Run with:
-//
-//	go test ./adt/ -tags 'integration transport' -run TestTransportFullCycle
 func TestTransportFullCycle_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
@@ -34,7 +107,6 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	objectURI := "/sap/bc/adt/programs/programs/" + objName
 	err = client.CreateObject(ctx, "PROG", objName, "Z_ADT_MCP_TEST", "Full cycle test", trNumber)
 	if err != nil {
-		// Try to release transport on failure so it doesn't pile up.
 		_ = client.ReleaseTransport(ctx, trNumber)
 		t.Fatalf("CreateObject: %v", err)
 	}
