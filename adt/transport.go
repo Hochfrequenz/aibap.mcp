@@ -111,6 +111,18 @@ func (c *httpClient) CreateTransport(ctx context.Context, category, target, desc
 	return "", fmt.Errorf("CreateTransport: transport created but number not returned — check GetTransportRequests to find it")
 }
 
+func (c *httpClient) ReleaseTransport(ctx context.Context, transportNumber string) error {
+	path := "/sap/bc/adt/cts/transportrequests/" + transportNumber + "/newreleasejobs"
+	resp, err := c.doMutate(ctx, http.MethodPost, path, nil,
+		map[string]string{"Accept": "application/vnd.sap.adt.transportorganizer.v1+xml"},
+	)
+	if err != nil {
+		return fmt.Errorf("ReleaseTransport: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return checkResponse(resp)
+}
+
 func (c *httpClient) GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error) {
 	params := url.Values{}
 	if user != "" {

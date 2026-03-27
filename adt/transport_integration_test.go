@@ -50,6 +50,24 @@ func TestCreateTransport_Integration(t *testing.T) {
 	t.Logf("created transport: %s", trNumber)
 }
 
+func TestReleaseTransport_Integration(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	// Create a fresh transport to release.
+	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP release test", "Z_ADT_MCP_TEST")
+	if err != nil {
+		t.Fatalf("CreateTransport failed: %v", err)
+	}
+	t.Logf("created transport: %s", trNumber)
+
+	err = client.ReleaseTransport(ctx, trNumber)
+	if err != nil {
+		t.Fatalf("ReleaseTransport failed: %v", err)
+	}
+	t.Logf("released transport: %s", trNumber)
+}
+
 func TestGetTransportRequests_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
