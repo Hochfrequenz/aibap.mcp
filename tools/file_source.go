@@ -33,7 +33,7 @@ func registerFileSourceTools(s toolAdder, client adt.Client, lockMap *adt.LockMa
 		filePath := req.GetString("file_path", "")
 		transport := req.GetString("transport", "")
 		explicitHandle := req.GetString("lock_handle", "")
-		key := lockKey(selector, uri)
+		key := adt.LockKey(selector.ActiveName(), uri)
 
 		// Read file
 		data, err := os.ReadFile(filePath)
@@ -42,33 +42,16 @@ func registerFileSourceTools(s toolAdder, client adt.Client, lockMap *adt.LockMa
 		}
 		source := string(data)
 
-		// Resolve lock handle
-		lockHandle := explicitHandle
-		if lockHandle == "" {
-			if state, ok := lockMap.Get(key); ok {
-				lockHandle = state.LockHandle
-			}
+		// Resolve lock handle: explicit param > lock map > auto-lock.
+		lockHandle, err := lockMap.ResolveLock(ctx, client, key, uri, explicitHandle)
+		if err != nil {
+			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
 		}
 
-		// Auto-lock if needed
-		if lockHandle == "" {
-			handle, err := client.LockObject(ctx, uri)
-			if err != nil {
-				return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
-			}
-			lockHandle = handle
-			lockMap.Set(key, handle, "")
-		}
-
-		// Get ETag if not in lock map
-		state, _ := lockMap.Get(key)
-		etag := state.ETag
-		if etag == "" {
-			sourceResult, err := client.GetSource(ctx, uri)
-			if err != nil {
-				return errorResult(err), nil
-			}
-			etag = sourceResult.ETag
+		// Get ETag if not in lock map.
+		etag, err := lockMap.ResolveETag(ctx, client, key, uri)
+		if err != nil {
+			return errorResult(err), nil
 		}
 
 		// Write source

@@ -22,7 +22,7 @@ func registerSourceTools(s toolAdder, client adt.Client, lockMap *adt.LockMap, s
 		if err != nil {
 			return errorResult(err), nil
 		}
-		lockMap.UpdateETag(lockKey(selector, uri), result.ETag)
+		lockMap.UpdateETag(adt.LockKey(selector.ActiveName(), uri), result.ETag)
 		out, _ := json.Marshal(map[string]string{
 			"source": result.Source,
 			"etag":   result.ETag,
