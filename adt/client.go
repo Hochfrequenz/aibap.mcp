@@ -44,6 +44,11 @@ type DocuClient interface {
 	GetABAPDoc(ctx context.Context, keyword string) (string, error)
 }
 
+// NavigationClient resolves source references.
+type NavigationClient interface {
+	NavigateToDefinition(ctx context.Context, sourceURI string) (string, error)
+}
+
 // SearchClient provides object discovery.
 type SearchClient interface {
 	SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error)
@@ -91,6 +96,7 @@ type Client interface {
 	ObjectClient
 	LockClient
 	DocuClient
+	NavigationClient
 	SearchClient
 	QualityClient
 	TransportClient
