@@ -30,6 +30,7 @@ type ObjectClient interface {
 	CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error
 	DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error
 	ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error)
+	GetInactiveObjects(ctx context.Context) ([]ObjectInfo, error)
 }
 
 // LockClient handles object locking.

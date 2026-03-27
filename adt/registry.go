@@ -102,6 +102,9 @@ func (r *ClientRegistry) SetSource(ctx context.Context, objectURI, source, lockH
 func (r *ClientRegistry) ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error) {
 	return r.activeClient().ActivateObjects(ctx, objectURIs)
 }
+func (r *ClientRegistry) GetInactiveObjects(ctx context.Context) ([]ObjectInfo, error) {
+	return r.activeClient().GetInactiveObjects(ctx)
+}
 func (r *ClientRegistry) SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error) {
 	return r.activeClient().SearchObjects(ctx, query, objectType, maxResults)
 }

@@ -60,6 +60,9 @@ func (m *mockClient) ActivateObjects(ctx context.Context, uris []string) (*adt.A
 	}
 	return &adt.ActivationResult{Success: true}, nil
 }
+func (m *mockClient) GetInactiveObjects(context.Context) ([]adt.ObjectInfo, error) {
+	return nil, nil
+}
 func (m *mockClient) SearchObjects(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error) {
 	if m.searchFn != nil {
 		return m.searchFn(ctx, q, t, n)
