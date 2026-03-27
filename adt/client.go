@@ -29,6 +29,7 @@ type Client interface {
 	RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error)
 	CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error)
 	CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error)
+	ReleaseTransport(ctx context.Context, transportNumber string) error
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
 	LockObject(ctx context.Context, objectURI string) (string, error)
