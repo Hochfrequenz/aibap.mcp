@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerSearchTools(s toolAdder, client adt.Client) {
+func registerSearchTools(s toolAdder, client adt.SearchClient) {
 	s.AddTool(mcp.NewTool("search_objects",
 		mcp.WithDescription("Search for ABAP repository objects by name. Supports wildcards, e.g. ZREPORT*."),
 		mcp.WithString("query", mcp.Required(), mcp.Description("Search query, e.g. ZREPORT*")),

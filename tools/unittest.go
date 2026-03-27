@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerUnitTestTools(s toolAdder, client adt.Client) {
+func registerUnitTestTools(s toolAdder, client adt.QualityClient) {
 	s.AddTool(mcp.NewTool("run_unit_tests",
 		mcp.WithDescription("Run ABAP Unit Tests for an object. Returns test results with pass/fail counts."),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),

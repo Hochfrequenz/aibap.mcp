@@ -6,16 +6,6 @@ import (
 	"sync"
 )
 
-// LockClient can lock ABAP objects.
-type LockClient interface {
-	LockObject(ctx context.Context, objectURI string) (string, error)
-}
-
-// SourceReader can read ABAP source code.
-type SourceReader interface {
-	GetSource(ctx context.Context, objectURI string) (*SourceResult, error)
-}
-
 // LockState holds the lock handle and ETag for a locked object.
 type LockState struct {
 	LockHandle string
@@ -88,7 +78,7 @@ func (m *LockMap) ResolveLock(ctx context.Context, locker LockClient, key, objec
 }
 
 // ResolveETag returns a cached ETag or fetches one via GetSource.
-func (m *LockMap) ResolveETag(ctx context.Context, reader SourceReader, key, objectURI string) (string, error) {
+func (m *LockMap) ResolveETag(ctx context.Context, reader SourceClient, key, objectURI string) (string, error) {
 	if state, ok := m.Get(key); ok && state.ETag != "" {
 		return state.ETag, nil
 	}

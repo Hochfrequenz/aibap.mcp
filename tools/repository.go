@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerRepositoryTools(s toolAdder, client adt.Client) {
+func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 	s.AddTool(mcp.NewTool("browse_package",
 		mcp.WithDescription("List all ABAP objects in a package."),
 		mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name, e.g. ZPACKAGE")),
