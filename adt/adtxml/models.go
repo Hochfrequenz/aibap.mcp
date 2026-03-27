@@ -1,4 +1,4 @@
-package adtmodel
+package adtxml
 
 // Models for SAP ADT XML response formats.
 //

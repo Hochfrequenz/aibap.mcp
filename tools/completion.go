@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerCompletionTools(s toolAdder, client adt.Client) {
+func registerCompletionTools(s toolAdder, client adt.SourceClient) {
 	s.AddTool(mcp.NewTool("get_completions",
 		mcp.WithDescription("Get ABAP code completion proposals at a specific cursor position."),
 		mcp.WithString(paramObjectURI,

@@ -9,30 +9,30 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 func (c *httpClient) RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds+5)*time.Second)
 	defer cancel()
 
-	reqBody := adtmodel.RunConfiguration{
+	reqBody := adtxml.RunConfiguration{
 		NS: "http://www.sap.com/adt/aunit",
-		External: adtmodel.External{
-			Coverage: adtmodel.Coverage{Active: "false"},
+		External: adtxml.External{
+			Coverage: adtxml.Coverage{Active: "false"},
 		},
-		Options: adtmodel.RunOptions{
-			URIType:                   adtmodel.Value{Value: "semantic"},
-			TestDeterminationStrategy: adtmodel.TestDetermination{SameProgram: "true", AssignedTests: "false", PublicMethods: "false"},
-			TestRiskLevels:            adtmodel.RiskLevels{Harmless: "true", Dangerous: "true", Critical: "true"},
-			TestDurations:             adtmodel.Durations{Short: "true", Medium: "true", Long: "true"},
+		Options: adtxml.RunOptions{
+			URIType:                   adtxml.Value{Value: "semantic"},
+			TestDeterminationStrategy: adtxml.TestDetermination{SameProgram: "true", AssignedTests: "false", PublicMethods: "false"},
+			TestRiskLevels:            adtxml.RiskLevels{Harmless: "true", Dangerous: "true", Critical: "true"},
+			TestDurations:             adtxml.Durations{Short: "true", Medium: "true", Long: "true"},
 		},
-		Objects: adtmodel.ObjectSets{
+		Objects: adtxml.ObjectSets{
 			NS: nsADTCore,
-			Set: adtmodel.ObjectSet{
+			Set: adtxml.ObjectSet{
 				Kind: "inclusive",
-				References: adtmodel.AUnitObjectRefs{
-					Refs: []adtmodel.ObjectRef{{URI: objectURI}},
+				References: adtxml.AUnitObjectRefs{
+					Refs: []adtxml.ObjectRef{{URI: objectURI}},
 				},
 			},
 		},
@@ -60,7 +60,7 @@ func (c *httpClient) RunUnitTests(ctx context.Context, objectURI string, timeout
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	var runResult adtmodel.RunResult
+	var runResult adtxml.RunResult
 	xml.Unmarshal(data, &runResult) //nolint:errcheck
 
 	result := &TestResult{}

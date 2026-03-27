@@ -1,118 +1,20 @@
 package tools
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// extractZIPToDir extracts a ZIP archive from raw bytes into the given directory.
-// Includes Zip Slip protection: rejects entries that would escape the target directory.
-func extractZIPToDir(data []byte, dir string) error {
-	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
-	if err != nil {
-		return fmt.Errorf("opening ZIP: %w", err)
-	}
-	cleanDir := filepath.Clean(dir) + string(os.PathSeparator)
-	for _, f := range r.File {
-		target := filepath.Join(dir, filepath.FromSlash(f.Name))
-		// Prevent path traversal (Zip Slip, CWE-22).
-		if !strings.HasPrefix(filepath.Clean(target)+string(os.PathSeparator), cleanDir) &&
-			filepath.Clean(target) != filepath.Clean(dir) {
-			return fmt.Errorf("illegal file path in ZIP (path traversal): %s", f.Name)
-		}
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0755); err != nil {
-				return fmt.Errorf("creating dir %s: %w", target, err)
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			return fmt.Errorf("creating parent dir for %s: %w", target, err)
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return fmt.Errorf("opening %s in ZIP: %w", f.Name, err)
-		}
-		out, err := os.Create(target)
-		if err != nil {
-			_ = rc.Close()
-			return fmt.Errorf("creating %s: %w", target, err)
-		}
-		_, err = io.Copy(out, rc)
-		_ = rc.Close()
-		_ = out.Close()
-		if err != nil {
-			return fmt.Errorf("writing %s: %w", target, err)
-		}
-	}
-	return nil
-}
-
-// writeExport writes a package export to disk, either as a ZIP file or an extracted folder.
-// Returns the path written to and the size in bytes.
-func writeExport(data []byte, outputDir, packageName string, asFolder bool) (string, int, error) {
-	if asFolder {
-		dir := filepath.Join(outputDir, packageName)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return "", 0, fmt.Errorf("creating directory %s: %w", dir, err)
-		}
-		if err := extractZIPToDir(data, dir); err != nil {
-			return "", 0, err
-		}
-		return dir, len(data), nil
-	}
-	filename := filepath.Join(outputDir, packageName+".zip")
-	if err := os.WriteFile(filename, data, 0644); err != nil {
-		return "", 0, fmt.Errorf("writing %s: %w", filename, err)
-	}
-	return filename, len(data), nil
-}
-
-// matchesAnyPattern checks if name matches any of the given wildcard patterns.
-// Patterns use filepath.Match syntax: * matches any sequence of non-separator characters,
-// ? matches one non-separator character. For ABAP package names (no path separators) this
-// behaves like a standard glob.
-func matchesAnyPattern(name string, patterns []string) bool {
-	upper := strings.ToUpper(name)
-	for _, p := range patterns {
-		if matched, _ := filepath.Match(strings.ToUpper(p), upper); matched {
-			return true
-		}
-	}
-	return false
-}
-
-// parsePatternList splits a comma-separated pattern string into trimmed, non-empty patterns.
-func parsePatternList(s string) ([]string, error) {
-	if s == "" {
-		return nil, nil
-	}
-	var result []string
-	for _, p := range strings.Split(s, ",") {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		// Validate pattern syntax.
-		if _, err := filepath.Match(p, ""); err != nil {
-			return nil, fmt.Errorf("invalid pattern %q: %w", p, err)
-		}
-		result = append(result, p)
-	}
-	return result, nil
-}
-
-func registerExportTools(s toolAdder, client adt.Client) {
+func registerExportTools(s toolAdder, client interface {
+	adt.ExportClient
+	adt.SearchClient
+}) {
 	s.AddTool(mcp.NewTool("export_package",
 		mcp.WithDescription(
 			"Export an ABAP package as an abapGit-compatible ZIP or folder on disk (read-only, no changes on SAP side). "+
@@ -143,7 +45,7 @@ func registerExportTools(s toolAdder, client adt.Client) {
 			return errorResult(err), nil
 		}
 
-		path, size, err := writeExport(data, outputDir, strings.ToUpper(pkg), extract)
+		path, size, err := adt.WriteExport(data, outputDir, strings.ToUpper(pkg), extract)
 		if err != nil {
 			return errorResult(err), nil
 		}
@@ -187,11 +89,11 @@ func registerExportTools(s toolAdder, client adt.Client) {
 		outputDir := req.GetString("output_dir", "")
 		extract := req.GetBool("extract", false)
 		maxPackages := req.GetInt("max_packages", 100)
-		excludePatterns, err := parsePatternList(req.GetString("exclude_patterns", ""))
+		excludePatterns, err := adt.ParsePatternList(req.GetString("exclude_patterns", ""))
 		if err != nil {
 			return errorResult(fmt.Errorf("exclude_patterns: %w", err)), nil
 		}
-		includePatterns, err := parsePatternList(req.GetString("include_patterns", ""))
+		includePatterns, err := adt.ParsePatternList(req.GetString("include_patterns", ""))
 		if err != nil {
 			return errorResult(fmt.Errorf("include_patterns: %w", err)), nil
 		}
@@ -223,10 +125,10 @@ func registerExportTools(s toolAdder, client adt.Client) {
 		if len(includePatterns) > 0 || len(excludePatterns) > 0 {
 			filtered := make([]adt.ObjectInfo, 0, len(packages))
 			for _, pkg := range packages {
-				if len(includePatterns) > 0 && !matchesAnyPattern(pkg.Name, includePatterns) {
+				if len(includePatterns) > 0 && !adt.MatchesAnyPattern(pkg.Name, includePatterns) {
 					continue
 				}
-				if len(excludePatterns) > 0 && matchesAnyPattern(pkg.Name, excludePatterns) {
+				if len(excludePatterns) > 0 && adt.MatchesAnyPattern(pkg.Name, excludePatterns) {
 					continue
 				}
 				filtered = append(filtered, pkg)
@@ -266,7 +168,7 @@ func registerExportTools(s toolAdder, client adt.Client) {
 				})
 				continue
 			}
-			path, size, err := writeExport(data, outputDir, name, extract)
+			path, size, err := adt.WriteExport(data, outputDir, name, extract)
 			if err != nil {
 				results = append(results, exportResult{
 					Package: name, Error: err.Error(),

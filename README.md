@@ -269,7 +269,7 @@ You: Show me the source of class ZCL_MY_SERVICE
 Claude: [calls get_source] Here's the source...
 
 You: Fix the bug in method GET_DATA and activate the class
-Claude: [calls lock_object, set_source, activate_object, unlock_object] Done. Activation succeeded.
+Claude: [calls lock_object, patch_source, activate_object, unlock_object] Done. Activation succeeded.
 
 You: Run the unit tests for this class
 Claude: [calls run_unit_tests] 5 tests passed, 0 failed.

@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 func (c *httpClient) BrowsePackage(ctx context.Context, packageName string) ([]ObjectInfo, error) {
@@ -33,7 +33,7 @@ func (c *httpClient) BrowsePackage(ctx context.Context, packageName string) ([]O
 	}
 
 	data, _ := io.ReadAll(resp.Body)
-	tc, err := adtmodel.UnmarshalASXData[adtmodel.PackageTreeContent](data)
+	tc, err := adtxml.UnmarshalASXData[adtxml.PackageTreeContent](data)
 	if err != nil {
 		return nil, fmt.Errorf("BrowsePackage parsing: %w", err)
 	}

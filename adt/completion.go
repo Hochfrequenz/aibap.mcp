@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adtmodel"
+	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
 func (c *httpClient) GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error) {
@@ -41,7 +41,7 @@ func (c *httpClient) GetCompletions(ctx context.Context, objectURI, source strin
 	if len(data) == 0 {
 		return nil, nil
 	}
-	var comps adtmodel.Completions
+	var comps adtxml.Completions
 	if err := xml.Unmarshal(data, &comps); err != nil {
 		return nil, fmt.Errorf("GetCompletions parsing: %w", err)
 	}
