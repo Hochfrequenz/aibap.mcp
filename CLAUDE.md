@@ -1,0 +1,23 @@
+# CLAUDE.md
+
+## Testing
+
+- **Test-driven**: Write unit tests before or alongside implementation, not after.
+- **Unit tests**: `go test ./...` — must always pass before committing.
+- **Integration tests**: `go test ./adt/ -tags integration` — run against a real SAP system. Require `SAP_INTEGRATION_*` env vars from `.env`.
+- **Transport tests**: `go test ./adt/ -tags 'integration transport'` — create, release, and modify transports on SAP. **Only run when explicitly requested** — these leave artifacts on the system.
+- **Never run transport tests automatically** as part of a general integration test run.
+
+## Workflow
+
+- One PR per issue. Don't bundle unrelated changes.
+- Always use feature branches (`feat/`, `fix/`, `test/`, `refactor/`), never commit directly to `main`.
+- Self-assign an issue before starting work on it.
+- Run `gofmt` and `go vet ./...` before committing.
+
+## SAP ADT
+
+- Credentials live in `.env` (never commit, never put in plain text in commands).
+- The MCP server config is at `~/.claude/mcp/sap-adt-config.yaml`.
+- S4 systems require HTTPS (secure cookie flag breaks HTTP — see #108).
+- ECC systems may not have all endpoints (e.g. `/sap/bc/adt/packages` is S4-only).
