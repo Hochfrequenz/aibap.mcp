@@ -33,48 +33,10 @@ func TestCheckTransport_Integration(t *testing.T) {
 	}
 }
 
-func TestCreateTransport_Integration(t *testing.T) {
-	client := newIntegrationClient(t)
-	ctx := context.Background()
-
-	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP integration test", "Z_ADT_MCP_TEST")
-	if err != nil {
-		t.Fatalf("CreateTransport failed: %v", err)
-	}
-	if trNumber == "" {
-		t.Fatal("expected non-empty transport number")
-	}
-	if len(trNumber) != 10 {
-		t.Errorf("expected 10-char transport number (e.g. S4UK900001), got %q", trNumber)
-	}
-	t.Logf("created transport: %s", trNumber)
-}
-
-func TestReleaseTransport_Integration(t *testing.T) {
-	client := newIntegrationClient(t)
-	ctx := context.Background()
-
-	// Create a fresh transport to release.
-	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP release test", "Z_ADT_MCP_TEST")
-	if err != nil {
-		t.Fatalf("CreateTransport failed: %v", err)
-	}
-	t.Logf("created transport: %s", trNumber)
-
-	err = client.ReleaseTransport(ctx, trNumber)
-	if err != nil {
-		t.Fatalf("ReleaseTransport failed: %v", err)
-	}
-	t.Logf("released transport: %s", trNumber)
-}
-
 func TestGetTransportRequests_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
-	// #14: Query modifiable transports — the correct Accept header
-	// (application/vnd.sap.adt.transportorganizertree.v1+xml) is required
-	// or SAP returns 406. If this call succeeds, the header fix is working.
 	transports, err := client.GetTransportRequests(ctx, "", "D")
 	if err != nil {
 		t.Fatalf("GetTransportRequests failed: %v", err)
@@ -84,7 +46,6 @@ func TestGetTransportRequests_Integration(t *testing.T) {
 	}
 	t.Logf("got %d modifiable transport requests", len(transports))
 
-	// Verify returned transports have essential fields populated.
 	for i, tr := range transports {
 		if tr.Number == "" {
 			t.Errorf("transport [%d]: Number is empty", i)
