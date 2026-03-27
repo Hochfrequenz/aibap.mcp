@@ -123,6 +123,9 @@ func (r *ClientRegistry) RunUnitTests(ctx context.Context, objectURI string, tim
 func (r *ClientRegistry) GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error) {
 	return r.activeClient().GetTransportRequests(ctx, user, status)
 }
+func (r *ClientRegistry) CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error) {
+	return r.activeClient().CheckTransport(ctx, pgmID, object, objectName)
+}
 func (r *ClientRegistry) AddToTransport(ctx context.Context, objectURI, transport string) error {
 	return r.activeClient().AddToTransport(ctx, objectURI, transport)
 }
