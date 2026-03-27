@@ -28,7 +28,9 @@ func (c *httpClient) CreateTransport(ctx context.Context, category, target, desc
 		"/sap/bc/adt/cts/transports",
 		strings.NewReader(string(body)),
 		map[string]string{
-			"Content-Type": "application/vnd.sap.as+xml; charset=utf-8; dataname=com.sap.adt.transport.WorkbenchTransport",
+			// The Content-Type controls the response format: v1 returns plain text,
+			// dataname=...CreateCorrectionRequest.v1 returns ASX XML with TRKORR.
+			"Content-Type": "application/vnd.sap.as+xml; charset=UTF-8; dataname=com.sap.adt.CreateCorrectionRequest.v1",
 			"Accept":       "application/vnd.sap.as+xml",
 		},
 	)
@@ -40,14 +42,6 @@ func (c *httpClient) CreateTransport(ctx context.Context, category, target, desc
 		return "", err
 	}
 
-	// SAP returns an empty body. Extract the transport number from the
-	// Location header (e.g. /sap/bc/adt/cts/transports/S4UK902345).
-	if loc := resp.Header.Get("Location"); loc != "" {
-		parts := strings.Split(loc, "/")
-		return parts[len(parts)-1], nil
-	}
-
-	// Fallback: read response body in case SAP returns the number there.
 	data, _ := io.ReadAll(resp.Body)
 	if len(data) > 0 {
 		asxData, err := adtmodel.UnmarshalASXData[struct {
