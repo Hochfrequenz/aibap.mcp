@@ -191,4 +191,3 @@ func applyLineOp(lines []string, op PatchOp) ([]string, error) {
 		return nil, fmt.Errorf("unknown op: %q", op.Type)
 	}
 }
-
