@@ -59,3 +59,51 @@ func (c *httpClient) ActivateObjects(ctx context.Context, objectURIs []string) (
 	}
 	return result, nil
 }
+
+func (c *httpClient) GetInactiveObjects(ctx context.Context) ([]ObjectInfo, error) {
+	resp, err := c.doRead(ctx, "/sap/bc/adt/activation/inactiveobjects",
+		map[string]string{"Accept": "application/vnd.sap.adt.inactivectsobjects.v1+xml"})
+	if err != nil {
+		return nil, fmt.Errorf("GetInactiveObjects: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("GetInactiveObjects reading body: %w", err)
+	}
+
+	var root struct {
+		Entries []struct {
+			Object struct {
+				Ref struct {
+					URI         string `xml:"uri,attr"`
+					Type        string `xml:"type,attr"`
+					Name        string `xml:"name,attr"`
+					PackageName string `xml:"packageName,attr"`
+				} `xml:"ref"`
+			} `xml:"object"`
+		} `xml:"entry"`
+	}
+	if err := xml.Unmarshal(data, &root); err != nil {
+		return nil, fmt.Errorf("GetInactiveObjects parsing: %w", err)
+	}
+
+	var result []ObjectInfo
+	for _, e := range root.Entries {
+		ref := e.Object.Ref
+		if ref.Name == "" {
+			continue // skip entries without an object (transport-only entries)
+		}
+		result = append(result, ObjectInfo{
+			URI:         ref.URI,
+			Type:        ref.Type,
+			Name:        ref.Name,
+			PackageName: ref.PackageName,
+		})
+	}
+	return result, nil
+}
