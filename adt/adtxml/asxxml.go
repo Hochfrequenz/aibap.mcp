@@ -1,6 +1,6 @@
-// Package adtmodel provides types and helpers for SAP ADT XML formats.
+// Package adtxml provides types and helpers for SAP ADT XML formats.
 //
-// This package is designed to be extractable to a separate repository once stable.
+// This package is an implementation detail of the adt package.
 // Only add types here that have been verified against a real SAP system.
 package adtxml
 
