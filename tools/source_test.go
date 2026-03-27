@@ -165,6 +165,9 @@ func (m *mockClient) RunATCCheck(_ context.Context, _ []string, _ string) (*adt.
 func (m *mockClient) RunQuery(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
 	return nil, nil
 }
+func (m *mockClient) ReleaseTransport(context.Context, string) error {
+	return nil
+}
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
