@@ -68,6 +68,49 @@ func (c *httpClient) CheckTransport(ctx context.Context, pgmID, object, objectNa
 	return result, nil
 }
 
+func (c *httpClient) CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error) {
+	reqData := adtmodel.CreateTransportData{
+		Category:    strings.ToUpper(category),
+		Target:      strings.ToUpper(target),
+		Description: description,
+		DevClass:    strings.ToUpper(devClass),
+	}
+	body, err := adtmodel.MarshalASXData(reqData)
+	if err != nil {
+		return "", fmt.Errorf("CreateTransport marshal: %w", err)
+	}
+
+	resp, err := c.doMutate(ctx, http.MethodPost,
+		"/sap/bc/adt/cts/transports",
+		strings.NewReader(string(body)),
+		map[string]string{
+			// The Content-Type controls the response format: v1 returns plain text,
+			// dataname=...CreateCorrectionRequest.v1 returns ASX XML with TRKORR.
+			"Content-Type": "application/vnd.sap.as+xml; charset=UTF-8; dataname=com.sap.adt.CreateCorrectionRequest.v1",
+			"Accept":       "application/vnd.sap.as+xml",
+		},
+	)
+	if err != nil {
+		return "", fmt.Errorf("CreateTransport: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return "", err
+	}
+
+	data, _ := io.ReadAll(resp.Body)
+	if len(data) > 0 {
+		asxData, err := adtmodel.UnmarshalASXData[struct {
+			TrKorr string `xml:"TRKORR"`
+		}](data)
+		if err == nil && asxData.TrKorr != "" {
+			return asxData.TrKorr, nil
+		}
+	}
+
+	return "", fmt.Errorf("CreateTransport: transport created but number not returned — check GetTransportRequests to find it")
+}
+
 func (c *httpClient) GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error) {
 	params := url.Values{}
 	if user != "" {
