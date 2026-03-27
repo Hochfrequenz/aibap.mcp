@@ -1,11 +1,36 @@
 package adt_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 )
+
+// mockLocker implements adt.LockClient for testing.
+type mockLocker struct {
+	handle string
+	err    error
+	called bool
+}
+
+func (m *mockLocker) LockObject(_ context.Context, _ string) (string, error) {
+	m.called = true
+	return m.handle, m.err
+}
+
+// mockReader implements adt.SourceReader for testing.
+type mockReader struct {
+	result *adt.SourceResult
+	err    error
+	called bool
+}
+
+func (m *mockReader) GetSource(_ context.Context, _ string) (*adt.SourceResult, error) {
+	m.called = true
+	return m.result, m.err
+}
 
 func TestLockMapSetAndGet(t *testing.T) {
 	m := adt.NewLockMap()
@@ -70,5 +95,89 @@ func TestLockMapConcurrent(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		<-done
+	}
+}
+
+func TestLockKey(t *testing.T) {
+	got := adt.LockKey("DEV", "/sap/bc/adt/programs/programs/ZTEST")
+	want := "DEV:/sap/bc/adt/programs/programs/ZTEST"
+	if got != want {
+		t.Errorf("LockKey = %q, want %q", got, want)
+	}
+}
+
+func TestResolveLock_ExplicitHandle(t *testing.T) {
+	m := adt.NewLockMap()
+	locker := &mockLocker{}
+	handle, err := m.ResolveLock(context.Background(), locker, "key", "/uri", "explicit-handle")
+	if err != nil || handle != "explicit-handle" || locker.called {
+		t.Errorf("expected explicit handle returned without calling locker")
+	}
+}
+
+func TestResolveLock_Cached(t *testing.T) {
+	m := adt.NewLockMap()
+	m.Set("key", "cached-handle", "")
+	locker := &mockLocker{}
+	handle, err := m.ResolveLock(context.Background(), locker, "key", "/uri", "")
+	if err != nil || handle != "cached-handle" || locker.called {
+		t.Errorf("expected cached handle without calling locker")
+	}
+}
+
+func TestResolveLock_AutoLock(t *testing.T) {
+	m := adt.NewLockMap()
+	locker := &mockLocker{handle: "new-handle"}
+	handle, err := m.ResolveLock(context.Background(), locker, "key", "/uri", "")
+	if err != nil || handle != "new-handle" || !locker.called {
+		t.Errorf("expected auto-lock to be called")
+	}
+	// Verify it was stored
+	state, ok := m.Get("key")
+	if !ok || state.LockHandle != "new-handle" {
+		t.Errorf("expected auto-lock handle to be stored in map")
+	}
+}
+
+func TestResolveLock_AutoLockError(t *testing.T) {
+	m := adt.NewLockMap()
+	locker := &mockLocker{err: fmt.Errorf("lock failed")}
+	_, err := m.ResolveLock(context.Background(), locker, "key", "/uri", "")
+	if err == nil {
+		t.Error("expected error from auto-lock")
+	}
+}
+
+func TestResolveETag_Cached(t *testing.T) {
+	m := adt.NewLockMap()
+	m.Set("key", "handle", "cached-etag")
+	reader := &mockReader{}
+	etag, err := m.ResolveETag(context.Background(), reader, "key", "/uri")
+	if err != nil || etag != "cached-etag" || reader.called {
+		t.Errorf("expected cached ETag without calling reader")
+	}
+}
+
+func TestResolveETag_FetchFromClient(t *testing.T) {
+	m := adt.NewLockMap()
+	m.Set("key", "handle", "") // no ETag cached
+	reader := &mockReader{result: &adt.SourceResult{ETag: "fetched-etag"}}
+	etag, err := m.ResolveETag(context.Background(), reader, "key", "/uri")
+	if err != nil || etag != "fetched-etag" || !reader.called {
+		t.Errorf("expected ETag fetched from client")
+	}
+	// Verify it was cached
+	state, _ := m.Get("key")
+	if state.ETag != "fetched-etag" {
+		t.Errorf("expected fetched ETag to be cached")
+	}
+}
+
+func TestResolveETag_ClientError(t *testing.T) {
+	m := adt.NewLockMap()
+	reader := &mockReader{err: fmt.Errorf("fetch failed")}
+	_, err := m.ResolveETag(context.Background(), reader, "key", "/uri")
+	if err == nil {
+		t.Error("expected error from client")
 	}
 }

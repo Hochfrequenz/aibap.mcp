@@ -48,23 +48,18 @@ func registerPatchTools(s toolAdder, client adt.Client, lockMap *adt.LockMap, se
 		}
 
 		// Resolve lock handle: explicit param > lock map > auto-lock.
-		key := lockKey(selector, uri)
-		lockHandle := explicitHandle
-		autoLocked := false
-		if lockHandle == "" {
-			if state, ok := lockMap.Get(key); ok {
-				lockHandle = state.LockHandle
+		key := adt.LockKey(selector.ActiveName(), uri)
+		preExisting := explicitHandle != ""
+		if !preExisting {
+			if state, ok := lockMap.Get(key); ok && state.LockHandle != "" {
+				preExisting = true
 			}
 		}
-		if lockHandle == "" {
-			handle, err := client.LockObject(ctx, uri)
-			if err != nil {
-				return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
-			}
-			lockHandle = handle
-			lockMap.Set(key, lockHandle, "")
-			autoLocked = true
+		lockHandle, err := lockMap.ResolveLock(ctx, client, key, uri, explicitHandle)
+		if err != nil {
+			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
 		}
+		autoLocked := !preExisting
 
 		// Get current source.
 		srcResult, err := client.GetSource(ctx, uri)
