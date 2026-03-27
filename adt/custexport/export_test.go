@@ -31,6 +31,9 @@ func (m *mockClient) SetSource(context.Context, string, string, string, string, 
 func (m *mockClient) ActivateObjects(context.Context, []string) (*adt.ActivationResult, error) {
 	panic("not implemented")
 }
+func (m *mockClient) GetInactiveObjects(context.Context) ([]adt.ObjectInfo, error) {
+	panic("not implemented")
+}
 func (m *mockClient) SearchObjects(context.Context, string, string, int) ([]adt.ObjectInfo, error) {
 	panic("not implemented")
 }
@@ -98,6 +101,7 @@ func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { panic
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
+func (m *mockClient) Logout(context.Context) error { panic("not implemented") }
 
 func TestDiscoverTables(t *testing.T) {
 	var capturedSQL string

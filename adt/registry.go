@@ -102,6 +102,9 @@ func (r *ClientRegistry) SetSource(ctx context.Context, objectURI, source, lockH
 func (r *ClientRegistry) ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error) {
 	return r.activeClient().ActivateObjects(ctx, objectURIs)
 }
+func (r *ClientRegistry) GetInactiveObjects(ctx context.Context) ([]ObjectInfo, error) {
+	return r.activeClient().GetInactiveObjects(ctx)
+}
 func (r *ClientRegistry) GetABAPDoc(ctx context.Context, keyword string) (string, error) {
 	return r.activeClient().GetABAPDoc(ctx, keyword)
 }
@@ -173,4 +176,7 @@ func (r *ClientRegistry) RunQuery(ctx context.Context, sql string, maxRows int) 
 }
 func (r *ClientRegistry) SystemInfo() (host, client string) {
 	return r.activeClient().SystemInfo()
+}
+func (r *ClientRegistry) Logout(ctx context.Context) error {
+	return r.activeClient().Logout(ctx)
 }

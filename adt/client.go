@@ -30,6 +30,7 @@ type ObjectClient interface {
 	CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error
 	DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error
 	ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error)
+	GetInactiveObjects(ctx context.Context) ([]ObjectInfo, error)
 }
 
 // LockClient handles object locking.
@@ -81,6 +82,7 @@ type QueryClient interface {
 // SystemClient provides system metadata.
 type SystemClient interface {
 	SystemInfo() (host, client string)
+	Logout(ctx context.Context) error
 }
 
 // Client is the full ADT client combining all capabilities.
@@ -160,6 +162,27 @@ func NewClientWithToken(cfg config.SAPConfig, accessToken string, onRefresh func
 // SystemInfo returns the SAP system host URL and client number.
 func (c *httpClient) SystemInfo() (host, client string) {
 	return c.cfg.Host, c.cfg.Client
+}
+
+// Logout invalidates the SAP session. After calling this, the CSRF token
+// and session cookies are no longer valid.
+func (c *httpClient) Logout(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.Host+"/sap/public/bc/icf/logoff", nil)
+	if err != nil {
+		return fmt.Errorf("Logout: %w", err)
+	}
+	c.setAuth(req)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("Logout: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	c.mu.Lock()
+	c.csrfToken = ""
+	c.mu.Unlock()
+	return nil
 }
 
 // fetchCSRFToken performs the CSRF preflight GET and caches the token and session cookies.
