@@ -68,6 +68,54 @@ func TestReleaseTransport_Integration(t *testing.T) {
 	t.Logf("released transport: %s", trNumber)
 }
 
+func TestAddToTransport_Integration(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	// Create a transport first.
+	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP AddToTransport test", "Z_ADT_MCP_TEST")
+	if err != nil {
+		t.Fatalf("CreateTransport: %v", err)
+	}
+	t.Logf("created transport: %s", trNumber)
+	t.Cleanup(func() { _ = client.ReleaseTransport(context.Background(), trNumber) })
+
+	// Create a program in a real package (not $TMP) so it needs a transport.
+	const objName = "Z_ADT_MCP_TR_ADD_TST"
+	objectURI := "/sap/bc/adt/programs/programs/" + objName
+	err = client.CreateObject(ctx, "PROG", objName, "Z_ADT_MCP_TEST", "Transport add test", trNumber)
+	if err != nil {
+		// May already exist from a previous run.
+		if _, infoErr := client.GetObjectInfo(ctx, objectURI); infoErr != nil {
+			t.Fatalf("CreateObject failed and object does not exist: %v", err)
+		}
+		t.Logf("object %s already exists, reusing", objName)
+	} else {
+		t.Logf("created %s in Z_ADT_MCP_TEST", objName)
+	}
+
+	// Check which transport/task is available.
+	check, err := client.CheckTransport(ctx, "R3TR", "PROG", objName)
+	if err != nil {
+		t.Fatalf("CheckTransport: %v", err)
+	}
+	t.Logf("CheckTransport: result=%s recording=%v requests=%d", check.Result, check.Recording, len(check.Requests))
+	for _, r := range check.Requests {
+		t.Logf("  %s (%s) %q", r.Number, r.Status, r.Description)
+	}
+
+	if len(check.Requests) == 0 {
+		t.Skip("no transport requests available")
+	}
+
+	taskNumber := check.Requests[0].Number
+	err = client.AddToTransport(ctx, objectURI, taskNumber)
+	if err != nil {
+		t.Fatalf("AddToTransport: %v", err)
+	}
+	t.Logf("added %s to %s", objectURI, taskNumber)
+}
+
 func TestGetTransportRequests_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
