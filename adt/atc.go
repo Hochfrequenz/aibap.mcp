@@ -59,47 +59,31 @@ func (c *httpClient) RunATCCheck(ctx context.Context, objectURIs []string) (*ATC
 		`xmlns:adtcore="http://www.sap.com/adt/core" maximumVerdicts="100">`+
 		`<objectSets>`+
 		`<objectSet kind="inclusive">`+
-		`%s`+
+		`<adtcore:objectReferences>%s</adtcore:objectReferences>`+
 		`</objectSet>`+
 		`</objectSets>`+
 		`</atc:run>`, refs.String())
 
-	// Step 1: Trigger ATC run.
-	// clientWait=false means the server returns immediately. The worklist fetch
-	// below assumes the run completes near-instantly. If this proves unreliable
-	// on systems where it works, a polling loop may be needed.
+	// Step 1: Trigger ATC run with a worklist to collect results.
+	const worklistID = "0000000000"
 	resp, err := c.doMutate(ctx, http.MethodPost,
-		"/sap/bc/adt/atc/runs?clientWait=false",
+		"/sap/bc/adt/atc/runs?clientWait=false&worklistId="+worklistID,
 		strings.NewReader(body),
 		map[string]string{
-			"Content-Type": "application/vnd.sap.atc.run.parameters.v1+xml",
-			"Accept":       "application/vnd.sap.atc.run.result.v1+xml",
+			"Content-Type": "application/xml",
+			"Accept":       "application/xml",
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("RunATCCheck: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	_ = resp.Body.Close()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("RunATCCheck reading run result: %w", err)
-	}
-
-	var runResult adtmodel.ATCWorklistRun
-	if err := xml.Unmarshal(data, &runResult); err != nil {
-		return nil, fmt.Errorf("RunATCCheck parsing run result: %w", err)
-	}
-
-	if runResult.WorklistID == "" {
-		return nil, fmt.Errorf("RunATCCheck: no worklist ID in response")
-	}
-
 	// Step 2: Fetch worklist results.
-	wlResp, err := c.doRead(ctx, "/sap/bc/adt/atc/worklists/"+runResult.WorklistID, map[string]string{
+	wlResp, err := c.doRead(ctx, "/sap/bc/adt/atc/worklists/"+worklistID, map[string]string{
 		"Accept": "application/atc.worklist.v1+xml",
 	})
 	if err != nil {
