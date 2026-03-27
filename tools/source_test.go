@@ -60,6 +60,9 @@ func (m *mockClient) ActivateObjects(ctx context.Context, uris []string) (*adt.A
 	}
 	return &adt.ActivationResult{Success: true}, nil
 }
+func (m *mockClient) GetInactiveObjects(context.Context) ([]adt.ObjectInfo, error) {
+	return nil, nil
+}
 func (m *mockClient) SearchObjects(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error) {
 	if m.searchFn != nil {
 		return m.searchFn(ctx, q, t, n)
@@ -171,6 +174,7 @@ func (m *mockClient) ReleaseTransport(context.Context, string) error {
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
+func (m *mockClient) Logout(context.Context) error { return nil }
 
 func newTestServer(client adt.Client) *server.MCPServer {
 	return newTestServerWithSelector(client, &mockSelector{}, adt.NewLockMap())
