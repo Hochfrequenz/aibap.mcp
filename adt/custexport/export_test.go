@@ -82,7 +82,7 @@ func (m *mockClient) ExportPackage(context.Context, string) ([]byte, error) {
 func (m *mockClient) GetATCCustomizing(context.Context) (*adt.ATCCustomizingResult, error) {
 	panic("not implemented")
 }
-func (m *mockClient) RunATCCheck(context.Context, []string) (*adt.ATCResult, error) {
+func (m *mockClient) RunATCCheck(context.Context, []string, string) (*adt.ATCResult, error) {
 	panic("not implemented")
 }
 func (m *mockClient) CheckTransport(context.Context, string, string, string) (*adt.TransportCheckResult, error) {

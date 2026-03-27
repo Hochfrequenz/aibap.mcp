@@ -156,8 +156,8 @@ func (r *ClientRegistry) ExportPackage(ctx context.Context, packageName string) 
 func (r *ClientRegistry) GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error) {
 	return r.activeClient().GetATCCustomizing(ctx)
 }
-func (r *ClientRegistry) RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error) {
-	return r.activeClient().RunATCCheck(ctx, objectURIs)
+func (r *ClientRegistry) RunATCCheck(ctx context.Context, objectURIs []string, checkVariant string) (*ATCResult, error) {
+	return r.activeClient().RunATCCheck(ctx, objectURIs, checkVariant)
 }
 func (r *ClientRegistry) RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error) {
 	return r.activeClient().RunQuery(ctx, sql, maxRows)
