@@ -38,8 +38,17 @@ func TestRunATCCheck_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
+	// Read the system check variant to pass explicitly — avoids NULL pointer
+	// on ECC systems where no default variant is configured.
+	cust, err := client.GetATCCustomizing(ctx)
+	if err != nil {
+		t.Skipf("GetATCCustomizing failed, cannot determine check variant: %v", err)
+	}
+	variant := cust.SystemCheckVariant
+	t.Logf("using check variant: %q", variant)
+
 	objectURI := "/sap/bc/adt/oo/classes/ZCL_ADT_MCP_TEST_UNITS"
-	result, err := client.RunATCCheck(ctx, []string{objectURI})
+	result, err := client.RunATCCheck(ctx, []string{objectURI}, variant)
 	if err != nil {
 		// Expected to fail on current S/4 system — see KNOWN ISSUE above.
 		t.Skipf("RunATCCheck not available on this system: %v", err)

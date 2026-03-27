@@ -45,7 +45,7 @@ func (c *httpClient) GetATCCustomizing(ctx context.Context) (*ATCCustomizingResu
 	return result, nil
 }
 
-func (c *httpClient) RunATCCheck(ctx context.Context, objectURIs []string) (*ATCResult, error) {
+func (c *httpClient) RunATCCheck(ctx context.Context, objectURIs []string, checkVariant string) (*ATCResult, error) {
 	// Build object references XML. Escape URIs to prevent XML injection.
 	var refs strings.Builder
 	for _, uri := range objectURIs {
@@ -54,15 +54,22 @@ func (c *httpClient) RunATCCheck(ctx context.Context, objectURIs []string) (*ATC
 		fmt.Fprintf(&refs, `<adtcore:objectReference adtcore:uri="%s"/>`, escaped.String())
 	}
 
+	variantAttr := ""
+	if checkVariant != "" {
+		var escaped strings.Builder
+		_ = xml.EscapeText(&escaped, []byte(checkVariant))
+		variantAttr = fmt.Sprintf(` checkVariant="%s"`, escaped.String())
+	}
+
 	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
 		`<atc:run xmlns:atc="http://www.sap.com/adt/atc" `+
-		`xmlns:adtcore="http://www.sap.com/adt/core" maximumVerdicts="100">`+
+		`xmlns:adtcore="http://www.sap.com/adt/core" maximumVerdicts="100"%s>`+
 		`<objectSets>`+
 		`<objectSet kind="inclusive">`+
 		`<adtcore:objectReferences>%s</adtcore:objectReferences>`+
 		`</objectSet>`+
 		`</objectSets>`+
-		`</atc:run>`, refs.String())
+		`</atc:run>`, variantAttr, refs.String())
 
 	// Step 1: Trigger ATC run with a worklist to collect results.
 	const worklistID = "0000000000"
