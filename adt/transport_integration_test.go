@@ -7,6 +7,23 @@ import (
 	"testing"
 )
 
+func TestCreateTransport_Integration(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP integration test", "Z_ADT_MCP_TEST")
+	if err != nil {
+		t.Fatalf("CreateTransport failed: %v", err)
+	}
+	if trNumber == "" {
+		t.Fatal("expected non-empty transport number")
+	}
+	if len(trNumber) != 10 {
+		t.Errorf("expected 10-char transport number (e.g. S4UK900001), got %q", trNumber)
+	}
+	t.Logf("created transport: %s", trNumber)
+}
+
 func TestGetTransportRequests_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
