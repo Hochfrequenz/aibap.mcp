@@ -58,6 +58,11 @@ type SearchClient interface {
 	GetObjectInfo(ctx context.Context, objectURI string) (*ObjectInfo, error)
 }
 
+// RefactoringClient provides code refactoring operations.
+type RefactoringClient interface {
+	Rename(ctx context.Context, sourceURI, newName, transport string) (*RenameResult, error)
+}
+
 // DDICClient provides DDIC metadata.
 type DDICClient interface {
 	GetTableFields(ctx context.Context, tableName string) ([]FieldInfo, error)
@@ -106,6 +111,7 @@ type Client interface {
 	SearchClient
 	DDICClient
 	QualityClient
+	RefactoringClient
 	TransportClient
 	ExportClient
 	QueryClient
