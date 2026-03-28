@@ -1,19 +1,18 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-
-	"gopkg.in/yaml.v3"
 )
 
 type SAPConfig struct {
-	Host           string `yaml:"host"`
-	Client         string `yaml:"client"`
-	User           string `yaml:"user"`
-	Password       string `yaml:"password"`
-	TLSSkipVerify  bool   `yaml:"tls_skip_verify"`
-	OAuth2ClientID string `yaml:"oauth2_client_id"`
+	Host           string `json:"host"`
+	Client         string `json:"client"`
+	User           string `json:"user"`
+	Password       string `json:"password"`
+	TLSSkipVerify  bool   `json:"tls_skip_verify"`
+	OAuth2ClientID string `json:"oauth2_client_id"`
 }
 
 // IsOAuth2 returns true when no basic-auth credentials are configured,
@@ -32,9 +31,9 @@ func (c SAPConfig) EffectiveOAuth2ClientID() string {
 }
 
 type Config struct {
-	DefaultSystem          string               `yaml:"default_system"`
-	IntegrationTestSystems []string             `yaml:"integration_test_systems"`
-	Systems                map[string]SAPConfig `yaml:"systems"`
+	DefaultSystem          string               `json:"default_system"`
+	IntegrationTestSystems []string             `json:"integration_test_systems"`
+	Systems                map[string]SAPConfig `json:"systems"`
 }
 
 // IsTestSystem returns true if the named system is whitelisted for integration tests.
@@ -67,7 +66,7 @@ func (c *Config) TestSystems() map[string]SAPConfig {
 	return result
 }
 
-// Load reads config from the given YAML file and validates it.
+// Load reads config from the given JSON file and validates it.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -75,7 +74,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
 

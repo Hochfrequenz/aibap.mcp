@@ -27,7 +27,7 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "login" {
 		configPath := os.Getenv("SAP_CONFIG_FILE")
 		if configPath == "" {
-			configPath = "config.yaml"
+			configPath = "config.json"
 		}
 		systemName := ""
 		if len(os.Args) >= 3 {
@@ -51,7 +51,7 @@ func run() error {
 
 	configPath := os.Getenv("SAP_CONFIG_FILE")
 	if configPath == "" {
-		configPath = "config.yaml"
+		configPath = "config.json"
 	}
 
 	cfg, err := config.Load(configPath)

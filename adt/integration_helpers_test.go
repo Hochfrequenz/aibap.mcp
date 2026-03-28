@@ -31,7 +31,7 @@ const (
 // YAML paths searched: SAP_ADT_CONFIG env var, ~/.claude/mcp/sap-adt-config.yaml
 func integrationConfig() config.SAPConfig {
 	// Try YAML config first
-	if cfg, ok := integrationConfigFromYAML(); ok {
+	if cfg, ok := integrationConfigFromFile(); ok {
 		return cfg
 	}
 	// Fallback to legacy env vars
@@ -44,10 +44,10 @@ func integrationConfig() config.SAPConfig {
 	}
 }
 
-func integrationConfigFromYAML() (config.SAPConfig, bool) {
+func integrationConfigFromFile() (config.SAPConfig, bool) {
 	paths := []string{os.Getenv("SAP_ADT_CONFIG")}
 	if home, err := os.UserHomeDir(); err == nil {
-		paths = append(paths, home+"/.claude/mcp/sap-adt-config.yaml")
+		paths = append(paths, home+"/.claude/mcp/sap-adt-config.json")
 	}
 
 	var cfg *config.Config
