@@ -141,6 +141,9 @@ func (m *mockClient) CreateObject(ctx context.Context, objectType, name, pkg, de
 	}
 	return nil
 }
+func (m *mockClient) CreateFunctionModule(context.Context, string, string, string, string, string) error {
+	return nil
+}
 func (m *mockClient) CreatePackage(context.Context, string, string, string, string, string, string) error {
 	return nil
 }
