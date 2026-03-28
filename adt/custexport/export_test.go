@@ -104,6 +104,9 @@ func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { panic
 func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error) {
 	panic("not implemented")
 }
+func (m *mockClient) Rename(context.Context, string, string, string) (*adt.RenameResult, error) {
+	panic("not implemented")
+}
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
