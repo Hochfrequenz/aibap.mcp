@@ -39,15 +39,15 @@ func (c *httpClient) ExportPackage(ctx context.Context, packageName string) ([]b
 		return nil, fmt.Errorf("ExportPackage: package name must not be empty")
 	}
 
-	data, err := c.exportPackageWithFolderLogic(ctx, pkg, "")
-	if err != nil && strings.Contains(err.Error(), folderLogicFullHint) {
+	data, hint, err := c.exportPackageWithFolderLogic(ctx, pkg, "")
+	if err != nil && (hint == "FULL" || strings.Contains(err.Error(), folderLogicFullHint)) {
 		// Retry with FULL folder logic for packages with non-PREFIX sub-packages.
-		data, err = c.exportPackageWithFolderLogic(ctx, pkg, "FULL")
+		data, _, err = c.exportPackageWithFolderLogic(ctx, pkg, "FULL")
 	}
 	return data, err
 }
 
-func (c *httpClient) exportPackageWithFolderLogic(ctx context.Context, pkg, folderLogic string) ([]byte, error) {
+func (c *httpClient) exportPackageWithFolderLogic(ctx context.Context, pkg, folderLogic string) ([]byte, string, error) {
 	params := url.Values{}
 	params.Set("package", pkg)
 	if folderLogic != "" {
@@ -57,18 +57,22 @@ func (c *httpClient) exportPackageWithFolderLogic(ctx context.Context, pkg, fold
 
 	resp, err := c.doReadLong(ctx, path, map[string]string{"Accept": "application/zip"})
 	if err != nil {
-		return nil, fmt.Errorf("ExportPackage: %w", err)
+		return nil, "", fmt.Errorf("ExportPackage: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	// Check for structured folder logic hint header before consuming the body.
+	hint := resp.Header.Get("X-Abapgit-Folder-Logic-Hint")
+
 	if err := checkResponse(resp); err != nil {
-		return nil, err
+		return nil, hint, err
 	}
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("ExportPackage: reading response: %w", err)
+		return nil, "", fmt.Errorf("ExportPackage: reading response: %w", err)
 	}
-	return data, nil
+	return data, "", nil
 }
 
 // ExtractZIPToDir extracts a ZIP archive from raw bytes into the given directory.
