@@ -62,13 +62,13 @@ func TestGetObjectInfo_Integration(t *testing.T) {
 		},
 		{
 			name:        "test class fixture",
-			uri:         "/sap/bc/adt/oo/classes/ZCL_ADT_MCP_TEST_NOUNITS",
+			uri:         testClassNoTests,
 			wantType:    "CLAS/OC",
 			wantPackage: "$TMP",
 		},
 		{
 			name:        "test interface fixture",
-			uri:         "/sap/bc/adt/oo/interfaces/ZIF_ADT_MCP_TEST",
+			uri:         testInterfaceURI,
 			wantType:    "INTF/OI",
 			wantPackage: "$TMP",
 		},

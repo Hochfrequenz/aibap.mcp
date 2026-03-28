@@ -47,7 +47,7 @@ func TestRunATCCheck_Integration(t *testing.T) {
 	variant := cust.SystemCheckVariant
 	t.Logf("using check variant: %q", variant)
 
-	objectURI := "/sap/bc/adt/oo/classes/ZCL_ADT_MCP_TEST_UNITS"
+	objectURI := testClassURI
 	result, err := client.RunATCCheck(ctx, []string{objectURI}, variant)
 	if err != nil {
 		// Expected to fail on current S/4 system — see KNOWN ISSUE above.

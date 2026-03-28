@@ -14,13 +14,15 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
-// testReportURI is the editable test report for lock/write/activate tests.
-// Created automatically by TestMain via setupFixtures.
-const testReportURI = "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_REPORT"
-
-// testSynWarnURI is a report with an unused variable, guaranteed to produce syntax warnings.
-// Created automatically by TestMain via setupFixtures.
-const testSynWarnURI = "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_SYNWARN"
+// Test fixture URIs — all objects live in package Z_ADT_MCP_TEST (S4) or $TMP (ECC).
+// Created automatically by TestMain via setupFixtures. See also fixtures_integration_test.go.
+const (
+	testReportURI    = "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_REPORT"
+	testSynWarnURI   = "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_SYNWARN"
+	testInterfaceURI = "/sap/bc/adt/oo/interfaces/ZIF_ADT_MCP_TEST"
+	testClassURI     = "/sap/bc/adt/oo/classes/ZCL_ADT_MCP_TEST_UNITS"
+	testClassNoTests = "/sap/bc/adt/oo/classes/ZCL_ADT_MCP_TEST_NOUNITS"
+)
 
 // integrationConfig builds a SAPConfig from environment variables.
 func integrationConfig() config.SAPConfig {
