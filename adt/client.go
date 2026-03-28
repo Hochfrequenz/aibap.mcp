@@ -27,6 +27,7 @@ type SourceClient interface {
 // ObjectClient manages ABAP object lifecycle.
 type ObjectClient interface {
 	CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error
+	CreateFunctionModule(ctx context.Context, groupName, moduleName, description, packageName, transport string) error
 	CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error
 	DeleteObject(ctx context.Context, objectURI, lockHandle, transport string) error
 	ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error)

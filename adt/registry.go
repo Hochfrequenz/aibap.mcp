@@ -156,6 +156,9 @@ func (r *ClientRegistry) PrettyPrint(ctx context.Context, source string) (string
 func (r *ClientRegistry) CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error {
 	return r.activeClient().CreateObject(ctx, objectType, name, packageName, description, transport)
 }
+func (r *ClientRegistry) CreateFunctionModule(ctx context.Context, groupName, moduleName, description, packageName, transport string) error {
+	return r.activeClient().CreateFunctionModule(ctx, groupName, moduleName, description, packageName, transport)
+}
 func (r *ClientRegistry) CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error {
 	return r.activeClient().CreatePackage(ctx, name, description, responsible, softwareComponent, transportLayer, transport)
 }

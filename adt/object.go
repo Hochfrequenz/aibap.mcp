@@ -74,6 +74,34 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	return checkResponse(resp)
 }
 
+func (c *httpClient) CreateFunctionModule(ctx context.Context, groupName, moduleName, description, packageName, transport string) error {
+	body, err := xml.Marshal(adtxml.CreateFunctionModule{
+		NSModule:    "http://www.sap.com/adt/functions/fmodules",
+		NSCore:      nsADTCore,
+		Type:        "FUGR/FF",
+		Name:        strings.ToUpper(moduleName),
+		Description: description,
+		PackageRef:  adtxml.PackageRef{Name: packageName},
+	})
+	if err != nil {
+		return fmt.Errorf("CreateFunctionModule marshal: %w", err)
+	}
+
+	path := "/sap/bc/adt/functions/groups/" + strings.ToLower(groupName) + "/fmodules"
+	if transport != "" {
+		path += "?corrNr=" + transport
+	}
+	resp, err := c.doMutate(ctx, http.MethodPost, path,
+		strings.NewReader(xml.Header+string(body)),
+		map[string]string{"Content-Type": "application/vnd.sap.adt.functions.fmodules.v2+xml"},
+	)
+	if err != nil {
+		return fmt.Errorf("CreateFunctionModule: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return checkResponse(resp)
+}
+
 func (c *httpClient) CreatePackage(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error {
 	body, err := xml.Marshal(adtxml.CreatePackage{
 		NSPak:       "http://www.sap.com/adt/packages",
