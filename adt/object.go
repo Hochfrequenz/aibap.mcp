@@ -21,6 +21,7 @@ var objectTypeMap = map[string]struct {
 	"DTEL": {"/sap/bc/adt/ddic/dataelements", "DTEL/DE"},
 	"DOMA": {"/sap/bc/adt/ddic/domains", "DOMA/DD"},
 	"TABL": {"/sap/bc/adt/ddic/tables", "TABL/DT"},
+	"DDLS": {"/sap/bc/adt/ddic/ddl/sources", "DDLS/STOB"},
 }
 
 func (c *httpClient) CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error {
@@ -72,6 +73,11 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 			NSBlue: "http://www.sap.com/wbobj/blue", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
+	case "DDLS":
+		body, err = xml.Marshal(adtxml.CreateDDLSource{
+			NSDdl: "http://www.sap.com/adt/ddic/ddlsources", NSCore: nsADTCore,
+			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
+		})
 	}
 	if err != nil {
 		return fmt.Errorf("CreateObject marshal: %w", err)
@@ -86,6 +92,8 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 		ct = "application/vnd.sap.adt.domains.v2+xml"
 	case "TABL":
 		ct = "application/vnd.sap.adt.tables.v2+xml"
+	case "DDLS":
+		ct = "application/vnd.sap.adt.ddlSource+xml"
 	}
 
 	path := info.endpoint
@@ -102,7 +110,7 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == 404 {
 		ot := strings.ToUpper(objectType)
-		if ot == "DTEL" || ot == "DOMA" || ot == "TABL" {
+		if ot == "DTEL" || ot == "DOMA" || ot == "TABL" || ot == "DDLS" {
 			return fmt.Errorf("CreateObject: the /sap/bc/adt/ddic/ endpoint for %s is not available on this SAP system — "+
 				"DDIC object creation via ADT REST requires S/4HANA or a recent ABAP Platform version. "+
 				"On older ECC systems, create DDIC objects via transaction SE11", ot)

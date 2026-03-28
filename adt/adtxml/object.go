@@ -46,6 +46,17 @@ type CreateFunctionGroup struct {
 	PackageRef  PackageRef `xml:"adtcore:packageRef"`
 }
 
+// CreateDDLSource is the XML body for creating a CDS view (DDLS). S4 only.
+type CreateDDLSource struct {
+	XMLName     xml.Name   `xml:"ddl:ddlSource"`
+	NSDdl       string     `xml:"xmlns:ddl,attr"`
+	NSCore      string     `xml:"xmlns:adtcore,attr"`
+	Type        string     `xml:"adtcore:type,attr"`
+	Description string     `xml:"adtcore:description,attr"`
+	Name        string     `xml:"adtcore:name,attr"`
+	PackageRef  PackageRef `xml:"adtcore:packageRef"`
+}
+
 // CreateTable is the XML body for creating a transparent table (TABL). S4 only.
 // Note: the table is created empty — use SetSource with DDL syntax to define fields,
 // then ActivateObjects to make it usable.

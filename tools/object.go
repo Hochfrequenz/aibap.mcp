@@ -9,10 +9,10 @@ import (
 
 func registerObjectTools(s toolAdder, client adt.ObjectClient) {
 	s.AddTool(mcp.NewTool("create_object",
-		mcp.WithDescription("Create a new ABAP object. Supported types: PROG (program), CLAS (class), INTF (interface), FUGR (function group), TABL (table, S4 only), DTEL (data element, S4 only), DOMA (domain, S4 only). For packages use create_package. Tables are created empty — use set_source_from_file with DDL syntax to add fields, then activate."),
+		mcp.WithDescription("Create a new ABAP object. Supported types: PROG (program), CLAS (class), INTF (interface), FUGR (function group), DDLS (CDS view, S4 only), TABL (table, S4 only), DTEL (data element, S4 only), DOMA (domain, S4 only). For packages use create_package. DDLS/TABL are created empty — use set_source_from_file with CDS DDL syntax to define them, then activate."),
 		mcp.WithString("object_type",
 			mcp.Required(),
-			mcp.Description("Object type: PROG, CLAS, INTF, FUGR, TABL (S4 only), DTEL (S4 only), DOMA (S4 only)"),
+			mcp.Description("Object type: PROG, CLAS, INTF, FUGR, DDLS (S4 only), TABL (S4 only), DTEL (S4 only), DOMA (S4 only)"),
 		),
 		mcp.WithString("name",
 			mcp.Required(),
