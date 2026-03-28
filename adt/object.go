@@ -20,6 +20,7 @@ var objectTypeMap = map[string]struct {
 	"FUGR": {"/sap/bc/adt/functions/groups", "FUGR/F"},
 	"DTEL": {"/sap/bc/adt/ddic/dataelements", "DTEL/DE"},
 	"DOMA": {"/sap/bc/adt/ddic/domains", "DOMA/DD"},
+	"TABL": {"/sap/bc/adt/ddic/tables", "TABL/DT"},
 }
 
 func (c *httpClient) CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error {
@@ -66,6 +67,11 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 			NSDomain: "http://www.sap.com/dictionary/domain", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
+	case "TABL":
+		body, err = xml.Marshal(adtxml.CreateTable{
+			NSBlue: "http://www.sap.com/wbobj/blue", NSCore: nsADTCore,
+			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
+		})
 	}
 	if err != nil {
 		return fmt.Errorf("CreateObject marshal: %w", err)
@@ -78,6 +84,8 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 		ct = "application/vnd.sap.adt.dataelements.v2+xml"
 	case "DOMA":
 		ct = "application/vnd.sap.adt.domains.v2+xml"
+	case "TABL":
+		ct = "application/vnd.sap.adt.tables.v2+xml"
 	}
 
 	path := info.endpoint
@@ -86,12 +94,20 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	}
 	resp, err := c.doMutate(ctx, http.MethodPost, path,
 		strings.NewReader(xml.Header+string(body)),
-		map[string]string{"Content-Type": ct},
+		map[string]string{"Content-Type": ct, "Accept": ct},
 	)
 	if err != nil {
 		return fmt.Errorf("CreateObject: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == 404 {
+		ot := strings.ToUpper(objectType)
+		if ot == "DTEL" || ot == "DOMA" || ot == "TABL" {
+			return fmt.Errorf("CreateObject: the /sap/bc/adt/ddic/ endpoint for %s is not available on this SAP system — "+
+				"DDIC object creation via ADT REST requires S/4HANA or a recent ABAP Platform version. "+
+				"On older ECC systems, create DDIC objects via transaction SE11", ot)
+		}
+	}
 	return checkResponse(resp)
 }
 
