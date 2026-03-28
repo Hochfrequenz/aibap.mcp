@@ -10,16 +10,22 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
+// Object type constants for DDIC types used in multiple switch statements.
+const (
+	objTypeDTEL = "DTEL"
+	objTypeDOMA = "DOMA"
+)
+
 var objectTypeMap = map[string]struct {
 	endpoint string
 	adtType  string
 }{
-	"PROG": {"/sap/bc/adt/programs/programs", "PROG/P"},
-	"CLAS": {"/sap/bc/adt/oo/classes", "CLAS/OC"},
-	"INTF": {"/sap/bc/adt/oo/interfaces", "INTF/OI"},
-	"FUGR": {"/sap/bc/adt/functions/groups", "FUGR/F"},
-	"DTEL": {"/sap/bc/adt/ddic/dataelements", "DTEL/DE"},
-	"DOMA": {"/sap/bc/adt/ddic/domains", "DOMA/DD"},
+	"PROG":      {"/sap/bc/adt/programs/programs", "PROG/P"},
+	"CLAS":      {"/sap/bc/adt/oo/classes", "CLAS/OC"},
+	"INTF":      {"/sap/bc/adt/oo/interfaces", "INTF/OI"},
+	"FUGR":      {"/sap/bc/adt/functions/groups", "FUGR/F"},
+	objTypeDTEL: {"/sap/bc/adt/ddic/dataelements", "DTEL/DE"},
+	objTypeDOMA: {"/sap/bc/adt/ddic/domains", "DOMA/DD"},
 }
 
 func (c *httpClient) CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error {
@@ -56,12 +62,12 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 			NSGroup: "http://www.sap.com/adt/functions/groups", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
-	case "DTEL":
+	case objTypeDTEL:
 		body, err = xml.Marshal(adtxml.CreateDataElement{
 			NSDtel: "http://www.sap.com/wbobj/dictionary/dtel", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
-	case "DOMA":
+	case objTypeDOMA:
 		body, err = xml.Marshal(adtxml.CreateDomain{
 			NSDomain: "http://www.sap.com/dictionary/domain", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
@@ -74,9 +80,9 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	// DDIC objects need specific content types on S4
 	ct := contentTypeXML
 	switch strings.ToUpper(objectType) {
-	case "DTEL":
+	case objTypeDTEL:
 		ct = "application/vnd.sap.adt.dataelements.v2+xml"
-	case "DOMA":
+	case objTypeDOMA:
 		ct = "application/vnd.sap.adt.domains.v2+xml"
 	}
 
