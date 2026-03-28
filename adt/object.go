@@ -10,17 +10,24 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
 
+// Object type constants for DDIC types used in multiple switch statements.
+const (
+	objTypeDTEL = "DTEL"
+	objTypeDOMA = "DOMA"
+	objTypeTABL = "TABL"
+)
+
 var objectTypeMap = map[string]struct {
 	endpoint string
 	adtType  string
 }{
-	"PROG": {"/sap/bc/adt/programs/programs", "PROG/P"},
-	"CLAS": {"/sap/bc/adt/oo/classes", "CLAS/OC"},
-	"INTF": {"/sap/bc/adt/oo/interfaces", "INTF/OI"},
-	"FUGR": {"/sap/bc/adt/functions/groups", "FUGR/F"},
-	"DTEL": {"/sap/bc/adt/ddic/dataelements", "DTEL/DE"},
-	"DOMA": {"/sap/bc/adt/ddic/domains", "DOMA/DD"},
-	"TABL": {"/sap/bc/adt/ddic/tables", "TABL/DT"},
+	"PROG":      {"/sap/bc/adt/programs/programs", "PROG/P"},
+	"CLAS":      {"/sap/bc/adt/oo/classes", "CLAS/OC"},
+	"INTF":      {"/sap/bc/adt/oo/interfaces", "INTF/OI"},
+	"FUGR":      {"/sap/bc/adt/functions/groups", "FUGR/F"},
+	objTypeDTEL: {"/sap/bc/adt/ddic/dataelements", "DTEL/DE"},
+	objTypeDOMA: {"/sap/bc/adt/ddic/domains", "DOMA/DD"},
+	objTypeTABL: {"/sap/bc/adt/ddic/tables", "TABL/DT"},
 }
 
 func (c *httpClient) CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error {
@@ -57,17 +64,17 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 			NSGroup: "http://www.sap.com/adt/functions/groups", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
-	case "DTEL":
+	case objTypeDTEL:
 		body, err = xml.Marshal(adtxml.CreateDataElement{
 			NSDtel: "http://www.sap.com/wbobj/dictionary/dtel", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
-	case "DOMA":
+	case objTypeDOMA:
 		body, err = xml.Marshal(adtxml.CreateDomain{
 			NSDomain: "http://www.sap.com/dictionary/domain", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
-	case "TABL":
+	case objTypeTABL:
 		body, err = xml.Marshal(adtxml.CreateTable{
 			NSBlue: "http://www.sap.com/wbobj/blue", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
@@ -80,11 +87,11 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	// DDIC objects need specific content types on S4
 	ct := contentTypeXML
 	switch strings.ToUpper(objectType) {
-	case "DTEL":
+	case objTypeDTEL:
 		ct = "application/vnd.sap.adt.dataelements.v2+xml"
-	case "DOMA":
+	case objTypeDOMA:
 		ct = "application/vnd.sap.adt.domains.v2+xml"
-	case "TABL":
+	case objTypeTABL:
 		ct = "application/vnd.sap.adt.tables.v2+xml"
 	}
 
@@ -102,7 +109,7 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == 404 {
 		ot := strings.ToUpper(objectType)
-		if ot == "DTEL" || ot == "DOMA" || ot == "TABL" {
+		if ot == objTypeDTEL || ot == objTypeDOMA || ot == objTypeTABL {
 			return fmt.Errorf("CreateObject: the /sap/bc/adt/ddic/ endpoint for %s is not available on this SAP system — "+
 				"DDIC object creation via ADT REST requires S/4HANA or a recent ABAP Platform version. "+
 				"On older ECC systems, create DDIC objects via transaction SE11", ot)
