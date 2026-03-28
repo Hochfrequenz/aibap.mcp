@@ -58,6 +58,11 @@ type SearchClient interface {
 	GetObjectInfo(ctx context.Context, objectURI string) (*ObjectInfo, error)
 }
 
+// RefactoringClient provides code refactoring operations.
+type RefactoringClient interface {
+	Rename(ctx context.Context, sourceURI, newName, transport string) (*RenameResult, error)
+}
+
 // QualityClient runs checks and tests.
 type QualityClient interface {
 	SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error)
@@ -100,6 +105,7 @@ type Client interface {
 	NavigationClient
 	SearchClient
 	QualityClient
+	RefactoringClient
 	TransportClient
 	ExportClient
 	QueryClient
