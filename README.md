@@ -148,20 +148,23 @@ Download the latest release for your platform from the [releases page](https://g
 
 Extract the archive. You'll get a single `mcp-server-abap` executable (or `mcp-server-abap.exe` on Windows).
 
-### 2. Create `config.yaml`
+### 2. Create `config.json`
 
-Create a file called `config.yaml` next to the binary (or anywhere you like):
+Create a file called `config.json` next to the binary (or anywhere you like):
 
-```yaml
-default_system: dev
-
-systems:
-  dev:
-    host: "https://your-sap-system:8000"
-    user: "YOUR_USER"
-    password: "YOUR_PASSWORD"
-    client: "100"
-    tls_skip_verify: false
+```json
+{
+  "default_system": "dev",
+  "systems": {
+    "dev": {
+      "host": "https://your-sap-system:8000",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD",
+      "client": "100",
+      "tls_skip_verify": false
+    }
+  }
+}
 ```
 
 ### 3. Connect to Claude
@@ -172,7 +175,7 @@ See [Usage with Claude](#usage-with-claude) below for copy-paste configuration s
 
 ```bash
 docker pull ghcr.io/hochfrequenz/mcp-server-abap:latest
-docker run -i -v ./config.yaml:/config.yaml -e SAP_CONFIG_FILE=/config.yaml ghcr.io/hochfrequenz/mcp-server-abap
+docker run -i -v ./config.json:/config.json -e SAP_CONFIG_FILE=/config.json ghcr.io/hochfrequenz/mcp-server-abap
 ```
 
 ### Alternative: Build from source
@@ -190,35 +193,42 @@ go build -o mcp-server-abap .
 Copy the example config and fill in your SAP system details:
 
 ```bash
-cp config.yaml.example config.yaml
+cp config.json.example config.json
 ```
 
-```yaml
-default_system: dev
-
-systems:
-  dev:
-    host: "https://your-dev-system:8000"
-    user: "YOUR_USER"
-    password: "YOUR_PASSWORD"
-    client: "100"          # optional, omit to use SAP default client
-    tls_skip_verify: false
-  prod:
-    host: "https://your-prod-system:8000"
-    user: "YOUR_USER"
-    password: "YOUR_PASSWORD"
+```json
+{
+  "default_system": "dev",
+  "systems": {
+    "dev": {
+      "host": "https://your-dev-system:8000",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD",
+      "client": "100",
+      "tls_skip_verify": false
+    },
+    "prod": {
+      "host": "https://your-prod-system:8000",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD"
+    }
+  }
+}
 ```
 
 ### OAuth2 / SSO
 
 For systems with SAML SSO, omit `user` and `password` to use OAuth2:
 
-```yaml
-systems:
-  prod:
-    host: "https://your-prod-system:8000"
-    # no user/password → OAuth2 mode
-    oauth2_client_id: "mcp-server-abap"  # optional, this is the default
+```json
+{
+  "systems": {
+    "prod": {
+      "host": "https://your-prod-system:8000",
+      "oauth2_client_id": "mcp-server-abap"
+    }
+  }
+}
 ```
 
 Then authenticate via browser before starting the server:
@@ -235,7 +245,7 @@ Alternatively, configure via environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `SAP_CONFIG_FILE` | Path to config.yaml (default: `./config.yaml`) |
+| `SAP_CONFIG_FILE` | Path to config.json (default: `./config.json`) |
 
 ## Usage with Claude
 
@@ -250,7 +260,7 @@ Add to your `claude_desktop_config.json`:
       "command": "/path/to/mcp-server-abap",
       "args": [],
       "env": {
-        "SAP_CONFIG_FILE": "/path/to/config.yaml"
+        "SAP_CONFIG_FILE": "/path/to/config.json"
       }
     }
   }
@@ -262,7 +272,7 @@ Add to your `claude_desktop_config.json`:
 Add to your Claude Code MCP settings or run directly:
 
 ```bash
-SAP_CONFIG_FILE=/path/to/config.yaml mcp-server-abap
+SAP_CONFIG_FILE=/path/to/config.json mcp-server-abap
 ```
 
 ## Example workflow
@@ -302,7 +312,7 @@ To send logs to [Papertrail](https://www.papertrail.com/):
 ```bash
 export PAPERTRAIL_HOST=logs5.papertrailapp.com
 export PAPERTRAIL_PORT=12345
-SAP_CONFIG_FILE=config.yaml ./mcp-server-abap
+SAP_CONFIG_FILE=config.json ./mcp-server-abap
 ```
 
 Logs are sent over TLS. Both stderr and Papertrail receive every log event.
