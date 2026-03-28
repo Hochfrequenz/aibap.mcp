@@ -38,14 +38,8 @@ func TestRunLoginFullFlow(t *testing.T) {
 
 	// Create a temp config file pointing at the mock server.
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yaml")
-	configContent := fmt.Sprintf(`default_system: DEV
-systems:
-  DEV:
-    host: %s
-    client: "100"
-    tls_skip_verify: true
-`, tokenServer.URL)
+	configPath := filepath.Join(tmpDir, "config.json")
+	configContent := fmt.Sprintf(`{"default_system":"DEV","systems":{"DEV":{"host":"%s","client":"100","tls_skip_verify":true}}}`, tokenServer.URL)
 
 	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -120,13 +114,8 @@ systems:
 
 func TestRunLoginInvalidSystem(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yaml")
-	configContent := `default_system: DEV
-systems:
-  DEV:
-    host: https://example.com
-    client: "100"
-`
+	configPath := filepath.Join(tmpDir, "config.json")
+	configContent := `{"default_system":"DEV","systems":{"DEV":{"host":"https://example.com","client":"100"}}}`
 	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -142,15 +131,8 @@ systems:
 
 func TestRunLoginBasicAuthSystem(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yaml")
-	configContent := `default_system: DEV
-systems:
-  DEV:
-    host: https://example.com
-    client: "100"
-    user: myuser
-    password: mypassword
-`
+	configPath := filepath.Join(tmpDir, "config.json")
+	configContent := `{"default_system":"DEV","systems":{"DEV":{"host":"https://example.com","client":"100","user":"myuser","password":"mypassword"}}}`
 	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -216,14 +198,8 @@ func TestRunLoginExchangeFailure(t *testing.T) {
 	defer tokenServer.Close()
 
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "config.yaml")
-	configContent := fmt.Sprintf(`default_system: DEV
-systems:
-  DEV:
-    host: %s
-    client: "100"
-    tls_skip_verify: true
-`, tokenServer.URL)
+	configPath := filepath.Join(tmpDir, "config.json")
+	configContent := fmt.Sprintf(`{"default_system":"DEV","systems":{"DEV":{"host":"%s","client":"100","tls_skip_verify":true}}}`, tokenServer.URL)
 
 	if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
 		t.Fatalf("write config: %v", err)

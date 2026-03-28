@@ -1,19 +1,18 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-
-	"gopkg.in/yaml.v3"
 )
 
 type SAPConfig struct {
-	Host           string `yaml:"host"`
-	Client         string `yaml:"client"`
-	User           string `yaml:"user"`
-	Password       string `yaml:"password"`
-	TLSSkipVerify  bool   `yaml:"tls_skip_verify"`
-	OAuth2ClientID string `yaml:"oauth2_client_id"`
+	Host           string `json:"host"`
+	Client         string `json:"client"`
+	User           string `json:"user"`
+	Password       string `json:"password"`
+	TLSSkipVerify  bool   `json:"tls_skip_verify"`
+	OAuth2ClientID string `json:"oauth2_client_id"`
 }
 
 // IsOAuth2 returns true when no basic-auth credentials are configured,
@@ -32,11 +31,42 @@ func (c SAPConfig) EffectiveOAuth2ClientID() string {
 }
 
 type Config struct {
-	DefaultSystem string               `yaml:"default_system"`
-	Systems       map[string]SAPConfig `yaml:"systems"`
+	DefaultSystem          string               `json:"default_system"`
+	IntegrationTestSystems []string             `json:"integration_test_systems"`
+	Systems                map[string]SAPConfig `json:"systems"`
 }
 
-// Load reads config from the given YAML file and validates it.
+// IsTestSystem returns true if the named system is whitelisted for integration tests.
+// If no whitelist is configured, only the default system is allowed.
+func (c *Config) IsTestSystem(name string) bool {
+	if len(c.IntegrationTestSystems) == 0 {
+		return name == c.DefaultSystem
+	}
+	for _, s := range c.IntegrationTestSystems {
+		if s == name {
+			return true
+		}
+	}
+	return false
+}
+
+// TestSystems returns all systems whitelisted for integration tests.
+func (c *Config) TestSystems() map[string]SAPConfig {
+	result := make(map[string]SAPConfig)
+	for _, name := range c.IntegrationTestSystems {
+		if sys, ok := c.Systems[name]; ok {
+			result[name] = sys
+		}
+	}
+	if len(result) == 0 {
+		if sys, ok := c.Systems[c.DefaultSystem]; ok {
+			result[c.DefaultSystem] = sys
+		}
+	}
+	return result
+}
+
+// Load reads config from the given JSON file and validates it.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -44,7 +74,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing config file: %w", err)
 	}
 
