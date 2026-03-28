@@ -28,6 +28,7 @@ func (c *httpClient) GetSource(ctx context.Context, objectURI string) (*SourceRe
 func (c *httpClient) SetSource(ctx context.Context, objectURI, source, lockHandle, transport, etag string) (string, error) {
 	headers := map[string]string{
 		"Content-Type": "text/plain; charset=utf-8",
+		"Accept":       "text/plain",
 		"If-Match":     etag,
 	}
 	if lockHandle != "" {

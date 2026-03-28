@@ -12,7 +12,7 @@
 
 - One PR per issue. Don't bundle unrelated changes.
 - Always use feature branches (`feat/`, `fix/`, `test/`, `refactor/`), never commit directly to `main`.
-- Self-assign an issue before starting work on it.
+- Only pick up **unassigned** issues. Assign yourself before starting work.
 - Run `gofmt` and `go vet ./...` before committing.
 
 ## SAP ADT
