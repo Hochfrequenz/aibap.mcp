@@ -125,6 +125,7 @@ type httpClient struct {
 	mu               sync.Mutex
 	csrfToken        string
 	hasSecureCookies bool                         // true if SAP sets Secure cookies on an HTTP connection
+	discovery        map[string][]string          // endpoint → accepted content types from discovery
 	accessToken      string                       // OAuth2 access token (empty = Basic Auth)
 	onTokenRefresh   func(string) (string, error) // callback to refresh token, returns new access token
 }
@@ -220,7 +221,12 @@ func (c *httpClient) fetchCSRFToken(ctx context.Context) error {
 		return fmt.Errorf("CSRF fetch: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	io.Copy(io.Discard, resp.Body) //nolint:errcheck
+
+	// Parse discovery XML to cache accepted content types per endpoint.
+	body, _ := io.ReadAll(resp.Body)
+	if len(body) > 0 {
+		c.discovery = parseDiscovery(body)
+	}
 
 	c.csrfToken = resp.Header.Get("X-CSRF-Token")
 	c.hasSecureCookies = hasSecureCookieOnHTTP(c.cfg.Host, resp.Header)
