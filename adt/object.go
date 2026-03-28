@@ -17,6 +17,7 @@ var objectTypeMap = map[string]struct {
 	"PROG": {"/sap/bc/adt/programs/programs", "PROG/P"},
 	"CLAS": {"/sap/bc/adt/oo/classes", "CLAS/OC"},
 	"INTF": {"/sap/bc/adt/oo/interfaces", "INTF/OI"},
+	"FUGR": {"/sap/bc/adt/functions/groups", "FUGR/F"},
 }
 
 func (c *httpClient) CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error {
@@ -46,6 +47,11 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	case "INTF":
 		body, err = xml.Marshal(adtxml.CreateInterface{
 			NSIntf: "http://www.sap.com/adt/oo/interfaces", NSCore: nsADTCore,
+			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
+		})
+	case "FUGR":
+		body, err = xml.Marshal(adtxml.CreateFunctionGroup{
+			NSGroup: "http://www.sap.com/adt/functions/groups", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
 	}

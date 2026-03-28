@@ -9,10 +9,10 @@ import (
 
 func registerObjectTools(s toolAdder, client adt.ObjectClient) {
 	s.AddTool(mcp.NewTool("create_object",
-		mcp.WithDescription("Create a new ABAP object. Supported types: PROG (program), CLAS (class), INTF (interface). For packages (DEVC), use create_package instead."),
+		mcp.WithDescription("Create a new ABAP object. Supported types: PROG (program), CLAS (class), INTF (interface), FUGR (function group). For packages (DEVC), use create_package instead."),
 		mcp.WithString("object_type",
 			mcp.Required(),
-			mcp.Description("Object type: PROG (program), CLAS (class), or INTF (interface)"),
+			mcp.Description("Object type: PROG (program), CLAS (class), INTF (interface), or FUGR (function group)"),
 		),
 		mcp.WithString("name",
 			mcp.Required(),
