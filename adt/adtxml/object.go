@@ -46,6 +46,28 @@ type CreateFunctionGroup struct {
 	PackageRef  PackageRef `xml:"adtcore:packageRef"`
 }
 
+// CreateDataElement is the XML body for creating a data element (DTEL). S4 only.
+type CreateDataElement struct {
+	XMLName     xml.Name   `xml:"dtel:wbobj"`
+	NSDtel      string     `xml:"xmlns:dtel,attr"`
+	NSCore      string     `xml:"xmlns:adtcore,attr"`
+	Type        string     `xml:"adtcore:type,attr"`
+	Description string     `xml:"adtcore:description,attr"`
+	Name        string     `xml:"adtcore:name,attr"`
+	PackageRef  PackageRef `xml:"adtcore:packageRef"`
+}
+
+// CreateDomain is the XML body for creating a domain (DOMA). S4 only.
+type CreateDomain struct {
+	XMLName     xml.Name   `xml:"domain:domain"`
+	NSDomain    string     `xml:"xmlns:domain,attr"`
+	NSCore      string     `xml:"xmlns:adtcore,attr"`
+	Type        string     `xml:"adtcore:type,attr"`
+	Description string     `xml:"adtcore:description,attr"`
+	Name        string     `xml:"adtcore:name,attr"`
+	PackageRef  PackageRef `xml:"adtcore:packageRef"`
+}
+
 // CreateFunctionModule is the XML body for creating a function module inside a function group.
 type CreateFunctionModule struct {
 	XMLName     xml.Name   `xml:"fmodule:abapFunctionModule"`
