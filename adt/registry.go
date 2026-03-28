@@ -111,6 +111,9 @@ func (r *ClientRegistry) GetABAPDoc(ctx context.Context, keyword string) (string
 func (r *ClientRegistry) NavigateToDefinition(ctx context.Context, sourceURI string) (string, error) {
 	return r.activeClient().NavigateToDefinition(ctx, sourceURI)
 }
+func (r *ClientRegistry) GetTableFields(ctx context.Context, tableName string) ([]FieldInfo, error) {
+	return r.activeClient().GetTableFields(ctx, tableName)
+}
 func (r *ClientRegistry) SearchObjects(ctx context.Context, query, objectType string, maxResults int) ([]ObjectInfo, error) {
 	return r.activeClient().SearchObjects(ctx, query, objectType, maxResults)
 }

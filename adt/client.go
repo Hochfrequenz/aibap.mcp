@@ -63,6 +63,11 @@ type RefactoringClient interface {
 	Rename(ctx context.Context, sourceURI, newName, transport string) (*RenameResult, error)
 }
 
+// DDICClient provides DDIC metadata.
+type DDICClient interface {
+	GetTableFields(ctx context.Context, tableName string) ([]FieldInfo, error)
+}
+
 // QualityClient runs checks and tests.
 type QualityClient interface {
 	SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error)
@@ -104,6 +109,7 @@ type Client interface {
 	DocuClient
 	NavigationClient
 	SearchClient
+	DDICClient
 	QualityClient
 	RefactoringClient
 	TransportClient

@@ -107,6 +107,9 @@ func (m *mockClient) NavigateToDefinition(context.Context, string) (string, erro
 func (m *mockClient) Rename(context.Context, string, string, string) (*adt.RenameResult, error) {
 	panic("not implemented")
 }
+func (m *mockClient) GetTableFields(context.Context, string) ([]adt.FieldInfo, error) {
+	panic("not implemented")
+}
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
