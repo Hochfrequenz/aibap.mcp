@@ -70,6 +70,9 @@ func (m *mockClient) PrettyPrint(context.Context, string) (string, error) {
 func (m *mockClient) CreateObject(context.Context, string, string, string, string, string) error {
 	panic("not implemented")
 }
+func (m *mockClient) CreateFunctionModule(context.Context, string, string, string, string, string) error {
+	panic("not implemented")
+}
 func (m *mockClient) CreatePackage(context.Context, string, string, string, string, string, string) error {
 	panic("not implemented")
 }
