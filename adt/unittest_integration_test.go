@@ -11,8 +11,8 @@ func TestRunUnitTests_WithTests_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
-	// ZCL_ADT_MCP_TEST_UNITS has passing + failing test methods.
-	result, err := client.RunUnitTests(ctx, "/sap/bc/adt/oo/classes/zcl_adt_mcp_test_units", 30)
+	// testClassURI has passing + failing test methods.
+	result, err := client.RunUnitTests(ctx, testClassURI, 30)
 	if err != nil {
 		t.Fatalf("RunUnitTests failed: %v", err)
 	}
@@ -31,8 +31,8 @@ func TestRunUnitTests_NoTests_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
-	// ZCL_ADT_MCP_TEST_NOUNITS has no unit tests.
-	result, err := client.RunUnitTests(ctx, "/sap/bc/adt/oo/classes/ZCL_ADT_MCP_TEST_NOUNITS", 30)
+	// testClassNoTests has no unit tests.
+	result, err := client.RunUnitTests(ctx, testClassNoTests, 30)
 	if err != nil {
 		t.Fatalf("RunUnitTests failed: %v", err)
 	}
