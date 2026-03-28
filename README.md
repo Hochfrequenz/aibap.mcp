@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (38)
+## Available tools (39)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -33,6 +33,7 @@ graph TD
 | `patch_source` | Apply incremental edits to source code |
 | `pretty_print` | Format ABAP source code using SAP Pretty Printer |
 | `get_completions` | Get code completion proposals at a cursor position |
+| `rename` | Rename a variable, method, or symbol with automatic reference updates |
 
 </details>
 

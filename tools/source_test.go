@@ -176,6 +176,9 @@ func (m *mockClient) ReleaseTransport(context.Context, string) error {
 }
 func (m *mockClient) GetABAPDoc(context.Context, string) (string, error)           { return "", nil }
 func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error) { return "", nil }
+func (m *mockClient) Rename(context.Context, string, string, string) (*adt.RenameResult, error) {
+	return &adt.RenameResult{}, nil
+}
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }

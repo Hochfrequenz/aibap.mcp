@@ -138,6 +138,9 @@ func (r *ClientRegistry) ReleaseTransport(ctx context.Context, transportNumber s
 func (r *ClientRegistry) GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error) {
 	return r.activeClient().GetTransportRequests(ctx, user, status)
 }
+func (r *ClientRegistry) Rename(ctx context.Context, sourceURI, newName, transport string) (*RenameResult, error) {
+	return r.activeClient().Rename(ctx, sourceURI, newName, transport)
+}
 func (r *ClientRegistry) CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error) {
 	return r.activeClient().CheckTransport(ctx, pgmID, object, objectName)
 }
