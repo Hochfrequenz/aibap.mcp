@@ -179,6 +179,9 @@ func (m *mockClient) NavigateToDefinition(context.Context, string) (string, erro
 func (m *mockClient) Rename(context.Context, string, string, string) (*adt.RenameResult, error) {
 	return &adt.RenameResult{}, nil
 }
+func (m *mockClient) GetTableFields(context.Context, string) ([]adt.FieldInfo, error) {
+	return nil, nil
+}
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
