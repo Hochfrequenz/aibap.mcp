@@ -3,6 +3,7 @@ package adt
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -45,12 +46,9 @@ func (c *httpClient) GetTableFields(ctx context.Context, tableName string) ([]Fi
 		if strings.HasPrefix(name, ".") {
 			continue
 		}
-		pos := 0
-		fmt.Sscanf(strings.TrimSpace(row[1]), "%d", &pos)
-		length := 0
-		fmt.Sscanf(strings.TrimSpace(row[4]), "%d", &length)
-		decimals := 0
-		fmt.Sscanf(strings.TrimSpace(row[5]), "%d", &decimals)
+		pos, _ := strconv.Atoi(strings.TrimSpace(row[1]))
+		length, _ := strconv.Atoi(strings.TrimSpace(row[4]))
+		decimals, _ := strconv.Atoi(strings.TrimSpace(row[5]))
 
 		fields = append(fields, FieldInfo{
 			Name:        name,
