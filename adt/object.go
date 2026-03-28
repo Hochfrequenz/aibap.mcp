@@ -18,6 +18,8 @@ var objectTypeMap = map[string]struct {
 	"CLAS": {"/sap/bc/adt/oo/classes", "CLAS/OC"},
 	"INTF": {"/sap/bc/adt/oo/interfaces", "INTF/OI"},
 	"FUGR": {"/sap/bc/adt/functions/groups", "FUGR/F"},
+	"DTEL": {"/sap/bc/adt/ddic/dataelements", "DTEL/DE"},
+	"DOMA": {"/sap/bc/adt/ddic/domains", "DOMA/DD"},
 }
 
 func (c *httpClient) CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error {
@@ -54,9 +56,28 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 			NSGroup: "http://www.sap.com/adt/functions/groups", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
+	case "DTEL":
+		body, err = xml.Marshal(adtxml.CreateDataElement{
+			NSDtel: "http://www.sap.com/wbobj/dictionary/dtel", NSCore: nsADTCore,
+			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
+		})
+	case "DOMA":
+		body, err = xml.Marshal(adtxml.CreateDomain{
+			NSDomain: "http://www.sap.com/dictionary/domain", NSCore: nsADTCore,
+			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
+		})
 	}
 	if err != nil {
 		return fmt.Errorf("CreateObject marshal: %w", err)
+	}
+
+	// DDIC objects need specific content types on S4
+	ct := contentTypeXML
+	switch strings.ToUpper(objectType) {
+	case "DTEL":
+		ct = "application/vnd.sap.adt.dataelements.v2+xml"
+	case "DOMA":
+		ct = "application/vnd.sap.adt.domains.v2+xml"
 	}
 
 	path := info.endpoint
@@ -65,7 +86,7 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	}
 	resp, err := c.doMutate(ctx, http.MethodPost, path,
 		strings.NewReader(xml.Header+string(body)),
-		map[string]string{"Content-Type": contentTypeXML},
+		map[string]string{"Content-Type": ct},
 	)
 	if err != nil {
 		return fmt.Errorf("CreateObject: %w", err)
