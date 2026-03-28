@@ -35,6 +35,17 @@ type CreateInterface struct {
 	PackageRef  PackageRef `xml:"adtcore:packageRef"`
 }
 
+// CreateFunctionGroup is the XML body for creating a function group.
+type CreateFunctionGroup struct {
+	XMLName     xml.Name   `xml:"group:abapFunctionGroup"`
+	NSGroup     string     `xml:"xmlns:group,attr"`
+	NSCore      string     `xml:"xmlns:adtcore,attr"`
+	Type        string     `xml:"adtcore:type,attr"`
+	Description string     `xml:"adtcore:description,attr"`
+	Name        string     `xml:"adtcore:name,attr"`
+	PackageRef  PackageRef `xml:"adtcore:packageRef"`
+}
+
 // PackageRef is the adtcore:packageRef element used in object creation.
 type PackageRef struct {
 	XMLName xml.Name `xml:"adtcore:packageRef"`
