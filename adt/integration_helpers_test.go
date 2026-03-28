@@ -24,8 +24,17 @@ const (
 	testClassNoTests = "/sap/bc/adt/oo/classes/ZCL_ADT_MCP_TEST_NOUNITS"
 )
 
-// integrationConfig builds a SAPConfig from environment variables.
+// integrationConfig builds a SAPConfig. It tries, in order:
+//  1. YAML config file (same as MCP server) + SAP_INTEGRATION_SYSTEM env var
+//  2. Legacy env vars: SAP_INTEGRATION_HOST, SAP_INTEGRATION_USER, etc.
+//
+// YAML paths searched: SAP_ADT_CONFIG env var, ~/.claude/mcp/sap-adt-config.yaml
 func integrationConfig() config.SAPConfig {
+	// Try YAML config first
+	if cfg, ok := integrationConfigFromYAML(); ok {
+		return cfg
+	}
+	// Fallback to legacy env vars
 	return config.SAPConfig{
 		Host:          strings.TrimSpace(os.Getenv("SAP_INTEGRATION_HOST")),
 		User:          strings.TrimSpace(os.Getenv("SAP_INTEGRATION_USER")),
@@ -35,19 +44,53 @@ func integrationConfig() config.SAPConfig {
 	}
 }
 
+func integrationConfigFromYAML() (config.SAPConfig, bool) {
+	paths := []string{os.Getenv("SAP_ADT_CONFIG")}
+	if home, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, home+"/.claude/mcp/sap-adt-config.yaml")
+	}
+
+	var cfg *config.Config
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		var err error
+		cfg, err = config.Load(p)
+		if err == nil {
+			break
+		}
+	}
+	if cfg == nil {
+		return config.SAPConfig{}, false
+	}
+
+	// Pick system: SAP_INTEGRATION_SYSTEM env var, or default_system from YAML
+	systemName := os.Getenv("SAP_INTEGRATION_SYSTEM")
+	if systemName == "" {
+		systemName = cfg.DefaultSystem
+	}
+	sys, ok := cfg.Systems[systemName]
+	if !ok {
+		return config.SAPConfig{}, false
+	}
+	sys.TLSSkipVerify = true
+	return sys, true
+}
+
 // newIntegrationClient creates a real ADT client from environment variables.
 // Do not log the returned client or its config — they contain credentials.
 func newIntegrationClient(t *testing.T) adt.Client {
 	t.Helper()
 	cfg := integrationConfig()
 	if cfg.Host == "" {
-		t.Skip("SAP_INTEGRATION_HOST not set, skipping integration test")
+		t.Skip("No SAP config found — set SAP_ADT_CONFIG or SAP_INTEGRATION_HOST")
 	}
 	if cfg.User == "" {
-		t.Fatal("SAP_INTEGRATION_USER must be set when SAP_INTEGRATION_HOST is set")
+		t.Fatal("SAP user not configured — check YAML config or SAP_INTEGRATION_USER")
 	}
 	if cfg.Password == "" {
-		t.Fatal("SAP_INTEGRATION_PASSWORD must be set when SAP_INTEGRATION_HOST is set")
+		t.Fatal("SAP password not configured — check YAML config or SAP_INTEGRATION_PASSWORD")
 	}
 	return adt.NewClient(cfg)
 }
