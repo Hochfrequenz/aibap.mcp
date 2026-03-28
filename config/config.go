@@ -32,8 +32,39 @@ func (c SAPConfig) EffectiveOAuth2ClientID() string {
 }
 
 type Config struct {
-	DefaultSystem string               `yaml:"default_system"`
-	Systems       map[string]SAPConfig `yaml:"systems"`
+	DefaultSystem          string               `yaml:"default_system"`
+	IntegrationTestSystems []string             `yaml:"integration_test_systems"`
+	Systems                map[string]SAPConfig `yaml:"systems"`
+}
+
+// IsTestSystem returns true if the named system is whitelisted for integration tests.
+// If no whitelist is configured, only the default system is allowed.
+func (c *Config) IsTestSystem(name string) bool {
+	if len(c.IntegrationTestSystems) == 0 {
+		return name == c.DefaultSystem
+	}
+	for _, s := range c.IntegrationTestSystems {
+		if s == name {
+			return true
+		}
+	}
+	return false
+}
+
+// TestSystems returns all systems whitelisted for integration tests.
+func (c *Config) TestSystems() map[string]SAPConfig {
+	result := make(map[string]SAPConfig)
+	for _, name := range c.IntegrationTestSystems {
+		if sys, ok := c.Systems[name]; ok {
+			result[name] = sys
+		}
+	}
+	if len(result) == 0 {
+		if sys, ok := c.Systems[c.DefaultSystem]; ok {
+			result[c.DefaultSystem] = sys
+		}
+	}
+	return result
 }
 
 // Load reads config from the given YAML file and validates it.

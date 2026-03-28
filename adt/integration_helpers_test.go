@@ -70,6 +70,12 @@ func integrationConfigFromYAML() (config.SAPConfig, bool) {
 	if systemName == "" {
 		systemName = cfg.DefaultSystem
 	}
+
+	// Check whitelist — only run tests against explicitly allowed systems
+	if !cfg.IsTestSystem(systemName) {
+		return config.SAPConfig{}, false
+	}
+
 	sys, ok := cfg.Systems[systemName]
 	if !ok {
 		return config.SAPConfig{}, false
