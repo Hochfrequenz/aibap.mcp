@@ -15,14 +15,10 @@ type SAPConfig struct {
 	OAuth2ClientID string `json:"oauth2_client_id"`
 }
 
-// IsOAuth2 returns true when no basic-auth credentials are configured,
-// meaning OAuth2 / SSO should be used.
 func (c SAPConfig) IsOAuth2() bool {
 	return c.User == "" && c.Password == ""
 }
 
-// EffectiveOAuth2ClientID returns the configured OAuth2 client ID, or the
-// default value "mcp-server-abap" when none is set.
 func (c SAPConfig) EffectiveOAuth2ClientID() string {
 	if c.OAuth2ClientID != "" {
 		return c.OAuth2ClientID
@@ -36,8 +32,6 @@ type Config struct {
 	Systems                map[string]SAPConfig `json:"systems"`
 }
 
-// IsTestSystem returns true if the named system is whitelisted for integration tests.
-// If no whitelist is configured, only the default system is allowed.
 func (c *Config) IsTestSystem(name string) bool {
 	if len(c.IntegrationTestSystems) == 0 {
 		return name == c.DefaultSystem
@@ -50,7 +44,6 @@ func (c *Config) IsTestSystem(name string) bool {
 	return false
 }
 
-// TestSystems returns all systems whitelisted for integration tests.
 func (c *Config) TestSystems() map[string]SAPConfig {
 	result := make(map[string]SAPConfig)
 	for _, name := range c.IntegrationTestSystems {
@@ -75,7 +68,7 @@ func Load(path string) (*Config, error) {
 
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing config file: %w", err)
+		return nil, fmt.Errorf("parsing config file (expected JSON): %w", err)
 	}
 
 	if len(cfg.Systems) == 0 {
@@ -84,7 +77,6 @@ func Load(path string) (*Config, error) {
 	if _, ok := cfg.Systems[cfg.DefaultSystem]; !ok {
 		return nil, fmt.Errorf("default_system %q not found in systems", cfg.DefaultSystem)
 	}
-
 	for name, sys := range cfg.Systems {
 		if sys.Host == "" {
 			return nil, fmt.Errorf("system %q has no host configured", name)
@@ -93,6 +85,5 @@ func Load(path string) (*Config, error) {
 			return nil, fmt.Errorf("system %q: must have both user and password, or neither (for OAuth2)", name)
 		}
 	}
-
 	return &cfg, nil
 }
