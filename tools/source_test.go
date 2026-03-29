@@ -179,9 +179,10 @@ func (m *mockClient) NavigateToDefinition(context.Context, string) (string, erro
 func (m *mockClient) Rename(context.Context, string, string, string) (*adt.RenameResult, error) {
 	return &adt.RenameResult{}, nil
 }
-func (m *mockClient) GetVersionHistory(context.Context, string, string) ([]adt.VersionInfo, error) {
+func (m *mockClient) GetVersionHistory(context.Context, string) ([]adt.VersionInfo, error) {
 	return nil, nil
 }
+func (m *mockClient) GetVersionSource(context.Context, string) (string, error) { return "", nil }
 func (m *mockClient) DiffActiveInactive(context.Context, string) (*adt.DiffResult, error) {
 	return &adt.DiffResult{}, nil
 }

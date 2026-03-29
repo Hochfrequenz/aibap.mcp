@@ -78,7 +78,8 @@ type QualityClient interface {
 
 // VersionClient provides version history and comparison.
 type VersionClient interface {
-	GetVersionHistory(ctx context.Context, objName, objType string) ([]VersionInfo, error)
+	GetVersionHistory(ctx context.Context, objectURI string) ([]VersionInfo, error)
+	GetVersionSource(ctx context.Context, contentURI string) (string, error)
 	DiffActiveInactive(ctx context.Context, objectURI string) (*DiffResult, error)
 }
 

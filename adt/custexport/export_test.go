@@ -107,7 +107,10 @@ func (m *mockClient) NavigateToDefinition(context.Context, string) (string, erro
 func (m *mockClient) Rename(context.Context, string, string, string) (*adt.RenameResult, error) {
 	panic("not implemented")
 }
-func (m *mockClient) GetVersionHistory(context.Context, string, string) ([]adt.VersionInfo, error) {
+func (m *mockClient) GetVersionHistory(context.Context, string) ([]adt.VersionInfo, error) {
+	panic("not implemented")
+}
+func (m *mockClient) GetVersionSource(context.Context, string) (string, error) {
 	panic("not implemented")
 }
 func (m *mockClient) DiffActiveInactive(context.Context, string) (*adt.DiffResult, error) {
