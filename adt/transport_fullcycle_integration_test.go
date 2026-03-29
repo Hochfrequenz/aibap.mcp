@@ -89,8 +89,10 @@ func TestAddToTransport_Integration(t *testing.T) {
 // 1. Create transport
 // 2. Create a program in a real package (assigned to transport)
 // 3. CheckTransport to verify the object is recordable
-// 4. Delete the program
-// 5. Release the transport
+// 4. Activate the object (creates a version in VRSD)
+// 5. Verify version history and retrieve historical source
+// 6. Delete the program
+// 7. Release the transport
 func TestTransportFullCycle_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
@@ -122,7 +124,40 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 		t.Errorf("expected DevClass Z_ADT_MCP_TEST, got %q", check.DevClass)
 	}
 
-	// 4. Delete the program (needs lock + transport)
+	// 4. Activate the object — this creates a version entry
+	result, err := client.ActivateObjects(ctx, []string{objectURI})
+	if err != nil {
+		t.Fatalf("ActivateObjects: %v", err)
+	}
+	t.Logf("[4] activated %s (inactive=%d)", objName, len(result.Inactive))
+
+	// 5. Verify version history and retrieve historical source
+	versions, err := client.GetVersionHistory(ctx, objectURI)
+	if err != nil {
+		t.Fatalf("GetVersionHistory: %v", err)
+	}
+	if len(versions) == 0 {
+		t.Fatal("expected at least one version after activation")
+	}
+	t.Logf("[5] version history: %d version(s)", len(versions))
+	for i, v := range versions {
+		t.Logf("    [%d] version=%s author=%s transport=%s date=%s", i, v.VersionNumber, v.Author, v.Transport, v.Date)
+	}
+
+	latest := versions[0]
+	if latest.ContentURI == "" {
+		t.Fatal("expected content_uri in version entry")
+	}
+	src, err := client.GetVersionSource(ctx, latest.ContentURI)
+	if err != nil {
+		t.Fatalf("GetVersionSource: %v", err)
+	}
+	if src == "" {
+		t.Fatal("expected non-empty source from version")
+	}
+	t.Logf("[5] retrieved version source (%d bytes)", len(src))
+
+	// 6. Delete the program (needs lock + transport)
 	lockHandle, err := client.LockObject(ctx, objectURI)
 	if err != nil {
 		t.Fatalf("LockObject: %v", err)
@@ -132,12 +167,12 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 		_ = client.UnlockObject(ctx, objectURI, lockHandle)
 		t.Fatalf("DeleteObject: %v", err)
 	}
-	t.Logf("[4] deleted %s", objName)
+	t.Logf("[6] deleted %s", objName)
 
-	// 5. Release the transport
+	// 7. Release the transport
 	err = client.ReleaseTransport(ctx, trNumber)
 	if err != nil {
 		t.Fatalf("ReleaseTransport: %v", err)
 	}
-	t.Logf("[5] released transport %s", trNumber)
+	t.Logf("[7] released transport %s", trNumber)
 }
