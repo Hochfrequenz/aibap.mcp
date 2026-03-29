@@ -27,7 +27,7 @@ func main() {
 	if len(os.Args) >= 2 && os.Args[1] == "login" {
 		configPath := os.Getenv("SAP_CONFIG_FILE")
 		if configPath == "" {
-			configPath = "config.yaml"
+			configPath = findConfigFile()
 		}
 		systemName := ""
 		if len(os.Args) >= 3 {
@@ -51,7 +51,7 @@ func run() error {
 
 	configPath := os.Getenv("SAP_CONFIG_FILE")
 	if configPath == "" {
-		configPath = "config.yaml"
+		configPath = findConfigFile()
 	}
 
 	cfg, err := config.Load(configPath)
@@ -80,4 +80,20 @@ func run() error {
 	stdioServer := server.NewStdioServer(s)
 	ctx := context.Background()
 	return stdioServer.Listen(ctx, os.Stdin, os.Stdout)
+}
+
+// findConfigFile searches for the config file in standard locations.
+func findConfigFile() string {
+	candidates := []string{"config.json"}
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates,
+			home+"/.claude/mcp/sap-adt-config.json",
+		)
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	return "config.json" // will produce a clear error in Load()
 }

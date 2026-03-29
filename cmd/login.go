@@ -19,7 +19,7 @@ var openBrowserFn = openBrowser
 
 // RunLogin executes the login subcommand.
 // systemName: which system to login to (empty = use default_system from config).
-// configPath: path to config.yaml.
+// configPath: path to config.json.
 func RunLogin(configPath, systemName string) error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
