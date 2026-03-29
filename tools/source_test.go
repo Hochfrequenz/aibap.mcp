@@ -93,6 +93,9 @@ func (m *mockClient) SyntaxCheck(ctx context.Context, uri string) ([]adt.SyntaxM
 	}
 	return nil, nil
 }
+func (m *mockClient) InlineSyntaxCheck(_ context.Context, _, _ string) ([]adt.SyntaxMessage, error) {
+	return nil, nil
+}
 func (m *mockClient) RunUnitTests(ctx context.Context, uri string, timeout int) (*adt.TestResult, error) {
 	if m.runTestsFn != nil {
 		return m.runTestsFn(ctx, uri, timeout)

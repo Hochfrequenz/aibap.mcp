@@ -20,17 +20,23 @@ func registerVerifyTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("verify_source",
 		mcp.WithDescription(
 			"Syntax-check ABAP source code without needing an existing object. "+
-				"Creates a temporary program in $TMP, checks the source, and cleans up. "+
+				"Uses inline syntax check (single HTTP call) when supported, "+
+				"with automatic fallback to a temporary-object approach on older systems. "+
 				"Returns {valid: true/false, messages: [...]}.",
 		),
 		mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code to check")),
+		mcp.WithString("object_uri", mcp.Description(
+			"Optional: ADT URI of an existing object to use as context for inline check. "+
+				"If omitted, a temporary program is created.",
+		)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		source := req.GetString("source", "")
 		if source == "" {
 			return errorResult(&adt.ADTError{StatusCode: 400, Message: "source must not be empty"}), nil
 		}
+		objectURI := req.GetString("object_uri", "")
 
-		result, err := verifySource(ctx, client, source)
+		result, err := verifySource(ctx, client, source, objectURI)
 		if err != nil {
 			return errorResult(err), nil
 		}
@@ -39,7 +45,20 @@ func registerVerifyTools(s toolAdder, client adt.Client) {
 	})
 }
 
-func verifySource(ctx context.Context, client adt.Client, source string) (*VerifyResult, error) {
+func verifySource(ctx context.Context, client adt.Client, source, objectURI string) (*VerifyResult, error) {
+	// Try inline syntax check first (single HTTP call, no temp object needed).
+	if objectURI != "" {
+		msgs, err := client.InlineSyntaxCheck(ctx, objectURI, source)
+		if err == nil {
+			return buildVerifyResult(msgs), nil
+		}
+		// Inline check not supported on this system — fall through to temp object.
+	}
+
+	return verifySourceWithTempObject(ctx, client, source)
+}
+
+func verifySourceWithTempObject(ctx context.Context, client adt.Client, source string) (*VerifyResult, error) {
 	// Generate a unique temporary name.
 	name := fmt.Sprintf("Z_MCP_VERIFY_%06d", rand.Intn(999999)) //nolint:gosec
 	objectURI := "/sap/bc/adt/programs/programs/" + name
@@ -79,6 +98,10 @@ func verifySource(ctx context.Context, client adt.Client, source string) (*Verif
 		return nil, fmt.Errorf("verify_source: syntax check: %w", err)
 	}
 
+	return buildVerifyResult(msgs), nil
+}
+
+func buildVerifyResult(msgs []adt.SyntaxMessage) *VerifyResult {
 	valid := true
 	for _, m := range msgs {
 		if m.Type == "E" {
@@ -86,5 +109,5 @@ func verifySource(ctx context.Context, client adt.Client, source string) (*Verif
 			break
 		}
 	}
-	return &VerifyResult{Valid: valid, Messages: msgs}, nil
+	return &VerifyResult{Valid: valid, Messages: msgs}
 }

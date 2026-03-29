@@ -71,6 +71,7 @@ type DDICClient interface {
 // QualityClient runs checks and tests.
 type QualityClient interface {
 	SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error)
+	InlineSyntaxCheck(ctx context.Context, objectURI, source string) ([]SyntaxMessage, error)
 	RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error)
 	RunATCCheck(ctx context.Context, objectURIs []string, checkVariant string) (*ATCResult, error)
 	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
