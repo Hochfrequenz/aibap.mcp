@@ -76,6 +76,12 @@ type QualityClient interface {
 	GetATCCustomizing(ctx context.Context) (*ATCCustomizingResult, error)
 }
 
+// VersionClient provides version history and comparison.
+type VersionClient interface {
+	GetVersionHistory(ctx context.Context, objName, objType string) ([]VersionInfo, error)
+	DiffActiveInactive(ctx context.Context, objectURI string) (*DiffResult, error)
+}
+
 // TransportClient manages CTS transports.
 type TransportClient interface {
 	CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error)
@@ -112,6 +118,7 @@ type Client interface {
 	DDICClient
 	QualityClient
 	RefactoringClient
+	VersionClient
 	TransportClient
 	ExportClient
 	QueryClient

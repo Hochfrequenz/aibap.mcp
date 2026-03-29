@@ -144,6 +144,12 @@ func (r *ClientRegistry) GetTransportRequests(ctx context.Context, user, status 
 func (r *ClientRegistry) Rename(ctx context.Context, sourceURI, newName, transport string) (*RenameResult, error) {
 	return r.activeClient().Rename(ctx, sourceURI, newName, transport)
 }
+func (r *ClientRegistry) GetVersionHistory(ctx context.Context, objName, objType string) ([]VersionInfo, error) {
+	return r.activeClient().GetVersionHistory(ctx, objName, objType)
+}
+func (r *ClientRegistry) DiffActiveInactive(ctx context.Context, objectURI string) (*DiffResult, error) {
+	return r.activeClient().DiffActiveInactive(ctx, objectURI)
+}
 func (r *ClientRegistry) CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error) {
 	return r.activeClient().CheckTransport(ctx, pgmID, object, objectName)
 }
