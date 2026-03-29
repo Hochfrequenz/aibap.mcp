@@ -3,6 +3,7 @@ package adt
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -58,7 +59,7 @@ const inlineSyntaxCheckCT = "application/vnd.sap.adt.functions.abapsource.syntax
 
 // ErrInlineSyntaxCheckNotSupported is returned when the system's ADT discovery
 // does not advertise the inline syntax check content type.
-var ErrInlineSyntaxCheckNotSupported = fmt.Errorf("inline syntax check not supported by this system")
+var ErrInlineSyntaxCheckNotSupported = errors.New("inline syntax check not supported by this system")
 
 // InlineSyntaxCheck sends source code for syntax checking without saving it first.
 // Uses the ADT POST {objectURI}/source/main?_action=CHECK endpoint with ASX-serialized SourceList.

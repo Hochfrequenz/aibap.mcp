@@ -4,7 +4,10 @@ package adt_test
 
 import (
 	"context"
+	"errors"
 	"testing"
+
+	"github.com/Hochfrequenz/mcp-server-abap/adt"
 )
 
 func TestSyntaxCheck_Integration(t *testing.T) {
@@ -51,6 +54,9 @@ func TestInlineSyntaxCheck_Integration(t *testing.T) {
 	source := "REPORT z_mcp_inline_test.\nDATA lv_x TYPE znonexistent_type_abc.\nWRITE lv_x.\n"
 	msgs, err := client.InlineSyntaxCheck(ctx, testReportURI, source)
 	if err != nil {
+		if errors.Is(err, adt.ErrInlineSyntaxCheckNotSupported) {
+			t.Skip("inline syntax check not supported on this system")
+		}
 		t.Fatalf("InlineSyntaxCheck failed: %v", err)
 	}
 	if len(msgs) == 0 {
@@ -81,6 +87,9 @@ func TestInlineSyntaxCheck_Clean_Integration(t *testing.T) {
 	source := "REPORT z_mcp_inline_test.\nWRITE: / 'Hello'.\n"
 	msgs, err := client.InlineSyntaxCheck(ctx, testReportURI, source)
 	if err != nil {
+		if errors.Is(err, adt.ErrInlineSyntaxCheckNotSupported) {
+			t.Skip("inline syntax check not supported on this system")
+		}
 		t.Fatalf("InlineSyntaxCheck failed: %v", err)
 	}
 	for _, m := range msgs {
