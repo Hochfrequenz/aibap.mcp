@@ -138,6 +138,46 @@ func TestAddToTransport(t *testing.T) {
 	}
 }
 
+func TestParseTransportObjectsXML(t *testing.T) {
+	xmlData := []byte(`<?xml version="1.0" encoding="utf-8"?>
+<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm" xmlns:adtcore="http://www.sap.com/adt/core">
+<tm:workbench tm:category="Workbench">
+<tm:modifiable tm:status="Modifiable">
+<tm:request tm:number="HFQK900178" tm:owner="TEST" tm:desc="Test" tm:status="D">
+<tm:abap_object tm:pgmid="R3TR" tm:type="PROG" tm:name="ZTEST" tm:wbtype="PROG/P"/>
+<tm:abap_object tm:pgmid="R3TR" tm:type="CLAS" tm:name="ZCL_TEST" tm:wbtype="CLAS/OC"/>
+<tm:task tm:number="HFQK900179" tm:owner="TEST" tm:desc="Task" tm:status="D">
+<tm:abap_object tm:pgmid="R3TR" tm:type="INTF" tm:name="ZIF_TEST" tm:wbtype="INTF/OI"/>
+<tm:abap_object tm:pgmid="R3TR" tm:type="PROG" tm:name="ZTEST" tm:wbtype="PROG/P"/>
+</tm:task>
+</tm:request>
+</tm:modifiable>
+</tm:workbench>
+</tm:root>`)
+
+	objects, err := adt.ParseTransportObjectsXMLForTest(xmlData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(objects) != 3 {
+		t.Fatalf("expected 3 unique objects, got %d: %+v", len(objects), objects)
+	}
+
+	// Verify expected objects are present (order: ZTEST, ZCL_TEST, ZIF_TEST).
+	names := make(map[string]bool)
+	for _, o := range objects {
+		names[o.Name] = true
+		if o.PgmID != "R3TR" {
+			t.Errorf("object %s: expected PgmID R3TR, got %q", o.Name, o.PgmID)
+		}
+	}
+	for _, want := range []string{"ZTEST", "ZCL_TEST", "ZIF_TEST"} {
+		if !names[want] {
+			t.Errorf("expected object %s not found in results", want)
+		}
+	}
+}
+
 func TestReleaseTransport(t *testing.T) {
 	var gotPath, gotMethod string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

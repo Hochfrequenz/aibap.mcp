@@ -93,6 +93,7 @@ type TransportClient interface {
 	ReleaseTransport(ctx context.Context, transportNumber string) error
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
+	GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error)
 }
 
 // ExportClient handles package exports.

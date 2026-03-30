@@ -168,6 +168,9 @@ func (r *ClientRegistry) CheckTransport(ctx context.Context, pgmID, object, obje
 func (r *ClientRegistry) AddToTransport(ctx context.Context, objectURI, transport string) error {
 	return r.activeClient().AddToTransport(ctx, objectURI, transport)
 }
+func (r *ClientRegistry) GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error) {
+	return r.activeClient().GetTransportObjects(ctx, transportNumber)
+}
 func (r *ClientRegistry) LockObject(ctx context.Context, objectURI string) (string, error) {
 	return r.activeClient().LockObject(ctx, objectURI)
 }
