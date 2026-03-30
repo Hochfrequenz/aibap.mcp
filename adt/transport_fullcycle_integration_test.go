@@ -129,7 +129,7 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ActivateObjects: %v", err)
 	}
-	t.Logf("[4] activated %s (inactive=%d)", objName, len(result.Inactive))
+	t.Logf("[4] activated %s (success=%v, messages=%d)", objName, result.Success, len(result.Messages))
 
 	// 5. Verify version history and retrieve historical source
 	versions, err := client.GetVersionHistory(ctx, objectURI)

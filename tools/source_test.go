@@ -196,6 +196,12 @@ func (m *mockClient) DiffActiveInactive(context.Context, string) (*adt.DiffResul
 func (m *mockClient) GetTableFields(context.Context, string) ([]adt.FieldInfo, error) {
 	return nil, nil
 }
+func (m *mockClient) GetEnhancementSpot(context.Context, string) (*adt.EnhancementSpotInfo, error) {
+	return &adt.EnhancementSpotInfo{}, nil
+}
+func (m *mockClient) GetEnhancementImplementation(context.Context, string) (*adt.BAdIImplementationInfo, error) {
+	return &adt.BAdIImplementationInfo{}, nil
+}
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }

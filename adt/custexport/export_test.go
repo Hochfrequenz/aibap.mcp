@@ -128,6 +128,12 @@ func (m *mockClient) DiffActiveInactive(context.Context, string) (*adt.DiffResul
 func (m *mockClient) GetTableFields(context.Context, string) ([]adt.FieldInfo, error) {
 	panic("not implemented")
 }
+func (m *mockClient) GetEnhancementSpot(context.Context, string) (*adt.EnhancementSpotInfo, error) {
+	panic("not implemented")
+}
+func (m *mockClient) GetEnhancementImplementation(context.Context, string) (*adt.BAdIImplementationInfo, error) {
+	panic("not implemented")
+}
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }

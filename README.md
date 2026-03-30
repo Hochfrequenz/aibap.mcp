@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (46)
+## Available tools (48)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -103,6 +103,16 @@ graph TD
 | `export_package` | Export an ABAP package as abapGit ZIP or folder ([requires companion](https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT)) |
 | `export_packages` | Bulk export with wildcard patterns and include/exclude filters |
 | `export_customizing` | Export all customizing tables to SQLite + JSON (read-only, ~16K tables with `customer_only`) |
+
+</details>
+
+<details>
+<summary><strong>Enhancements / BAdIs</strong> (2 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `get_badi_definition` | Read a BAdI enhancement spot — definitions, interfaces, filters, sample classes |
+| `get_badi_implementation` | Read a BAdI enhancement implementation — implementing classes and references |
 
 </details>
 
