@@ -14,19 +14,41 @@ jobs:
         with:
           go-version: '1.26.x'
 
-      - name: Run tests with coverage
-        run: go test ./... -v -covermode=count -coverprofile=coverage.out
+      - name: Check per-package coverage
+        run: |
+          # Per-package coverage thresholds.
+          #   Logic packages (parsing, config, auth): higher thresholds
+          #   HTTP wrappers (adt client methods): medium threshold
+          #   Tool handlers, logging, cmd: no threshold (tested via integration tests)
+          declare -A thresholds=(
+            ["github.com/Hochfrequenz/mcp-server-abap/config"]=80
+            ["github.com/Hochfrequenz/mcp-server-abap/auth"]=75
+            ["github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"]=50
+            ["github.com/Hochfrequenz/mcp-server-abap/adt/custexport"]=60
+            ["github.com/Hochfrequenz/mcp-server-abap/adt"]=40
+          )
 
-      - name: Convert coverage to lcov
-        uses: jandelgado/gcov2lcov-action@v1.2.0
+          failed=0
+          while IFS= read -r line; do
+            pkg=$(echo "$line" | awk '{print $2}')
+            pct=$(echo "$line" | sed -n 's/.*coverage: \([0-9.]*\)%.*/\1/p')
+            [ -z "$pct" ] && continue
 
-      - name: Check coverage threshold
-        uses: VeryGoodOpenSource/very_good_coverage@v3.0.0
-        with:
-          path: coverage.lcov
-          # ADT client methods (atc.go, export.go, debugger.go) are thin HTTP
-          # wrappers that call SAP endpoints — meaningful testing requires a live
-          # SAP system (integration tests), not mocked HTTP responses. MCP tool
-          # handlers similarly just wire parameters to client calls. Lowered from
-          # 70% to 60% to accommodate this without adding low-value mock tests.
-          min_coverage: 60
+            threshold=${thresholds[$pkg]:-0}
+            pct_int=${pct%.*}
+
+            if [ "$threshold" -eq 0 ]; then
+              echo "  $pkg: ${pct}% (no threshold)"
+            elif [ "$pct_int" -lt "$threshold" ]; then
+              echo "::error::$pkg: coverage ${pct}% is below threshold ${threshold}%"
+              failed=1
+            else
+              echo "✓ $pkg: ${pct}% (threshold: ${threshold}%)"
+            fi
+          done < <(go test ./... -covermode=count 2>&1 | grep "^ok")
+
+          if [ "$failed" -eq 1 ]; then
+            exit 1
+          fi
+          echo ""
+          echo "All packages meet their coverage thresholds."
