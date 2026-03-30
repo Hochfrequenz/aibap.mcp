@@ -18,12 +18,12 @@ type rollbackResult struct {
 }
 
 type rollbackEntry struct {
-	Type       string   `json:"type"`
-	Name       string   `json:"name"`
-	Reason     string   `json:"reason,omitempty"`
-	Version    string   `json:"version,omitempty"`
-	DiffHint   string   `json:"diff_hint,omitempty"`    // human-readable hint about what changed
-	AddedLines []string `json:"added_lines,omitempty"`  // lines only in new version
+	Type         string   `json:"type"`
+	Name         string   `json:"name"`
+	Reason       string   `json:"reason,omitempty"`
+	Version      string   `json:"version,omitempty"`
+	DiffHint     string   `json:"diff_hint,omitempty"`     // human-readable hint about what changed
+	AddedLines   []string `json:"added_lines,omitempty"`   // lines only in new version
 	RemovedLines []string `json:"removed_lines,omitempty"` // lines only in old version
 }
 
