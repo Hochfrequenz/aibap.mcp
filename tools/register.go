@@ -70,4 +70,5 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 	registerDDICTools(ls, client)
 	registerVersionTools(ls, client)
 	registerMessageClassTools(ls, client)
+	registerRollbackTools(ls, client)
 }

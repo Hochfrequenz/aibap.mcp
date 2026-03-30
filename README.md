@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (47)
+## Available tools (48)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -93,6 +93,7 @@ graph TD
 | `get_transport_requests` | List open or released transport requests |
 | `get_transport_objects` | List objects in a transport request |
 | `add_to_transport` | Assign an object to a transport request |
+| `rollback_transport` | Restore all source objects to their pre-transport state |
 
 </details>
 
