@@ -104,6 +104,9 @@ func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { panic
 func (m *mockClient) GetMessageClass(context.Context, string) (*adt.MessageClassInfo, error) {
 	panic("not implemented")
 }
+func (m *mockClient) SearchMessages(context.Context, string, int) ([]adt.MessageSearchResult, error) {
+	panic("not implemented")
+}
 func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error) {
 	panic("not implemented")
 }
