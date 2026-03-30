@@ -204,6 +204,12 @@ func (r *ClientRegistry) RunATCCheck(ctx context.Context, objectURIs []string, c
 func (r *ClientRegistry) RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error) {
 	return r.activeClient().RunQuery(ctx, sql, maxRows)
 }
+func (r *ClientRegistry) GetEnhancementSpot(ctx context.Context, spotName string) (*EnhancementSpotInfo, error) {
+	return r.activeClient().GetEnhancementSpot(ctx, spotName)
+}
+func (r *ClientRegistry) GetEnhancementImplementation(ctx context.Context, implName string) (*BAdIImplementationInfo, error) {
+	return r.activeClient().GetEnhancementImplementation(ctx, implName)
+}
 func (r *ClientRegistry) SystemInfo() (host, client string) {
 	return r.activeClient().SystemInfo()
 }
