@@ -42,12 +42,15 @@ func (c *httpClient) GetTextElements(ctx context.Context, objectURI string) (*Te
 	}
 
 	result := &TextElements{}
+	var lastErr error
 
 	// Read text symbols
 	symbols, err := c.readTextElementSource(ctx, basePath+"/source/symbols",
 		"application/vnd.sap.adt.textelements.symbols.v1")
 	if err == nil {
 		result.Symbols = parseTextSymbols(symbols)
+	} else {
+		lastErr = err
 	}
 
 	// Read selection texts
@@ -55,6 +58,13 @@ func (c *httpClient) GetTextElements(ctx context.Context, objectURI string) (*Te
 		"application/vnd.sap.adt.textelements.selections.v1")
 	if err == nil {
 		result.Selections = parseSelectionTexts(selections)
+	} else {
+		lastErr = err
+	}
+
+	// If both failed, report the error (endpoint likely not available)
+	if result.Symbols == nil && result.Selections == nil && lastErr != nil {
+		return nil, lastErr
 	}
 
 	return result, nil
