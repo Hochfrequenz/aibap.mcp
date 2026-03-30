@@ -111,6 +111,9 @@ func (r *ClientRegistry) GetABAPDoc(ctx context.Context, keyword string) (string
 func (r *ClientRegistry) GetMessageClass(ctx context.Context, messageClassName string) (*MessageClassInfo, error) {
 	return r.activeClient().GetMessageClass(ctx, messageClassName)
 }
+func (r *ClientRegistry) SearchMessages(ctx context.Context, query string, maxResults int) ([]MessageSearchResult, error) {
+	return r.activeClient().SearchMessages(ctx, query, maxResults)
+}
 func (r *ClientRegistry) NavigateToDefinition(ctx context.Context, sourceURI string) (string, error) {
 	return r.activeClient().NavigateToDefinition(ctx, sourceURI)
 }

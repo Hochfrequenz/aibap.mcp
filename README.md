@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (44)
+## Available tools (45)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -80,6 +80,7 @@ graph TD
 | `get_atc_customizing` | Get ATC check variant configuration |
 | `get_abap_doc` | Look up ABAP keyword documentation |
 | `get_message_class` | Read all messages of a message class (SE91) |
+| `search_messages` | Search messages across all message classes |
 
 </details>
 
