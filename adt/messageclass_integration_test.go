@@ -32,18 +32,11 @@ func TestGetMessageClass_Integration(t *testing.T) {
 	}
 }
 
-// TestSetMessages_Integration is currently skipped — the Lock Handle from
-// LockObject is rejected by the PUT endpoint with "invalid lock handle".
-// The lock succeeds (200 + handle) but the subsequent PUT fails.
-// Root cause under investigation: possibly session/CSRF mismatch or
-// message class resources require a different lock protocol.
 func TestSetMessages_Integration(t *testing.T) {
-	t.Skip("lock handle rejected by message class PUT — under investigation")
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
 	const msgClass = "Z_ADT_MCP_MSG"
-	msgURI := "/sap/bc/adt/messageclass/" + msgClass
 
 	// Ensure the message class exists (create if missing).
 	if _, err := client.GetMessageClass(ctx, msgClass); err != nil {
@@ -54,34 +47,23 @@ func TestSetMessages_Integration(t *testing.T) {
 		t.Logf("created message class %s", msgClass)
 	}
 
-	// Read ETag before locking (required for If-Match)
+	// Read ETag (required for optimistic locking via If-Match)
 	mcInfo, err := client.GetMessageClass(ctx, msgClass)
 	if err != nil {
 		t.Fatalf("GetMessageClass for ETag: %v", err)
 	}
 	t.Logf("ETag: %s", mcInfo.ETag)
 
-	// Lock
-	lockHandle, err := client.LockObject(ctx, msgURI)
-	if err != nil {
-		t.Fatalf("LockObject: %v", err)
-	}
-	t.Logf("lock handle: %s", lockHandle)
-	t.Cleanup(func() { _ = client.UnlockObject(context.Background(), msgURI, lockHandle) })
-
-	// Set messages
+	// Set messages using optimistic locking (If-Match + no lockHandle = server auto-locks)
 	messages := []adt.Message{
 		{Number: "001", Text: "Hello from MCP &1", SelfExpl: true},
 		{Number: "002", Text: "Error in &1: &2", SelfExpl: false},
 	}
-	err = client.SetMessages(ctx, msgClass, lockHandle, mcInfo.ETag, messages)
+	err = client.SetMessages(ctx, msgClass, mcInfo.ETag, messages)
 	if err != nil {
 		t.Fatalf("SetMessages: %v", err)
 	}
 	t.Logf("set %d messages on %s", len(messages), msgClass)
-
-	// Unlock
-	_ = client.UnlockObject(ctx, msgURI, lockHandle)
 
 	// Verify
 	result, err := client.GetMessageClass(ctx, msgClass)

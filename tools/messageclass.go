@@ -9,7 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerMessageClassTools(s toolAdder, client adt.DocuClient) {
+func registerMessageClassTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("get_message_class",
 		mcp.WithDescription(
 			"Read all messages of an ABAP message class (SE91). "+
@@ -55,6 +55,48 @@ func registerMessageClassTools(s toolAdder, client adt.DocuClient) {
 			return errorResult(err), nil
 		}
 		out, _ := json.Marshal(results)
+		return mcp.NewToolResultText(string(out)), nil
+	})
+
+	s.AddTool(mcp.NewTool("set_messages",
+		mcp.WithDescription(
+			"Write messages to an ABAP message class. Reads the current ETag and uses optimistic locking. "+
+				"Pass all messages that should exist in the class. Existing messages not in the list will be removed. "+
+				"Each message needs a 3-digit number (e.g. '001') and text. Use &1-&4 for placeholders.",
+		),
+		mcp.WithString("message_class", mcp.Required(), mcp.Description("Message class name, e.g. 'ZFOO'")),
+		mcp.WithString("messages", mcp.Required(), mcp.Description(
+			`JSON array of messages, e.g. [{"number":"001","text":"Hello &1","self_explanatory":true}]`,
+		)),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		name := req.GetString("message_class", "")
+		if name == "" {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "message_class is required"}), nil
+		}
+		msgsJSON := req.GetString("messages", "")
+		if msgsJSON == "" {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "messages is required"}), nil
+		}
+		var messages []adt.Message
+		if err := json.Unmarshal([]byte(msgsJSON), &messages); err != nil {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "invalid messages JSON: " + err.Error()}), nil
+		}
+
+		// Read current ETag for optimistic locking
+		mcInfo, err := client.GetMessageClass(ctx, name)
+		if err != nil {
+			return errorResult(err), nil
+		}
+
+		if err := client.SetMessages(ctx, name, mcInfo.ETag, messages); err != nil {
+			return errorResult(err), nil
+		}
+
+		out, _ := json.Marshal(map[string]any{
+			"success":        true,
+			"message_class":  name,
+			"messages_count": len(messages),
+		})
 		return mcp.NewToolResultText(string(out)), nil
 	})
 }

@@ -107,7 +107,7 @@ func (m *mockClient) GetMessageClass(context.Context, string) (*adt.MessageClass
 func (m *mockClient) SearchMessages(context.Context, string, int) ([]adt.MessageSearchResult, error) {
 	panic("not implemented")
 }
-func (m *mockClient) SetMessages(context.Context, string, string, string, []adt.Message) error {
+func (m *mockClient) SetMessages(context.Context, string, string, []adt.Message) error {
 	panic("not implemented")
 }
 func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error) {
