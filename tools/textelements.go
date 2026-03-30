@@ -14,7 +14,7 @@ func registerTextElementTools(s toolAdder, client adt.DocuClient) {
 			"Read text symbols and selection texts of an ABAP program, class, or function group. "+
 				"Text symbols are referenced as TEXT-001, TEXT-002 etc. in ABAP source. "+
 				"Selection texts are the labels for PARAMETERS and SELECT-OPTIONS on the selection screen. "+
-				"Requires S/4HANA or ABAP Platform (not available on older ECC systems).",
+				"Not available on all systems — depends on the SAP Basis version.",
 		),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

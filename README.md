@@ -79,7 +79,7 @@ graph TD
 | `run_atc_check` | Run ATC (ABAP Test Cockpit) checks |
 | `get_atc_customizing` | Get ATC check variant configuration |
 | `get_abap_doc` | Look up ABAP keyword documentation |
-| `get_text_elements` | Read text symbols and selection texts (S4 only) |
+| `get_text_elements` | Read text symbols and selection texts |
 
 </details>
 
