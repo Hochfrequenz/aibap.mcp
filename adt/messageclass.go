@@ -142,9 +142,11 @@ func buildMessageClassPutXML(name string, messages []Message) string {
 	return sb.String()
 }
 
+const xmlTrue = "true"
+
 func boolToString(b bool) string {
 	if b {
-		return "true"
+		return xmlTrue
 	}
 	return "false"
 }
@@ -179,7 +181,7 @@ func parseMessageClassXML(data []byte) (*MessageClassInfo, error) {
 		result.Messages = append(result.Messages, Message{
 			Number:   m.Number,
 			Text:     m.Text,
-			SelfExpl: m.SelfExpl == "true",
+			SelfExpl: m.SelfExpl == xmlTrue,
 		})
 	}
 	return result, nil
