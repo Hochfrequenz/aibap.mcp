@@ -111,6 +111,15 @@ func (r *ClientRegistry) GetABAPDoc(ctx context.Context, keyword string) (string
 func (r *ClientRegistry) GetTextElements(ctx context.Context, objectURI string) (*TextElements, error) {
 	return r.activeClient().GetTextElements(ctx, objectURI)
 }
+func (r *ClientRegistry) GetMessageClass(ctx context.Context, messageClassName string) (*MessageClassInfo, error) {
+	return r.activeClient().GetMessageClass(ctx, messageClassName)
+}
+func (r *ClientRegistry) SearchMessages(ctx context.Context, query string, maxResults int) ([]MessageSearchResult, error) {
+	return r.activeClient().SearchMessages(ctx, query, maxResults)
+}
+func (r *ClientRegistry) SetMessages(ctx context.Context, messageClassName, etag string, messages []Message) error {
+	return r.activeClient().SetMessages(ctx, messageClassName, etag, messages)
+}
 func (r *ClientRegistry) NavigateToDefinition(ctx context.Context, sourceURI string) (string, error) {
 	return r.activeClient().NavigateToDefinition(ctx, sourceURI)
 }
@@ -197,6 +206,12 @@ func (r *ClientRegistry) RunATCCheck(ctx context.Context, objectURIs []string, c
 }
 func (r *ClientRegistry) RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error) {
 	return r.activeClient().RunQuery(ctx, sql, maxRows)
+}
+func (r *ClientRegistry) GetEnhancementSpot(ctx context.Context, spotName string) (*EnhancementSpotInfo, error) {
+	return r.activeClient().GetEnhancementSpot(ctx, spotName)
+}
+func (r *ClientRegistry) GetEnhancementImplementation(ctx context.Context, implName string) (*BAdIImplementationInfo, error) {
+	return r.activeClient().GetEnhancementImplementation(ctx, implName)
 }
 func (r *ClientRegistry) SystemInfo() (host, client string) {
 	return r.activeClient().SystemInfo()

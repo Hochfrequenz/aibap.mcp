@@ -44,6 +44,9 @@ type LockClient interface {
 type DocuClient interface {
 	GetABAPDoc(ctx context.Context, keyword string) (string, error)
 	GetTextElements(ctx context.Context, objectURI string) (*TextElements, error)
+	GetMessageClass(ctx context.Context, messageClassName string) (*MessageClassInfo, error)
+	SearchMessages(ctx context.Context, query string, maxResults int) ([]MessageSearchResult, error)
+	SetMessages(ctx context.Context, messageClassName, etag string, messages []Message) error
 }
 
 // NavigationClient resolves source references.
@@ -103,6 +106,12 @@ type QueryClient interface {
 	RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error)
 }
 
+// EnhancementClient reads BAdI enhancement spots and implementations.
+type EnhancementClient interface {
+	GetEnhancementSpot(ctx context.Context, spotName string) (*EnhancementSpotInfo, error)
+	GetEnhancementImplementation(ctx context.Context, implName string) (*BAdIImplementationInfo, error)
+}
+
 // SystemClient provides system metadata.
 type SystemClient interface {
 	SystemInfo() (host, client string)
@@ -124,6 +133,7 @@ type Client interface {
 	TransportClient
 	ExportClient
 	QueryClient
+	EnhancementClient
 	SystemClient
 }
 
