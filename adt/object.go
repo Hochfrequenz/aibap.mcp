@@ -30,6 +30,7 @@ var objectTypeMap = map[string]struct {
 	objTypeDOMA: {"/sap/bc/adt/ddic/domains", "DOMA/DD"},
 	objTypeTABL: {"/sap/bc/adt/ddic/tables", "TABL/DT"},
 	objTypeDDLS: {"/sap/bc/adt/ddic/ddl/sources", "DDLS/STOB"},
+	"MSAG":      {"/sap/bc/adt/messageclass", "MSAG/N"},
 }
 
 func (c *httpClient) CreateObject(ctx context.Context, objectType, name, packageName, description, transport string) error {
@@ -84,6 +85,11 @@ func (c *httpClient) CreateObject(ctx context.Context, objectType, name, package
 	case objTypeDDLS:
 		body, err = xml.Marshal(adtxml.CreateDDLSource{
 			NSDdl: "http://www.sap.com/adt/ddic/ddlsources", NSCore: nsADTCore,
+			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
+		})
+	case "MSAG":
+		body, err = xml.Marshal(adtxml.CreateMessageClass{
+			NSMC: "http://www.sap.com/adt/MessageClass", NSCore: nsADTCore,
 			Type: info.adtType, Description: description, Name: name, PackageRef: pkgRef,
 		})
 	}

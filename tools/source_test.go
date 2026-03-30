@@ -178,7 +178,14 @@ func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { retur
 func (m *mockClient) GetTextElements(context.Context, string) (*adt.TextElements, error) {
 	return &adt.TextElements{}, nil
 }
-func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error) { return "", nil }
+func (m *mockClient) GetMessageClass(context.Context, string) (*adt.MessageClassInfo, error) {
+	return &adt.MessageClassInfo{}, nil
+}
+func (m *mockClient) SearchMessages(context.Context, string, int) ([]adt.MessageSearchResult, error) {
+	return nil, nil
+}
+func (m *mockClient) SetMessages(context.Context, string, string, []adt.Message) error { return nil }
+func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error)     { return "", nil }
 func (m *mockClient) Rename(context.Context, string, string, string) (*adt.RenameResult, error) {
 	return &adt.RenameResult{}, nil
 }
@@ -191,6 +198,12 @@ func (m *mockClient) DiffActiveInactive(context.Context, string) (*adt.DiffResul
 }
 func (m *mockClient) GetTableFields(context.Context, string) ([]adt.FieldInfo, error) {
 	return nil, nil
+}
+func (m *mockClient) GetEnhancementSpot(context.Context, string) (*adt.EnhancementSpotInfo, error) {
+	return &adt.EnhancementSpotInfo{}, nil
+}
+func (m *mockClient) GetEnhancementImplementation(context.Context, string) (*adt.BAdIImplementationInfo, error) {
+	return &adt.BAdIImplementationInfo{}, nil
 }
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"

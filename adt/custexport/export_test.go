@@ -104,6 +104,15 @@ func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { panic
 func (m *mockClient) GetTextElements(context.Context, string) (*adt.TextElements, error) {
 	panic("not implemented")
 }
+func (m *mockClient) GetMessageClass(context.Context, string) (*adt.MessageClassInfo, error) {
+	panic("not implemented")
+}
+func (m *mockClient) SearchMessages(context.Context, string, int) ([]adt.MessageSearchResult, error) {
+	panic("not implemented")
+}
+func (m *mockClient) SetMessages(context.Context, string, string, []adt.Message) error {
+	panic("not implemented")
+}
 func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error) {
 	panic("not implemented")
 }
@@ -120,6 +129,12 @@ func (m *mockClient) DiffActiveInactive(context.Context, string) (*adt.DiffResul
 	panic("not implemented")
 }
 func (m *mockClient) GetTableFields(context.Context, string) ([]adt.FieldInfo, error) {
+	panic("not implemented")
+}
+func (m *mockClient) GetEnhancementSpot(context.Context, string) (*adt.EnhancementSpotInfo, error) {
+	panic("not implemented")
+}
+func (m *mockClient) GetEnhancementImplementation(context.Context, string) (*adt.BAdIImplementationInfo, error) {
 	panic("not implemented")
 }
 func (m *mockClient) SystemInfo() (string, string) {
