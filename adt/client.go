@@ -45,6 +45,7 @@ type DocuClient interface {
 	GetABAPDoc(ctx context.Context, keyword string) (string, error)
 	GetMessageClass(ctx context.Context, messageClassName string) (*MessageClassInfo, error)
 	SearchMessages(ctx context.Context, query string, maxResults int) ([]MessageSearchResult, error)
+	SetMessages(ctx context.Context, messageClassName, lockHandle, etag string, messages []Message) error
 }
 
 // NavigationClient resolves source references.
