@@ -33,9 +33,9 @@ var textElementEndpoints = map[string]string{
 	"/sap/bc/adt/functions/groups/":  "/sap/bc/adt/textelements/functiongroups/",
 }
 
-// ErrTextElementsNotSupported is returned when the system does not have the
-// text elements endpoint (ECC systems).
-var ErrTextElementsNotSupported = fmt.Errorf("text elements endpoint not available on this system (requires S/4HANA)")
+// ErrTextElementsNotSupported is returned when the system's ADT discovery
+// does not advertise the text elements endpoint.
+var ErrTextElementsNotSupported = fmt.Errorf("text elements endpoint not available on this system")
 
 // GetTextElements reads text symbols and selection texts for an ABAP object.
 // The objectURI must be a program, class, or function group URI.
