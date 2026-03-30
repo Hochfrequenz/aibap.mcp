@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (45)
+## Available tools (46)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -81,6 +81,7 @@ graph TD
 | `get_abap_doc` | Look up ABAP keyword documentation |
 | `get_message_class` | Read all messages of a message class (SE91) |
 | `search_messages` | Search messages across all message classes |
+| `set_messages` | Write messages to a message class |
 
 </details>
 

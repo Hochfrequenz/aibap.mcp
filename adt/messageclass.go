@@ -106,13 +106,12 @@ func parseNamedItemList(data []byte) ([]MessageSearchResult, error) {
 	return results, nil
 }
 
-// SetMessages writes messages to a message class. The object must be locked first.
-// Messages replace the existing content — include all messages, not just new ones.
-// The etag should come from a GetMessageClass call made *before* locking.
-func (c *httpClient) SetMessages(ctx context.Context, messageClassName, lockHandle, etag string, messages []Message) error {
+// SetMessages writes messages to a message class using optimistic locking.
+// Pass the ETag from a prior GetMessageClass call. The server locks automatically
+// when If-Match is set without a lockHandle (optimistic locking protocol).
+func (c *httpClient) SetMessages(ctx context.Context, messageClassName, etag string, messages []Message) error {
 	body := buildMessageClassPutXML(messageClassName, messages)
-	path := fmt.Sprintf("/sap/bc/adt/messageclass/%s?lockHandle=%s",
-		messageClassName, lockHandle)
+	path := "/sap/bc/adt/messageclass/" + messageClassName + "?accessMode=MODIFY"
 	resp, err := c.doMutate(ctx, http.MethodPut, path,
 		strings.NewReader(body),
 		map[string]string{
