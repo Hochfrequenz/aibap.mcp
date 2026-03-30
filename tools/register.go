@@ -68,4 +68,5 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 	registerRefactoringTools(ls, client)
 	registerDDICTools(ls, client)
 	registerVersionTools(ls, client)
+	registerTextElementTools(ls, client)
 }

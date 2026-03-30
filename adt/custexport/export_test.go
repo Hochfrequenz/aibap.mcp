@@ -101,6 +101,9 @@ func (m *mockClient) ReleaseTransport(context.Context, string) error {
 	panic("not implemented")
 }
 func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { panic("not implemented") }
+func (m *mockClient) GetTextElements(context.Context, string) (*adt.TextElements, error) {
+	panic("not implemented")
+}
 func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error) {
 	panic("not implemented")
 }

@@ -43,6 +43,7 @@ type LockClient interface {
 // DocuClient provides ABAP documentation.
 type DocuClient interface {
 	GetABAPDoc(ctx context.Context, keyword string) (string, error)
+	GetTextElements(ctx context.Context, objectURI string) (*TextElements, error)
 }
 
 // NavigationClient resolves source references.
