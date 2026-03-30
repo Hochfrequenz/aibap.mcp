@@ -132,10 +132,7 @@ func buildMessageClassPutXML(name string, messages []Message) string {
 	sb.WriteString(`<mc:messageClass xmlns:mc="http://www.sap.com/adt/MessageClass" xmlns:adtcore="http://www.sap.com/adt/core"`)
 	sb.WriteString(fmt.Sprintf(` adtcore:name="%s" adtcore:type="MSAG/N">`, strings.ToUpper(name)))
 	for _, m := range messages {
-		selfExpl := "false"
-		if m.SelfExpl {
-			selfExpl = "true"
-		}
+		selfExpl := boolToString(m.SelfExpl)
 		var escapedText strings.Builder
 		_ = xml.EscapeText(&escapedText, []byte(m.Text))
 		sb.WriteString(fmt.Sprintf(`<mc:messages mc:msgno="%s" mc:msgtext="%s" mc:selfexplainatory="%s" mc:documented="false" adtcore:name=""/>`,
@@ -143,6 +140,13 @@ func buildMessageClassPutXML(name string, messages []Message) string {
 	}
 	sb.WriteString(`</mc:messageClass>`)
 	return sb.String()
+}
+
+func boolToString(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 func parseMessageClassXML(data []byte) (*MessageClassInfo, error) {
