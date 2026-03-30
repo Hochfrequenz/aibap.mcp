@@ -108,6 +108,9 @@ func (r *ClientRegistry) GetInactiveObjects(ctx context.Context) ([]ObjectInfo, 
 func (r *ClientRegistry) GetABAPDoc(ctx context.Context, keyword string) (string, error) {
 	return r.activeClient().GetABAPDoc(ctx, keyword)
 }
+func (r *ClientRegistry) GetMessageClass(ctx context.Context, messageClassName string) (*MessageClassInfo, error) {
+	return r.activeClient().GetMessageClass(ctx, messageClassName)
+}
 func (r *ClientRegistry) NavigateToDefinition(ctx context.Context, sourceURI string) (string, error) {
 	return r.activeClient().NavigateToDefinition(ctx, sourceURI)
 }
