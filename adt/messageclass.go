@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 )
 
@@ -14,6 +15,7 @@ type MessageClassInfo struct {
 	Description string    `json:"description"`
 	Package     string    `json:"package"`
 	Messages    []Message `json:"messages"`
+	ETag        string    `json:"-"` // HTTP ETag for optimistic locking, not serialized to JSON
 }
 
 // Message is a single message entry in a message class.
@@ -40,7 +42,12 @@ func (c *httpClient) GetMessageClass(ctx context.Context, messageClassName strin
 		return nil, fmt.Errorf("GetMessageClass: reading body: %w", err)
 	}
 
-	return parseMessageClassXML(data)
+	result, err := parseMessageClassXML(data)
+	if err != nil {
+		return nil, err
+	}
+	result.ETag = resp.Header.Get("ETag")
+	return result, nil
 }
 
 // MessageSearchResult is a single entry from the message search endpoint.
@@ -97,6 +104,46 @@ func parseNamedItemList(data []byte) ([]MessageSearchResult, error) {
 		})
 	}
 	return results, nil
+}
+
+// SetMessages writes messages to a message class. The object must be locked first.
+// Messages replace the existing content — include all messages, not just new ones.
+// The etag should come from a GetMessageClass call made *before* locking.
+func (c *httpClient) SetMessages(ctx context.Context, messageClassName, lockHandle, etag string, messages []Message) error {
+	body := buildMessageClassPutXML(messageClassName, messages)
+	path := fmt.Sprintf("/sap/bc/adt/messageclass/%s?lockHandle=%s",
+		messageClassName, lockHandle)
+	resp, err := c.doMutate(ctx, http.MethodPut, path,
+		strings.NewReader(body),
+		map[string]string{
+			"Content-Type": "application/vnd.sap.adt.mc.messageclass+xml",
+			"If-Match":     etag,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("SetMessages: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return checkResponse(resp)
+}
+
+func buildMessageClassPutXML(name string, messages []Message) string {
+	var sb strings.Builder
+	sb.WriteString(`<?xml version="1.0" encoding="utf-8"?>`)
+	sb.WriteString(`<mc:messageClass xmlns:mc="http://www.sap.com/adt/MessageClass" xmlns:adtcore="http://www.sap.com/adt/core"`)
+	sb.WriteString(fmt.Sprintf(` adtcore:name="%s" adtcore:type="MSAG/N">`, strings.ToUpper(name)))
+	for _, m := range messages {
+		selfExpl := "false"
+		if m.SelfExpl {
+			selfExpl = "true"
+		}
+		var escapedText strings.Builder
+		_ = xml.EscapeText(&escapedText, []byte(m.Text))
+		sb.WriteString(fmt.Sprintf(`<mc:messages mc:msgno="%s" mc:msgtext="%s" mc:selfexplainatory="%s" mc:documented="false" adtcore:name=""/>`,
+			m.Number, escapedText.String(), selfExpl))
+	}
+	sb.WriteString(`</mc:messageClass>`)
+	return sb.String()
 }
 
 func parseMessageClassXML(data []byte) (*MessageClassInfo, error) {

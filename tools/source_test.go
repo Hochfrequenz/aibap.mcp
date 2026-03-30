@@ -181,6 +181,9 @@ func (m *mockClient) GetMessageClass(context.Context, string) (*adt.MessageClass
 func (m *mockClient) SearchMessages(context.Context, string, int) ([]adt.MessageSearchResult, error) {
 	return nil, nil
 }
+func (m *mockClient) SetMessages(context.Context, string, string, string, []adt.Message) error {
+	return nil
+}
 func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error) { return "", nil }
 func (m *mockClient) Rename(context.Context, string, string, string) (*adt.RenameResult, error) {
 	return &adt.RenameResult{}, nil
