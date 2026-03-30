@@ -33,12 +33,24 @@ var textElementEndpoints = map[string]string{
 	"/sap/bc/adt/functions/groups/":  "/sap/bc/adt/textelements/functiongroups/",
 }
 
+// ErrTextElementsNotSupported is returned when the system does not have the
+// text elements endpoint (ECC systems).
+var ErrTextElementsNotSupported = fmt.Errorf("text elements endpoint not available on this system (requires S/4HANA)")
+
 // GetTextElements reads text symbols and selection texts for an ABAP object.
 // The objectURI must be a program, class, or function group URI.
 func (c *httpClient) GetTextElements(ctx context.Context, objectURI string) (*TextElements, error) {
 	basePath, err := resolveTextElementPath(objectURI)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check discovery to avoid unnecessary HTTP calls on unsupported systems.
+	// basePath is e.g. "/sap/bc/adt/textelements/programs/ZTEST" — strip the object name
+	// to match the collection endpoint "/sap/bc/adt/textelements/programs".
+	collectionPath := basePath[:strings.LastIndex(basePath, "/")]
+	if !c.hasEndpointInDiscovery(ctx, collectionPath) {
+		return nil, ErrTextElementsNotSupported
 	}
 
 	result := &TextElements{}
