@@ -174,7 +174,10 @@ func (m *mockClient) RunQuery(_ context.Context, _ string, _ int) (*adt.QueryRes
 func (m *mockClient) ReleaseTransport(context.Context, string) error {
 	return nil
 }
-func (m *mockClient) GetABAPDoc(context.Context, string) (string, error)           { return "", nil }
+func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { return "", nil }
+func (m *mockClient) GetTextElements(context.Context, string) (*adt.TextElements, error) {
+	return &adt.TextElements{}, nil
+}
 func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error) { return "", nil }
 func (m *mockClient) Rename(context.Context, string, string, string) (*adt.RenameResult, error) {
 	return &adt.RenameResult{}, nil
