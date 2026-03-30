@@ -28,9 +28,9 @@ type SelectionText struct {
 
 // textElementEndpoints maps object type prefixes to their text element endpoint paths.
 var textElementEndpoints = map[string]string{
-	"/sap/bc/adt/programs/programs/":  "/sap/bc/adt/textelements/programs/",
-	"/sap/bc/adt/oo/classes/":         "/sap/bc/adt/textelements/classes/",
-	"/sap/bc/adt/functions/groups/":   "/sap/bc/adt/textelements/functiongroups/",
+	"/sap/bc/adt/programs/programs/": "/sap/bc/adt/textelements/programs/",
+	"/sap/bc/adt/oo/classes/":        "/sap/bc/adt/textelements/classes/",
+	"/sap/bc/adt/functions/groups/":  "/sap/bc/adt/textelements/functiongroups/",
 }
 
 // GetTextElements reads text symbols and selection texts for an ABAP object.
