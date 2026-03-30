@@ -181,3 +181,87 @@ func (c *httpClient) AddToTransport(ctx context.Context, objectURI, transport st
 	defer func() { _ = resp.Body.Close() }()
 	return checkResponse(resp)
 }
+
+// TransportObject describes an object recorded in a transport request.
+type TransportObject struct {
+	PgmID  string `json:"pgmid"`   // R3TR, LIMU
+	Type   string `json:"type"`    // PROG, CLAS, DDLS, etc.
+	Name   string `json:"name"`    // object name
+	WBType string `json:"wb_type"` // e.g. PROG/P, CLAS/OC
+}
+
+// GetTransportObjects reads the object list of a transport request
+// via GET /sap/bc/adt/cts/transportrequests/{number}.
+func (c *httpClient) GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error) {
+	path := "/sap/bc/adt/cts/transportrequests/" + url.PathEscape(transportNumber)
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	if err != nil {
+		return nil, fmt.Errorf("GetTransportObjects: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("GetTransportObjects: reading body: %w", err)
+	}
+
+	return parseTransportObjectsXML(data)
+}
+
+func parseTransportObjectsXML(data []byte) ([]TransportObject, error) {
+	var doc struct {
+		Workbench struct {
+			Sections []struct {
+				Requests []struct {
+					Objects []struct {
+						PgmID  string `xml:"pgmid,attr"`
+						Type   string `xml:"type,attr"`
+						Name   string `xml:"name,attr"`
+						WBType string `xml:"wbtype,attr"`
+					} `xml:"abap_object"`
+					Tasks []struct {
+						Objects []struct {
+							PgmID  string `xml:"pgmid,attr"`
+							Type   string `xml:"type,attr"`
+							Name   string `xml:"name,attr"`
+							WBType string `xml:"wbtype,attr"`
+						} `xml:"abap_object"`
+					} `xml:"task"`
+				} `xml:"request"`
+			} `xml:",any"`
+		} `xml:"workbench"`
+	}
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parsing transport objects: %w", err)
+	}
+
+	seen := make(map[string]bool)
+	var objects []TransportObject
+
+	addObj := func(pgmid, typ, name, wbtype string) {
+		key := pgmid + "/" + typ + "/" + name
+		if !seen[key] && name != "" {
+			seen[key] = true
+			objects = append(objects, TransportObject{
+				PgmID: pgmid, Type: typ, Name: name, WBType: wbtype,
+			})
+		}
+	}
+
+	for _, section := range doc.Workbench.Sections {
+		for _, req := range section.Requests {
+			for _, obj := range req.Objects {
+				addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType)
+			}
+			for _, task := range req.Tasks {
+				for _, obj := range task.Objects {
+					addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType)
+				}
+			}
+		}
+	}
+	return objects, nil
+}
