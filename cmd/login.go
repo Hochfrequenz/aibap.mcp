@@ -55,7 +55,7 @@ func RunLogin(configPath, systemName string) error {
 
 	codeCh, errCh := startCallbackServer(listener)
 
-	authorizeURL := auth.AuthorizeURL(sysCfg.Host, sysCfg.EffectiveOAuth2ClientID(), redirectURI, challenge)
+	authorizeURL := auth.AuthorizeURL(sysCfg.Host, config.EffectiveOAuth2ClientID(sysCfg), redirectURI, challenge)
 
 	if err := openBrowserFn(authorizeURL); err != nil {
 		return fmt.Errorf("open browser: %w", err)
@@ -75,7 +75,7 @@ func RunLogin(configPath, systemName string) error {
 		return fmt.Errorf("login timed out after 120 seconds")
 	}
 
-	token, err := auth.ExchangeCode(sysCfg.Host, sysCfg.EffectiveOAuth2ClientID(), code, verifier, redirectURI, sysCfg.TLSSkipVerify)
+	token, err := auth.ExchangeCode(sysCfg.Host, config.EffectiveOAuth2ClientID(sysCfg), code, verifier, redirectURI, sysCfg.TLSSkipVerify)
 	if err != nil {
 		return fmt.Errorf("exchange code: %w", err)
 	}

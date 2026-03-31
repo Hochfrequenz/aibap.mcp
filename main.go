@@ -87,6 +87,7 @@ func findConfigFile() string {
 	candidates := []string{"config.json"}
 	if home, err := os.UserHomeDir(); err == nil {
 		candidates = append(candidates,
+			home+"/.config/sap-mcp/systems.json",
 			home+"/.claude/mcp/sap-adt-config.json",
 		)
 	}

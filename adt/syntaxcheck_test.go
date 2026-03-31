@@ -55,7 +55,7 @@ func TestSyntaxCheckWithErrors(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	msgs, err := client.SyntaxCheck(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
@@ -97,7 +97,7 @@ func TestSyntaxCheckClean(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	msgs, err := client.SyntaxCheck(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")

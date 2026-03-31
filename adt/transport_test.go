@@ -51,7 +51,7 @@ func TestCheckTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.CheckTransport(context.Background(), "R3TR", "PROG", "ZTEST")
@@ -97,7 +97,7 @@ func TestGetTransportRequests(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	transports, err := client.GetTransportRequests(context.Background(), "", "D")
@@ -125,7 +125,7 @@ func TestAddToTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.AddToTransport(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "DEVK900123")
@@ -152,7 +152,7 @@ func TestReleaseTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.ReleaseTransport(context.Background(), "DEVK900123")

@@ -3,6 +3,7 @@ module github.com/Hochfrequenz/mcp-server-abap
 go 1.26
 
 require (
+	github.com/Hochfrequenz/sap-mcp-config v0.0.1
 	github.com/mark3labs/mcp-go v0.45.0
 	modernc.org/sqlite v1.47.0
 )
@@ -13,6 +14,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect

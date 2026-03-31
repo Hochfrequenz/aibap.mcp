@@ -16,13 +16,13 @@ import (
 type ClientRegistry struct {
 	mu      sync.RWMutex
 	clients map[string]Client
-	configs map[string]config.SAPConfig
+	configs map[string]config.SAPSystem
 	active  string
 }
 
 // NewClientRegistry creates one Client per system in cfg, with cfg.DefaultSystem active.
 // For OAuth2 systems it loads the stored token and sets up automatic refresh.
-func NewClientRegistry(cfg *config.Config) (*ClientRegistry, error) {
+func NewClientRegistry(cfg *config.AppConfig) (*ClientRegistry, error) {
 	clients := make(map[string]Client, len(cfg.Systems))
 	for name, sysCfg := range cfg.Systems {
 		if sysCfg.IsOAuth2() {
@@ -37,7 +37,7 @@ func NewClientRegistry(cfg *config.Config) (*ClientRegistry, error) {
 			onRefresh := func(currentToken string) (string, error) {
 				newToken, err := auth.RefreshToken(
 					sysCfgCopy.Host,
-					sysCfgCopy.EffectiveOAuth2ClientID(),
+					config.EffectiveOAuth2ClientID(sysCfgCopy),
 					td.RefreshToken,
 					sysCfgCopy.TLSSkipVerify,
 				)
