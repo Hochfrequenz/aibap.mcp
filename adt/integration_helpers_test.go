@@ -24,11 +24,11 @@ const (
 	testClassNoTests = "/sap/bc/adt/oo/classes/ZCL_ADT_MCP_TEST_NOUNITS"
 )
 
-// integrationConfig builds a SAPConfig. It tries, in order:
-//  1. YAML config file (same as MCP server) + SAP_INTEGRATION_SYSTEM env var
-//  2. Legacy env vars: SAP_INTEGRATION_HOST, SAP_INTEGRATION_USER, etc.
+// integrationConfig builds a SAPSystem. It tries, in order:
+//  1. JSON config file (same as MCP server) + SAP_INTEGRATION_SYSTEM env var
+//  2. Fallback env vars: SAP_INTEGRATION_HOST, SAP_INTEGRATION_USER, etc.
 //
-// YAML paths searched: SAP_ADT_CONFIG env var, ~/.claude/mcp/sap-adt-config.yaml
+// JSON paths searched: SAP_ADT_CONFIG env var, ~/.config/sap-mcp/systems.json
 func integrationConfig() config.SAPSystem {
 	// Try YAML config first
 	if cfg, ok := integrationConfigFromFile(); ok {
@@ -47,7 +47,7 @@ func integrationConfig() config.SAPSystem {
 func integrationConfigFromFile() (config.SAPSystem, bool) {
 	paths := []string{os.Getenv("SAP_ADT_CONFIG")}
 	if home, err := os.UserHomeDir(); err == nil {
-		paths = append(paths, home+"/.claude/mcp/sap-adt-config.json")
+		paths = append(paths, home+"/.config/sap-mcp/systems.json")
 	}
 
 	var cfg *config.AppConfig
