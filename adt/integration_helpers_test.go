@@ -28,9 +28,9 @@ const (
 //  1. JSON config file (same as MCP server) + SAP_INTEGRATION_SYSTEM env var
 //  2. Fallback env vars: SAP_INTEGRATION_HOST, SAP_INTEGRATION_USER, etc.
 //
-// JSON paths searched: SAP_ADT_CONFIG env var, ~/.config/sap-mcp/systems.json
+// JSON paths searched: SAP_CONFIG_FILE env var, ~/.config/sap-mcp/systems.json
 func integrationConfig() config.SAPSystem {
-	// Try YAML config first
+	// Try JSON config first
 	if cfg, ok := integrationConfigFromFile(); ok {
 		return cfg
 	}
@@ -45,7 +45,7 @@ func integrationConfig() config.SAPSystem {
 }
 
 func integrationConfigFromFile() (config.SAPSystem, bool) {
-	paths := []string{os.Getenv("SAP_ADT_CONFIG")}
+	paths := []string{os.Getenv("SAP_CONFIG_FILE")}
 	if home, err := os.UserHomeDir(); err == nil {
 		paths = append(paths, home+"/.config/sap-mcp/systems.json")
 	}
@@ -90,7 +90,7 @@ func newIntegrationClient(t *testing.T) adt.Client {
 	t.Helper()
 	cfg := integrationConfig()
 	if cfg.Host == "" {
-		t.Skip("No SAP config found — set SAP_ADT_CONFIG or SAP_INTEGRATION_HOST")
+		t.Skip("No SAP config found — set SAP_CONFIG_FILE or SAP_INTEGRATION_HOST")
 	}
 	if cfg.User == "" {
 		t.Fatal("SAP user not configured — check YAML config or SAP_INTEGRATION_USER")
