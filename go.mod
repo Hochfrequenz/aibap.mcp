@@ -3,7 +3,7 @@ module github.com/Hochfrequenz/mcp-server-abap
 go 1.26
 
 require (
-	github.com/Hochfrequenz/sap-mcp-config v0.0.1
+	github.com/Hochfrequenz/sap-mcp-config v0.0.3
 	github.com/mark3labs/mcp-go v0.45.0
 	modernc.org/sqlite v1.47.0
 )
