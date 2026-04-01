@@ -36,7 +36,7 @@ func newClient(t *testing.T) adt.Client {
 	if password == "" {
 		t.Fatal("SAP_INTEGRATION_PASSWORD must be set when SAP_INTEGRATION_HOST is set")
 	}
-	return adt.NewClient(config.SAPConfig{
+	return adt.NewClient(config.SAPSystem{
 		Host:          host,
 		User:          user,
 		Password:      password,

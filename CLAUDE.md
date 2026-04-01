@@ -17,7 +17,8 @@
 
 ## SAP ADT
 
-- Credentials live in `.env` (never commit, never put in plain text in commands).
-- The MCP server config is at `~/.claude/mcp/sap-adt-config.yaml`.
+- Credentials live in `~/.config/sap-mcp/systems.json` (never commit, never put in plain text in commands).
+- Config format: see [sap-mcp-config](https://github.com/Hochfrequenz/sap-mcp-config).
+- Override config path via `SAP_CONFIG_FILE` env var.
 - S4 systems require HTTPS (secure cookie flag breaks HTTP — see #108).
 - ECC systems may not have all endpoints (e.g. `/sap/bc/adt/packages` is S4-only).

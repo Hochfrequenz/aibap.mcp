@@ -24,18 +24,18 @@ const (
 	testClassNoTests = "/sap/bc/adt/oo/classes/ZCL_ADT_MCP_TEST_NOUNITS"
 )
 
-// integrationConfig builds a SAPConfig. It tries, in order:
-//  1. YAML config file (same as MCP server) + SAP_INTEGRATION_SYSTEM env var
-//  2. Legacy env vars: SAP_INTEGRATION_HOST, SAP_INTEGRATION_USER, etc.
+// integrationConfig builds a SAPSystem. It tries, in order:
+//  1. JSON config file (same as MCP server) + SAP_INTEGRATION_SYSTEM env var
+//  2. Fallback env vars: SAP_INTEGRATION_HOST, SAP_INTEGRATION_USER, etc.
 //
-// YAML paths searched: SAP_ADT_CONFIG env var, ~/.claude/mcp/sap-adt-config.yaml
-func integrationConfig() config.SAPConfig {
-	// Try YAML config first
+// JSON paths searched: SAP_CONFIG_FILE env var, ~/.config/sap-mcp/systems.json
+func integrationConfig() config.SAPSystem {
+	// Try JSON config first
 	if cfg, ok := integrationConfigFromFile(); ok {
 		return cfg
 	}
 	// Fallback to legacy env vars
-	return config.SAPConfig{
+	return config.SAPSystem{
 		Host:          strings.TrimSpace(os.Getenv("SAP_INTEGRATION_HOST")),
 		User:          strings.TrimSpace(os.Getenv("SAP_INTEGRATION_USER")),
 		Password:      os.Getenv("SAP_INTEGRATION_PASSWORD"),
@@ -44,13 +44,13 @@ func integrationConfig() config.SAPConfig {
 	}
 }
 
-func integrationConfigFromFile() (config.SAPConfig, bool) {
-	paths := []string{os.Getenv("SAP_ADT_CONFIG")}
+func integrationConfigFromFile() (config.SAPSystem, bool) {
+	paths := []string{os.Getenv("SAP_CONFIG_FILE")}
 	if home, err := os.UserHomeDir(); err == nil {
-		paths = append(paths, home+"/.claude/mcp/sap-adt-config.json")
+		paths = append(paths, home+"/.config/sap-mcp/systems.json")
 	}
 
-	var cfg *config.Config
+	var cfg *config.AppConfig
 	for _, p := range paths {
 		if p == "" {
 			continue
@@ -62,7 +62,7 @@ func integrationConfigFromFile() (config.SAPConfig, bool) {
 		}
 	}
 	if cfg == nil {
-		return config.SAPConfig{}, false
+		return config.SAPSystem{}, false
 	}
 
 	// Pick system: SAP_INTEGRATION_SYSTEM env var, or default_system from YAML
@@ -73,12 +73,12 @@ func integrationConfigFromFile() (config.SAPConfig, bool) {
 
 	// Check whitelist — only run tests against explicitly allowed systems
 	if !cfg.IsTestSystem(systemName) {
-		return config.SAPConfig{}, false
+		return config.SAPSystem{}, false
 	}
 
 	sys, ok := cfg.Systems[systemName]
 	if !ok {
-		return config.SAPConfig{}, false
+		return config.SAPSystem{}, false
 	}
 	sys.TLSSkipVerify = true
 	return sys, true
@@ -90,7 +90,7 @@ func newIntegrationClient(t *testing.T) adt.Client {
 	t.Helper()
 	cfg := integrationConfig()
 	if cfg.Host == "" {
-		t.Skip("No SAP config found — set SAP_ADT_CONFIG or SAP_INTEGRATION_HOST")
+		t.Skip("No SAP config found — set SAP_CONFIG_FILE or SAP_INTEGRATION_HOST")
 	}
 	if cfg.User == "" {
 		t.Fatal("SAP user not configured — check YAML config or SAP_INTEGRATION_USER")

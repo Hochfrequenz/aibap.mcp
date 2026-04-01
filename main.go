@@ -86,9 +86,7 @@ func run() error {
 func findConfigFile() string {
 	candidates := []string{"config.json"}
 	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates,
-			home+"/.claude/mcp/sap-adt-config.json",
-		)
+		candidates = append(candidates, home+"/.config/sap-mcp/systems.json")
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
