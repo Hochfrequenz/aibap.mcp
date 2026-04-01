@@ -30,7 +30,7 @@ func TestPrettyPrint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.PrettyPrint(context.Background(), "report ztest.\nwrite 'Hello'.")

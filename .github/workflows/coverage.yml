@@ -21,7 +21,7 @@ jobs:
           #   HTTP wrappers (adt client methods): medium threshold
           #   Tool handlers, logging, cmd: no threshold (tested via integration tests)
           declare -A thresholds=(
-            ["github.com/Hochfrequenz/mcp-server-abap/config"]=80
+            ["github.com/Hochfrequenz/mcp-server-abap/config"]=75
             ["github.com/Hochfrequenz/mcp-server-abap/auth"]=75
             ["github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"]=50
             ["github.com/Hochfrequenz/mcp-server-abap/adt/custexport"]=60

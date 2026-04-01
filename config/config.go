@@ -4,35 +4,31 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
-type SAPConfig struct {
-	Host           string `json:"host"`
-	Client         string `json:"client"`
-	User           string `json:"user"`
-	Password       string `json:"password"`
-	TLSSkipVerify  bool   `json:"tls_skip_verify"`
-	OAuth2ClientID string `json:"oauth2_client_id"`
+// SAPSystem is a type alias for the shared SAPSystem type, keeping backward
+// compatibility within this project.
+type SAPSystem = sapmcpconfig.SAPSystem
+
+// AppConfig extends the shared Config with project-specific fields.
+type AppConfig struct {
+	sapmcpconfig.Config
+	IntegrationTestSystems []string `json:"integration_test_systems"`
 }
 
-func (c SAPConfig) IsOAuth2() bool {
-	return c.User == "" && c.Password == ""
-}
-
-func (c SAPConfig) EffectiveOAuth2ClientID() string {
-	if c.OAuth2ClientID != "" {
-		return c.OAuth2ClientID
+// EffectiveOAuth2ClientID returns the OAuth2 client ID for the given system,
+// defaulting to "mcp-server-abap" when not configured.
+func EffectiveOAuth2ClientID(sys sapmcpconfig.SAPSystem) string {
+	if sys.OAuth2ClientID != "" {
+		return sys.OAuth2ClientID
 	}
 	return "mcp-server-abap"
 }
 
-type Config struct {
-	DefaultSystem          string               `json:"default_system"`
-	IntegrationTestSystems []string             `json:"integration_test_systems"`
-	Systems                map[string]SAPConfig `json:"systems"`
-}
-
-func (c *Config) IsTestSystem(name string) bool {
+// IsTestSystem reports whether the named system should be used for integration tests.
+func (c *AppConfig) IsTestSystem(name string) bool {
 	if len(c.IntegrationTestSystems) == 0 {
 		return name == c.DefaultSystem
 	}
@@ -44,8 +40,9 @@ func (c *Config) IsTestSystem(name string) bool {
 	return false
 }
 
-func (c *Config) TestSystems() map[string]SAPConfig {
-	result := make(map[string]SAPConfig)
+// TestSystems returns the systems configured for integration testing.
+func (c *AppConfig) TestSystems() map[string]SAPSystem {
+	result := make(map[string]SAPSystem)
 	for _, name := range c.IntegrationTestSystems {
 		if sys, ok := c.Systems[name]; ok {
 			result[name] = sys
@@ -60,30 +57,23 @@ func (c *Config) TestSystems() map[string]SAPConfig {
 }
 
 // Load reads config from the given JSON file and validates it.
-func Load(path string) (*Config, error) {
+func Load(path string) (*AppConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading config file %q: %w", path, err)
 	}
 
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing config file (expected JSON): %w", err)
+	// Parse the shared config portion (with validation).
+	sharedCfg, err := sapmcpconfig.Parse(data)
+	if err != nil {
+		return nil, err
 	}
 
-	if len(cfg.Systems) == 0 {
-		return nil, fmt.Errorf("config has no systems defined")
+	// Parse again to pick up project-specific fields.
+	var app AppConfig
+	if err := json.Unmarshal(data, &app); err != nil {
+		return nil, fmt.Errorf("parsing config file (expected JSON): %w", err)
 	}
-	if _, ok := cfg.Systems[cfg.DefaultSystem]; !ok {
-		return nil, fmt.Errorf("default_system %q not found in systems", cfg.DefaultSystem)
-	}
-	for name, sys := range cfg.Systems {
-		if sys.Host == "" {
-			return nil, fmt.Errorf("system %q has no host configured", name)
-		}
-		if (sys.User == "") != (sys.Password == "") {
-			return nil, fmt.Errorf("system %q: must have both user and password, or neither (for OAuth2)", name)
-		}
-	}
-	return &cfg, nil
+	app.Config = *sharedCfg
+	return &app, nil
 }
