@@ -7,17 +7,19 @@ import (
 	"strings"
 	"testing"
 
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
+
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/Hochfrequenz/mcp-server-abap/auth"
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
-func makeRegistryConfig(systems map[string]string, defaultSystem string) *config.Config {
-	cfgSystems := make(map[string]config.SAPConfig, len(systems))
+func makeRegistryConfig(systems map[string]string, defaultSystem string) *config.AppConfig {
+	cfgSystems := make(map[string]config.SAPSystem, len(systems))
 	for name, host := range systems {
-		cfgSystems[name] = config.SAPConfig{Host: host, Client: "100", User: "U", Password: "P"}
+		cfgSystems[name] = config.SAPSystem{Host: host, Client: "100", User: "U", Password: "P"}
 	}
-	return &config.Config{DefaultSystem: defaultSystem, Systems: cfgSystems}
+	return &config.AppConfig{Config: sapmcpconfig.Config{DefaultSystem: defaultSystem, Systems: cfgSystems}}
 }
 
 func TestRegistryDefaultSystem(t *testing.T) {
@@ -286,16 +288,16 @@ func TestNewClientRegistryOAuth2Error(t *testing.T) {
 	auth.DefaultTokenPath = func() string { return t.TempDir() + "/nonexistent/tokens.json" }
 	defer func() { auth.DefaultTokenPath = orig }()
 
-	cfg := &config.Config{
+	cfg := &config.AppConfig{Config: sapmcpconfig.Config{
 		DefaultSystem: "oauth-sys",
-		Systems: map[string]config.SAPConfig{
+		Systems: map[string]config.SAPSystem{
 			"oauth-sys": {
 				Host:   "http://example.com",
 				Client: "100",
 				// No User/Password => IsOAuth2() == true
 			},
 		},
-	}
+	}}
 
 	_, err := adt.NewClientRegistry(cfg)
 	if err == nil {

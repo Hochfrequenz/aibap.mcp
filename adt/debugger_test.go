@@ -38,7 +38,7 @@ func TestDebugSessionSetBreakpoint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 	dbg := adt.NewDebugSession(client, "U")
 
@@ -70,7 +70,7 @@ func TestDebugSessionStartListenerTimeout(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
 
 	result, err := dbg.StartListener(context.Background(), 1)
@@ -100,7 +100,7 @@ func TestDebugSessionStopListener(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
 
 	err := dbg.StopListener(context.Background())
@@ -134,7 +134,7 @@ func TestDebugSessionGetDebuggeeSessions(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
 
 	data, err := dbg.GetDebuggeeSessions(context.Background())
@@ -169,7 +169,7 @@ func TestDebugSessionAttach(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
 
 	err := dbg.Attach(context.Background(), "debuggee-42")
@@ -199,7 +199,7 @@ func TestDebugSessionStep(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
 
 	data, err := dbg.Step(context.Background(), "stepInto")
@@ -231,7 +231,7 @@ func TestDebugSessionGetVariable(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
 
 	data, err := dbg.GetVariable(context.Background(), "LV_TEST")
@@ -259,7 +259,7 @@ func TestDebugSessionGetStack(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	dbg := adt.NewDebugSession(adt.NewClient(cfg), "U")
 
 	data, err := dbg.GetStack(context.Background())

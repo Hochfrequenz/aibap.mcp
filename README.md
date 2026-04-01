@@ -165,9 +165,9 @@ Download the latest release for your platform from the [releases page](https://g
 
 Extract the archive. You'll get a single `mcp-server-abap` executable (or `mcp-server-abap.exe` on Windows).
 
-### 2. Create `config.json`
+### 2. Create `systems.json`
 
-Create a file called `config.json` next to the binary (or anywhere you like):
+Create `~/.config/sap-mcp/systems.json` (shared with [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp) — configure once, use everywhere):
 
 ```json
 {
@@ -262,7 +262,7 @@ Alternatively, configure via environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `SAP_CONFIG_FILE` | Path to config.json (default: `./config.json`) |
+| `SAP_CONFIG_FILE` | Path to systems.json (default: `~/.config/sap-mcp/systems.json`) |
 
 ## Usage with Claude
 

@@ -138,7 +138,7 @@ type Client interface {
 }
 
 type httpClient struct {
-	cfg              config.SAPConfig
+	cfg              config.SAPSystem
 	http             *http.Client
 	httpLong         *http.Client // long-timeout client for large queries; shares transport + cookie jar
 	mu               sync.Mutex
@@ -150,7 +150,7 @@ type httpClient struct {
 }
 
 // NewClient creates a new ADT HTTP client configured from cfg.
-func NewClient(cfg config.SAPConfig) Client {
+func NewClient(cfg config.SAPSystem) Client {
 	jar, _ := cookiejar.New(nil)
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
@@ -174,7 +174,7 @@ func NewClient(cfg config.SAPConfig) Client {
 
 // NewClientWithToken creates a Client using Bearer token auth.
 // onRefresh is called with the current access token when a 401 occurs; it should return a new access token.
-func NewClientWithToken(cfg config.SAPConfig, accessToken string, onRefresh func(string) (string, error)) Client {
+func NewClientWithToken(cfg config.SAPSystem, accessToken string, onRefresh func(string) (string, error)) Client {
 	jar, _ := cookiejar.New(nil)
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{

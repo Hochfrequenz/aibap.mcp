@@ -28,7 +28,7 @@ func TestActivateObjectSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.ActivateObjects(context.Background(), []string{"/sap/bc/adt/programs/programs/ZTEST"})
@@ -68,7 +68,7 @@ func TestActivateObjectWithErrors(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPConfig{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.ActivateObjects(context.Background(), []string{"/sap/bc/adt/programs/programs/ZTEST"})
