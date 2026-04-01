@@ -11,6 +11,10 @@ import (
 
 func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("get_source",
+		mcp.WithTitleAnnotation("Get ABAP Source Code"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Read ABAP source code from SAP. Returns source text and ETag for optimistic locking."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),

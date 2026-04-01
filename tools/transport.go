@@ -10,6 +10,10 @@ import (
 
 func registerTransportTools(s toolAdder, client adt.TransportClient) {
 	s.AddTool(mcp.NewTool("get_transport_requests",
+		mcp.WithTitleAnnotation("Get Transport Requests"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("List CTS transport requests on the configured SAP system. Status: D=modifiable, L=released."),
 		mcp.WithString("user", mcp.Description("Filter by owner username")),
 		mcp.WithString("status", mcp.Description("Filter by status: D (modifiable) or L (released)")),
@@ -25,7 +29,11 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 	})
 
 	s.AddTool(mcp.NewTool("add_to_transport",
-		mcp.WithDescription("Record an ABAP object into a CTS transport task. The transport parameter should be a task number (not the parent transport). Use check_transport to find available tasks."),
+		mcp.WithTitleAnnotation("Add to Transport"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription("Record an ABAP object into a CTS transport task. The transport parameter should be a task number (not the parent transport). Use get_transport_requests to find available transports."),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number, e.g. DEVK900123")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

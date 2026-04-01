@@ -13,22 +13,27 @@ import (
 
 func registerCustomizingTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("export_customizing",
+		mcp.WithTitleAnnotation("Export Customizing"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithDescription(
 			"Export SAP customizing tables to SQLite database + JSON files on disk "+
 				"(read-only, no changes on SAP side). "+
 				"IMPORTANT: exports only the connected client's data (MANDT). "+
 				"Client-dependent tables are filtered by the SAP connection automatically. "+
 				"The output filename includes the client number (e.g. customizing_100.db). "+
-				"By default exports ALL customizing tables (delivery class C+G, ~57K tables, ~3.5 hours). "+
+				"By default exports ALL customizing tables (delivery class C+G) — this may take several hours depending on system size. "+
 				"Set customer_only=true to export only tables that were actually configured and transported "+
-				"(~16K tables, excludes SAP-delivered bulk data like SLO migration and conversion rules). "+
+				"(significantly fewer tables, excludes SAP-delivered bulk data like SLO migration and conversion rules). "+
 				"Output goes directly to disk — nothing is sent through the LLM context."),
 		mcp.WithString("output_dir", mcp.Required(),
 			mcp.Description("Directory to write the export into. Must already exist. Use an absolute path.")),
 		mcp.WithBoolean("customer_only",
 			mcp.Description("If true, only export tables that were actually modified and transported "+
 				"(intersection of DD02L customizing tables and E071K transport keys). "+
-				"Filters ~57K tables down to ~16K. Excludes SAP infrastructure tables "+
+				"Significantly reduces the number of tables. Excludes SAP infrastructure tables "+
 				"(SLO migration, conversion rules, messaging platform) that bloat the export. "+
 				"Recommended for cross-system comparison.")),
 		mcp.WithString("tables",

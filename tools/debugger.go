@@ -21,6 +21,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	}
 
 	s.AddTool(mcp.NewTool("debug_set_breakpoint",
+		mcp.WithTitleAnnotation("Set Breakpoint"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Set a line breakpoint in an ABAP object for external debugging."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
@@ -58,7 +61,10 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_remove_breakpoint",
-		mcp.WithDescription("Remove a previously set breakpoint by ID."),
+		mcp.WithTitleAnnotation("Remove Breakpoint"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription("Not yet implemented. Breakpoints are cleared automatically when debug_stop is called."),
 		mcp.WithString("breakpoint_id",
 			mcp.Required(),
 			mcp.Description("Breakpoint ID returned by debug_set_breakpoint"),
@@ -70,6 +76,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_start",
+		mcp.WithTitleAnnotation("Start Debug Session"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Set a breakpoint and start the debug listener. Blocks until the breakpoint is hit or timeout expires. To trigger the breakpoint, run unit tests (run_unit_tests) in a separate call. External breakpoints only trigger in HTTP/ICF sessions, not SAP GUI."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
@@ -125,6 +134,10 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_stop",
+		mcp.WithTitleAnnotation("Stop Debug Session"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Stop the debug listener and clean up all breakpoints."),
 		mcp.WithString("user",
 			mcp.Required(),
@@ -139,6 +152,10 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_sessions",
+		mcp.WithTitleAnnotation("Get Debug Sessions"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("List active debuggee sessions."),
 		mcp.WithString("user",
 			mcp.Required(),
@@ -154,6 +171,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_attach",
+		mcp.WithTitleAnnotation("Attach to Debug Session"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Attach to an active debuggee session."),
 		mcp.WithString("debuggee_id",
 			mcp.Required(),
@@ -173,6 +193,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_step",
+		mcp.WithTitleAnnotation("Debug Step"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Execute a debug step action (stepInto, stepOver, stepReturn, or continue). Requires an active debug session via debug_start + debug_attach."),
 		mcp.WithString("action",
 			mcp.Required(),
@@ -194,6 +217,10 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_variable",
+		mcp.WithTitleAnnotation("Get Debug Variable"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Read a variable value from the active debug session."),
 		mcp.WithString("variable_name",
 			mcp.Required(),
@@ -214,6 +241,10 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_stack",
+		mcp.WithTitleAnnotation("Get Debug Stack"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Get the current call stack from the active debug session."),
 		mcp.WithString("user",
 			mcp.Required(),
@@ -229,6 +260,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	})
 
 	s.AddTool(mcp.NewTool("debug_set_watchpoint",
+		mcp.WithTitleAnnotation("Set Watchpoint"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Set a watchpoint on a variable to break when its value changes."),
 		mcp.WithString("variable_name",
 			mcp.Required(),

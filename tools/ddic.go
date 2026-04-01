@@ -10,6 +10,10 @@ import (
 
 func registerDDICTools(s toolAdder, client adt.DDICClient) {
 	s.AddTool(mcp.NewTool("get_table_fields",
+		mcp.WithTitleAnnotation("Get Table Fields"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Get the field definitions of a DDIC table or structure. "+
 				"Returns field name, position, key flag, data type, length, decimals, domain, and data element. "+

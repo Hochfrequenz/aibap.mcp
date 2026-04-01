@@ -10,6 +10,10 @@ import (
 
 func registerNavigationTools(s toolAdder, client adt.NavigationClient) {
 	s.AddTool(mcp.NewTool("navigate_to_definition",
+		mcp.WithTitleAnnotation("Navigate to Definition"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Navigate to the definition of an ABAP object referenced at a source position. "+
 				"Pass the source URI with a line/column fragment (e.g. /sap/bc/adt/programs/programs/z_report/source/main#start=15,4). "+

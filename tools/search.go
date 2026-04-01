@@ -10,6 +10,10 @@ import (
 
 func registerSearchTools(s toolAdder, client adt.SearchClient) {
 	s.AddTool(mcp.NewTool("search_objects",
+		mcp.WithTitleAnnotation("Search ABAP Objects"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Search for ABAP repository objects by name. Supports wildcards, e.g. ZREPORT*."),
 		mcp.WithString("query", mcp.Required(), mcp.Description("Search query, e.g. ZREPORT*")),
 		mcp.WithString("object_type", mcp.Description("Filter by type, e.g. PROG/P for programs")),
@@ -27,6 +31,10 @@ func registerSearchTools(s toolAdder, client adt.SearchClient) {
 	})
 
 	s.AddTool(mcp.NewTool("where_used",
+		mcp.WithTitleAnnotation("Where-Used List"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Find all ABAP objects that use the given object."),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

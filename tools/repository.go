@@ -10,6 +10,10 @@ import (
 
 func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 	s.AddTool(mcp.NewTool("browse_package",
+		mcp.WithTitleAnnotation("Browse Package Contents"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("List all ABAP objects in a package."),
 		mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name, e.g. ZPACKAGE")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -23,6 +27,10 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 	})
 
 	s.AddTool(mcp.NewTool("get_object_info",
+		mcp.WithTitleAnnotation("Get Object Info"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Get metadata for an ABAP repository object."),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

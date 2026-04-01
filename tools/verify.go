@@ -18,6 +18,10 @@ type VerifyResult struct {
 
 func registerVerifyTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("verify_source",
+		mcp.WithTitleAnnotation("Verify Source"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Syntax-check ABAP source code without needing an existing object. "+
 				"Creates a temporary program in $TMP, checks the source, and cleans up. "+

@@ -16,7 +16,10 @@ func registerFileSourceTools(s toolAdder, client interface {
 	adt.LockClient
 }, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("set_source_from_file",
-		mcp.WithDescription("Upload ABAP source code from a local file to SAP. Auto-locks if needed."),
+		mcp.WithTitleAnnotation("Set Source from File"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription("Upload ABAP source code from a local file to SAP. Auto-locks if needed (lock is retained for subsequent operations)."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
 			mcp.Description(descADTObjectURI),

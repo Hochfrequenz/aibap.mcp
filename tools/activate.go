@@ -10,7 +10,11 @@ import (
 
 func registerActivateTools(s toolAdder, client adt.ObjectClient) {
 	s.AddTool(mcp.NewTool("activate_objects",
-		mcp.WithDescription("Activate one or more ABAP objects in SAP."),
+		mcp.WithTitleAnnotation("Activate Objects"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription("Activate one or more ABAP objects in SAP. Returns activation result with per-object messages (E=error, W=warning, I=info)."),
 		mcp.WithArray("object_uris",
 			mcp.Required(),
 			mcp.Description("List of ADT object URIs to activate"),
@@ -27,6 +31,10 @@ func registerActivateTools(s toolAdder, client adt.ObjectClient) {
 
 	// Backward-compatible alias: activate a single object by URI string.
 	s.AddTool(mcp.NewTool("activate_object",
+		mcp.WithTitleAnnotation("Activate Object"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Activate a single ABAP object (alias for activate_objects)."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),

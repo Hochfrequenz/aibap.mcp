@@ -10,6 +10,9 @@ import (
 
 func registerRefactoringTools(s toolAdder, client adt.RefactoringClient) {
 	s.AddTool(mcp.NewTool("rename",
+		mcp.WithTitleAnnotation("Rename Symbol"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Rename an ABAP variable, method, or other symbol. Automatically finds and updates all references. "+
 				"Pass the source URI with position of the symbol to rename "+

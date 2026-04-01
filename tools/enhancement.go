@@ -10,6 +10,10 @@ import (
 
 func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 	s.AddTool(mcp.NewTool("get_badi_definition",
+		mcp.WithTitleAnnotation("Get BAdI Definition"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Read a BAdI enhancement spot by name. Returns all BAdI definitions within the spot, "+
 				"including the BAdI interface, sample class, filter definitions, and single-use / fallback flags. "+
@@ -30,6 +34,10 @@ func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 	})
 
 	s.AddTool(mcp.NewTool("get_badi_implementation",
+		mcp.WithTitleAnnotation("Get BAdI Implementation"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Read a BAdI enhancement implementation by name. Returns the implementing classes, "+
 				"the referenced enhancement spot and BAdI definition, and active/default flags. "+

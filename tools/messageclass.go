@@ -11,6 +11,10 @@ import (
 
 func registerMessageClassTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("get_message_class",
+		mcp.WithTitleAnnotation("Get Message Class"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Read all messages of an ABAP message class (SE91). "+
 				"Returns the message class metadata and all message entries with number, text, and documentation flag. "+
@@ -31,6 +35,10 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 	})
 
 	s.AddTool(mcp.NewTool("search_messages",
+		mcp.WithTitleAnnotation("Search Messages"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Search for messages across all message classes. "+
 				"The query filters by message class ID (type-ahead, e.g. '00', 'Z*'). "+
@@ -59,6 +67,9 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 	})
 
 	s.AddTool(mcp.NewTool("set_messages",
+		mcp.WithTitleAnnotation("Set Message Class Messages"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Write messages to an ABAP message class. Reads the current ETag and uses optimistic locking. "+
 				"Pass all messages that should exist in the class. Existing messages not in the list will be removed. "+
