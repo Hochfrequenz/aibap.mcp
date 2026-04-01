@@ -93,7 +93,7 @@ func (m *mockClient) SyntaxCheck(ctx context.Context, uri string) ([]adt.SyntaxM
 	}
 	return nil, nil
 }
-func (m *mockClient) BatchSyntaxCheck(ctx context.Context, uris []string, workers int) []adt.ObjectSyntaxResult {
+func (m *mockClient) BatchSyntaxCheck(ctx context.Context, uris []string) []adt.ObjectSyntaxResult {
 	results := make([]adt.ObjectSyntaxResult, len(uris))
 	for i, uri := range uris {
 		msgs, err := m.SyntaxCheck(ctx, uri)

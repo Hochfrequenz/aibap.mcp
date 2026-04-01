@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
@@ -62,41 +61,92 @@ type ObjectSyntaxResult struct {
 	Error     string          `json:"error,omitempty"`
 }
 
-// BatchSyntaxCheck runs syntax checks on multiple objects concurrently.
-// Workers controls parallelism (clamped to 1–20).
-func (c *httpClient) BatchSyntaxCheck(ctx context.Context, objectURIs []string, workers int) []ObjectSyntaxResult {
-	if workers < 1 {
-		workers = 10
+// batchCheckChunkSize is the maximum number of objects per checkruns request.
+// SAP endpoints have undocumented request size limits; 10 is a safe default.
+const batchCheckChunkSize = 10
+
+// BatchSyntaxCheck runs syntax checks on multiple objects using the native
+// batch capability of /sap/bc/adt/checkruns. Objects are sent in chunks
+// of batchCheckChunkSize to stay within SAP request size limits.
+// Results are correlated back to objects via the report's triggeringUri.
+func (c *httpClient) BatchSyntaxCheck(ctx context.Context, objectURIs []string) []ObjectSyntaxResult {
+	results := make([]ObjectSyntaxResult, len(objectURIs))
+	for start := 0; start < len(objectURIs); start += batchCheckChunkSize {
+		end := start + batchCheckChunkSize
+		if end > len(objectURIs) {
+			end = len(objectURIs)
+		}
+		chunk := objectURIs[start:end]
+		chunkResults := c.batchSyntaxCheckChunk(ctx, chunk)
+		copy(results[start:], chunkResults)
 	}
-	if workers > 20 {
-		workers = 20
+	return results
+}
+
+// batchSyntaxCheckChunk runs a single batched syntax check request for a chunk of objects.
+func (c *httpClient) batchSyntaxCheckChunk(ctx context.Context, objectURIs []string) []ObjectSyntaxResult {
+	// Build XML with all objects in a single checkObjectList.
+	var sb strings.Builder
+	sb.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
+	sb.WriteString(`<chkrun:checkObjectList xmlns:chkrun="http://www.sap.com/adt/checkrun" `)
+	sb.WriteString(`xmlns:adtcore="http://www.sap.com/adt/core">`)
+	for _, uri := range objectURIs {
+		sb.WriteString(fmt.Sprintf(`<chkrun:checkObject adtcore:uri="%s" chkrun:version="inactive"/>`, uri))
+	}
+	sb.WriteString(`</chkrun:checkObjectList>`)
+
+	resp, err := c.doMutate(ctx, http.MethodPost,
+		"/sap/bc/adt/checkruns",
+		strings.NewReader(sb.String()),
+		map[string]string{
+			"Content-Type": "application/vnd.sap.adt.checkobjects+xml",
+			"Accept":       "application/vnd.sap.adt.checkmessages+xml",
+		},
+	)
+	if err != nil {
+		// On HTTP-level failure, return the error for all objects.
+		results := make([]ObjectSyntaxResult, len(objectURIs))
+		for i, uri := range objectURIs {
+			results[i] = ObjectSyntaxResult{ObjectURI: uri, Error: fmt.Sprintf("BatchSyntaxCheck: %s", err)}
+		}
+		return results
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		results := make([]ObjectSyntaxResult, len(objectURIs))
+		for i, uri := range objectURIs {
+			results[i] = ObjectSyntaxResult{ObjectURI: uri, Error: err.Error()}
+		}
+		return results
+	}
+
+	data, _ := io.ReadAll(resp.Body)
+	var reports adtxml.CheckRunReports
+	xml.Unmarshal(data, &reports) //nolint:errcheck
+
+	// Index reports by triggeringUri for correlation.
+	reportsByURI := make(map[string]*adtxml.CheckRunReport, len(reports.Reports))
+	for i := range reports.Reports {
+		reportsByURI[reports.Reports[i].TriggerURI] = &reports.Reports[i]
 	}
 
 	results := make([]ObjectSyntaxResult, len(objectURIs))
-
-	sem := make(chan struct{}, workers)
-	var wg sync.WaitGroup
-
 	for i, uri := range objectURIs {
-		if ctx.Err() != nil {
-			results[i] = ObjectSyntaxResult{ObjectURI: uri, Error: ctx.Err().Error()}
-			continue
+		results[i] = ObjectSyntaxResult{ObjectURI: uri}
+		report, ok := reportsByURI[uri]
+		if !ok {
+			continue // no report = no messages = clean
 		}
-		wg.Add(1)
-		go func(idx int, objectURI string) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			msgs, err := c.SyntaxCheck(ctx, objectURI)
-			if err != nil {
-				results[idx] = ObjectSyntaxResult{ObjectURI: objectURI, Error: err.Error()}
-				return
-			}
-			results[idx] = ObjectSyntaxResult{ObjectURI: objectURI, Messages: msgs}
-		}(i, uri)
+		for _, m := range report.Messages {
+			line, col := parseMessagePosition(m.URI)
+			results[i].Messages = append(results[i].Messages, SyntaxMessage{
+				Type:   m.Type,
+				Text:   m.ShortText,
+				Line:   line,
+				Column: col,
+			})
+		}
 	}
-	wg.Wait()
 	return results
 }
 
