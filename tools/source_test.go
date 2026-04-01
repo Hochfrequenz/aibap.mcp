@@ -175,6 +175,9 @@ func (m *mockClient) ReleaseTransport(context.Context, string) error {
 	return nil
 }
 func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { return "", nil }
+func (m *mockClient) GetTextElements(context.Context, string) (*adt.TextElements, error) {
+	return &adt.TextElements{}, nil
+}
 func (m *mockClient) GetMessageClass(context.Context, string) (*adt.MessageClassInfo, error) {
 	return &adt.MessageClassInfo{}, nil
 }
