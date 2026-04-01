@@ -108,6 +108,9 @@ func (r *ClientRegistry) GetInactiveObjects(ctx context.Context) ([]ObjectInfo, 
 func (r *ClientRegistry) GetABAPDoc(ctx context.Context, keyword string) (string, error) {
 	return r.activeClient().GetABAPDoc(ctx, keyword)
 }
+func (r *ClientRegistry) GetTextElements(ctx context.Context, objectURI string) (*TextElements, error) {
+	return r.activeClient().GetTextElements(ctx, objectURI)
+}
 func (r *ClientRegistry) GetMessageClass(ctx context.Context, messageClassName string) (*MessageClassInfo, error) {
 	return r.activeClient().GetMessageClass(ctx, messageClassName)
 }
