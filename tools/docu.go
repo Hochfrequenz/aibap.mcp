@@ -12,6 +12,7 @@ func registerDocuTools(s toolAdder, client adt.DocuClient) {
 		mcp.WithTitleAnnotation("Get ABAP Documentation"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Look up ABAP keyword documentation from SAP's built-in help. Returns plain text documentation for the given keyword (e.g. SELECT, LOOP, DATA, CLASS)."),
 		mcp.WithString("keyword", mcp.Required(), mcp.Description("ABAP keyword to look up (e.g. SELECT, LOOP, DATA)")),

@@ -18,6 +18,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 	s.AddTool(mcp.NewTool("set_source_from_file",
 		mcp.WithTitleAnnotation("Set Source from File"),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Upload ABAP source code from a local file to SAP. Auto-locks if needed (lock is retained for subsequent operations)."),
 		mcp.WithString(paramObjectURI,

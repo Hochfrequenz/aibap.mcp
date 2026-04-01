@@ -13,6 +13,7 @@ func registerTextElementTools(s toolAdder, client adt.DocuClient) {
 		mcp.WithTitleAnnotation("Get Text Elements"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Read text symbols and selection texts of an ABAP program, class, or function group. "+

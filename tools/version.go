@@ -13,6 +13,7 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 		mcp.WithTitleAnnotation("Get Version History"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Get the full version history of an ABAP object — every activation with author, date, and transport number. "+
@@ -38,6 +39,7 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 		mcp.WithTitleAnnotation("Get Version Source"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Get the source code of a specific historical version. "+
@@ -62,6 +64,7 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 		mcp.WithTitleAnnotation("Diff Active vs Inactive"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Compare the active (last activated) and inactive (saved but not activated) source of an ABAP object. "+

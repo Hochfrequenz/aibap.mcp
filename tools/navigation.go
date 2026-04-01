@@ -13,6 +13,7 @@ func registerNavigationTools(s toolAdder, client adt.NavigationClient) {
 		mcp.WithTitleAnnotation("Navigate to Definition"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Navigate to the definition of an ABAP object referenced at a source position. "+

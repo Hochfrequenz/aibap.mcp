@@ -13,6 +13,7 @@ func registerATCTools(s toolAdder, client adt.QualityClient) {
 		mcp.WithTitleAnnotation("Get ATC Customizing"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Get ATC (ABAP Test Cockpit) configuration including check variant and exemption reasons."),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

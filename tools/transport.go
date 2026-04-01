@@ -13,6 +13,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 		mcp.WithTitleAnnotation("Get Transport Requests"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("List CTS transport requests on the configured SAP system. Status: D=modifiable, L=released."),
 		mcp.WithString("user", mcp.Description("Filter by owner username")),

@@ -13,6 +13,7 @@ func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 		mcp.WithTitleAnnotation("Get BAdI Definition"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Read a BAdI enhancement spot by name. Returns all BAdI definitions within the spot, "+
@@ -37,6 +38,7 @@ func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 		mcp.WithTitleAnnotation("Get BAdI Implementation"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Read a BAdI enhancement implementation by name. Returns the implementing classes, "+

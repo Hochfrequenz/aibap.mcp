@@ -13,6 +13,7 @@ func registerDDICTools(s toolAdder, client adt.DDICClient) {
 		mcp.WithTitleAnnotation("Get Table Fields"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Get the field definitions of a DDIC table or structure. "+
