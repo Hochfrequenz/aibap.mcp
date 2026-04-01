@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (49)
+## Available tools (50)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -74,6 +74,7 @@ graph TD
 | Tool | Description |
 |------|-------------|
 | `syntax_check` | Run a syntax check |
+| `batch_syntax_check` | Run syntax checks on multiple objects in parallel |
 | `verify_source` | Syntax-check ABAP source without an existing object |
 | `run_unit_tests` | Run ABAP Unit Tests |
 | `run_atc_check` | Run ATC (ABAP Test Cockpit) checks |

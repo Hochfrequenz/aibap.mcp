@@ -141,6 +141,9 @@ func (r *ClientRegistry) GetObjectInfo(ctx context.Context, objectURI string) (*
 func (r *ClientRegistry) SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error) {
 	return r.activeClient().SyntaxCheck(ctx, objectURI)
 }
+func (r *ClientRegistry) BatchSyntaxCheck(ctx context.Context, objectURIs []string, workers int) []ObjectSyntaxResult {
+	return r.activeClient().BatchSyntaxCheck(ctx, objectURIs, workers)
+}
 func (r *ClientRegistry) RunUnitTests(ctx context.Context, objectURI string, timeoutSeconds int) (*TestResult, error) {
 	return r.activeClient().RunUnitTests(ctx, objectURI, timeoutSeconds)
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
@@ -52,6 +53,51 @@ func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]Synta
 		}
 	}
 	return result, nil
+}
+
+// ObjectSyntaxResult holds the syntax check result for a single object.
+type ObjectSyntaxResult struct {
+	ObjectURI string          `json:"object_uri"`
+	Messages  []SyntaxMessage `json:"messages"`
+	Error     string          `json:"error,omitempty"`
+}
+
+// BatchSyntaxCheck runs syntax checks on multiple objects concurrently.
+// Workers controls parallelism (clamped to 1–20).
+func (c *httpClient) BatchSyntaxCheck(ctx context.Context, objectURIs []string, workers int) []ObjectSyntaxResult {
+	if workers < 1 {
+		workers = 10
+	}
+	if workers > 20 {
+		workers = 20
+	}
+
+	results := make([]ObjectSyntaxResult, len(objectURIs))
+
+	sem := make(chan struct{}, workers)
+	var wg sync.WaitGroup
+
+	for i, uri := range objectURIs {
+		if ctx.Err() != nil {
+			results[i] = ObjectSyntaxResult{ObjectURI: uri, Error: ctx.Err().Error()}
+			continue
+		}
+		wg.Add(1)
+		go func(idx int, objectURI string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			msgs, err := c.SyntaxCheck(ctx, objectURI)
+			if err != nil {
+				results[idx] = ObjectSyntaxResult{ObjectURI: objectURI, Error: err.Error()}
+				return
+			}
+			results[idx] = ObjectSyntaxResult{ObjectURI: objectURI, Messages: msgs}
+		}(i, uri)
+	}
+	wg.Wait()
+	return results
 }
 
 // parseMessagePosition extracts line and column from a checkMessage URI fragment.
