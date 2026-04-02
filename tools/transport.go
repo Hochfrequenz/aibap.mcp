@@ -52,9 +52,10 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
-			"Create a task (Aufgabe) under an existing transport request. "+
-				"Use this when you need to record changes under a shared transport, e.g. to delete or modify objects "+
-				"locked in another user's transport. The task is created for the currently authenticated SAP user.",
+			"Create a task (Aufgabe) under an existing transport request for the current user. "+
+				"Use this when you need your own task to add new objects to a shared transport. "+
+				"Note: for deleting or modifying objects already locked in a transport, you do NOT need to create a task first — "+
+				"pass the parent transport number directly to delete_object or set_source and SAP records the change automatically.",
 		),
 		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. S4UK902339")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("Short description for the task")),

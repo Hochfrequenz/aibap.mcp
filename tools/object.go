@@ -48,7 +48,13 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient) {
 		mcp.WithTitleAnnotation("Delete ABAP Object"),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Delete an ABAP object from the SAP system. Uses optimistic locking (ETag) internally."),
+		mcp.WithDescription(
+			"Delete an ABAP object from the SAP system. Uses optimistic locking (ETag) internally. "+
+				"For objects in non-local packages, pass the transport number that locks the object. "+
+				"If the object is locked in another user's transport, use that transport's number directly — "+
+				"SAP will automatically record the deletion under your user. "+
+				"Use get_transport_requests to find the locking transport if needed.",
+		),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
 			mcp.Description(descADTObjectURI),
