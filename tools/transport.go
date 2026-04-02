@@ -45,4 +45,31 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 		}
 		return mcp.NewToolResultText("Object added to transport successfully"), nil
 	})
+
+	s.AddTool(mcp.NewTool("create_transport_task",
+		mcp.WithTitleAnnotation("Create Transport Task"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"Create a task (Aufgabe) under an existing transport request. "+
+				"Use this when you need to record changes under a shared transport, e.g. to delete or modify objects "+
+				"locked in another user's transport. The task is created for the currently authenticated SAP user.",
+		),
+		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. S4UK902339")),
+		mcp.WithString("description", mcp.Required(), mcp.Description("Short description for the task")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		parent := req.GetString("parent_transport", "")
+		desc := req.GetString("description", "")
+		taskNumber, err := client.CreateTransportTask(ctx, parent, desc)
+		if err != nil {
+			return errorResult(err), nil
+		}
+		out, _ := json.Marshal(map[string]string{
+			"task_number":      taskNumber,
+			"parent_transport": parent,
+			"description":      desc,
+		})
+		return mcp.NewToolResultText(string(out)), nil
+	})
 }

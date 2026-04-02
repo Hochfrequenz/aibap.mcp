@@ -111,6 +111,46 @@ func (c *httpClient) CreateTransport(ctx context.Context, category, target, desc
 	return "", fmt.Errorf("CreateTransport: transport created but number not returned — check GetTransportRequests to find it")
 }
 
+func (c *httpClient) CreateTransportTask(ctx context.Context, parentTransport, description string) (string, error) {
+	var descBuf strings.Builder
+	xml.EscapeText(&descBuf, []byte(description))
+	owner := strings.ToUpper(c.cfg.User)
+	body := `<?xml version="1.0" encoding="utf-8"?>` +
+		`<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm"` +
+		` tm:useraction="newtask" tm:targetuser="` + owner + `">` +
+		`<tm:task tm:owner="` + owner + `" tm:desc="` + descBuf.String() + `"/>` +
+		`</tm:root>`
+
+	path := "/sap/bc/adt/cts/transportrequests/" + parentTransport + "/tasks"
+	resp, err := c.doMutate(ctx, http.MethodPost, path,
+		strings.NewReader(body),
+		map[string]string{
+			"Content-Type": "application/vnd.sap.adt.transportorganizer.v1+xml",
+			"Accept":       "application/vnd.sap.adt.transportorganizer.v1+xml",
+		},
+	)
+	if err != nil {
+		return "", fmt.Errorf("CreateTransportTask: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return "", err
+	}
+
+	data, _ := io.ReadAll(resp.Body)
+	if len(data) > 0 {
+		// The response has the task number as tm:number attribute on tm:root.
+		var taskRoot struct {
+			Number string `xml:"number,attr"`
+		}
+		if err := xml.Unmarshal(data, &taskRoot); err == nil && taskRoot.Number != "" {
+			return taskRoot.Number, nil
+		}
+	}
+
+	return "", fmt.Errorf("CreateTransportTask: task created but number not returned")
+}
+
 func (c *httpClient) ReleaseTransport(ctx context.Context, transportNumber string) error {
 	path := "/sap/bc/adt/cts/transportrequests/" + transportNumber + "/newreleasejobs"
 	resp, err := c.doMutate(ctx, http.MethodPost, path, nil,
