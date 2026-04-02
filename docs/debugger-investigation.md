@@ -41,47 +41,6 @@ The `get_attached_session()` call in `CL_TPDA_ADT_RES_ACTIONS` (step) and `CL_TP
 ### Reentrance tickets work for SSO but not debug context
 The ADT endpoint `/sap/bc/adt/security/reentranceticket` returns a MYSAPSSO2 ticket that can open a SAP GUI session without password. But the resulting GUI session is still a separate dialog process — it does NOT share the debug context with the HTTP/ADT session.
 
-## How Eclipse ADT executes programs (reverse-engineered from JARs)
-
-Source: Eclipse ADT plugins 3.56.x (`com.sap.adt.sapgui.ui`, `com.sap.adt.debugger.ui`)
-
-### Execution flow for "Run As → ABAP Application"
-1. **Get reentrance ticket** via `ReentranceTicketService` → GET `/sap/bc/adt/security/reentranceticket`
-2. **Open embedded SAP GUI via JCo** — Eclipse uses `com.sap.conn.jco` (Java Connector) to create an RFC connection, not a standalone GUI session
-3. **Start transaction `*SADT_START_TCODE`** (or `*SADT_START_WB_URI`) with parameters:
-   - `D_AIE_TCODE` = target transaction (e.g. `SA38`)
-   - `D_OBJECT_URI` = ADT object URI (e.g. `/sap/bc/adt/programs/programs/Z_REPORT`)
-   - `D_WB_ACTION` = `EXECUTE`
-   - `D_TID` = terminal ID
-   - `D_IDE_ID` = IDE identifier
-   - `D_REQUEST_USER` = debugging user
-   - `D_GUID` = session GUID
-4. `SADT_START_TCODE` calls `cl_adt_gui_integration_context=>initialize_instance()` then `LEAVE TO TRANSACTION <tcode>`
-5. The report executes **within the JCo/RFC session** — this is why breakpoints trigger
-
-### Key classes (from Eclipse plugin JARs)
-- `SapGuiStartupData` — builds transaction parameters, holds reentrance ticket
-- `EmbeddedGuiConnectionFactory` — creates JCo connection for embedded GUI
-- `ClassicalObjectsExecutionHandler` — handles "Run As" for classical objects
-- `TransactionExecutionHandler` — handles transaction execution
-- `ReentranceTicketService` — fetches reentrance tickets
-- `AutoAttachHelper` / `AutoAttachJobStarter` — manages debug listener auto-attach
-
-### SADT_START_TCODE internals (ABAP side)
-- Function group: `SADT_GUI_INTEGRATION` (package `SADT_GUI_INTEGRATION`)
-- Screen 0100 PAI: reads `d_object_uri`, `d_wb_action`, `d_tid`, `d_ide_id` etc.
-- Calls BAdI `IF_ADT_GUI_INTEGRATION` → `process_request(uri, context)`
-- Screen 0200 PAI (SADT_START_TCODE variant): calls `LEAVE TO TRANSACTION <tcode>`
-- SPA/GPA parameter: `SADT_GUI_TID` (terminal ID)
-
-### SADT_REST_RFC_ENDPOINT internals
-- Function module in group `SADT_REST` (package `SADT_REST`)
-- Signature: `IMPORTING REQUEST TYPE SADT_REST_REQUEST, EXPORTING RESPONSE TYPE SADT_REST_RESPONSE`
-- `SADT_REST_REQUEST`: `{ request_line: { method, uri, version }, header_fields: TIHTTPNVP, message_body: RAWSTRING }`
-- `SADT_REST_RESPONSE`: `{ status_line: { version, status_code, reason_phrase }, header_fields: TIHTTPNVP, message_body: RAWSTRING }`
-- Routes the request to the same REST handler classes used by HTTP/ICF
-- Stateful: work process is kept for the RFC session duration
-
 ## Proven debug flow (integration tested)
 
 1. **Set breakpoint** with `syncMode=full`, `scope=external`, `debuggingMode=user`
