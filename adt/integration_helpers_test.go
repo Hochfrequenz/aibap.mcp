@@ -14,7 +14,12 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
-// Test fixture URIs — all objects live in package Z_ADT_MCP_TEST (S4) or $TMP (ECC).
+// testPackage is the SAP package that holds all persistent integration test objects.
+// It must exist on the target system before running integration tests.
+// Source and installation instructions: https://github.com/Hochfrequenz/Z_ADT_MCP_TEST
+const testPackage = "Z_ADT_MCP_TEST"
+
+// Test fixture URIs — all objects live in testPackage (S4) or $TMP (ECC).
 // Created automatically by TestMain via setupFixtures. See also fixtures_integration_test.go.
 const (
 	testReportURI    = "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_REPORT"

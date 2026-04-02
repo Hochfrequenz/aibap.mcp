@@ -16,7 +16,7 @@ func TestExportPackage_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
-	data, err := client.ExportPackage(ctx, "Z_ADT_MCP_TEST")
+	data, err := client.ExportPackage(ctx, testPackage)
 	if err != nil {
 		t.Fatalf("ExportPackage failed: %v", err)
 	}
@@ -50,13 +50,13 @@ func TestExportPackage_WriteZIP(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
-	data, err := client.ExportPackage(ctx, "Z_ADT_MCP_TEST")
+	data, err := client.ExportPackage(ctx, testPackage)
 	if err != nil {
 		t.Fatalf("ExportPackage failed: %v", err)
 	}
 
 	outputDir := t.TempDir()
-	zipPath := filepath.Join(outputDir, "Z_ADT_MCP_TEST.zip")
+	zipPath := filepath.Join(outputDir, testPackage+".zip")
 	if err := os.WriteFile(zipPath, data, 0644); err != nil {
 		t.Fatalf("writing ZIP: %v", err)
 	}
@@ -72,13 +72,13 @@ func TestExportPackage_ExtractFolder(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
-	data, err := client.ExportPackage(ctx, "Z_ADT_MCP_TEST")
+	data, err := client.ExportPackage(ctx, testPackage)
 	if err != nil {
 		t.Fatalf("ExportPackage failed: %v", err)
 	}
 
 	outputDir := t.TempDir()
-	pkgDir := filepath.Join(outputDir, "Z_ADT_MCP_TEST")
+	pkgDir := filepath.Join(outputDir, testPackage)
 
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
