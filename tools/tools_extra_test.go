@@ -562,3 +562,68 @@ func firstText(result *mcp.CallToolResult) string {
 	}
 	return ""
 }
+
+// --- batch_syntax_check ---
+
+func TestBatchSyntaxCheckTool(t *testing.T) {
+	mock := &mockClient{
+		syntaxCheckFn: func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error) {
+			if uri == "/sap/bc/adt/programs/programs/ZFAIL" {
+				return []adt.SyntaxMessage{
+					{Type: "E", Text: "Syntax error", Line: 10, Column: 5},
+				}, nil
+			}
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_syntax_check", map[string]interface{}{
+		"object_uris": []string{
+			"/sap/bc/adt/programs/programs/ZOK",
+			"/sap/bc/adt/programs/programs/ZFAIL",
+		},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Total         int                      `json:"total"`
+		Clean         int                      `json:"clean"`
+		TotalErrors   int                      `json:"total_errors"`
+		TotalWarnings int                      `json:"total_warnings"`
+		Results       []adt.ObjectSyntaxResult `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Total != 2 {
+		t.Errorf("total: got %d, want 2", out.Total)
+	}
+	if out.Clean != 1 {
+		t.Errorf("clean: got %d, want 1", out.Clean)
+	}
+	if out.TotalErrors != 1 {
+		t.Errorf("total_errors: got %d, want 1", out.TotalErrors)
+	}
+	if len(out.Results) != 2 {
+		t.Fatalf("results length: got %d, want 2", len(out.Results))
+	}
+	if len(out.Results[0].Messages) != 0 {
+		t.Errorf("first result should have 0 messages, got %d", len(out.Results[0].Messages))
+	}
+	if len(out.Results[1].Messages) != 1 {
+		t.Errorf("second result should have 1 message, got %d", len(out.Results[1].Messages))
+	}
+}
+
+func TestBatchSyntaxCheckEmptyURIs(t *testing.T) {
+	mock := &mockClient{}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_syntax_check", map[string]interface{}{
+		"object_uris": []string{},
+	})
+	if !result.IsError {
+		t.Error("expected error for empty URIs")
+	}
+}
