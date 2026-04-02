@@ -93,6 +93,18 @@ func (m *mockClient) SyntaxCheck(ctx context.Context, uri string) ([]adt.SyntaxM
 	}
 	return nil, nil
 }
+func (m *mockClient) BatchSyntaxCheck(ctx context.Context, uris []string) []adt.ObjectSyntaxResult {
+	results := make([]adt.ObjectSyntaxResult, len(uris))
+	for i, uri := range uris {
+		msgs, err := m.SyntaxCheck(ctx, uri)
+		if err != nil {
+			results[i] = adt.ObjectSyntaxResult{ObjectURI: uri, Error: err.Error()}
+		} else {
+			results[i] = adt.ObjectSyntaxResult{ObjectURI: uri, Messages: msgs}
+		}
+	}
+	return results
+}
 func (m *mockClient) RunUnitTests(ctx context.Context, uri string, timeout int) (*adt.TestResult, error) {
 	if m.runTestsFn != nil {
 		return m.runTestsFn(ctx, uri, timeout)

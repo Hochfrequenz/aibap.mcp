@@ -43,6 +43,34 @@ func TestSyntaxCheck_Integration(t *testing.T) {
 	}
 }
 
+func TestBatchSyntaxCheck_Integration(t *testing.T) {
+	client := newIntegrationClient(t)
+	ctx := context.Background()
+
+	uris := []string{testSynWarnURI, testReportURI, testClassURI}
+	results := client.BatchSyntaxCheck(ctx, uris)
+
+	if len(results) != len(uris) {
+		t.Fatalf("expected %d results, got %d", len(uris), len(results))
+	}
+
+	// Verify each result is correlated to the correct input URI.
+	for i, r := range results {
+		if r.ObjectURI != uris[i] {
+			t.Errorf("result[%d]: object_uri = %q, want %q", i, r.ObjectURI, uris[i])
+		}
+		if r.Error != "" {
+			t.Errorf("result[%d] (%s): unexpected error: %s", i, r.ObjectURI, r.Error)
+		}
+		t.Logf("result[%d] %s: %d messages", i, r.ObjectURI, len(r.Messages))
+	}
+
+	// The synwarn fixture should have messages (unused variable).
+	if len(results[0].Messages) == 0 {
+		t.Error("expected messages for synwarn fixture, got 0")
+	}
+}
+
 func TestSyntaxCheck_CleanCode_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()

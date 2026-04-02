@@ -49,6 +49,9 @@ func (m *mockClient) GetObjectInfo(context.Context, string) (*adt.ObjectInfo, er
 func (m *mockClient) SyntaxCheck(context.Context, string) ([]adt.SyntaxMessage, error) {
 	panic("not implemented")
 }
+func (m *mockClient) BatchSyntaxCheck(context.Context, []string) []adt.ObjectSyntaxResult {
+	panic("not implemented")
+}
 func (m *mockClient) RunUnitTests(context.Context, string, int) (*adt.TestResult, error) {
 	panic("not implemented")
 }
