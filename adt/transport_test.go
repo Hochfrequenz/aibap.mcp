@@ -160,7 +160,7 @@ func TestCreateTransportTask(t *testing.T) {
 	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
-	taskNumber, err := client.CreateTransportTask(context.Background(), "S4UK902339", "My task")
+	taskNumber, err := client.CreateTransportTask(context.Background(), "S4UK902339", "", "My task")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -19,7 +19,7 @@ func TestCreateAndDeleteTransportTask_Integration(t *testing.T) {
 	t.Logf("Created transport: %s", trNumber)
 
 	// Create a task under the transport
-	taskNumber, err := client.CreateTransportTask(ctx, trNumber, "Integration test task")
+	taskNumber, err := client.CreateTransportTask(ctx, trNumber, "", "Integration test task")
 	if err != nil {
 		t.Fatalf("CreateTransportTask: %v", err)
 	}

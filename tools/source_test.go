@@ -117,7 +117,7 @@ func (m *mockClient) CheckTransport(context.Context, string, string, string) (*a
 func (m *mockClient) CreateTransport(context.Context, string, string, string, string) (string, error) {
 	return "DEVK999999", nil
 }
-func (m *mockClient) CreateTransportTask(context.Context, string, string) (string, error) {
+func (m *mockClient) CreateTransportTask(context.Context, string, string, string) (string, error) {
 	return "DEVK999998", nil
 }
 func (m *mockClient) DeleteTransport(context.Context, string) error {

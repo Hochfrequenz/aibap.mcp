@@ -111,10 +111,13 @@ func (c *httpClient) CreateTransport(ctx context.Context, category, target, desc
 	return "", fmt.Errorf("CreateTransport: transport created but number not returned — check GetTransportRequests to find it")
 }
 
-func (c *httpClient) CreateTransportTask(ctx context.Context, parentTransport, description string) (string, error) {
+func (c *httpClient) CreateTransportTask(ctx context.Context, parentTransport, owner, description string) (string, error) {
 	var descBuf strings.Builder
 	xml.EscapeText(&descBuf, []byte(description))
-	owner := strings.ToUpper(c.cfg.User)
+	if owner == "" {
+		owner = c.cfg.User
+	}
+	owner = strings.ToUpper(owner)
 	body := `<?xml version="1.0" encoding="utf-8"?>` +
 		`<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm"` +
 		` tm:useraction="newtask" tm:targetuser="` + owner + `">` +
