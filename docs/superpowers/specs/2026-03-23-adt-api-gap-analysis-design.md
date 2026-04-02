@@ -15,10 +15,9 @@ verified against:
 2. Actual endpoint responses from the real SAP at `srvhfuhana.sap.msp.local:44300`
 3. Official SAP documentation (help.sap.com, SAP notes) where available
 
-We do not use third-party libraries or reverse-engineered code as a source of truth. All endpoint
-paths, HTTP methods, request/response formats, and behaviors must be confirmed by querying the
-real SAP system or citing an official SAP documentation URL. Unverified endpoints are clearly
-marked as **hypothesized** — not stated as fact.
+All endpoint paths, HTTP methods, request/response formats, and behaviors must be confirmed by
+querying the real SAP system or citing an official SAP documentation URL. Unverified endpoints
+are clearly marked as **hypothesized** — not stated as fact.
 
 Each issue is marked **verified** or **needs verification** before submission.
 
