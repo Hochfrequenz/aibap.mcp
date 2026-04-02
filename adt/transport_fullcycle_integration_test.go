@@ -16,7 +16,7 @@ func TestCreateTransport_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
-	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP integration test", "Z_ADT_MCP_TEST")
+	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP integration test", testPackage)
 	if err != nil {
 		t.Fatalf("CreateTransport failed: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestReleaseTransport_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
-	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP release test", "Z_ADT_MCP_TEST")
+	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP release test", testPackage)
 	if err != nil {
 		t.Fatalf("CreateTransport failed: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestAddToTransport_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
-	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP AddToTransport test", "Z_ADT_MCP_TEST")
+	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP AddToTransport test", testPackage)
 	if err != nil {
 		t.Fatalf("CreateTransport: %v", err)
 	}
@@ -59,14 +59,14 @@ func TestAddToTransport_Integration(t *testing.T) {
 
 	const objName = "Z_ADT_MCP_TR_ADD_TST"
 	objectURI := "/sap/bc/adt/programs/programs/" + objName
-	err = client.CreateObject(ctx, "PROG", objName, "Z_ADT_MCP_TEST", "Transport add test", trNumber)
+	err = client.CreateObject(ctx, "PROG", objName, testPackage, "Transport add test", trNumber)
 	if err != nil {
 		if _, infoErr := client.GetObjectInfo(ctx, objectURI); infoErr != nil {
 			t.Fatalf("CreateObject failed and object does not exist: %v", err)
 		}
 		t.Logf("object %s already exists, reusing", objName)
 	} else {
-		t.Logf("created %s in Z_ADT_MCP_TEST", objName)
+		t.Logf("created %s in %s", objName, testPackage)
 	}
 
 	check, err := client.CheckTransport(ctx, "R3TR", "PROG", objName)
@@ -98,7 +98,7 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Create transport
-	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP full cycle test", "Z_ADT_MCP_TEST")
+	trNumber, err := client.CreateTransport(ctx, "K", "DUM", "MCP full cycle test", testPackage)
 	if err != nil {
 		t.Fatalf("CreateTransport: %v", err)
 	}
@@ -107,12 +107,12 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	// 2. Create a program in a real package, assigned to this transport
 	const objName = "Z_ADT_MCP_FULLCYCLE"
 	objectURI := "/sap/bc/adt/programs/programs/" + objName
-	err = client.CreateObject(ctx, "PROG", objName, "Z_ADT_MCP_TEST", "Full cycle test", trNumber)
+	err = client.CreateObject(ctx, "PROG", objName, testPackage, "Full cycle test", trNumber)
 	if err != nil {
 		_ = client.ReleaseTransport(ctx, trNumber)
 		t.Fatalf("CreateObject: %v", err)
 	}
-	t.Logf("[2] created %s in Z_ADT_MCP_TEST (transport %s)", objName, trNumber)
+	t.Logf("[2] created %s in %s (transport %s)", objName, testPackage, trNumber)
 
 	// 3. CheckTransport — verify the object is known to CTS
 	check, err := client.CheckTransport(ctx, "R3TR", "PROG", objName)
@@ -120,8 +120,8 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 		t.Fatalf("CheckTransport: %v", err)
 	}
 	t.Logf("[3] CheckTransport: result=%s recording=%v devclass=%s", check.Result, check.Recording, check.DevClass)
-	if check.DevClass != "Z_ADT_MCP_TEST" {
-		t.Errorf("expected DevClass Z_ADT_MCP_TEST, got %q", check.DevClass)
+	if check.DevClass != testPackage {
+		t.Errorf("expected DevClass %s, got %q", testPackage, check.DevClass)
 	}
 
 	// 4. Activate the object — this creates a version entry
