@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"strconv"
@@ -13,45 +14,11 @@ import (
 )
 
 func (c *httpClient) SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error) {
-	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>`+
-		`<chkrun:checkObjectList xmlns:chkrun="http://www.sap.com/adt/checkrun" `+
-		`xmlns:adtcore="http://www.sap.com/adt/core">`+
-		`<chkrun:checkObject adtcore:uri="%s" chkrun:version="inactive"/>`+
-		`</chkrun:checkObjectList>`, objectURI)
-
-	resp, err := c.doMutate(ctx, http.MethodPost,
-		"/sap/bc/adt/checkruns",
-		strings.NewReader(body),
-		map[string]string{
-			"Content-Type": "application/vnd.sap.adt.checkobjects+xml",
-			"Accept":       "application/vnd.sap.adt.checkmessages+xml",
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("SyntaxCheck: %w", err)
+	results := c.batchSyntaxCheckChunk(ctx, []string{objectURI})
+	if results[0].Error != "" {
+		return nil, fmt.Errorf("SyntaxCheck: %s", results[0].Error)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if err := checkResponse(resp); err != nil {
-		return nil, err
-	}
-
-	data, _ := io.ReadAll(resp.Body)
-	var reports adtxml.CheckRunReports
-	xml.Unmarshal(data, &reports) //nolint:errcheck
-
-	var result []SyntaxMessage
-	for _, report := range reports.Reports {
-		for _, m := range report.Messages {
-			line, col := parseMessagePosition(m.URI)
-			result = append(result, SyntaxMessage{
-				Type:   m.Type,
-				Text:   m.ShortText,
-				Line:   line,
-				Column: col,
-			})
-		}
-	}
-	return result, nil
+	return results[0].Messages, nil
 }
 
 // ObjectSyntaxResult holds the syntax check result for a single object.
@@ -91,7 +58,7 @@ func (c *httpClient) batchSyntaxCheckChunk(ctx context.Context, objectURIs []str
 	sb.WriteString(`<chkrun:checkObjectList xmlns:chkrun="http://www.sap.com/adt/checkrun" `)
 	sb.WriteString(`xmlns:adtcore="http://www.sap.com/adt/core">`)
 	for _, uri := range objectURIs {
-		sb.WriteString(fmt.Sprintf(`<chkrun:checkObject adtcore:uri="%s" chkrun:version="inactive"/>`, uri))
+		sb.WriteString(`<chkrun:checkObject adtcore:uri="` + html.EscapeString(uri) + `" chkrun:version="inactive"/>`)
 	}
 	sb.WriteString(`</chkrun:checkObjectList>`)
 

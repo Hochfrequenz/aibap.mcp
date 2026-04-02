@@ -30,9 +30,9 @@ func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 				"Returns per-object results with messages and errors. "+
 				"Use this instead of calling syntax_check in a loop to reduce round-trips.",
 		),
-		mcp.WithArray("object_uris", mcp.Required(), mcp.Description("List of ADT object URIs to check")),
+		mcp.WithArray(paramObjectURI+"s", mcp.Required(), mcp.Description("List of ADT object URIs to check")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uris := req.GetStringSlice("object_uris", nil)
+		uris := req.GetStringSlice(paramObjectURI+"s", nil)
 		if len(uris) == 0 {
 			return errorResult(&adt.ADTError{StatusCode: 400, Message: "object_uris must be a non-empty array of strings"}), nil
 		}
