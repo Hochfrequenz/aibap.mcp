@@ -15,14 +15,45 @@ type VersionInfo struct {
 	Date          string `json:"date"`      // ISO 8601 UTC
 	Transport     string `json:"transport"` // transport number (empty for local)
 	TransportDesc string `json:"transport_description"`
-	ContentURI    string `json:"content_uri"` // URI to fetch the source of this version
+	ContentURI    string `json:"content_uri"`       // URI to fetch the source of this version
+	Include       string `json:"include,omitempty"` // class include: "definitions" or "implementations" (empty for non-class objects)
+}
+
+// classIncludes lists the includes whose version history is fetched for classes.
+var classIncludes = []string{"definitions", "implementations"}
+
+// isClassURI returns true if the URI points to an OO class object.
+func isClassURI(objectURI string) bool {
+	return strings.Contains(objectURI, "/oo/classes/")
 }
 
 // GetVersionHistory returns the version history of an ABAP source object.
-// Uses the ADT /source/main/versions endpoint which returns an Atom feed.
+// For classes (CLAS/OC), it fetches version history for each include
+// (definitions and implementations) separately, since classes do not support
+// /source/main/versions. For all other object types, it uses
+// /source/main/versions.
 func (c *httpClient) GetVersionHistory(ctx context.Context, objectURI string) ([]VersionInfo, error) {
-	path := objectURI + "/source/main/versions"
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/atom+xml"})
+	if isClassURI(objectURI) {
+		return c.getClassVersionHistory(ctx, objectURI)
+	}
+	return c.getVersionFeed(ctx, objectURI+"/source/main/versions", "")
+}
+
+func (c *httpClient) getClassVersionHistory(ctx context.Context, objectURI string) ([]VersionInfo, error) {
+	var all []VersionInfo
+	for _, include := range classIncludes {
+		path := objectURI + "/includes/" + include + "/versions"
+		versions, err := c.getVersionFeed(ctx, path, include)
+		if err != nil {
+			return nil, fmt.Errorf("GetVersionHistory %s: %w", include, err)
+		}
+		all = append(all, versions...)
+	}
+	return all, nil
+}
+
+func (c *httpClient) getVersionFeed(ctx context.Context, path, include string) ([]VersionInfo, error) {
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/atom+xml;type=feed"})
 	if err != nil {
 		return nil, fmt.Errorf("GetVersionHistory: %w", err)
 	}
@@ -36,7 +67,16 @@ func (c *httpClient) GetVersionHistory(ctx context.Context, objectURI string) ([
 		return nil, fmt.Errorf("GetVersionHistory reading body: %w", err)
 	}
 
-	return parseVersionFeed(data)
+	versions, err := parseVersionFeed(data)
+	if err != nil {
+		return nil, err
+	}
+	if include != "" {
+		for i := range versions {
+			versions[i].Include = include
+		}
+	}
+	return versions, nil
 }
 
 func parseVersionFeed(data []byte) ([]VersionInfo, error) {
