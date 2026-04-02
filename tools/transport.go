@@ -59,10 +59,12 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 		),
 		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. S4UK902339")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("Short description for the task")),
+		mcp.WithString("owner", mcp.Description("SAP username for the task owner. Defaults to the authenticated user if omitted. Use this to create tasks for other team members.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		parent := req.GetString("parent_transport", "")
 		desc := req.GetString("description", "")
-		taskNumber, err := client.CreateTransportTask(ctx, parent, desc)
+		owner := req.GetString("owner", "")
+		taskNumber, err := client.CreateTransportTask(ctx, parent, owner, desc)
 		if err != nil {
 			return errorResult(err), nil
 		}
