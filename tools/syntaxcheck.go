@@ -10,6 +10,11 @@ import (
 
 func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 	s.AddTool(mcp.NewTool("syntax_check",
+		mcp.WithTitleAnnotation("Syntax Check"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Run ABAP syntax check on a saved object. Checks the inactive (saved but not yet activated) version. Returns messages with type (E/W/I), line, column. To check code without saving to an object, use verify_source instead."),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

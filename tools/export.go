@@ -16,6 +16,11 @@ func registerExportTools(s toolAdder, client interface {
 	adt.SearchClient
 }) {
 	s.AddTool(mcp.NewTool("export_package",
+		mcp.WithTitleAnnotation("Export Package"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithDescription(
 			"Export an ABAP package as an abapGit-compatible ZIP or folder on disk (read-only, no changes on SAP side). "+
 				"Nothing is sent through the LLM context — output goes directly to disk. "+
@@ -60,6 +65,11 @@ func registerExportTools(s toolAdder, client interface {
 	})
 
 	s.AddTool(mcp.NewTool("export_packages",
+		mcp.WithTitleAnnotation("Export Packages"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithDescription(
 			"Export multiple ABAP packages matching a search pattern to disk (read-only). "+
 				"Searches SAP for packages matching the pattern, then exports each to the output directory. "+

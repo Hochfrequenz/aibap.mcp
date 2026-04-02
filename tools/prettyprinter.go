@@ -9,6 +9,11 @@ import (
 
 func registerPrettyPrinterTools(s toolAdder, client adt.SourceClient) {
 	s.AddTool(mcp.NewTool("pretty_print",
+		mcp.WithTitleAnnotation("Pretty Print Source"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Format ABAP source code using the SAP Pretty Printer."),
 		mcp.WithString("source",
 			mcp.Required(),

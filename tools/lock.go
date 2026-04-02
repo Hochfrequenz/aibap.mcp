@@ -10,6 +10,10 @@ import (
 
 func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("lock_object",
+		mcp.WithTitleAnnotation("Lock Object"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Lock an ABAP object for editing. Returns a lock handle stored in the server lock map. Usually not needed — patch_source and set_source_from_file auto-lock."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
@@ -26,6 +30,10 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 	})
 
 	s.AddTool(mcp.NewTool("unlock_object",
+		mcp.WithTitleAnnotation("Unlock Object"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Unlock a previously locked ABAP object."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
