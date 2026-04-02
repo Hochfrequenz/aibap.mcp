@@ -28,7 +28,24 @@ var testFixtures = []fixtureObject{
 		name:        "Z_ADT_MCP_TEST_REPORT",
 		description: "MCP Server Integration Test Report",
 		objectURI:   "/sap/bc/adt/programs/programs/Z_ADT_MCP_TEST_REPORT",
-		source:      "REPORT z_adt_mcp_test_report.\nWRITE: / 'Hello from MCP integration test'.\n",
+		source: `REPORT z_adt_mcp_test_report.
+DATA: lv_test TYPE string.
+lv_test = 'Hello debugger'.
+WRITE: / lv_test.
+
+CLASS lcl_test DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+  PRIVATE SECTION.
+    METHODS test_hello FOR TESTING.
+ENDCLASS.
+
+CLASS lcl_test IMPLEMENTATION.
+  METHOD test_hello.
+    DATA: lv_val TYPE string.
+    lv_val = 'test'.
+    cl_abap_unit_assert=>assert_equals( act = lv_val exp = 'test' ).
+  ENDMETHOD.
+ENDCLASS.
+`,
 	},
 	{
 		objType:     "PROG",
@@ -89,37 +106,53 @@ ENDCLASS.
 	},
 }
 
-// TestMain runs setup before all integration tests.
-// Test fixtures are persistent — they are created if missing but never deleted,
-// because deleting objects in transportable packages leaves them locked in the
-// transport system and prevents recreation on the next run.
+// TestMain runs setup before all integration tests and teardown after.
+// Fixtures created during setup are deleted after all tests complete.
 func TestMain(m *testing.M) {
-	if os.Getenv("SAP_INTEGRATION_HOST") == "" {
+	cfg := integrationConfig()
+	if cfg.Host == "" {
 		// Not an integration run — just execute tests normally (they'll skip).
 		os.Exit(m.Run())
 	}
 
-	client := newIntegrationClientFromEnv()
+	client := adt.NewClient(cfg)
 	ctx := context.Background()
 
 	fmt.Println("=== Integration test setup: ensuring fixtures exist ===")
-	if err := setupFixtures(ctx, client); err != nil {
+	created, err := setupFixtures(ctx, client)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "SETUP FAILED: %v\n", err)
 		os.Exit(1)
 	}
 
-	os.Exit(m.Run())
+	code := m.Run()
+
+	// Teardown: delete objects we created (reverse order to handle dependencies).
+	if len(created) > 0 {
+		fmt.Println("=== Integration test teardown: deleting created fixtures ===")
+		for i := len(created) - 1; i >= 0; i-- {
+			f := created[i]
+			if err := client.DeleteObject(ctx, f.objectURI, "", ""); err != nil {
+				fmt.Printf("  [delete failed] %s %s: %v\n", f.objType, f.name, err)
+			} else {
+				fmt.Printf("  [deleted] %s %s\n", f.objType, f.name)
+			}
+		}
+	}
+
+	os.Exit(code)
 }
 
-// newIntegrationClientFromEnv creates a client without *testing.T (for TestMain).
-func newIntegrationClientFromEnv() adt.Client {
-	cfg := integrationConfig()
-	return adt.NewClient(cfg)
-}
+// fixturePackages lists packages to try when creating fixtures, in order of preference.
+// Z_ADT_MCP_TEST is the dedicated test package on S4; $TMP is the fallback for ECC
+// or when Z_ADT_MCP_TEST doesn't exist.
+var fixturePackages = []string{"Z_ADT_MCP_TEST", "$TMP"}
 
 // setupFixtures creates any missing test objects, sets their source, and activates them.
-func setupFixtures(ctx context.Context, client adt.Client) error {
-	var created []string
+// Returns the fixtures that were created (for teardown).
+func setupFixtures(ctx context.Context, client adt.Client) ([]fixtureObject, error) {
+	var created []fixtureObject
+	var createdURIs []string
 	for _, f := range testFixtures {
 		// Check if object already exists.
 		_, err := client.GetObjectInfo(ctx, f.objectURI)
@@ -128,44 +161,52 @@ func setupFixtures(ctx context.Context, client adt.Client) error {
 			continue
 		}
 
-		// Create. If it fails (e.g. object locked in a transport from a previous
-		// run), warn and continue — tests that need this object will skip/fail
-		// individually rather than blocking the entire suite.
-		if err := client.CreateObject(ctx, f.objType, f.name, "$TMP", f.description, ""); err != nil {
+		// Try each package in order — Z_ADT_MCP_TEST first (S4), $TMP as fallback.
+		var createErr error
+		var usedPkg string
+		for _, pkg := range fixturePackages {
+			createErr = client.CreateObject(ctx, f.objType, f.name, pkg, f.description, "")
+			if createErr == nil {
+				usedPkg = pkg
+				break
+			}
+		}
+		if createErr != nil {
 			if _, infoErr := client.GetObjectInfo(ctx, f.objectURI); infoErr == nil {
-				fmt.Printf("  [exists, create skipped] %s %s: %v\n", f.objType, f.name, err)
+				fmt.Printf("  [exists, create skipped] %s %s: %v\n", f.objType, f.name, createErr)
 				continue
 			}
-			fmt.Printf("  [unavailable] %s %s: %v\n", f.objType, f.name, err)
+			fmt.Printf("  [unavailable] %s %s: %v\n", f.objType, f.name, createErr)
 			continue
 		}
-		fmt.Printf("  [created] %s %s\n", f.objType, f.name)
+		fmt.Printf("  [created] %s %s in package %s\n", f.objType, f.name, usedPkg)
 
 		// Set source: lock → get etag → set source → unlock.
 		if err := setFixtureSource(ctx, client, f); err != nil {
-			return fmt.Errorf("set source %s: %w", f.name, err)
+			return created, fmt.Errorf("set source %s: %w", f.name, err)
 		}
 		fmt.Printf("  [source set] %s\n", f.name)
 
-		created = append(created, f.objectURI)
+		created = append(created, f)
+		createdURIs = append(createdURIs, f.objectURI)
 	}
 
 	// Activate newly created objects.
-	if len(created) > 0 {
-		result, err := client.ActivateObjects(ctx, created)
+	if len(createdURIs) > 0 {
+		result, err := client.ActivateObjects(ctx, createdURIs)
 		if err != nil {
-			return fmt.Errorf("activate: %w", err)
+			return created, fmt.Errorf("activate: %w", err)
 		}
 		if !result.Success {
 			for _, msg := range result.Messages {
 				fmt.Printf("  [activation %s] %s: %s\n", msg.Type, msg.Text, msg.ObjectURI)
 			}
-			return fmt.Errorf("activation failed with %d messages", len(result.Messages))
+			return created, fmt.Errorf("activation failed with %d messages", len(result.Messages))
 		}
-		fmt.Printf("  [activated] %d objects\n", len(created))
+		fmt.Printf("  [activated] %d objects\n", len(createdURIs))
 	}
 
-	return nil
+	return created, nil
 }
 
 // setFixtureSource locks an object, writes its source, and unlocks it.
