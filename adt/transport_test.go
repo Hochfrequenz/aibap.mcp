@@ -176,6 +176,36 @@ func TestCreateTransportTask(t *testing.T) {
 	}
 }
 
+func TestDeleteTransport(t *testing.T) {
+	var gotPath, gotMethod string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		gotPath = r.URL.Path
+		gotMethod = r.Method
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	err := client.DeleteTransport(context.Background(), "DEVK900123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Errorf("method: got %q, want DELETE", gotMethod)
+	}
+	expected := "/sap/bc/adt/cts/transportrequests/DEVK900123"
+	if gotPath != expected {
+		t.Errorf("path: got %q, want %q", gotPath, expected)
+	}
+}
+
 func TestReleaseTransport(t *testing.T) {
 	var gotPath, gotMethod string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

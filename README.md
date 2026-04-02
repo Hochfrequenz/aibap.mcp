@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (51)
+## Available tools (52)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -88,13 +88,14 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Transport management</strong> (3 tools)</summary>
+<summary><strong>Transport management</strong> (4 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `get_transport_requests` | List open or released transport requests |
 | `add_to_transport` | Assign an object to a transport request |
 | `create_transport_task` | Create a task under an existing transport request |
+| `delete_transport` | Delete a transport request or task |
 
 </details>
 
