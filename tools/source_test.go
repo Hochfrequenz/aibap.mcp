@@ -120,6 +120,9 @@ func (m *mockClient) CreateTransport(context.Context, string, string, string, st
 func (m *mockClient) CreateTransportTask(context.Context, string, string) (string, error) {
 	return "DEVK999998", nil
 }
+func (m *mockClient) DeleteTransport(context.Context, string) error {
+	return nil
+}
 func (m *mockClient) GetTransportRequests(ctx context.Context, user, status string) ([]adt.TransportRequest, error) {
 	if m.getTransportFn != nil {
 		return m.getTransportFn(ctx, user, status)

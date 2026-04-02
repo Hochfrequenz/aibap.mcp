@@ -151,6 +151,16 @@ func (c *httpClient) CreateTransportTask(ctx context.Context, parentTransport, d
 	return "", fmt.Errorf("CreateTransportTask: task created but number not returned")
 }
 
+func (c *httpClient) DeleteTransport(ctx context.Context, transportNumber string) error {
+	path := "/sap/bc/adt/cts/transportrequests/" + transportNumber
+	resp, err := c.doMutate(ctx, http.MethodDelete, path, nil, nil)
+	if err != nil {
+		return fmt.Errorf("DeleteTransport: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return checkResponse(resp)
+}
+
 func (c *httpClient) ReleaseTransport(ctx context.Context, transportNumber string) error {
 	path := "/sap/bc/adt/cts/transportrequests/" + transportNumber + "/newreleasejobs"
 	resp, err := c.doMutate(ctx, http.MethodPost, path, nil,

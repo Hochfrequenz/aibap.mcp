@@ -153,6 +153,9 @@ func (r *ClientRegistry) CreateTransport(ctx context.Context, category, target, 
 func (r *ClientRegistry) CreateTransportTask(ctx context.Context, parentTransport, description string) (string, error) {
 	return r.activeClient().CreateTransportTask(ctx, parentTransport, description)
 }
+func (r *ClientRegistry) DeleteTransport(ctx context.Context, transportNumber string) error {
+	return r.activeClient().DeleteTransport(ctx, transportNumber)
+}
 func (r *ClientRegistry) ReleaseTransport(ctx context.Context, transportNumber string) error {
 	return r.activeClient().ReleaseTransport(ctx, transportNumber)
 }
