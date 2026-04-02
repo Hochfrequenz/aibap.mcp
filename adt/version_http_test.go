@@ -10,17 +10,6 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
-const versionFeedXML = `<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
-  <entry>
-    <id>00001</id>
-    <updated>2025-01-15T10:30:00Z</updated>
-    <title>Version 1</title>
-    <author><name>DEVELOPER</name></author>
-    <content src="%s"/>
-  </entry>
-</feed>`
-
 func TestGetVersionHistory_AcceptHeader(t *testing.T) {
 	var gotAccept string
 
