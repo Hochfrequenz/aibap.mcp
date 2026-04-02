@@ -8,6 +8,10 @@ import (
 
 func registerSystemTools(s toolAdder, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("select_system",
+		mcp.WithTitleAnnotation("Select SAP System"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithDescription("Switch the active SAP system for all subsequent tool calls. System names are defined in systems.json (see https://github.com/Hochfrequenz/sap-mcp-config). Returns the active system name and host URL."),
 		mcp.WithString("system",
 			mcp.Required(),

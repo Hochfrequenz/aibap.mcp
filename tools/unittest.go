@@ -10,6 +10,11 @@ import (
 
 func registerUnitTestTools(s toolAdder, client adt.QualityClient) {
 	s.AddTool(mcp.NewTool("run_unit_tests",
+		mcp.WithTitleAnnotation("Run Unit Tests"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Run ABAP Unit Tests for an object. Returns test results with pass/fail counts."),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 		mcp.WithNumber("timeout_seconds", mcp.Description("Test execution timeout in seconds (default: 30)")),

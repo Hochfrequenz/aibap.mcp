@@ -10,6 +10,11 @@ import (
 
 func registerVersionTools(s toolAdder, client adt.VersionClient) {
 	s.AddTool(mcp.NewTool("get_version_history",
+		mcp.WithTitleAnnotation("Get Version History"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Get the full version history of an ABAP object — every activation with author, date, and transport number. "+
 				"This is the SAP equivalent of 'git log'. Use this to understand how code evolved, "+
@@ -31,6 +36,11 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 	})
 
 	s.AddTool(mcp.NewTool("get_version_source",
+		mcp.WithTitleAnnotation("Get Version Source"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Get the source code of a specific historical version. "+
 				"Pass the content_uri from get_version_history to retrieve the code as it was at that point in time. "+
@@ -51,6 +61,11 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 	})
 
 	s.AddTool(mcp.NewTool("diff_active_inactive",
+		mcp.WithTitleAnnotation("Diff Active vs Inactive"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Compare the active (last activated) and inactive (saved but not activated) source of an ABAP object. "+
 				"Shows pending changes that haven't been activated yet — like 'git diff' for staged changes.",

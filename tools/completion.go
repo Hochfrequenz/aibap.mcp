@@ -10,6 +10,11 @@ import (
 
 func registerCompletionTools(s toolAdder, client adt.SourceClient) {
 	s.AddTool(mcp.NewTool("get_completions",
+		mcp.WithTitleAnnotation("Get Code Completions"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Get ABAP code completion proposals at a cursor position. Requires the full source code and cursor line/column. Returns completion text and description. May return empty results if the SAP system has code completion disabled."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),

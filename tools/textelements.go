@@ -10,6 +10,11 @@ import (
 
 func registerTextElementTools(s toolAdder, client adt.DocuClient) {
 	s.AddTool(mcp.NewTool("get_text_elements",
+		mcp.WithTitleAnnotation("Get Text Elements"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Read text symbols and selection texts of an ABAP program, class, or function group. "+
 				"Text symbols are referenced as TEXT-001, TEXT-002 etc. in ABAP source. "+
