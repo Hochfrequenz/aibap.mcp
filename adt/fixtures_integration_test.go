@@ -151,6 +151,12 @@ var fixturePackages = []string{"Z_ADT_MCP_TEST", "$TMP"}
 // setupFixtures creates any missing test objects, sets their source, and activates them.
 // Returns the fixtures that were created (for teardown).
 func setupFixtures(ctx context.Context, client adt.Client) ([]fixtureObject, string, error) {
+	// Verify that the companion test package exists on the SAP system.
+	// We only warn (not fail) so that tests which don't need the package can still run.
+	if _, err := client.BrowsePackage(ctx, testPackage); err != nil {
+		fmt.Printf("WARNING: package %s not found — some integration tests will fail. See https://github.com/Hochfrequenz/Z_ADT_MCP_TEST\n", testPackage)
+	}
+
 	// For non-local packages, create a transport to hold the new objects.
 	// The transport is released at the end so objects don't stay locked.
 	var fixtureTransport string
