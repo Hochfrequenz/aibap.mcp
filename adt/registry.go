@@ -150,6 +150,9 @@ func (r *ClientRegistry) RunUnitTests(ctx context.Context, objectURI string, tim
 func (r *ClientRegistry) CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error) {
 	return r.activeClient().CreateTransport(ctx, category, target, description, devClass)
 }
+func (r *ClientRegistry) CreateTransportTask(ctx context.Context, parentTransport, description string) (string, error) {
+	return r.activeClient().CreateTransportTask(ctx, parentTransport, description)
+}
 func (r *ClientRegistry) ReleaseTransport(ctx context.Context, transportNumber string) error {
 	return r.activeClient().ReleaseTransport(ctx, transportNumber)
 }
