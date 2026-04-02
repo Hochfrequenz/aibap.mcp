@@ -23,6 +23,11 @@ func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 	})
 
 	s.AddTool(mcp.NewTool("batch_syntax_check",
+		mcp.WithTitleAnnotation("Batch Syntax Check"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Run syntax checks on multiple ABAP objects in a single tool call. "+
 				"Uses the native batch capability of SAP's checkruns endpoint. "+
