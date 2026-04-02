@@ -113,7 +113,7 @@ func (c *httpClient) CreateTransport(ctx context.Context, category, target, desc
 
 func (c *httpClient) CreateTransportTask(ctx context.Context, parentTransport, owner, description string) (string, error) {
 	var descBuf strings.Builder
-	xml.EscapeText(&descBuf, []byte(description))
+	_ = xml.EscapeText(&descBuf, []byte(description))
 	if owner == "" {
 		owner = c.cfg.User
 	}
