@@ -176,62 +176,54 @@ func TestCreateTransportTask(t *testing.T) {
 	}
 }
 
-func TestDeleteTransport(t *testing.T) {
-	var gotPath, gotMethod string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == csrfEndpoint {
-			w.Header().Set("X-CSRF-Token", "token")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		gotPath = r.URL.Path
-		gotMethod = r.Method
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
-
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
-	client := adt.NewClient(cfg)
-
-	err := client.DeleteTransport(context.Background(), "DEVK900123")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestDeleteAndReleaseTransport(t *testing.T) {
+	tests := []struct {
+		name       string
+		call       func(adt.Client) error
+		wantMethod string
+		wantPath   string
+	}{
+		{
+			name:       "delete",
+			call:       func(c adt.Client) error { return c.DeleteTransport(context.Background(), "DEVK900123") },
+			wantMethod: http.MethodDelete,
+			wantPath:   "/sap/bc/adt/cts/transportrequests/DEVK900123",
+		},
+		{
+			name:       "release",
+			call:       func(c adt.Client) error { return c.ReleaseTransport(context.Background(), "DEVK900123") },
+			wantMethod: http.MethodPost,
+			wantPath:   "/sap/bc/adt/cts/transportrequests/DEVK900123/newreleasejobs",
+		},
 	}
-	if gotMethod != http.MethodDelete {
-		t.Errorf("method: got %q, want DELETE", gotMethod)
-	}
-	expected := "/sap/bc/adt/cts/transportrequests/DEVK900123"
-	if gotPath != expected {
-		t.Errorf("path: got %q, want %q", gotPath, expected)
-	}
-}
 
-func TestReleaseTransport(t *testing.T) {
-	var gotPath, gotMethod string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == csrfEndpoint {
-			w.Header().Set("X-CSRF-Token", "token")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		gotPath = r.URL.Path
-		gotMethod = r.Method
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer srv.Close()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotPath, gotMethod string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == csrfEndpoint {
+					w.Header().Set("X-CSRF-Token", "token")
+					w.WriteHeader(http.StatusOK)
+					return
+				}
+				gotPath = r.URL.Path
+				gotMethod = r.Method
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
-	client := adt.NewClient(cfg)
+			cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+			client := adt.NewClient(cfg)
 
-	err := client.ReleaseTransport(context.Background(), "DEVK900123")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if gotMethod != http.MethodPost {
-		t.Errorf("method: got %q, want POST", gotMethod)
-	}
-	expected := "/sap/bc/adt/cts/transportrequests/DEVK900123/newreleasejobs"
-	if gotPath != expected {
-		t.Errorf("path: got %q, want %q", gotPath, expected)
+			if err := tt.call(client); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotMethod != tt.wantMethod {
+				t.Errorf("method: got %q, want %q", gotMethod, tt.wantMethod)
+			}
+			if gotPath != tt.wantPath {
+				t.Errorf("path: got %q, want %q", gotPath, tt.wantPath)
+			}
+		})
 	}
 }
