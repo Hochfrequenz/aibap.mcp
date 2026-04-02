@@ -108,3 +108,81 @@ func TestSyntaxCheckClean(t *testing.T) {
 		t.Errorf("expected 0 messages for clean check, got %d", len(msgs))
 	}
 }
+
+func TestBatchSyntaxCheckChunking(t *testing.T) {
+	// Track how many requests hit the server.
+	requestCount := 0
+	var requestBodies []string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		requestCount++
+		body, _ := io.ReadAll(r.Body)
+		requestBodies = append(requestBodies, string(body))
+
+		w.Header().Set("Content-Type", "application/vnd.sap.adt.checkmessages+xml")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun">
+</chkrun:checkRunReports>`))
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	// 12 URIs should produce 2 requests (chunk size is 10).
+	uris := make([]string, 12)
+	for i := range uris {
+		uris[i] = "/sap/bc/adt/programs/programs/ZPROG" + strings.Repeat("X", i)
+	}
+
+	results := client.BatchSyntaxCheck(context.Background(), uris)
+
+	if len(results) != 12 {
+		t.Fatalf("expected 12 results, got %d", len(results))
+	}
+	if requestCount != 2 {
+		t.Errorf("expected 2 HTTP requests (chunk of 10 + chunk of 2), got %d", requestCount)
+	}
+	// Verify each result is correlated to the correct URI.
+	for i, r := range results {
+		if r.ObjectURI != uris[i] {
+			t.Errorf("result[%d]: got URI %q, want %q", i, r.ObjectURI, uris[i])
+		}
+	}
+}
+
+func TestBatchSyntaxCheckHTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	uris := []string{"/sap/bc/adt/programs/programs/ZA", "/sap/bc/adt/programs/programs/ZB"}
+	results := client.BatchSyntaxCheck(context.Background(), uris)
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	for i, r := range results {
+		if r.Error == "" {
+			t.Errorf("result[%d]: expected error to be populated", i)
+		}
+		if r.ObjectURI != uris[i] {
+			t.Errorf("result[%d]: got URI %q, want %q", i, r.ObjectURI, uris[i])
+		}
+	}
+}
