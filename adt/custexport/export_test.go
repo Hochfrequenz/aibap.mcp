@@ -100,6 +100,12 @@ func (m *mockClient) CheckTransport(context.Context, string, string, string) (*a
 func (m *mockClient) CreateTransport(context.Context, string, string, string, string) (string, error) {
 	panic("not implemented")
 }
+func (m *mockClient) CreateTransportTask(context.Context, string, string, string) (string, error) {
+	panic("not implemented")
+}
+func (m *mockClient) DeleteTransport(context.Context, string) error {
+	panic("not implemented")
+}
 func (m *mockClient) ReleaseTransport(context.Context, string) error {
 	panic("not implemented")
 }

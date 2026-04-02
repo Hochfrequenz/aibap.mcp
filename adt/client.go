@@ -92,6 +92,8 @@ type VersionClient interface {
 type TransportClient interface {
 	CheckTransport(ctx context.Context, pgmID, object, objectName string) (*TransportCheckResult, error)
 	CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error)
+	CreateTransportTask(ctx context.Context, parentTransport, owner, description string) (string, error)
+	DeleteTransport(ctx context.Context, transportNumber string) error
 	ReleaseTransport(ctx context.Context, transportNumber string) error
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
