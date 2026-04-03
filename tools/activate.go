@@ -29,6 +29,25 @@ func registerActivateTools(s toolAdder, client adt.ObjectClient) {
 		return mcp.NewToolResultText(string(out)), nil
 	})
 
+	s.AddTool(mcp.NewTool("get_inactive_objects",
+		mcp.WithTitleAnnotation("Get Inactive Objects"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"List all inactive (not yet activated) ABAP objects for the current user. "+
+				"Use this to check what needs activation before releasing a transport.",
+		),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		objects, err := client.GetInactiveObjects(ctx)
+		if err != nil {
+			return errorResult(err), nil
+		}
+		out, _ := json.Marshal(objects)
+		return mcp.NewToolResultText(string(out)), nil
+	})
+
 	// Backward-compatible alias: activate a single object by URI string.
 	s.AddTool(mcp.NewTool("activate_object",
 		mcp.WithTitleAnnotation("Activate Object"),
