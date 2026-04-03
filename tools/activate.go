@@ -54,7 +54,7 @@ func registerActivateTools(s toolAdder, client adt.ObjectClient) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Activate a single ABAP object (alias for activate_objects)."),
+		mcp.WithDescription("Activate a single ABAP object."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
 			mcp.Description(descADTObjectURI),
