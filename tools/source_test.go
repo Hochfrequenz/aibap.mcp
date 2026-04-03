@@ -223,6 +223,12 @@ func (m *mockClient) GetEnhancementSpot(context.Context, string) (*adt.Enhanceme
 func (m *mockClient) GetEnhancementImplementation(context.Context, string) (*adt.BAdIImplementationInfo, error) {
 	return &adt.BAdIImplementationInfo{}, nil
 }
+func (m *mockClient) ListShortDumps(context.Context, string, string, string) ([]adt.ShortDumpHeader, error) {
+	return nil, nil
+}
+func (m *mockClient) GetShortDumps(context.Context, string, string, string) ([]adt.ShortDump, error) {
+	return nil, nil
+}
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
