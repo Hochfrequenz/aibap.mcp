@@ -760,3 +760,157 @@ func TestBatchSyntaxCheckEmptyURIs(t *testing.T) {
 		t.Error("expected error for empty URIs")
 	}
 }
+
+// --- batch_get_source ---
+
+func TestBatchGetSourceTool(t *testing.T) {
+	lockMap := adt.NewLockMap()
+	// Pre-populate lock map entry so UpdateETag has something to update.
+	lockMap.Set("dev:/sap/bc/adt/programs/programs/ZOK", "lock-handle-ok", "")
+	mock := &mockClient{
+		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
+			if uri == "/sap/bc/adt/programs/programs/ZFAIL" {
+				return nil, &adt.ADTError{StatusCode: 404, Message: "not found"}
+			}
+			return &adt.SourceResult{Source: "REPORT ZOK.", ETag: `"etag-ok"`}, nil
+		},
+	}
+	s := newTestServerWithLockMap(mock, lockMap)
+	result := callTool(t, s, "batch_get_source", map[string]interface{}{
+		"object_uris": []string{
+			"/sap/bc/adt/programs/programs/ZOK",
+			"/sap/bc/adt/programs/programs/ZFAIL",
+		},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Total   int `json:"total"`
+		Results []struct {
+			ObjectURI string `json:"object_uri"`
+			Source    string `json:"source"`
+			ETag      string `json:"etag"`
+			Error     string `json:"error"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Total != 2 {
+		t.Errorf("total: got %d, want 2", out.Total)
+	}
+	if len(out.Results) != 2 {
+		t.Fatalf("results length: got %d, want 2", len(out.Results))
+	}
+	// First result: success
+	if out.Results[0].ObjectURI != "/sap/bc/adt/programs/programs/ZOK" {
+		t.Errorf("first result URI: got %q", out.Results[0].ObjectURI)
+	}
+	if out.Results[0].Source != "REPORT ZOK." {
+		t.Errorf("first result source: got %q", out.Results[0].Source)
+	}
+	if out.Results[0].ETag != `"etag-ok"` {
+		t.Errorf("first result etag: got %q", out.Results[0].ETag)
+	}
+	if out.Results[0].Error != "" {
+		t.Errorf("first result should have no error, got %q", out.Results[0].Error)
+	}
+	// Second result: error
+	if out.Results[1].ObjectURI != "/sap/bc/adt/programs/programs/ZFAIL" {
+		t.Errorf("second result URI: got %q", out.Results[1].ObjectURI)
+	}
+	if out.Results[1].Error == "" {
+		t.Error("second result should have an error")
+	}
+	// Verify ETag stored in lockMap for successful result
+	state, ok := lockMap.Get("dev:/sap/bc/adt/programs/programs/ZOK")
+	if !ok {
+		t.Fatal("expected lock map entry for successful URI")
+	}
+	if state.ETag != `"etag-ok"` {
+		t.Errorf("lock map ETag: got %q, want %q", state.ETag, `"etag-ok"`)
+	}
+	// Verify no lock map entry for failed result
+	if _, ok := lockMap.Get("dev:/sap/bc/adt/programs/programs/ZFAIL"); ok {
+		t.Error("expected no lock map entry for failed URI")
+	}
+}
+
+func TestBatchGetSourceSingleURI(t *testing.T) {
+	mock := &mockClient{
+		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
+			return &adt.SourceResult{Source: "REPORT ZTEST.", ETag: `"etag-1"`}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_get_source", map[string]interface{}{
+		"object_uris": []string{testObjectURI},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Total   int `json:"total"`
+		Results []struct {
+			Source string `json:"source"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Total != 1 {
+		t.Errorf("total: got %d, want 1", out.Total)
+	}
+	if len(out.Results) != 1 {
+		t.Fatalf("results length: got %d, want 1", len(out.Results))
+	}
+	if out.Results[0].Source != "REPORT ZTEST." {
+		t.Errorf("source: got %q", out.Results[0].Source)
+	}
+}
+
+func TestBatchGetSourceAllErrors(t *testing.T) {
+	mock := &mockClient{
+		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
+			return nil, &adt.ADTError{StatusCode: 500, Message: "server error"}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_get_source", map[string]interface{}{
+		"object_uris": []string{
+			"/sap/bc/adt/programs/programs/ZFAIL1",
+			"/sap/bc/adt/programs/programs/ZFAIL2",
+		},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected tool-level error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Results []struct {
+			Error string `json:"error"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for i, r := range out.Results {
+		if r.Error == "" {
+			t.Errorf("result[%d] should have an error", i)
+		}
+	}
+}
+
+func TestBatchGetSourceEmptyURIs(t *testing.T) {
+	mock := &mockClient{}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_get_source", map[string]interface{}{
+		"object_uris": []string{},
+	})
+	if !result.IsError {
+		t.Error("expected error for empty URIs")
+	}
+}
