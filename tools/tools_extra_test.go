@@ -696,6 +696,148 @@ func firstText(result *mcp.CallToolResult) string {
 	return ""
 }
 
+// --- batch_run_unit_tests ---
+
+func TestBatchRunUnitTestsTool(t *testing.T) {
+	mock := &mockClient{
+		runTestsFn: func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error) {
+			if uri == testObjectURIFail {
+				return nil, &adt.ADTError{StatusCode: 500, Message: "test run failed"}
+			}
+			return &adt.TestResult{Passed: 3, Failed: 1}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_run_unit_tests", map[string]interface{}{
+		"object_uris": []string{
+			testObjectURIOK,
+			testObjectURIFail,
+		},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		TotalObjects int `json:"total_objects"`
+		TotalPassed  int `json:"total_passed"`
+		TotalFailed  int `json:"total_failed"`
+		Results      []struct {
+			ObjectURI  string          `json:"object_uri"`
+			TestResult *adt.TestResult `json:"test_result,omitempty"`
+			Error      string          `json:"error,omitempty"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.TotalObjects != 2 {
+		t.Errorf("total_objects: got %d, want 2", out.TotalObjects)
+	}
+	if out.TotalPassed != 3 {
+		t.Errorf("total_passed: got %d, want 3", out.TotalPassed)
+	}
+	if out.TotalFailed != 1 {
+		t.Errorf("total_failed: got %d, want 1", out.TotalFailed)
+	}
+	if len(out.Results) != 2 {
+		t.Fatalf("results length: got %d, want 2", len(out.Results))
+	}
+	// First result should have test_result, no error.
+	if out.Results[0].TestResult == nil {
+		t.Error("first result should have test_result")
+	}
+	if out.Results[0].Error != "" {
+		t.Errorf("first result should have no error, got %q", out.Results[0].Error)
+	}
+	// Second result should have error.
+	if out.Results[1].Error == "" {
+		t.Error("second result should have error")
+	}
+}
+
+func TestBatchRunUnitTestsSingleURI(t *testing.T) {
+	mock := &mockClient{
+		runTestsFn: func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error) {
+			return &adt.TestResult{Passed: 10, Failed: 0}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_run_unit_tests", map[string]interface{}{
+		"object_uris": []string{testObjectURIOK},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		TotalObjects int `json:"total_objects"`
+		TotalPassed  int `json:"total_passed"`
+		TotalFailed  int `json:"total_failed"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.TotalObjects != 1 {
+		t.Errorf("total_objects: got %d, want 1", out.TotalObjects)
+	}
+	if out.TotalPassed != 10 {
+		t.Errorf("total_passed: got %d, want 10", out.TotalPassed)
+	}
+}
+
+func TestBatchRunUnitTestsAllErrors(t *testing.T) {
+	mock := &mockClient{
+		runTestsFn: func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error) {
+			return nil, &adt.ADTError{StatusCode: 500, Message: "server error"}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_run_unit_tests", map[string]interface{}{
+		"object_uris": []string{
+			"/sap/bc/adt/programs/programs/ZFAIL1",
+			"/sap/bc/adt/programs/programs/ZFAIL2",
+		},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		TotalObjects int `json:"total_objects"`
+		TotalPassed  int `json:"total_passed"`
+		TotalFailed  int `json:"total_failed"`
+		Results      []struct {
+			Error string `json:"error,omitempty"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.TotalPassed != 0 {
+		t.Errorf("total_passed: got %d, want 0", out.TotalPassed)
+	}
+	if out.TotalFailed != 0 {
+		t.Errorf("total_failed: got %d, want 0", out.TotalFailed)
+	}
+	for i, r := range out.Results {
+		if r.Error == "" {
+			t.Errorf("result %d should have error", i)
+		}
+	}
+}
+
+func TestBatchRunUnitTestsEmptyURIs(t *testing.T) {
+	mock := &mockClient{}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_run_unit_tests", map[string]interface{}{
+		"object_uris": []string{},
+	})
+	if !result.IsError {
+		t.Error("expected error for empty URIs")
+	}
+}
+
 // --- batch_syntax_check ---
 
 func TestBatchSyntaxCheckTool(t *testing.T) {
@@ -769,7 +911,7 @@ func TestBatchGetSourceTool(t *testing.T) {
 	lockMap.Set("dev:/sap/bc/adt/programs/programs/ZOK", "lock-handle-ok", "")
 	mock := &mockClient{
 		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
-			if uri == "/sap/bc/adt/programs/programs/ZFAIL" {
+			if uri == testObjectURIFail {
 				return nil, &adt.ADTError{StatusCode: 404, Message: "not found"}
 			}
 			return &adt.SourceResult{Source: "REPORT ZOK.", ETag: `"etag-ok"`}, nil
@@ -778,8 +920,8 @@ func TestBatchGetSourceTool(t *testing.T) {
 	s := newTestServerWithLockMap(mock, lockMap)
 	result := callTool(t, s, "batch_get_source", map[string]interface{}{
 		"object_uris": []string{
-			"/sap/bc/adt/programs/programs/ZOK",
-			"/sap/bc/adt/programs/programs/ZFAIL",
+			testObjectURIOK,
+			testObjectURIFail,
 		},
 	})
 	if result.IsError {
@@ -805,7 +947,7 @@ func TestBatchGetSourceTool(t *testing.T) {
 		t.Fatalf("results length: got %d, want 2", len(out.Results))
 	}
 	// First result: success
-	if out.Results[0].ObjectURI != "/sap/bc/adt/programs/programs/ZOK" {
+	if out.Results[0].ObjectURI != testObjectURIOK {
 		t.Errorf("first result URI: got %q", out.Results[0].ObjectURI)
 	}
 	if out.Results[0].Source != "REPORT ZOK." {
@@ -818,7 +960,7 @@ func TestBatchGetSourceTool(t *testing.T) {
 		t.Errorf("first result should have no error, got %q", out.Results[0].Error)
 	}
 	// Second result: error
-	if out.Results[1].ObjectURI != "/sap/bc/adt/programs/programs/ZFAIL" {
+	if out.Results[1].ObjectURI != testObjectURIFail {
 		t.Errorf("second result URI: got %q", out.Results[1].ObjectURI)
 	}
 	if out.Results[1].Error == "" {

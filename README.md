@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (56)
+## Available tools (57)
 
 <details>
 <summary><strong>Source code</strong> (6 tools)</summary>
@@ -71,7 +71,7 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Testing and quality</strong> (4 tools)</summary>
+<summary><strong>Testing and quality</strong> (5 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -79,6 +79,7 @@ graph TD
 | `batch_syntax_check` | Run syntax checks on multiple objects in parallel |
 | `verify_source` | Syntax-check ABAP source without an existing object |
 | `run_unit_tests` | Run ABAP Unit Tests |
+| `batch_run_unit_tests` | Run unit tests on multiple objects concurrently |
 | `run_atc_check` | Run ATC (ABAP Test Cockpit) checks |
 | `get_atc_customizing` | Get ATC check variant configuration |
 | `get_abap_doc` | Look up ABAP keyword documentation |
