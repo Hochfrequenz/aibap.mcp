@@ -5,6 +5,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net/http"
+	"strings"
 )
 
 // BAdIDefinition describes a BAdI definition within an enhancement spot.
@@ -44,6 +46,8 @@ type BAdIImplementationInfo struct {
 	Name            string          `json:"name"`
 	Description     string          `json:"description"`
 	Package         string          `json:"package"`
+	ETag            string          `json:"etag,omitempty"`
+	RawXML          string          `json:"-"` // full XML for round-trip PUT
 	Implementations []BAdIImplEntry `json:"implementations"`
 }
 
@@ -78,11 +82,13 @@ func (c *httpClient) GetEnhancementSpot(ctx context.Context, spotName string) (*
 	return parseEnhancementSpotXML(data)
 }
 
+const enhoContentType = "application/vnd.sap.adt.enh.enho.v1+xml"
+
 // GetEnhancementImplementation reads a BAdI enhancement implementation.
 func (c *httpClient) GetEnhancementImplementation(ctx context.Context, implName string) (*BAdIImplementationInfo, error) {
 	path := "/sap/bc/adt/enhancements/enhoxh/" + implName
 	resp, err := c.doRead(ctx, path, map[string]string{
-		"Accept": "application/vnd.sap.adt.enh.enho.v1+xml",
+		"Accept": enhoContentType,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("GetEnhancementImplementation: %w", err)
@@ -95,7 +101,40 @@ func (c *httpClient) GetEnhancementImplementation(ctx context.Context, implName 
 	if err != nil {
 		return nil, fmt.Errorf("GetEnhancementImplementation: reading body: %w", err)
 	}
-	return parseEnhancementImplXML(data)
+	result, err := parseEnhancementImplXML(data)
+	if err != nil {
+		return nil, err
+	}
+	result.ETag = resp.Header.Get("ETag")
+	result.RawXML = string(data)
+	return result, nil
+}
+
+// SetEnhancementImplementation writes the full XML of a BAdI enhancement implementation.
+// Use GetEnhancementImplementation to get the RawXML, modify it, then pass it back.
+func (c *httpClient) SetEnhancementImplementation(ctx context.Context, implName, xmlBody, lockHandle, transport, etag string) error {
+	path := "/sap/bc/adt/enhancements/enhoxh/" + implName
+	headers := map[string]string{
+		"Content-Type": enhoContentType,
+	}
+	if etag != "" {
+		headers["If-Match"] = etag
+	}
+	if lockHandle != "" {
+		headers["X-SAP-Lock-Handle"] = lockHandle
+	}
+	if transport != "" {
+		path += "?corrNr=" + transport
+	}
+	resp, err := c.doMutate(ctx, http.MethodPut, path,
+		strings.NewReader(xmlBody),
+		headers,
+	)
+	if err != nil {
+		return fmt.Errorf("SetEnhancementImplementation: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return checkResponse(resp)
 }
 
 func parseEnhancementSpotXML(data []byte) (*EnhancementSpotInfo, error) {

@@ -237,6 +237,9 @@ func (m *mockClient) GetEnhancementSpot(context.Context, string) (*adt.Enhanceme
 func (m *mockClient) GetEnhancementImplementation(context.Context, string) (*adt.BAdIImplementationInfo, error) {
 	return &adt.BAdIImplementationInfo{}, nil
 }
+func (m *mockClient) SetEnhancementImplementation(context.Context, string, string, string, string, string) error {
+	return nil
+}
 func (m *mockClient) ListShortDumps(context.Context, string, string, string) ([]adt.ShortDumpHeader, error) {
 	return nil, nil
 }
