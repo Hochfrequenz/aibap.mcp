@@ -19,6 +19,8 @@ const (
 	testETagNew       = `"etag-new"`
 	testETagAfter     = `"etag-after"`
 	testLockHandle123 = "lock-handle-123"
+	testObjectURIOK   = "/sap/bc/adt/programs/programs/ZOK"
+	testObjectURIFail = "/sap/bc/adt/programs/programs/ZFAIL"
 )
 
 // mockClient is a test double for adt.Client.

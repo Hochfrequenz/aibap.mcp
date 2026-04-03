@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (54)
+## Available tools (55)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -38,12 +38,13 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> (6 tools)</summary>
+<summary><strong>Objects and packages</strong> (7 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `search_objects` | Search for objects by name pattern and type |
 | `where_used` | Find all usages of an object |
+| `batch_where_used` | Find usages of multiple objects in parallel |
 | `navigate_to_definition` | Go to definition of a source reference |
 | `browse_package` | List contents of a package |
 | `get_object_info` | Get object metadata (type, package, description) |
