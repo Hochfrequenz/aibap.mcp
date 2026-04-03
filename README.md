@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (58)
+## Available tools (60)
 
 <details>
 <summary><strong>Source code</strong> (7 tools)</summary>

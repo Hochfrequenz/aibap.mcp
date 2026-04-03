@@ -14,7 +14,10 @@ func (c *httpClient) LockObject(ctx context.Context, objectURI string) (string, 
 	resp, err := c.doMutate(ctx, http.MethodPost,
 		objectURI+"?_action=LOCK&accessMode=MODIFY",
 		nil,
-		map[string]string{"Accept": "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result"},
+		map[string]string{
+			"Accept":                "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result",
+			"X-sap-adt-sessiontype": "stateful",
+		},
 	)
 	if err != nil {
 		return "", fmt.Errorf("LockObject: %w", err)
@@ -44,7 +47,7 @@ func (c *httpClient) UnlockObject(ctx context.Context, objectURI, lockHandle str
 	resp, err := c.doMutate(ctx, http.MethodPost,
 		objectURI+"?_action=UNLOCK&lockHandle="+lockHandle,
 		nil,
-		nil,
+		map[string]string{"X-sap-adt-sessiontype": "stateful"},
 	)
 	if err != nil {
 		return fmt.Errorf("UnlockObject: %w", err)
