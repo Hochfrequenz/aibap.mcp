@@ -74,25 +74,36 @@ var objectTypeAcceptHeaders = map[string]string{
 }
 
 // acceptHeaderForURI returns the best Accept header for a given object URI.
-// Nested sub-URIs (e.g. /functions/groups/GRP/fmodules/FM) will match
-// the parent prefix, which is acceptable for metadata requests.
-func acceptHeaderForURI(objectURI string) string {
+// It first checks the ADT discovery cache (populated from /sap/bc/adt/discovery
+// during CSRF fetch) for supported content types, then falls back to the
+// hardcoded objectTypeAcceptHeaders map.
+func (c *httpClient) acceptHeaderForURI(objectURI string) string {
+	// Find the best matching prefix from the hardcoded map.
 	bestPrefix := ""
-	bestAccept := ""
+	hardcoded := ""
 	for prefix, accept := range objectTypeAcceptHeaders {
 		if strings.HasPrefix(objectURI, prefix) && len(prefix) > len(bestPrefix) {
 			bestPrefix = prefix
-			bestAccept = accept
+			hardcoded = accept
 		}
 	}
-	if bestAccept != "" {
-		return bestAccept + ", application/xml"
+	if bestPrefix == "" {
+		return "application/xml"
 	}
-	return "application/xml"
+	// Check if discovery knows this endpoint. If it does, use the first
+	// content type the system supports (discovery lists them in preference
+	// order). Otherwise fall back to the hardcoded value.
+	c.mu.Lock()
+	accepted := c.discovery[bestPrefix]
+	c.mu.Unlock()
+	if len(accepted) > 0 {
+		return accepted[0] + ", application/xml"
+	}
+	return hardcoded + ", application/xml"
 }
 
 func (c *httpClient) GetObjectInfo(ctx context.Context, objectURI string) (*ObjectInfo, error) {
-	accept := acceptHeaderForURI(objectURI)
+	accept := c.acceptHeaderForURI(objectURI)
 	resp, err := c.doRead(ctx, objectURI, map[string]string{"Accept": accept})
 	if err != nil {
 		return nil, fmt.Errorf("GetObjectInfo: %w", err)
