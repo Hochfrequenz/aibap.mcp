@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
@@ -83,7 +82,7 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 				defer func() { <-sem }()
 				info, err := client.GetObjectInfo(ctx, u)
 				if err != nil {
-					results[idx] = objectInfoResult{ObjectURI: u, Error: fmt.Sprintf("%v", err)}
+					results[idx] = objectInfoResult{ObjectURI: u, Error: err.Error()}
 				} else {
 					results[idx] = objectInfoResult{ObjectURI: u, Info: info}
 				}
