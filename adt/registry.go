@@ -105,6 +105,9 @@ func (r *ClientRegistry) GetIncludeSource(ctx context.Context, objectURI, includ
 func (r *ClientRegistry) SetIncludeSource(ctx context.Context, objectURI, include, source, lockHandle, transport, etag string) (string, error) {
 	return r.activeClient().SetIncludeSource(ctx, objectURI, include, source, lockHandle, transport, etag)
 }
+func (r *ClientRegistry) CreateTestInclude(ctx context.Context, objectURI, lockHandle, transport string) error {
+	return r.activeClient().CreateTestInclude(ctx, objectURI, lockHandle, transport)
+}
 func (r *ClientRegistry) ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error) {
 	return r.activeClient().ActivateObjects(ctx, objectURIs)
 }
