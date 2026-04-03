@@ -24,7 +24,7 @@ graph TD
 ## Available tools (58)
 
 <details>
-<summary><strong>Source code</strong> (6 tools)</summary>
+<summary><strong>Source code</strong> (7 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -39,7 +39,7 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> (7 tools)</summary>
+<summary><strong>Objects and packages</strong> (13 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -72,7 +72,7 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Testing and quality</strong> (5 tools)</summary>
+<summary><strong>Testing and quality</strong> (12 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
