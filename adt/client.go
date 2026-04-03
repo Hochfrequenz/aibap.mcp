@@ -72,6 +72,12 @@ type DDICClient interface {
 	GetTableFields(ctx context.Context, tableName string) ([]FieldInfo, error)
 }
 
+// DumpClient reads ABAP short dumps (ST22).
+type DumpClient interface {
+	ListShortDumps(ctx context.Context, from, to, user string) ([]ShortDumpHeader, error)
+	GetShortDumps(ctx context.Context, from, to, user string) ([]ShortDump, error)
+}
+
 // QualityClient runs checks and tests.
 type QualityClient interface {
 	SyntaxCheck(ctx context.Context, objectURI string) ([]SyntaxMessage, error)
@@ -137,6 +143,7 @@ type Client interface {
 	ExportClient
 	QueryClient
 	EnhancementClient
+	DumpClient
 	SystemClient
 }
 
