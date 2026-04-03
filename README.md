@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (57)
+## Available tools (58)
 
 <details>
 <summary><strong>Source code</strong> (6 tools)</summary>
@@ -49,6 +49,7 @@ graph TD
 | `navigate_to_definition` | Go to definition of a source reference |
 | `browse_package` | List contents of a package |
 | `get_object_info` | Get object metadata (type, package, description) |
+| `batch_get_object_info` | Get metadata for multiple objects concurrently |
 | `get_table_fields` | Get DDIC table/structure field definitions |
 | `get_version_history` | Get full version history — like 'git log' for ABAP |
 | `get_version_source` | Get source of a historical version — like 'git show' |

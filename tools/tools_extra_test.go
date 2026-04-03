@@ -696,6 +696,123 @@ func firstText(result *mcp.CallToolResult) string {
 	return ""
 }
 
+// --- batch_get_object_info ---
+
+func TestBatchGetObjectInfoTool(t *testing.T) {
+	mock := &mockClient{
+		getObjectFn: func(ctx context.Context, uri string) (*adt.ObjectInfo, error) {
+			if uri == testObjectURIFail {
+				return nil, &adt.ADTError{StatusCode: 404, Message: "not found"}
+			}
+			return &adt.ObjectInfo{Name: "ZOK", Type: "PROG/P", URI: uri}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_get_object_info", map[string]interface{}{
+		"object_uris": []string{testObjectURIOK, testObjectURIFail},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Total     int `json:"total"`
+		Succeeded int `json:"succeeded"`
+		Failed    int `json:"failed"`
+		Results   []struct {
+			ObjectURI string          `json:"object_uri"`
+			Info      *adt.ObjectInfo `json:"info,omitempty"`
+			Error     string          `json:"error,omitempty"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Total != 2 {
+		t.Errorf("total: got %d, want 2", out.Total)
+	}
+	if out.Succeeded != 1 {
+		t.Errorf("succeeded: got %d, want 1", out.Succeeded)
+	}
+	if out.Failed != 1 {
+		t.Errorf("failed: got %d, want 1", out.Failed)
+	}
+	if len(out.Results) != 2 {
+		t.Fatalf("results length: got %d, want 2", len(out.Results))
+	}
+	if out.Results[0].ObjectURI != testObjectURIOK {
+		t.Errorf("first result URI: got %q", out.Results[0].ObjectURI)
+	}
+	if out.Results[0].Info == nil || out.Results[0].Info.Name != "ZOK" {
+		t.Errorf("first result info: got %v", out.Results[0].Info)
+	}
+	if out.Results[1].Error == "" {
+		t.Error("second result should have an error")
+	}
+}
+
+func TestBatchGetObjectInfoSingleURI(t *testing.T) {
+	mock := &mockClient{
+		getObjectFn: func(ctx context.Context, uri string) (*adt.ObjectInfo, error) {
+			return &adt.ObjectInfo{Name: "ZTEST", Type: "PROG/P"}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_get_object_info", map[string]interface{}{
+		"object_uris": []string{testObjectURI},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Total     int `json:"total"`
+		Succeeded int `json:"succeeded"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Total != 1 || out.Succeeded != 1 {
+		t.Errorf("expected total=1, succeeded=1, got total=%d, succeeded=%d", out.Total, out.Succeeded)
+	}
+}
+
+func TestBatchGetObjectInfoAllErrors(t *testing.T) {
+	mock := &mockClient{
+		getObjectFn: func(ctx context.Context, uri string) (*adt.ObjectInfo, error) {
+			return nil, &adt.ADTError{StatusCode: 500, Message: "server error"}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_get_object_info", map[string]interface{}{
+		"object_uris": []string{"/sap/bc/adt/programs/programs/ZFAIL1", "/sap/bc/adt/programs/programs/ZFAIL2"},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected tool-level error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Failed int `json:"failed"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Failed != 2 {
+		t.Errorf("failed: got %d, want 2", out.Failed)
+	}
+}
+
+func TestBatchGetObjectInfoEmptyURIs(t *testing.T) {
+	mock := &mockClient{}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_get_object_info", map[string]interface{}{
+		"object_uris": []string{},
+	})
+	if !result.IsError {
+		t.Error("expected error for empty URIs")
+	}
+}
+
 // --- batch_run_unit_tests ---
 
 func TestBatchRunUnitTestsTool(t *testing.T) {
