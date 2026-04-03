@@ -99,6 +99,12 @@ func (r *ClientRegistry) GetSource(ctx context.Context, objectURI string) (*Sour
 func (r *ClientRegistry) SetSource(ctx context.Context, objectURI, source, lockHandle, transport, etag string) (string, error) {
 	return r.activeClient().SetSource(ctx, objectURI, source, lockHandle, transport, etag)
 }
+func (r *ClientRegistry) GetIncludeSource(ctx context.Context, objectURI, include string) (*SourceResult, error) {
+	return r.activeClient().GetIncludeSource(ctx, objectURI, include)
+}
+func (r *ClientRegistry) SetIncludeSource(ctx context.Context, objectURI, include, source, lockHandle, transport, etag string) (string, error) {
+	return r.activeClient().SetIncludeSource(ctx, objectURI, include, source, lockHandle, transport, etag)
+}
 func (r *ClientRegistry) ActivateObjects(ctx context.Context, objectURIs []string) (*ActivationResult, error) {
 	return r.activeClient().ActivateObjects(ctx, objectURIs)
 }

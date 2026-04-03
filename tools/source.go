@@ -89,6 +89,68 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		})
 		return mcp.NewToolResultText(string(out)), nil
 	})
+
+	s.AddTool(mcp.NewTool("get_include_source",
+		mcp.WithTitleAnnotation("Get Class Include Source"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"Read source code of a class include (local definitions, implementations, test classes, macros). "+
+				"Use this to read or inspect local test classes, helper classes, or type definitions that live "+
+				"in separate includes rather than in the main class source.",
+		),
+		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description("Class URI, e.g. /sap/bc/adt/oo/classes/ZCL_MY_CLASS")),
+		mcp.WithString("include", mcp.Required(), mcp.Description("Include name: testclasses, definitions, implementations, or macros")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		uri := req.GetString(paramObjectURI, "")
+		include := req.GetString("include", "")
+		result, err := client.GetIncludeSource(ctx, uri, include)
+		if err != nil {
+			return errorResult(err), nil
+		}
+		out, _ := json.Marshal(map[string]string{
+			"source":  result.Source,
+			"etag":    result.ETag,
+			"include": include,
+		})
+		return mcp.NewToolResultText(string(out)), nil
+	})
+
+	s.AddTool(mcp.NewTool("set_include_source",
+		mcp.WithTitleAnnotation("Set Class Include Source"),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"Write source code to a class include. Use this to set local test classes, helper classes, "+
+				"type definitions, or macros. The object must be locked first (use lock_object). "+
+				"Pass the ETag from get_include_source for optimistic locking.",
+		),
+		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description("Class URI, e.g. /sap/bc/adt/oo/classes/ZCL_MY_CLASS")),
+		mcp.WithString("include", mcp.Required(), mcp.Description("Include name: testclasses, definitions, implementations, or macros")),
+		mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code to write")),
+		mcp.WithString("lock_handle", mcp.Description("Lock handle from lock_object (optional, looked up from lock map)")),
+		mcp.WithString("transport", mcp.Description("Transport request number (required for non-local packages)")),
+		mcp.WithString("etag", mcp.Required(), mcp.Description("ETag from get_include_source for optimistic locking")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		uri := req.GetString(paramObjectURI, "")
+		include := req.GetString("include", "")
+		source := req.GetString("source", "")
+		lh := req.GetString("lock_handle", "")
+		transport := req.GetString("transport", "")
+		etag := req.GetString("etag", "")
+		newETag, err := client.SetIncludeSource(ctx, uri, include, source, lh, transport, etag)
+		if err != nil {
+			return errorResult(err), nil
+		}
+		out, _ := json.Marshal(map[string]string{
+			"etag":    newETag,
+			"include": include,
+		})
+		return mcp.NewToolResultText(string(out)), nil
+	})
 }
 
 // errorResult converts an error to an MCP error result with the SAP error message.

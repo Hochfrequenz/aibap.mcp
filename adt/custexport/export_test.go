@@ -28,6 +28,12 @@ func (m *mockClient) GetSource(context.Context, string) (*adt.SourceResult, erro
 func (m *mockClient) SetSource(context.Context, string, string, string, string, string) (string, error) {
 	panic("not implemented")
 }
+func (m *mockClient) GetIncludeSource(context.Context, string, string) (*adt.SourceResult, error) {
+	panic("not implemented")
+}
+func (m *mockClient) SetIncludeSource(context.Context, string, string, string, string, string, string) (string, error) {
+	panic("not implemented")
+}
 func (m *mockClient) ActivateObjects(context.Context, []string) (*adt.ActivationResult, error) {
 	panic("not implemented")
 }
