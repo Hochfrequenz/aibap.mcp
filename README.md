@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (61)
+## Available tools (62)
 
 <details>
 <summary><strong>Source code</strong> (8 tools)</summary>
@@ -42,10 +42,11 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> (13 tools)</summary>
+<summary><strong>Objects and packages</strong> (14 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
+| `object_exists` | Check if an ABAP object exists (anti-hallucination) |
 | `search_objects` | Search for objects by name pattern and type |
 | `where_used` | Find all usages of an object |
 | `batch_where_used` | Find usages of multiple objects in parallel |
