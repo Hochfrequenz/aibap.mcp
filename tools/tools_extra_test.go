@@ -374,6 +374,139 @@ func TestWhereUsedToolError(t *testing.T) {
 	}
 }
 
+// --- batch_where_used ---
+
+func TestBatchWhereUsedTool(t *testing.T) {
+	mock := &mockClient{
+		whereUsedFn: func(ctx context.Context, uri string) ([]adt.ObjectInfo, error) {
+			if uri == testObjectURIFail {
+				return nil, &adt.ADTError{StatusCode: 500, Message: "lookup failed"}
+			}
+			return []adt.ObjectInfo{{Name: "ZCALLER", Type: "PROG/P"}}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_where_used", map[string]interface{}{
+		"object_uris": []string{
+			testObjectURIOK,
+			testObjectURIFail,
+		},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Total           int `json:"total"`
+		TotalReferences int `json:"total_references"`
+		Results         []struct {
+			ObjectURI  string           `json:"object_uri"`
+			References []adt.ObjectInfo `json:"references"`
+			Error      string           `json:"error,omitempty"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Total != 2 {
+		t.Errorf("total: got %d, want 2", out.Total)
+	}
+	if out.TotalReferences != 1 {
+		t.Errorf("total_references: got %d, want 1", out.TotalReferences)
+	}
+	if len(out.Results) != 2 {
+		t.Fatalf("results length: got %d, want 2", len(out.Results))
+	}
+	if out.Results[0].ObjectURI != testObjectURIOK {
+		t.Errorf("first result URI: got %q", out.Results[0].ObjectURI)
+	}
+	if len(out.Results[0].References) != 1 {
+		t.Errorf("first result should have 1 reference, got %d", len(out.Results[0].References))
+	}
+	if out.Results[1].ObjectURI != testObjectURIFail {
+		t.Errorf("second result URI: got %q", out.Results[1].ObjectURI)
+	}
+	if out.Results[1].Error == "" {
+		t.Error("second result should have an error")
+	}
+}
+
+func TestBatchWhereUsedSingleURI(t *testing.T) {
+	mock := &mockClient{
+		whereUsedFn: func(ctx context.Context, uri string) ([]adt.ObjectInfo, error) {
+			return []adt.ObjectInfo{{Name: "ZCALLER", Type: "PROG/P"}}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_where_used", map[string]interface{}{
+		"object_uris": []string{testObjectURI},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Total           int `json:"total"`
+		TotalReferences int `json:"total_references"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Total != 1 {
+		t.Errorf("total: got %d, want 1", out.Total)
+	}
+	if out.TotalReferences != 1 {
+		t.Errorf("total_references: got %d, want 1", out.TotalReferences)
+	}
+}
+
+func TestBatchWhereUsedAllErrors(t *testing.T) {
+	mock := &mockClient{
+		whereUsedFn: func(ctx context.Context, uri string) ([]adt.ObjectInfo, error) {
+			return nil, &adt.ADTError{StatusCode: 500, Message: "server error"}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_where_used", map[string]interface{}{
+		"object_uris": []string{
+			"/sap/bc/adt/programs/programs/ZFAIL1",
+			"/sap/bc/adt/programs/programs/ZFAIL2",
+		},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected tool-level error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		TotalReferences int `json:"total_references"`
+		Results         []struct {
+			Error string `json:"error"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.TotalReferences != 0 {
+		t.Errorf("total_references: got %d, want 0", out.TotalReferences)
+	}
+	for i, r := range out.Results {
+		if r.Error == "" {
+			t.Errorf("result[%d] should have an error", i)
+		}
+	}
+}
+
+func TestBatchWhereUsedEmptyURIs(t *testing.T) {
+	mock := &mockClient{}
+	s := newTestServer(mock)
+	result := callTool(t, s, "batch_where_used", map[string]interface{}{
+		"object_uris": []string{},
+	})
+	if !result.IsError {
+		t.Error("expected error for empty URIs")
+	}
+}
+
 // --- browse_package ---
 
 func TestBrowsePackageTool(t *testing.T) {
@@ -568,7 +701,7 @@ func firstText(result *mcp.CallToolResult) string {
 func TestBatchSyntaxCheckTool(t *testing.T) {
 	mock := &mockClient{
 		syntaxCheckFn: func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error) {
-			if uri == "/sap/bc/adt/programs/programs/ZFAIL" {
+			if uri == testObjectURIFail {
 				return []adt.SyntaxMessage{
 					{Type: "E", Text: "Syntax error", Line: 10, Column: 5},
 				}, nil
@@ -579,8 +712,8 @@ func TestBatchSyntaxCheckTool(t *testing.T) {
 	s := newTestServer(mock)
 	result := callTool(t, s, "batch_syntax_check", map[string]interface{}{
 		"object_uris": []string{
-			"/sap/bc/adt/programs/programs/ZOK",
-			"/sap/bc/adt/programs/programs/ZFAIL",
+			testObjectURIOK,
+			testObjectURIFail,
 		},
 	})
 	if result.IsError {
