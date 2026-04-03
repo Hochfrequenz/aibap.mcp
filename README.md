@@ -21,14 +21,15 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (60)
+## Available tools (61)
 
 <details>
-<summary><strong>Source code</strong> (7 tools)</summary>
+<summary><strong>Source code</strong> (8 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `get_source` | Read ABAP source code of any object |
+| `get_class_definition` | Read only the definition part of a class (no implementations) |
 | `batch_get_source` | Get source code for multiple objects in parallel |
 | `set_source_from_file` | Write ABAP source from a local file |
 | `patch_source` | Apply incremental edits to source code |
