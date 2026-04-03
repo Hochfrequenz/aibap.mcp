@@ -379,7 +379,7 @@ func TestWhereUsedToolError(t *testing.T) {
 func TestBatchWhereUsedTool(t *testing.T) {
 	mock := &mockClient{
 		whereUsedFn: func(ctx context.Context, uri string) ([]adt.ObjectInfo, error) {
-			if uri == "/sap/bc/adt/programs/programs/ZFAIL" {
+			if uri == testObjectURIFail {
 				return nil, &adt.ADTError{StatusCode: 500, Message: "lookup failed"}
 			}
 			return []adt.ObjectInfo{{Name: "ZCALLER", Type: "PROG/P"}}, nil
@@ -388,8 +388,8 @@ func TestBatchWhereUsedTool(t *testing.T) {
 	s := newTestServer(mock)
 	result := callTool(t, s, "batch_where_used", map[string]interface{}{
 		"object_uris": []string{
-			"/sap/bc/adt/programs/programs/ZOK",
-			"/sap/bc/adt/programs/programs/ZFAIL",
+			testObjectURIOK,
+			testObjectURIFail,
 		},
 	})
 	if result.IsError {
@@ -417,13 +417,13 @@ func TestBatchWhereUsedTool(t *testing.T) {
 	if len(out.Results) != 2 {
 		t.Fatalf("results length: got %d, want 2", len(out.Results))
 	}
-	if out.Results[0].ObjectURI != "/sap/bc/adt/programs/programs/ZOK" {
+	if out.Results[0].ObjectURI != testObjectURIOK {
 		t.Errorf("first result URI: got %q", out.Results[0].ObjectURI)
 	}
 	if len(out.Results[0].References) != 1 {
 		t.Errorf("first result should have 1 reference, got %d", len(out.Results[0].References))
 	}
-	if out.Results[1].ObjectURI != "/sap/bc/adt/programs/programs/ZFAIL" {
+	if out.Results[1].ObjectURI != testObjectURIFail {
 		t.Errorf("second result URI: got %q", out.Results[1].ObjectURI)
 	}
 	if out.Results[1].Error == "" {
@@ -701,7 +701,7 @@ func firstText(result *mcp.CallToolResult) string {
 func TestBatchSyntaxCheckTool(t *testing.T) {
 	mock := &mockClient{
 		syntaxCheckFn: func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error) {
-			if uri == "/sap/bc/adt/programs/programs/ZFAIL" {
+			if uri == testObjectURIFail {
 				return []adt.SyntaxMessage{
 					{Type: "E", Text: "Syntax error", Line: 10, Column: 5},
 				}, nil
@@ -712,8 +712,8 @@ func TestBatchSyntaxCheckTool(t *testing.T) {
 	s := newTestServer(mock)
 	result := callTool(t, s, "batch_syntax_check", map[string]interface{}{
 		"object_uris": []string{
-			"/sap/bc/adt/programs/programs/ZOK",
-			"/sap/bc/adt/programs/programs/ZFAIL",
+			testObjectURIOK,
+			testObjectURIFail,
 		},
 	})
 	if result.IsError {
