@@ -88,7 +88,7 @@ func (c *httpClient) acceptHeaderForURI(objectURI string) string {
 		}
 	}
 	if bestPrefix == "" {
-		return "application/xml"
+		return contentTypeXML
 	}
 	// Check if discovery knows this endpoint. If it does, use the first
 	// content type the system supports (discovery lists them in preference
