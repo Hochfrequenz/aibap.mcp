@@ -32,6 +32,8 @@ graph TD
 | `batch_get_source` | Get source code for multiple objects in parallel |
 | `set_source_from_file` | Write ABAP source from a local file |
 | `patch_source` | Apply incremental edits to source code |
+| `get_include_source` | Read class include source (testclasses, definitions, implementations, macros) |
+| `set_include_source` | Write class include source |
 | `pretty_print` | Format ABAP source code using SAP Pretty Printer |
 | `get_completions` | Get code completion proposals at a cursor position |
 | `rename` | Rename a variable, method, or symbol with automatic reference updates |
