@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (63)
+## Available tools (68)
 
 <details>
 <summary><strong>Source code</strong> (8 tools)</summary>
@@ -42,11 +42,12 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> (14 tools)</summary>
+<summary><strong>Objects and packages</strong> (15 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `object_exists` | Check if an ABAP object exists (anti-hallucination) |
+| `batch_object_exists` | Check existence of multiple objects concurrently |
 | `search_objects` | Search for objects by name pattern and type |
 | `where_used` | Find all usages of an object |
 | `batch_where_used` | Find usages of multiple objects in parallel |
@@ -72,6 +73,7 @@ graph TD
 | `unlock_object` | Unlock a previously locked object |
 | `activate_object` | Activate a single ABAP object |
 | `activate_objects` | Activate multiple objects at once |
+| `get_inactive_objects` | List all inactive objects for the current user |
 
 </details>
 
@@ -106,11 +108,13 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Transport management</strong> (4 tools)</summary>
+<summary><strong>Transport management</strong> (6 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `get_transport_requests` | List open or released transport requests |
+| `create_transport` | Create a new transport request |
+| `release_transport` | Release a transport request or task |
 | `add_to_transport` | Assign an object to a transport request |
 | `create_transport_task` | Create a task under an existing transport request |
 | `delete_transport` | Delete a transport request or task |
@@ -136,6 +140,15 @@ graph TD
 | `get_badi_definition` | Read a BAdI enhancement spot — definitions, interfaces, filters, sample classes |
 | `get_badi_implementation` | Read a BAdI enhancement implementation — implementing classes and references |
 | `set_badi_implementation` | Update an existing BAdI enhancement implementation (creation requires SE19) |
+
+</details>
+
+<details>
+<summary><strong>Data query</strong> (1 tool)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `run_query` | Execute a SELECT query on SAP database tables |
 
 </details>
 

@@ -135,4 +135,63 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 		})
 		return mcp.NewToolResultText(string(out)), nil
 	})
+
+	s.AddTool(mcp.NewTool("batch_object_exists",
+		mcp.WithTitleAnnotation("Batch Check Objects Exist"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"Check existence of multiple ABAP objects concurrently. "+
+				"Returns true/false per object. Use this to validate a list of object references in bulk.",
+		),
+		mcp.WithArray(paramObjectURI+"s", mcp.Required(), mcp.Description("List of ADT object URIs to check")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		uris := req.GetStringSlice(paramObjectURI+"s", nil)
+		if len(uris) == 0 {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "object_uris must be a non-empty array of strings"}), nil
+		}
+
+		type existsResult struct {
+			ObjectURI string `json:"object_uri"`
+			Exists    bool   `json:"exists"`
+			Name      string `json:"name,omitempty"`
+			Type      string `json:"type,omitempty"`
+		}
+
+		results := make([]existsResult, len(uris))
+		sem := make(chan struct{}, 10)
+		var wg sync.WaitGroup
+		wg.Add(len(uris))
+		for i, uri := range uris {
+			go func(idx int, u string) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				info, err := client.GetObjectInfo(ctx, u)
+				if err != nil {
+					results[idx] = existsResult{ObjectURI: u, Exists: false}
+				} else {
+					results[idx] = existsResult{ObjectURI: u, Exists: true, Name: info.Name, Type: info.Type}
+				}
+			}(i, uri)
+		}
+		wg.Wait()
+
+		found := 0
+		for _, r := range results {
+			if r.Exists {
+				found++
+			}
+		}
+
+		out, _ := json.Marshal(map[string]any{
+			"total":   len(uris),
+			"found":   found,
+			"missing": len(uris) - found,
+			"results": results,
+		})
+		return mcp.NewToolResultText(string(out)), nil
+	})
 }
