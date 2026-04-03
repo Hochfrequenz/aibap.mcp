@@ -46,6 +46,34 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 		return mcp.NewToolResultText(string(out)), nil
 	})
 
+	s.AddTool(mcp.NewTool("object_exists",
+		mcp.WithTitleAnnotation("Check Object Exists"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"Check whether an ABAP object exists. Returns true/false with basic metadata if found. "+
+				"Use this to verify object names before reading source or navigating, avoiding hallucinated references.",
+		),
+		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		uri := req.GetString(paramObjectURI, "")
+		info, err := client.GetObjectInfo(ctx, uri)
+		if err != nil {
+			out, _ := json.Marshal(map[string]any{"exists": false, "object_uri": uri})
+			return mcp.NewToolResultText(string(out)), nil
+		}
+		out, _ := json.Marshal(map[string]any{
+			"exists":      true,
+			"object_uri":  uri,
+			"name":        info.Name,
+			"type":        info.Type,
+			"description": info.Description,
+		})
+		return mcp.NewToolResultText(string(out)), nil
+	})
+
 	s.AddTool(mcp.NewTool("batch_get_object_info",
 		mcp.WithTitleAnnotation("Batch Get Object Info"),
 		mcp.WithReadOnlyHintAnnotation(true),
