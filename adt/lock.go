@@ -14,7 +14,7 @@ func (c *httpClient) LockObject(ctx context.Context, objectURI string) (string, 
 	resp, err := c.doMutate(ctx, http.MethodPost,
 		objectURI+"?_action=LOCK&accessMode=MODIFY",
 		nil,
-		map[string]string{"Accept": "application/vnd.sap.as+xml"},
+		map[string]string{"Accept": "application/vnd.sap.as+xml;charset=UTF-8;dataname=com.sap.adt.lock.result"},
 	)
 	if err != nil {
 		return "", fmt.Errorf("LockObject: %w", err)

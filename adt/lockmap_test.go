@@ -45,6 +45,9 @@ func (m *mockReader) GetIncludeSource(_ context.Context, _, _ string) (*adt.Sour
 func (m *mockReader) SetIncludeSource(_ context.Context, _, _, _, _, _, _ string) (string, error) {
 	return "", nil
 }
+func (m *mockReader) CreateTestInclude(_ context.Context, _, _, _ string) error {
+	return nil
+}
 
 func (m *mockReader) PrettyPrint(_ context.Context, _ string) (string, error) {
 	return "", nil

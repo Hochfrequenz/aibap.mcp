@@ -39,7 +39,7 @@ func TestGetSource(t *testing.T) {
 
 func TestGetIncludeSource(t *testing.T) {
 	// ZCL_TEST padded to 30 chars = ZCL_TEST=======================
-	wantPath := "/sap/bc/adt/programs/includes/ZCL_TEST======================CCAU/source/main"
+	wantPath := "/sap/bc/adt/oo/classes/zcl_test/includes/testclasses"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == wantPath {
 			w.Header().Set("ETag", `"etag-incl"`)
@@ -68,7 +68,7 @@ func TestGetIncludeSource(t *testing.T) {
 }
 
 func TestSetIncludeSource(t *testing.T) {
-	wantPath := "/sap/bc/adt/programs/includes/ZCL_TEST======================CCAU/source/main"
+	wantPath := "/sap/bc/adt/oo/classes/zcl_test/includes/testclasses"
 	var gotPath, gotMethod, gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == csrfEndpoint {
