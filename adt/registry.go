@@ -222,6 +222,12 @@ func (r *ClientRegistry) GetEnhancementSpot(ctx context.Context, spotName string
 func (r *ClientRegistry) GetEnhancementImplementation(ctx context.Context, implName string) (*BAdIImplementationInfo, error) {
 	return r.activeClient().GetEnhancementImplementation(ctx, implName)
 }
+func (r *ClientRegistry) ListShortDumps(ctx context.Context, from, to, user string) ([]ShortDumpHeader, error) {
+	return r.activeClient().ListShortDumps(ctx, from, to, user)
+}
+func (r *ClientRegistry) GetShortDumps(ctx context.Context, from, to, user string) ([]ShortDump, error) {
+	return r.activeClient().GetShortDumps(ctx, from, to, user)
+}
 func (r *ClientRegistry) SystemInfo() (host, client string) {
 	return r.activeClient().SystemInfo()
 }

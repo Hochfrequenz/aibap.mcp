@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (52)
+## Available tools (54)
 
 <details>
 <summary><strong>Source code</strong> (5 tools)</summary>
@@ -84,6 +84,16 @@ graph TD
 | `get_message_class` | Read all messages of a message class (SE91) |
 | `search_messages` | Search messages across all message classes |
 | `set_messages` | Write messages to a message class |
+
+</details>
+
+<details>
+<summary><strong>Runtime errors (ST22)</strong> (2 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `list_short_dumps` | List recent short dumps (headers only) |
+| `get_short_dump_details` | Get full dump details with error analysis and call stack |
 
 </details>
 
