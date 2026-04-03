@@ -208,7 +208,7 @@ func (c *httpClient) DeleteObject(ctx context.Context, objectURI, lockHandle, tr
 	// The pessimistic path (lockHandle query param) fails on some systems because
 	// CL_ADT_ENQUEUE=>READ doesn't find the REST-session lock.
 	// Fetch the ETag from the object URI itself (not /source/main).
-	accept := acceptHeaderForURI(objectURI)
+	accept := c.acceptHeaderForURI(objectURI)
 	etagResp, err := c.doRead(ctx, objectURI, map[string]string{"Accept": accept})
 	if err != nil {
 		return fmt.Errorf("DeleteObject fetch ETag: %w", err)
