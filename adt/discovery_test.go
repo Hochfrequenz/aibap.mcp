@@ -76,3 +76,37 @@ func TestNegotiateContentType(t *testing.T) {
 		t.Errorf("expected v2 fallback, got %q", got)
 	}
 }
+
+func TestAcceptHeaderForURI_UsesDiscovery(t *testing.T) {
+	// System only supports v1 for packages (older ECC)
+	c := &httpClient{
+		discovery: map[string][]string{
+			"/sap/bc/adt/packages": {testPkgV1},
+		},
+	}
+
+	// Hardcoded default is v2, but discovery only has v1 → should use v1
+	got := c.acceptHeaderForURI("/sap/bc/adt/packages/Z_MY_PKG")
+	if got != testPkgV1+", application/xml" {
+		t.Errorf("expected v1 from discovery, got %q", got)
+	}
+}
+
+func TestAcceptHeaderForURI_FallsBackToHardcoded(t *testing.T) {
+	// No discovery data → use hardcoded defaults
+	c := &httpClient{}
+
+	got := c.acceptHeaderForURI("/sap/bc/adt/packages/Z_MY_PKG")
+	want := "application/vnd.sap.adt.packages.v2+xml, application/xml"
+	if got != want {
+		t.Errorf("expected hardcoded fallback %q, got %q", want, got)
+	}
+}
+
+func TestAcceptHeaderForURI_UnknownURI(t *testing.T) {
+	c := &httpClient{}
+	got := c.acceptHeaderForURI("/sap/bc/adt/something/unknown")
+	if got != "application/xml" {
+		t.Errorf("expected generic xml, got %q", got)
+	}
+}
