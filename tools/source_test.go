@@ -62,6 +62,9 @@ func (m *mockClient) GetIncludeSource(context.Context, string, string) (*adt.Sou
 func (m *mockClient) SetIncludeSource(context.Context, string, string, string, string, string, string) (string, error) {
 	return "new-etag", nil
 }
+func (m *mockClient) CreateTestInclude(context.Context, string, string, string) error {
+	return nil
+}
 func (m *mockClient) ActivateObjects(ctx context.Context, uris []string) (*adt.ActivationResult, error) {
 	if m.activateObjectsFn != nil {
 		return m.activateObjectsFn(ctx, uris)

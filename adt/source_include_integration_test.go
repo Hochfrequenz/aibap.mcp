@@ -31,49 +31,44 @@ func TestCreateAndWriteTestInclude_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
 
-	// Lock the class
+	// Lock the class (stateful session — required for include operations).
 	lockHandle, err := client.LockObject(ctx, testClassURI)
 	if err != nil {
 		t.Fatalf("LockObject: %v", err)
 	}
 	defer func() { _ = client.UnlockObject(ctx, testClassURI, lockHandle) }()
 
-	// Try writing to definitions include with lockHandle as header
-	defSrc := "*MCP test local definitions\n"
-	newETag, err := client.SetIncludeSource(ctx, testClassURI, "definitions", defSrc, lockHandle, "", "")
-	if err != nil {
-		t.Fatalf("SetIncludeSource(definitions): %v", err)
-	}
-	t.Logf("set definitions: etag=%s", newETag)
-
-	// Read back
-	result, err := client.GetIncludeSource(ctx, testClassURI, "definitions")
-	if err != nil {
-		t.Fatalf("GetIncludeSource(definitions): %v", err)
-	}
-	if !strings.Contains(result.Source, "MCP test") {
-		t.Errorf("expected MCP test in source, got: %s", result.Source)
-	}
-	t.Logf("definitions: %d bytes", len(result.Source))
-
-	// Try creating test include
+	// Create test include — requires stateful lock on the class.
 	t.Log("Creating test include...")
 	err = client.CreateTestInclude(ctx, testClassURI, lockHandle, "")
 	if err != nil {
-		t.Logf("CreateTestInclude: %v", err)
-	} else {
-		t.Log("CreateTestInclude: OK")
-
-		// Write test class source
-		testSource := "CLASS lcl_mcp_test DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.\n" +
-			"  PRIVATE SECTION.\n    METHODS test_pass FOR TESTING.\nENDCLASS.\n\n" +
-			"CLASS lcl_mcp_test IMPLEMENTATION.\n  METHOD test_pass.\n" +
-			"    cl_abap_unit_assert=>assert_equals( act = 1 exp = 1 ).\n  ENDMETHOD.\nENDCLASS.\n"
-		_, err = client.SetIncludeSource(ctx, testClassURI, "testclasses", testSource, lockHandle, "", "")
-		if err != nil {
-			t.Logf("SetIncludeSource(testclasses): %v", err)
-		} else {
-			t.Log("SetIncludeSource(testclasses): OK")
-		}
+		t.Fatalf("CreateTestInclude: %v", err)
 	}
+	t.Log("CreateTestInclude: OK")
+
+	// Write test class source to the new include.
+	testSource := "CLASS lcl_mcp_test DEFINITION FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.\n" +
+		"  PRIVATE SECTION.\n" +
+		"    METHODS test_pass FOR TESTING.\n" +
+		"ENDCLASS.\n\n" +
+		"CLASS lcl_mcp_test IMPLEMENTATION.\n" +
+		"  METHOD test_pass.\n" +
+		"    cl_abap_unit_assert=>assert_equals( act = 1 exp = 1 ).\n" +
+		"  ENDMETHOD.\n" +
+		"ENDCLASS.\n"
+	_, err = client.SetIncludeSource(ctx, testClassURI, "testclasses", testSource, lockHandle, "", "")
+	if err != nil {
+		t.Fatalf("SetIncludeSource(testclasses): %v", err)
+	}
+	t.Log("SetIncludeSource(testclasses): OK")
+
+	// Read back and verify.
+	result, err := client.GetIncludeSource(ctx, testClassURI, "testclasses")
+	if err != nil {
+		t.Fatalf("GetIncludeSource(testclasses): %v", err)
+	}
+	if !strings.Contains(result.Source, "lcl_mcp_test") {
+		t.Errorf("expected lcl_mcp_test in source, got: %s", result.Source)
+	}
+	t.Logf("testclasses: %d bytes, etag=%s", len(result.Source), result.ETag)
 }

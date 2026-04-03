@@ -66,8 +66,9 @@ func (c *httpClient) SetIncludeSource(ctx context.Context, objectURI, include, s
 		return "", err
 	}
 	headers := map[string]string{
-		"Content-Type": "text/plain; charset=utf-8",
-		"Accept":       "text/plain",
+		"Content-Type":          "text/plain; charset=utf-8",
+		"Accept":                "text/plain",
+		"X-sap-adt-sessiontype": "stateful",
 	}
 	if etag != "" {
 		headers["If-Match"] = etag
@@ -99,7 +100,7 @@ func (c *httpClient) SetIncludeSource(ctx context.Context, objectURI, include, s
 }
 
 // CreateTestInclude creates the test classes include for a class that doesn't have one yet.
-// Requires a lock on the parent class. Credit: approach from oisee/vibing-steampunk.
+// Requires a stateful lock on the parent class (LockObject uses stateful sessions).
 func (c *httpClient) CreateTestInclude(ctx context.Context, objectURI, lockHandle, transport string) error {
 	body := `<?xml version="1.0" encoding="UTF-8"?>
 <class:abapClassInclude xmlns:class="http://www.sap.com/adt/oo/classes"
@@ -115,7 +116,10 @@ func (c *httpClient) CreateTestInclude(ctx context.Context, objectURI, lockHandl
 	path := objectURI + "/includes?" + params.Encode()
 	resp, err := c.doMutate(ctx, http.MethodPost, path,
 		strings.NewReader(body),
-		map[string]string{"Content-Type": "application/*"},
+		map[string]string{
+			"Content-Type":          "application/*",
+			"X-sap-adt-sessiontype": "stateful",
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("CreateTestInclude: %w", err)
