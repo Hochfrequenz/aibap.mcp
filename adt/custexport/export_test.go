@@ -158,6 +158,9 @@ func (m *mockClient) GetEnhancementSpot(context.Context, string) (*adt.Enhanceme
 func (m *mockClient) GetEnhancementImplementation(context.Context, string) (*adt.BAdIImplementationInfo, error) {
 	panic("not implemented")
 }
+func (m *mockClient) SetEnhancementImplementation(context.Context, string, string, string, string, string) error {
+	panic("not implemented")
+}
 func (m *mockClient) ListShortDumps(context.Context, string, string, string) ([]adt.ShortDumpHeader, error) {
 	panic("not implemented")
 }

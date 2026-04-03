@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (62)
+## Available tools (63)
 
 <details>
 <summary><strong>Source code</strong> (8 tools)</summary>
@@ -129,12 +129,13 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Enhancements / BAdIs</strong> (2 tools)</summary>
+<summary><strong>Enhancements / BAdIs</strong> (3 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `get_badi_definition` | Read a BAdI enhancement spot — definitions, interfaces, filters, sample classes |
 | `get_badi_implementation` | Read a BAdI enhancement implementation — implementing classes and references |
+| `set_badi_implementation` | Update an existing BAdI enhancement implementation (creation requires SE19) |
 
 </details>
 
