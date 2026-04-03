@@ -50,6 +50,9 @@ func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResu
 	}
 	return &adt.SourceResult{}, nil
 }
+func (m *mockClient) GetClassDefinition(context.Context, string) (*adt.SourceResult, error) {
+	return &adt.SourceResult{}, nil
+}
 func (m *mockClient) SetSource(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error) {
 	if m.setSourceFn != nil {
 		return m.setSourceFn(ctx, uri, source, lockHandle, transport, etag)

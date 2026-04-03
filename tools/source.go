@@ -36,6 +36,32 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		return mcp.NewToolResultText(string(out)), nil
 	})
 
+	s.AddTool(mcp.NewTool("get_class_definition",
+		mcp.WithTitleAnnotation("Get Class Definition Only"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"Read only the definition part of an ABAP class (everything up to the first ENDCLASS), "+
+				"excluding method implementations. Use this instead of get_source when you only need "+
+				"the class signature, inheritance hierarchy, interface implementations, or method signatures. "+
+				"Saves ~95% tokens on large classes.",
+		),
+		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description("Class URI, e.g. /sap/bc/adt/oo/classes/ZCL_MY_CLASS")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		uri := req.GetString(paramObjectURI, "")
+		result, err := client.GetClassDefinition(ctx, uri)
+		if err != nil {
+			return errorResult(err), nil
+		}
+		out, _ := json.Marshal(map[string]string{
+			"source": result.Source,
+			"etag":   result.ETag,
+		})
+		return mcp.NewToolResultText(string(out)), nil
+	})
+
 	s.AddTool(mcp.NewTool("batch_get_source",
 		mcp.WithTitleAnnotation("Batch Get ABAP Source Code"),
 		mcp.WithReadOnlyHintAnnotation(true),

@@ -96,6 +96,9 @@ func (r *ClientRegistry) activeClient() Client {
 func (r *ClientRegistry) GetSource(ctx context.Context, objectURI string) (*SourceResult, error) {
 	return r.activeClient().GetSource(ctx, objectURI)
 }
+func (r *ClientRegistry) GetClassDefinition(ctx context.Context, objectURI string) (*SourceResult, error) {
+	return r.activeClient().GetClassDefinition(ctx, objectURI)
+}
 func (r *ClientRegistry) SetSource(ctx context.Context, objectURI, source, lockHandle, transport, etag string) (string, error) {
 	return r.activeClient().SetSource(ctx, objectURI, source, lockHandle, transport, etag)
 }
