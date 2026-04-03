@@ -20,6 +20,9 @@ import (
 type SourceClient interface {
 	GetSource(ctx context.Context, objectURI string) (*SourceResult, error)
 	SetSource(ctx context.Context, objectURI, source, lockHandle, transport, etag string) (string, error)
+	GetIncludeSource(ctx context.Context, objectURI, include string) (*SourceResult, error)
+	SetIncludeSource(ctx context.Context, objectURI, include, source, lockHandle, transport, etag string) (string, error)
+	CreateTestInclude(ctx context.Context, objectURI, lockHandle, transport string) error
 	PrettyPrint(ctx context.Context, source string) (string, error)
 	GetCompletions(ctx context.Context, objectURI, source string, line, column int) ([]CompletionItem, error)
 }
