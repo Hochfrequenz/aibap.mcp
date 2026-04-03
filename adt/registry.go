@@ -234,6 +234,9 @@ func (r *ClientRegistry) GetEnhancementSpot(ctx context.Context, spotName string
 func (r *ClientRegistry) GetEnhancementImplementation(ctx context.Context, implName string) (*BAdIImplementationInfo, error) {
 	return r.activeClient().GetEnhancementImplementation(ctx, implName)
 }
+func (r *ClientRegistry) SetEnhancementImplementation(ctx context.Context, implName, xmlBody, lockHandle, transport, etag string) error {
+	return r.activeClient().SetEnhancementImplementation(ctx, implName, xmlBody, lockHandle, transport, etag)
+}
 func (r *ClientRegistry) ListShortDumps(ctx context.Context, from, to, user string) ([]ShortDumpHeader, error) {
 	return r.activeClient().ListShortDumps(ctx, from, to, user)
 }

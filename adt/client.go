@@ -119,10 +119,11 @@ type QueryClient interface {
 	RunQuery(ctx context.Context, sql string, maxRows int) (*QueryResult, error)
 }
 
-// EnhancementClient reads BAdI enhancement spots and implementations.
+// EnhancementClient reads and writes BAdI enhancement spots and implementations.
 type EnhancementClient interface {
 	GetEnhancementSpot(ctx context.Context, spotName string) (*EnhancementSpotInfo, error)
 	GetEnhancementImplementation(ctx context.Context, implName string) (*BAdIImplementationInfo, error)
+	SetEnhancementImplementation(ctx context.Context, implName, xmlBody, lockHandle, transport, etag string) error
 }
 
 // SystemClient provides system metadata.
