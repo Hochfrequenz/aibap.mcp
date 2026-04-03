@@ -36,6 +36,9 @@ func (m *mockReader) GetSource(_ context.Context, _ string) (*adt.SourceResult, 
 	return m.result, m.err
 }
 
+func (m *mockReader) GetClassDefinition(_ context.Context, _ string) (*adt.SourceResult, error) {
+	return &adt.SourceResult{}, nil
+}
 func (m *mockReader) SetSource(_ context.Context, _, _, _, _, _ string) (string, error) {
 	return "", nil
 }

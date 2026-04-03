@@ -2,11 +2,14 @@ package adt
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 func (c *httpClient) GetSource(ctx context.Context, objectURI string) (*SourceResult, error) {
@@ -23,6 +26,107 @@ func (c *httpClient) GetSource(ctx context.Context, objectURI string) (*SourceRe
 		return nil, fmt.Errorf("GetSource reading body: %w", err)
 	}
 	return &SourceResult{Source: string(body), ETag: resp.Header.Get("ETag")}, nil
+}
+
+// objectStructure is the XML response from the objectstructure endpoint.
+type objectStructure struct {
+	XMLName xml.Name `xml:"objectStructureElement"`
+	Links   []struct {
+		Rel  string `xml:"rel,attr"`
+		Href string `xml:"href,attr"`
+	} `xml:"link"`
+}
+
+// parseDefinitionEndLine extracts the end line of the definitionBlock from objectstructure XML.
+// The href format is "./source/main#start=1,0;end=26,8" — we need the line from "end=26,...".
+func parseDefinitionEndLine(data []byte) (int, error) {
+	var obj objectStructure
+	if err := xml.Unmarshal(data, &obj); err != nil {
+		return 0, fmt.Errorf("parsing objectstructure: %w", err)
+	}
+	for _, link := range obj.Links {
+		if link.Rel != "http://www.sap.com/adt/relations/source/definitionBlock" {
+			continue
+		}
+		// href: "./source/main#start=1,0;end=26,8"
+		idx := strings.Index(link.Href, "end=")
+		if idx < 0 {
+			return 0, fmt.Errorf("no end= in definitionBlock href: %s", link.Href)
+		}
+		endPart := link.Href[idx+4:] // "26,8"
+		comma := strings.Index(endPart, ",")
+		if comma < 0 {
+			return 0, fmt.Errorf("no comma in end position: %s", endPart)
+		}
+		line, err := strconv.Atoi(endPart[:comma])
+		if err != nil {
+			return 0, fmt.Errorf("parsing end line %q: %w", endPart[:comma], err)
+		}
+		return line, nil
+	}
+	return 0, fmt.Errorf("definitionBlock link not found in objectstructure")
+}
+
+// GetClassDefinition returns only the definition part of a class source.
+// It fetches objectstructure (for the definition line range) and source/main concurrently,
+// then truncates the source to the definition block.
+func (c *httpClient) GetClassDefinition(ctx context.Context, objectURI string) (*SourceResult, error) {
+	type structResult struct {
+		data []byte
+		err  error
+	}
+	type sourceResult struct {
+		result *SourceResult
+		err    error
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	var sr sourceResult
+	var str structResult
+
+	go func() {
+		defer wg.Done()
+		sr.result, sr.err = c.GetSource(ctx, objectURI)
+	}()
+	go func() {
+		defer wg.Done()
+		resp, err := c.doRead(ctx, objectURI+"/objectstructure", map[string]string{"Accept": "application/xml"})
+		if err != nil {
+			str.err = fmt.Errorf("GetClassDefinition objectstructure: %w", err)
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if err := checkResponse(resp); err != nil {
+			str.err = err
+			return
+		}
+		str.data, str.err = io.ReadAll(resp.Body)
+	}()
+
+	wg.Wait()
+
+	if sr.err != nil {
+		return nil, sr.err
+	}
+	if str.err != nil {
+		return nil, str.err
+	}
+
+	endLine, err := parseDefinitionEndLine(str.data)
+	if err != nil {
+		return nil, err
+	}
+
+	// Truncate source to definition block (lines are 1-based).
+	lines := strings.Split(sr.result.Source, "\n")
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+	definition := strings.Join(lines[:endLine], "\n")
+
+	return &SourceResult{Source: definition, ETag: sr.result.ETag}, nil
 }
 
 // validIncludes lists the valid class include types.
