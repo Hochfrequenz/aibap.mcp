@@ -16,6 +16,7 @@ type SAPSystem = sapmcpconfig.SAPSystem
 type AppConfig struct {
 	sapmcpconfig.Config
 	IntegrationTestSystems []string `json:"integration_test_systems"`
+	Tools                  []string `json:"tools"`
 }
 
 // EffectiveOAuth2ClientID returns the OAuth2 client ID for the given system,
