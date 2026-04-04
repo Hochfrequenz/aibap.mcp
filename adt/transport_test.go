@@ -192,6 +192,47 @@ func TestCreateTransport(t *testing.T) {
 	}
 }
 
+func TestCreateTransportWithoutPackage(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		data, _ := io.ReadAll(r.Body)
+		gotBody = string(data)
+		w.Header().Set("Content-Type", "application/vnd.sap.as+xml")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+    <DATA>
+      <TRKORR>DEVK900888</TRKORR>
+    </DATA>
+  </asx:values>
+</asx:abap>`))
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	nr, err := client.CreateTransport(context.Background(), "K", "", "No package transport", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if nr != "DEVK900888" {
+		t.Errorf("transport number: got %q", nr)
+	}
+	if strings.Contains(gotBody, "<DEVCLASS>") {
+		t.Errorf("body must not contain DEVCLASS when package is empty, got:\n%s", gotBody)
+	}
+	if strings.Contains(gotBody, "<TARGET>") {
+		t.Errorf("body must not contain TARGET when target is empty, got:\n%s", gotBody)
+	}
+}
+
 func TestParseBackgroundRunPollURI(t *testing.T) {
 	tests := []struct {
 		name string
