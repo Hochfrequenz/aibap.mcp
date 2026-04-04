@@ -24,53 +24,79 @@ graph TD
 ## Available tools (70)
 
 <details>
-<summary><strong>Source code</strong> (8 tools)</summary>
+<summary><strong>Source code</strong> (7 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `get_source` | Read ABAP source code of any object |
-| `get_class_definition` | Read only the definition part of a class (no implementations) |
-| `batch_get_source` | Get source code for multiple objects in parallel |
-| `set_source_from_file` | Write ABAP source from a local file |
-| `patch_source` | Apply incremental edits to source code |
+| `get_class_definition` | Read only the class definition (no implementations) — saves ~95% tokens on large classes |
+| `batch_get_source` | Read source code for multiple objects in parallel |
 | `get_include_source` | Read class include source (testclasses, definitions, implementations, macros) |
-| `set_include_source` | Write class include source |
+| `set_source_from_file` | Write ABAP source from a local file (auto-locks) |
+| `set_include_source` | Write class include source (requires lock on the class) |
+| `patch_source` | Apply line-based or search/replace edits to source code (auto-locks) |
+
+</details>
+
+<details>
+<summary><strong>Code intelligence</strong> (4 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
 | `pretty_print` | Format ABAP source code using SAP Pretty Printer |
 | `get_completions` | Get code completion proposals at a cursor position |
-| `rename` | Rename a variable, method, or symbol with automatic reference updates |
+| `rename` | Rename a symbol and update all references automatically |
+| `navigate_to_definition` | Jump to the definition of a symbol at a source position |
 
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> (15 tools)</summary>
+<summary><strong>Objects and packages</strong> (10 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `object_exists` | Check if an ABAP object exists (anti-hallucination) |
+| `object_exists` | Check if an ABAP object exists (true/false + metadata) |
 | `batch_object_exists` | Check existence of multiple objects concurrently |
-| `search_objects` | Search for objects by name pattern and type |
-| `where_used` | Find all usages of an object |
-| `batch_where_used` | Find usages of multiple objects in parallel |
-| `navigate_to_definition` | Go to definition of a source reference |
-| `browse_package` | List contents of a package |
-| `get_object_info` | Get object metadata (type, package, description) |
+| `search_objects` | Search for objects by name pattern and type (supports wildcards) |
+| `browse_package` | List all objects in a package (flat, one level) |
+| `get_object_info` | Get object metadata: type, package, description |
 | `batch_get_object_info` | Get metadata for multiple objects concurrently |
-| `get_table_fields` | Get DDIC table/structure field definitions |
-| `get_version_history` | Get full version history — like 'git log' for ABAP |
-| `get_version_source` | Get source of a historical version — like 'git show' |
-| `diff_active_inactive` | Compare active vs saved source — like 'git diff' |
-| `create_object` | Create a new ABAP object (program, class, interface) |
-| `delete_object` | Delete an ABAP object |
+| `get_table_fields` | Get DDIC table/structure field definitions (DD03L) |
+| `create_object` | Create a new ABAP object (PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA) |
+| `delete_object` | Delete an ABAP object (uses optimistic locking) |
+| `diff_active_inactive` | Compare active vs inactive source — like `git diff` |
 
 </details>
 
 <details>
-<summary><strong>Locking and activation</strong> (4 tools)</summary>
+<summary><strong>Search and analysis</strong> (4 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `lock_object` | Lock an object for editing, returns a lock handle |
-| `unlock_object` | Unlock a previously locked object |
+| `where_used` | Find all objects that reference a given object |
+| `batch_where_used` | Find references for multiple objects in parallel |
+| `run_query` | Execute a SELECT query on SAP database tables (read-only) |
+| `get_abap_doc` | Look up ABAP keyword documentation |
+
+</details>
+
+<details>
+<summary><strong>Version history</strong> (2 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `get_version_history` | List version history of an object — like `git log` |
+| `get_version_source` | Read source of a specific version — like `git show` |
+
+</details>
+
+<details>
+<summary><strong>Locking and activation</strong> (5 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `lock_object` | Lock an object for editing (returns lock handle) |
+| `unlock_object` | Release a lock on an object |
 | `activate_object` | Activate a single ABAP object |
 | `activate_objects` | Activate multiple objects at once |
 | `get_inactive_objects` | List all inactive objects for the current user |
@@ -78,22 +104,29 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Testing and quality</strong> (12 tools)</summary>
+<summary><strong>Testing and quality</strong> (7 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `syntax_check` | Run a syntax check |
+| `syntax_check` | Run syntax check on an object |
 | `batch_syntax_check` | Run syntax checks on multiple objects in parallel |
-| `verify_source` | Syntax-check ABAP source without an existing object |
-| `run_unit_tests` | Run ABAP Unit Tests |
+| `verify_source` | Syntax-check source code without saving to SAP |
+| `run_unit_tests` | Run ABAP Unit tests on an object |
 | `batch_run_unit_tests` | Run unit tests on multiple objects concurrently |
-| `run_atc_check` | Run ATC (ABAP Test Cockpit) checks |
+| `run_atc_check` | Run ATC (ABAP Test Cockpit) static analysis |
 | `get_atc_customizing` | Get ATC check variant configuration |
-| `get_abap_doc` | Look up ABAP keyword documentation |
-| `get_text_elements` | Read text symbols and selection texts |
+
+</details>
+
+<details>
+<summary><strong>Messages and texts</strong> (4 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
 | `get_message_class` | Read all messages of a message class (SE91) |
 | `search_messages` | Search messages across all message classes |
 | `set_messages` | Write messages to a message class |
+| `get_text_elements` | Read text symbols and selection texts of a program |
 
 </details>
 
@@ -102,7 +135,7 @@ graph TD
 
 | Tool | Description |
 |------|-------------|
-| `list_short_dumps` | List recent short dumps (headers only) |
+| `list_short_dumps` | List recent short dumps (headers only, filterable by date/user) |
 | `get_short_dump_details` | Get full dump details with error analysis and call stack |
 
 </details>
@@ -139,18 +172,9 @@ graph TD
 
 | Tool | Description |
 |------|-------------|
-| `get_badi_definition` | Read a BAdI enhancement spot — definitions, interfaces, filters, sample classes |
-| `get_badi_implementation` | Read a BAdI enhancement implementation — implementing classes and references |
-| `set_badi_implementation` | Update an existing BAdI enhancement implementation (creation requires SE19) |
-
-</details>
-
-<details>
-<summary><strong>Data query</strong> (1 tool)</summary>
-
-| Tool | Description |
-|------|-------------|
-| `run_query` | Execute a SELECT query on SAP database tables |
+| `get_badi_definition` | Read a BAdI enhancement spot — definitions, interfaces, filters |
+| `get_badi_implementation` | Read a BAdI enhancement implementation — implementing classes and flags |
+| `set_badi_implementation` | Update an existing enhancement implementation (creation requires SE19) |
 
 </details>
 
@@ -159,16 +183,16 @@ graph TD
 
 | Tool | Description |
 |------|-------------|
-| `debug_start` | Start a debug session |
-| `debug_stop` | Stop a debug session |
-| `debug_attach` | Attach to a running debug session |
-| `debug_step` | Step into/over/out in debugger |
-| `debug_set_breakpoint` | Set a breakpoint |
-| `debug_remove_breakpoint` | Remove a breakpoint |
-| `debug_set_watchpoint` | Set a watchpoint on a variable |
-| `debug_get_variable` | Read a variable value |
-| `debug_get_stack` | Get the call stack |
-| `debug_get_sessions` | List active debug sessions |
+| `debug_start` | Set a breakpoint and wait for it to be hit |
+| `debug_stop` | Stop the debug listener and clean up breakpoints |
+| `debug_attach` | Attach to an active debuggee session |
+| `debug_step` | Step into / over / out / continue |
+| `debug_get_variable` | Read a variable value in the current scope |
+| `debug_get_stack` | Get the current call stack |
+| `debug_get_sessions` | List active debuggee sessions |
+| `debug_set_breakpoint` | Set an additional breakpoint |
+| `debug_set_watchpoint` | Break when a variable value changes |
+| `debug_remove_breakpoint` | Remove a breakpoint (not yet implemented) |
 
 </details>
 

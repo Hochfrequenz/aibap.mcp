@@ -64,7 +64,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		mcp.WithTitleAnnotation("Remove Breakpoint"),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Not yet implemented. Breakpoints are cleared automatically when debug_stop is called."),
+		mcp.WithDescription("Remove a breakpoint by ID. Note: all breakpoints are also cleared automatically when debug_stop is called."),
 		mcp.WithString("breakpoint_id",
 			mcp.Required(),
 			mcp.Description("Breakpoint ID returned by debug_set_breakpoint"),
