@@ -131,6 +131,11 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	}
 	t.Logf("[4] activated %s (success=%v, messages=%d)", objName, result.Success, len(result.Messages))
 
+	// Release residual ENQUEUE lock from CreateObject/Activate.
+	if lh, lockErr := client.LockObject(ctx, objectURI); lockErr == nil {
+		_ = client.UnlockObject(ctx, objectURI, lh)
+	}
+
 	// 5. Verify version history and retrieve historical source
 	versions, err := client.GetVersionHistory(ctx, objectURI)
 	if err != nil {

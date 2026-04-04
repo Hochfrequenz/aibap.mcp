@@ -81,5 +81,6 @@ type CreateTransportData struct {
 	Category    string `xml:"CATEGORY"`
 	Target      string `xml:"TARGET"`
 	Description string `xml:"DESCRIPTION"`
+	Text        string `xml:"AS4TEXT"`
 	DevClass    string `xml:"DEVCLASS"`
 }

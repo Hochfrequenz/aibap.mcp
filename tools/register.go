@@ -71,6 +71,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 	registerTextElementTools(ls, client)
 	registerMessageClassTools(ls, client)
 	registerQueryTools(ls, client)
+	registerRollbackTools(ls, client)
 	registerEnhancementTools(ls, client)
 	registerShortDumpTools(ls, client)
 }

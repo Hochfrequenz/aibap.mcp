@@ -105,8 +105,11 @@ type TransportClient interface {
 	CreateTransportTask(ctx context.Context, parentTransport, owner, description string) (string, error)
 	DeleteTransport(ctx context.Context, transportNumber string) error
 	ReleaseTransport(ctx context.Context, transportNumber string) error
+	ReleaseTransportWithTasks(ctx context.Context, transportNumber string) error
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
+	GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error)
+	GetTransportTasks(ctx context.Context, transportNumber string) ([]string, error)
 }
 
 // ExportClient handles package exports.
