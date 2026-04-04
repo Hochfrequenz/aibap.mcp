@@ -368,8 +368,15 @@ func (c *httpClient) GetTransportRequests(ctx context.Context, user, status stri
 		return nil, fmt.Errorf("GetTransportRequests parsing: %w", err)
 	}
 
-	result := make([]TransportRequest, len(root.WorkbenchRequests))
-	for i, r := range root.WorkbenchRequests {
+	// Collect requests from all groups (workbench + customizing) and buckets (modifiable + released).
+	var all []adtxml.TransportRequest
+	for _, group := range []adtxml.TransportGroup{root.Workbench, root.Customizing} {
+		all = append(all, group.Modifiable.Requests...)
+		all = append(all, group.Released.Requests...)
+	}
+
+	result := make([]TransportRequest, len(all))
+	for i, r := range all {
 		result[i] = TransportRequest{
 			Number: r.Number, Owner: r.Owner,
 			Description: r.Description, Status: r.Status,
