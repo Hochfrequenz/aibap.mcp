@@ -548,6 +548,158 @@ func TestGetTransportRequestsToolError(t *testing.T) {
 	}
 }
 
+func TestGetObjectInfoBatch(t *testing.T) {
+	mock := &mockClient{
+		getObjectFn: func(ctx context.Context, uri string) (*adt.ObjectInfo, error) {
+			return &adt.ObjectInfo{Name: "ZOBJ", Type: "PROG/P"}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_info", map[string]interface{}{
+		"object_uri": []any{"/sap/bc/adt/programs/programs/ZA", "/sap/bc/adt/programs/programs/ZB"},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error")
+	}
+	var text string
+	for _, c := range result.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			text = tc.Text
+			break
+		}
+	}
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
+	if resp["total"] != float64(2) {
+		t.Errorf("total: got %v", resp["total"])
+	}
+}
+
+func TestObjectExistsBatch(t *testing.T) {
+	mock := &mockClient{
+		getObjectFn: func(ctx context.Context, uri string) (*adt.ObjectInfo, error) {
+			if uri == testObjectURIFail {
+				return nil, &adt.ADTError{StatusCode: 404, Message: "Not found"}
+			}
+			return &adt.ObjectInfo{Name: "ZOK", Type: "PROG/P"}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "object_exists", map[string]interface{}{
+		"object_uri": []any{testObjectURIOK, testObjectURIFail},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error")
+	}
+	var text string
+	for _, c := range result.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			text = tc.Text
+			break
+		}
+	}
+	var resp map[string]any
+	json.Unmarshal([]byte(text), &resp)
+	if resp["found"] != float64(1) {
+		t.Errorf("found: got %v", resp["found"])
+	}
+	if resp["missing"] != float64(1) {
+		t.Errorf("missing: got %v", resp["missing"])
+	}
+}
+
+func TestWhereUsedBatch(t *testing.T) {
+	mock := &mockClient{
+		whereUsedFn: func(ctx context.Context, uri string) ([]adt.ObjectInfo, error) {
+			return []adt.ObjectInfo{{Name: "ZCALLER", Type: "PROG/P"}}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "where_used", map[string]interface{}{
+		"object_uri": []any{"/sap/bc/adt/programs/programs/ZA", "/sap/bc/adt/programs/programs/ZB"},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error")
+	}
+	var text string
+	for _, c := range result.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			text = tc.Text
+			break
+		}
+	}
+	var resp map[string]any
+	json.Unmarshal([]byte(text), &resp)
+	if resp["total"] != float64(2) {
+		t.Errorf("total: got %v", resp["total"])
+	}
+	if resp["total_references"] != float64(2) {
+		t.Errorf("total_references: got %v", resp["total_references"])
+	}
+}
+
+func TestSyntaxCheckBatch(t *testing.T) {
+	mock := &mockClient{
+		syntaxCheckFn: func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error) {
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "syntax_check", map[string]interface{}{
+		"object_uri": []any{"/sap/bc/adt/programs/programs/ZA", "/sap/bc/adt/programs/programs/ZB"},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error")
+	}
+	var text string
+	for _, c := range result.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			text = tc.Text
+			break
+		}
+	}
+	var resp map[string]any
+	json.Unmarshal([]byte(text), &resp)
+	if resp["total"] != float64(2) {
+		t.Errorf("total: got %v", resp["total"])
+	}
+	if resp["clean"] != float64(2) {
+		t.Errorf("clean: got %v", resp["clean"])
+	}
+}
+
+func TestRunUnitTestsBatch(t *testing.T) {
+	mock := &mockClient{
+		runTestsFn: func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error) {
+			return &adt.TestResult{Passed: 3, Failed: 0}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "run_unit_tests", map[string]interface{}{
+		"object_uri": []any{"/sap/bc/adt/programs/programs/ZA", "/sap/bc/adt/programs/programs/ZB"},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error")
+	}
+	var text string
+	for _, c := range result.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			text = tc.Text
+			break
+		}
+	}
+	var resp map[string]any
+	json.Unmarshal([]byte(text), &resp)
+	if resp["total_objects"] != float64(2) {
+		t.Errorf("total_objects: got %v", resp["total_objects"])
+	}
+	if resp["total_passed"] != float64(6) {
+		t.Errorf("total_passed: got %v", resp["total_passed"])
+	}
+}
+
 func TestAddToTransportTool(t *testing.T) {
 	var gotURI, gotTransport string
 	mock := &mockClient{

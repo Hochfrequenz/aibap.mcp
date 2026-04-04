@@ -374,7 +374,7 @@ func TestWhereUsedToolError(t *testing.T) {
 	}
 }
 
-// --- batch_where_used ---
+// --- where_used (batch) ---
 
 func TestBatchWhereUsedTool(t *testing.T) {
 	mock := &mockClient{
@@ -386,8 +386,8 @@ func TestBatchWhereUsedTool(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_where_used", map[string]interface{}{
-		"object_uris": []string{
+	result := callTool(t, s, "where_used", map[string]interface{}{
+		"object_uri": []string{
 			testObjectURIOK,
 			testObjectURIFail,
 		},
@@ -438,8 +438,8 @@ func TestBatchWhereUsedSingleURI(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_where_used", map[string]interface{}{
-		"object_uris": []string{testObjectURI},
+	result := callTool(t, s, "where_used", map[string]interface{}{
+		"object_uri": []string{testObjectURI},
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", firstText(result))
@@ -467,8 +467,8 @@ func TestBatchWhereUsedAllErrors(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_where_used", map[string]interface{}{
-		"object_uris": []string{
+	result := callTool(t, s, "where_used", map[string]interface{}{
+		"object_uri": []string{
 			"/sap/bc/adt/programs/programs/ZFAIL1",
 			"/sap/bc/adt/programs/programs/ZFAIL2",
 		},
@@ -499,11 +499,11 @@ func TestBatchWhereUsedAllErrors(t *testing.T) {
 func TestBatchWhereUsedEmptyURIs(t *testing.T) {
 	mock := &mockClient{}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_where_used", map[string]interface{}{
-		"object_uris": []string{},
+	result := callTool(t, s, "where_used", map[string]interface{}{
+		"object_uri": []string{},
 	})
-	if !result.IsError {
-		t.Error("expected error for empty URIs")
+	if result.IsError {
+		t.Errorf("unexpected error for empty array: %s", firstText(result))
 	}
 }
 
@@ -696,7 +696,7 @@ func firstText(result *mcp.CallToolResult) string {
 	return ""
 }
 
-// --- batch_get_object_info ---
+// --- get_object_info (batch) ---
 
 func TestBatchGetObjectInfoTool(t *testing.T) {
 	mock := &mockClient{
@@ -708,8 +708,8 @@ func TestBatchGetObjectInfoTool(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_get_object_info", map[string]interface{}{
-		"object_uris": []string{testObjectURIOK, testObjectURIFail},
+	result := callTool(t, s, "get_object_info", map[string]interface{}{
+		"object_uri": []string{testObjectURIOK, testObjectURIFail},
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", firstText(result))
@@ -758,8 +758,8 @@ func TestBatchGetObjectInfoSingleURI(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_get_object_info", map[string]interface{}{
-		"object_uris": []string{testObjectURI},
+	result := callTool(t, s, "get_object_info", map[string]interface{}{
+		"object_uri": []string{testObjectURI},
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", firstText(result))
@@ -784,8 +784,8 @@ func TestBatchGetObjectInfoAllErrors(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_get_object_info", map[string]interface{}{
-		"object_uris": []string{"/sap/bc/adt/programs/programs/ZFAIL1", "/sap/bc/adt/programs/programs/ZFAIL2"},
+	result := callTool(t, s, "get_object_info", map[string]interface{}{
+		"object_uri": []string{"/sap/bc/adt/programs/programs/ZFAIL1", "/sap/bc/adt/programs/programs/ZFAIL2"},
 	})
 	if result.IsError {
 		t.Fatalf("unexpected tool-level error: %s", firstText(result))
@@ -805,15 +805,15 @@ func TestBatchGetObjectInfoAllErrors(t *testing.T) {
 func TestBatchGetObjectInfoEmptyURIs(t *testing.T) {
 	mock := &mockClient{}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_get_object_info", map[string]interface{}{
-		"object_uris": []string{},
+	result := callTool(t, s, "get_object_info", map[string]interface{}{
+		"object_uri": []string{},
 	})
-	if !result.IsError {
-		t.Error("expected error for empty URIs")
+	if result.IsError {
+		t.Errorf("unexpected error for empty array: %s", firstText(result))
 	}
 }
 
-// --- batch_run_unit_tests ---
+// --- run_unit_tests (batch) ---
 
 func TestBatchRunUnitTestsTool(t *testing.T) {
 	mock := &mockClient{
@@ -825,8 +825,8 @@ func TestBatchRunUnitTestsTool(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_run_unit_tests", map[string]interface{}{
-		"object_uris": []string{
+	result := callTool(t, s, "run_unit_tests", map[string]interface{}{
+		"object_uri": []string{
 			testObjectURIOK,
 			testObjectURIFail,
 		},
@@ -880,8 +880,8 @@ func TestBatchRunUnitTestsSingleURI(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_run_unit_tests", map[string]interface{}{
-		"object_uris": []string{testObjectURIOK},
+	result := callTool(t, s, "run_unit_tests", map[string]interface{}{
+		"object_uri": []string{testObjectURIOK},
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", firstText(result))
@@ -910,8 +910,8 @@ func TestBatchRunUnitTestsAllErrors(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_run_unit_tests", map[string]interface{}{
-		"object_uris": []string{
+	result := callTool(t, s, "run_unit_tests", map[string]interface{}{
+		"object_uri": []string{
 			"/sap/bc/adt/programs/programs/ZFAIL1",
 			"/sap/bc/adt/programs/programs/ZFAIL2",
 		},
@@ -947,15 +947,15 @@ func TestBatchRunUnitTestsAllErrors(t *testing.T) {
 func TestBatchRunUnitTestsEmptyURIs(t *testing.T) {
 	mock := &mockClient{}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_run_unit_tests", map[string]interface{}{
-		"object_uris": []string{},
+	result := callTool(t, s, "run_unit_tests", map[string]interface{}{
+		"object_uri": []string{},
 	})
-	if !result.IsError {
-		t.Error("expected error for empty URIs")
+	if result.IsError {
+		t.Errorf("unexpected error for empty array: %s", firstText(result))
 	}
 }
 
-// --- batch_syntax_check ---
+// --- syntax_check (batch) ---
 
 func TestBatchSyntaxCheckTool(t *testing.T) {
 	mock := &mockClient{
@@ -969,8 +969,8 @@ func TestBatchSyntaxCheckTool(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_syntax_check", map[string]interface{}{
-		"object_uris": []string{
+	result := callTool(t, s, "syntax_check", map[string]interface{}{
+		"object_uri": []string{
 			testObjectURIOK,
 			testObjectURIFail,
 		},
@@ -1012,11 +1012,11 @@ func TestBatchSyntaxCheckTool(t *testing.T) {
 func TestBatchSyntaxCheckEmptyURIs(t *testing.T) {
 	mock := &mockClient{}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_syntax_check", map[string]interface{}{
-		"object_uris": []string{},
+	result := callTool(t, s, "syntax_check", map[string]interface{}{
+		"object_uri": []string{},
 	})
-	if !result.IsError {
-		t.Error("expected error for empty URIs")
+	if result.IsError {
+		t.Errorf("unexpected error for empty array: %s", firstText(result))
 	}
 }
 
