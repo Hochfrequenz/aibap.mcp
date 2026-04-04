@@ -149,6 +149,12 @@ func (m *mockClient) AddToTransport(ctx context.Context, uri, transport string) 
 	}
 	return nil
 }
+func (m *mockClient) GetTransportInfo(context.Context, string) (*adt.TransportRequest, error) {
+	return nil, nil
+}
+func (m *mockClient) GetTransportObjects(context.Context, string) ([]adt.TransportObject, error) {
+	return nil, nil
+}
 func (m *mockClient) LockObject(ctx context.Context, uri string) (string, error) {
 	if m.lockObjectFn != nil {
 		return m.lockObjectFn(ctx, uri)
@@ -205,6 +211,12 @@ func (m *mockClient) RunQuery(_ context.Context, _ string, _ int) (*adt.QueryRes
 }
 func (m *mockClient) ReleaseTransport(context.Context, string) error {
 	return nil
+}
+func (m *mockClient) ReleaseTransportWithTasks(context.Context, string) error {
+	return nil
+}
+func (m *mockClient) GetTransportTasks(context.Context, string) ([]string, error) {
+	return nil, nil
 }
 func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { return "", nil }
 func (m *mockClient) GetTextElements(context.Context, string) (*adt.TextElements, error) {

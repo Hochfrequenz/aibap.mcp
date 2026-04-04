@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/Hochfrequenz/mcp-server-abap/config"
@@ -188,6 +189,104 @@ func TestCreateTransport(t *testing.T) {
 	}
 	if strings.Contains(gotBody, "<AS4TEXT>") {
 		t.Error("body must not contain AS4TEXT (use REQUEST_TEXT instead)")
+	}
+}
+
+func TestParseBackgroundRunPollURI(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want string
+	}{
+		{
+			name: "sync release response (no background run)",
+			data: `<?xml version="1.0" encoding="utf-8"?>
+<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm">
+  <tm:releasereports><tm:checkReport chkrun:status="released"/></tm:releasereports>
+</tm:root>`,
+			want: "",
+		},
+		{
+			name: "background run with self link",
+			data: `<?xml version="1.0" encoding="utf-8"?>
+<runs:run xmlns:runs="http://www.sap.com/adt/bgrun" xmlns:atom="http://www.w3.org/2005/Atom">
+  <runs:status>running</runs:status>
+  <atom:link rel="self" href="/sap/bc/adt/system/backgroundruns/12345"/>
+</runs:run>`,
+			want: "/sap/bc/adt/system/backgroundruns/12345",
+		},
+		{
+			name: "empty data",
+			data: "",
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := adt.ParseBackgroundRunPollURI([]byte(tt.data))
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReleaseTransportAsync(t *testing.T) {
+	pollCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		// POST to newreleasejobs → return background run
+		if r.Method == http.MethodPost && strings.Contains(r.URL.Path, "newreleasejobs") {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<runs:run xmlns:runs="http://www.sap.com/adt/bgrun" xmlns:atom="http://www.w3.org/2005/Atom">
+  <runs:status>new</runs:status>
+  <atom:link rel="self" href="/sap/bc/adt/system/backgroundruns/99"/>
+</runs:run>`))
+			return
+		}
+		// GET poll URI → first call: running, second: finished with result link
+		if r.URL.Path == "/sap/bc/adt/system/backgroundruns/99" {
+			pollCount++
+			if pollCount < 2 {
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<runs:run xmlns:runs="http://www.sap.com/adt/bgrun" xmlns:atom="http://www.w3.org/2005/Atom">
+  <runs:status>running</runs:status>
+</runs:run>`))
+			} else {
+				_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<runs:run xmlns:runs="http://www.sap.com/adt/bgrun" xmlns:atom="http://www.w3.org/2005/Atom">
+  <runs:status>finished</runs:status>
+  <atom:link rel="http://www.sap.com/adt/relations/runs/result" href="/sap/bc/adt/system/backgroundruns/99/result" type="application/http"/>
+</runs:run>`))
+			}
+			return
+		}
+		// GET result URI → release report
+		if r.URL.Path == "/sap/bc/adt/system/backgroundruns/99/result" {
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm" xmlns:chkrun="http://www.sap.com/adt/checkrun">
+  <tm:releasereports><tm:checkReport chkrun:status="released"/></tm:releasereports>
+</tm:root>`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClientWithPollInterval(cfg, 10*time.Millisecond)
+
+	err := client.ReleaseTransport(context.Background(), "DEVK900123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pollCount < 2 {
+		t.Errorf("expected at least 2 poll requests, got %d", pollCount)
 	}
 }
 
