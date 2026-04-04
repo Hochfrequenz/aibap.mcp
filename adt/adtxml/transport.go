@@ -4,11 +4,12 @@ import "encoding/xml"
 
 // TransportRoot is the XML response from GET /sap/bc/adt/cts/transportrequests.
 // Real SAP structure: root > workbench > modifiable|released > request
-//                     root > customizing > modifiable|released > request
+//
+//	root > customizing > modifiable|released > request
 type TransportRoot struct {
-	XMLName     xml.Name        `xml:"root"`
-	Workbench   TransportGroup  `xml:"workbench"`
-	Customizing TransportGroup  `xml:"customizing"`
+	XMLName     xml.Name       `xml:"root"`
+	Workbench   TransportGroup `xml:"workbench"`
+	Customizing TransportGroup `xml:"customizing"`
 }
 
 // TransportGroup holds modifiable and released transport requests.
