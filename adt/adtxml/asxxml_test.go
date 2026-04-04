@@ -135,6 +135,7 @@ func TestMarshalASXData_TransportCreateRequest(t *testing.T) {
 	input := CreateTransportData{
 		Category:    "K",
 		Target:      "DUM",
+		Text:        "My transport description",
 		Description: "My transport description",
 		DevClass:    "$TMP",
 	}
@@ -151,8 +152,8 @@ func TestMarshalASXData_TransportCreateRequest(t *testing.T) {
 	if !strings.Contains(xmlStr, "<CATEGORY>K</CATEGORY>") {
 		t.Error("missing CATEGORY element")
 	}
-	if !strings.Contains(xmlStr, "<DESCRIPTION>My transport description</DESCRIPTION>") {
-		t.Error("missing DESCRIPTION element")
+	if !strings.Contains(xmlStr, "<REQUEST_TEXT>My transport description</REQUEST_TEXT>") {
+		t.Error("missing REQUEST_TEXT element")
 	}
 	if !strings.Contains(xmlStr, "<DEVCLASS>$TMP</DEVCLASS>") {
 		t.Error("missing DEVCLASS element")
