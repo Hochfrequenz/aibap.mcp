@@ -130,9 +130,9 @@ func TestMain(m *testing.M) {
 				fmt.Printf("  [deleted] %s %s\n", f.objType, f.name)
 			}
 		}
-		// Release the transport so objects don't stay locked for future runs.
+		// Release transport including tasks (test cleanup).
 		if transport != "" {
-			if err := client.ReleaseTransport(ctx, transport); err != nil {
+			if err := client.ReleaseTransportWithTasks(ctx, transport); err != nil {
 				fmt.Printf("  [transport release failed] %s: %v\n", transport, err)
 			} else {
 				fmt.Printf("  [transport released] %s\n", transport)
@@ -207,7 +207,7 @@ func setupFixtures(ctx context.Context, client adt.Client) ([]fixtureObject, str
 		fmt.Printf("  [created] %s %s in package %s\n", f.objType, f.name, usedPkg)
 
 		// Set source: lock → get etag → set source → unlock.
-		if err := setFixtureSource(ctx, client, f); err != nil {
+		if err := setFixtureSource(ctx, client, f, fixtureTransport); err != nil {
 			return created, fixtureTransport, fmt.Errorf("set source %s: %w", f.name, err)
 		}
 		fmt.Printf("  [source set] %s\n", f.name)
@@ -235,7 +235,7 @@ func setupFixtures(ctx context.Context, client adt.Client) ([]fixtureObject, str
 }
 
 // setFixtureSource locks an object, writes its source, and unlocks it.
-func setFixtureSource(ctx context.Context, client adt.Client, f fixtureObject) error {
+func setFixtureSource(ctx context.Context, client adt.Client, f fixtureObject, transport string) error {
 	lockHandle, err := client.LockObject(ctx, f.objectURI)
 	if err != nil {
 		return fmt.Errorf("lock: %w", err)
@@ -249,7 +249,7 @@ func setFixtureSource(ctx context.Context, client adt.Client, f fixtureObject) e
 		return fmt.Errorf("get source for etag: %w", err)
 	}
 
-	_, err = client.SetSource(ctx, f.objectURI, f.source, lockHandle, "", src.ETag)
+	_, err = client.SetSource(ctx, f.objectURI, f.source, lockHandle, transport, src.ETag)
 	if err != nil {
 		return fmt.Errorf("set source: %w", err)
 	}

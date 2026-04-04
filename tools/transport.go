@@ -113,12 +113,21 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 		mcp.WithDescription(
 			"Release a transport request or task. Released transports are queued for import "+
 				"into the target system and cannot be modified afterwards. "+
-				"All tasks must be released before the parent transport can be released.",
+				"All tasks must be released before the parent request — if include_tasks is true, "+
+				"tasks are released automatically first.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to release")),
+		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
-		if err := client.ReleaseTransport(ctx, transport); err != nil {
+		includeTasks := req.GetBool("include_tasks", false)
+		var err error
+		if includeTasks {
+			err = client.ReleaseTransportWithTasks(ctx, transport)
+		} else {
+			err = client.ReleaseTransport(ctx, transport)
+		}
+		if err != nil {
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultText("Transport " + transport + " released"), nil
@@ -141,5 +150,26 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultText("Transport " + transport + " deleted"), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_transport_objects",
+		mcp.WithTitleAnnotation("Get Transport Objects"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"List all objects recorded in a transport request (deduplicated across request and tasks). "+
+				"Use this to see what a transport contains before releasing or rolling back.",
+		),
+		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		transport := req.GetString("transport", "")
+		objects, err := client.GetTransportObjects(ctx, transport)
+		if err != nil {
+			return errorResult(err), nil
+		}
+		out, _ := json.Marshal(objects)
+		return mcp.NewToolResultText(string(out)), nil
 	})
 }

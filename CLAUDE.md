@@ -18,6 +18,8 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 - **Integration tests**: `go test ./adt/ -tags integration` — run against a real SAP system. Require `SAP_INTEGRATION_*` env vars from `.env`.
 - **Transport tests**: `go test ./adt/ -tags 'integration transport'` — create, release, and modify transports on SAP. **Only run when explicitly requested** — these leave artifacts on the system.
 - **Never run transport tests automatically** as part of a general integration test run.
+- **Never run the full integration suite unprompted.** Always use `-run TestSpecificFunc` to test individual functions. Only run the full suite when explicitly asked.
+- **Fix before creating:** When a SAP object (transport, program, etc.) has a problem, fix the existing one first. Don't keep creating new objects to work around issues.
 - **Coverage thresholds** (enforced in CI per package): `config` 80%, `auth` 75%, `adt/custexport` 60%, `adt/adtxml` 50%, `adt` 40%. `tools`/`logging`/`cmd` are integration-tested only (0%).
 - **Test package dependency**: Integration tests require SAP package `Z_ADT_MCP_TEST` on the target system. Install from [Hochfrequenz/Z_ADT_MCP_TEST](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST).
 
@@ -54,11 +56,18 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 
 When you need to understand how an ADT endpoint works or debug unexpected behavior:
 
-1. **Use our own MCP server tools** (`mcp__sap-adt__*`) to query the live SAP system — call `select_system`, then use `get_object_info`, `search_objects`, `get_source`, etc. to inspect real responses.
-2. **Write throwaway integration tests** to probe endpoint behavior (paths, headers, response formats). Delete them once the investigation is done.
-3. **Debug handler code** by setting breakpoints in the `adt/` package and running the relevant unit test — see `docs/debugger-investigation.md` for the proven debug flow.
-4. **Check ADT discovery** — the server caches `/sap/bc/adt/discovery` XML which lists available endpoints and their accepted content types per system.
-5. **Test against both systems** (`hfq` = ECC, `s4u` = S4) — endpoint behavior often differs.
+1. **Use our own MCP server tools** (`mcp__sap-adt__*`) to query the live SAP system — call `select_system`, then use `get_object_info`, `search_objects`, `get_source`, etc. to inspect real responses. Prefer these over `mcp__sap-desktop__*` (SAP GUI automation is fragile — popups are invisible, complex layouts).
+2. **Query TRDIR/TADIR first** — `SELECT NAME, SUBC FROM TRDIR WHERE NAME LIKE 'ZCL_%'` reveals internal program structure. This is ground truth.
+3. **Read the ABAP handler source** — use `get_source` on ADT resource classes (`CL_SEDI_ADT_RES_SOURCE`, `CL_WB_ADT_REST_RESOURCE` etc.) to understand what the server expects. Search for error message IDs to find validation code.
+4. **Write throwaway integration tests** to probe endpoint behavior (paths, headers, response formats). Delete them once the investigation is done.
+5. **Debug handler code** by setting breakpoints in the `adt/` package and running the relevant unit test — see `docs/debugger-investigation.md` for the proven debug flow.
+6. **Check ADT discovery** — the server caches `/sap/bc/adt/discovery` XML which lists available endpoints and their accepted content types per system.
+7. **Test against both systems** (`hfq` = ECC, `s4u` = S4) — endpoint behavior often differs.
+8. **Other implementations are inspiration, not truth** — code targeting BTP/Steampunk may not work on S4 on-prem. Always verify against the real system.
+
+## Coding Pitfalls
+
+- **Never use Go backtick (raw) string literals for ABAP source code** in test fixtures. Backtick strings preserve tab indentation from the Go source file, causing invisible syntax errors in SAP. Use double-quoted strings with `\n` concatenation instead.
 
 ## SAP ADT
 
@@ -67,3 +76,5 @@ When you need to understand how an ADT endpoint works or debug unexpected behavi
 - Override config path via `SAP_CONFIG_FILE` env var.
 - S4 systems require HTTPS (secure cookie flag breaks HTTP — see #108).
 - ECC systems may not have all endpoints (e.g. `/sap/bc/adt/packages` is S4-only).
+- **Transport release** only works via REST on S4 (`/newreleasejobs`). On ECC, release must happen via SAP GUI (SE09).
+- **Stateful sessions** (`X-sap-adt-sessiontype: stateful`) solve 423 lock errors when SAP checks locks in the wrong enqueue table. Proven for debugger and class includes. When hitting 423 on new endpoints, try stateful sessions first.

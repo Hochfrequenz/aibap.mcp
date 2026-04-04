@@ -73,6 +73,12 @@ func (m *mockClient) GetTransportRequests(context.Context, string, string) ([]ad
 func (m *mockClient) AddToTransport(context.Context, string, string) error {
 	panic("not implemented")
 }
+func (m *mockClient) GetTransportInfo(context.Context, string) (*adt.TransportRequest, error) {
+	panic("not implemented")
+}
+func (m *mockClient) GetTransportObjects(context.Context, string) ([]adt.TransportObject, error) {
+	panic("not implemented")
+}
 func (m *mockClient) LockObject(context.Context, string) (string, error) {
 	panic("not implemented")
 }
@@ -119,6 +125,12 @@ func (m *mockClient) DeleteTransport(context.Context, string) error {
 	panic("not implemented")
 }
 func (m *mockClient) ReleaseTransport(context.Context, string) error {
+	panic("not implemented")
+}
+func (m *mockClient) ReleaseTransportWithTasks(context.Context, string) error {
+	panic("not implemented")
+}
+func (m *mockClient) GetTransportTasks(context.Context, string) ([]string, error) {
 	panic("not implemented")
 }
 func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { panic("not implemented") }

@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (68)
+## Available tools (70)
 
 <details>
 <summary><strong>Source code</strong> (7 tools)</summary>
@@ -141,16 +141,29 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Transport management</strong> (6 tools)</summary>
+<summary><strong>Transport management</strong> (8 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `get_transport_requests` | List transport requests (filterable by user/status) |
-| `create_transport` | Create a new transport request (K=workbench, T=customizing) |
+| `get_transport_requests` | List open or released transport requests |
+| `get_transport_objects` | List all objects recorded in a transport (deduplicated) |
+| `create_transport` | Create a new transport request |
 | `create_transport_task` | Create a task under an existing transport request |
-| `release_transport` | Release a transport request or task for import |
-| `add_to_transport` | Record an object into a transport task |
-| `delete_transport` | Delete a modifiable transport request or task |
+| `release_transport` | Release a transport request or task |
+| `add_to_transport` | Assign an object to a transport request |
+| `delete_transport` | Delete a transport request or task |
+| `rollback_transport` | Restore all source objects to their pre-transport version |
+
+</details>
+
+<details>
+<summary><strong>Export</strong> (3 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `export_package` | Export an ABAP package as abapGit ZIP or folder ([requires companion](https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT)) |
+| `export_packages` | Bulk export with wildcard patterns and include/exclude filters |
+| `export_customizing` | Export all customizing tables to SQLite + JSON (read-only, ~16K tables with `customer_only`) |
 
 </details>
 
@@ -162,17 +175,6 @@ graph TD
 | `get_badi_definition` | Read a BAdI enhancement spot — definitions, interfaces, filters |
 | `get_badi_implementation` | Read a BAdI enhancement implementation — implementing classes and flags |
 | `set_badi_implementation` | Update an existing enhancement implementation (creation requires SE19) |
-
-</details>
-
-<details>
-<summary><strong>Export</strong> (3 tools)</summary>
-
-| Tool | Description |
-|------|-------------|
-| `export_package` | Export a package as abapGit ZIP ([requires companion](https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT)) |
-| `export_packages` | Bulk export with wildcard patterns and include/exclude filters |
-| `export_customizing` | Export customizing tables to SQLite + JSON (~16K tables) |
 
 </details>
 

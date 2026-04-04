@@ -105,8 +105,12 @@ type TransportClient interface {
 	CreateTransportTask(ctx context.Context, parentTransport, owner, description string) (string, error)
 	DeleteTransport(ctx context.Context, transportNumber string) error
 	ReleaseTransport(ctx context.Context, transportNumber string) error
+	ReleaseTransportWithTasks(ctx context.Context, transportNumber string) error
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
+	GetTransportInfo(ctx context.Context, transportNumber string) (*TransportRequest, error)
+	GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error)
+	GetTransportTasks(ctx context.Context, transportNumber string) ([]string, error)
 }
 
 // ExportClient handles package exports.
@@ -162,10 +166,17 @@ type httpClient struct {
 	discovery        map[string][]string          // endpoint → accepted content types from discovery
 	accessToken      string                       // OAuth2 access token (empty = Basic Auth)
 	onTokenRefresh   func(string) (string, error) // callback to refresh token, returns new access token
+	pollInterval     time.Duration                // polling interval for background runs (default: 10s)
 }
 
 // NewClient creates a new ADT HTTP client configured from cfg.
 func NewClient(cfg config.SAPSystem) Client {
+	return NewClientWithPollInterval(cfg, backgroundRunPollInterval)
+}
+
+// NewClientWithPollInterval creates a new ADT HTTP client with a custom polling interval
+// for background release jobs. Use NewClient for the default 10-second interval.
+func NewClientWithPollInterval(cfg config.SAPSystem, pollInterval time.Duration) Client {
 	jar, _ := cookiejar.New(nil)
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
@@ -184,6 +195,7 @@ func NewClient(cfg config.SAPSystem) Client {
 			Transport: transport,
 			Jar:       jar,
 		},
+		pollInterval: pollInterval,
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
@@ -165,16 +166,178 @@ func (c *httpClient) DeleteTransport(ctx context.Context, transportNumber string
 	return checkResponse(resp)
 }
 
+// ReleaseTransport releases a transport request or task.
+// If the request has unreleased tasks, it returns an error listing them.
 func (c *httpClient) ReleaseTransport(ctx context.Context, transportNumber string) error {
-	path := "/sap/bc/adt/cts/transportrequests/" + transportNumber + "/newreleasejobs"
-	resp, err := c.doMutate(ctx, http.MethodPost, path, nil,
-		map[string]string{"Accept": "application/vnd.sap.adt.transportorganizer.v1+xml"},
-	)
-	if err != nil {
-		return fmt.Errorf("ReleaseTransport: %w", err)
+	return c.releaseTransport(ctx, transportNumber, false)
+}
+
+// ReleaseTransportWithTasks releases a transport request including all its tasks.
+// Each task is released first, then the request itself.
+func (c *httpClient) ReleaseTransportWithTasks(ctx context.Context, transportNumber string) error {
+	return c.releaseTransport(ctx, transportNumber, true)
+}
+
+func (c *httpClient) releaseTransport(ctx context.Context, transportNumber string, releaseTasks bool) error {
+	err := c.releaseTransportDirect(ctx, transportNumber)
+	if err == nil {
+		return nil
 	}
-	defer func() { _ = resp.Body.Close() }()
-	return checkResponse(resp)
+
+	// Check for unreleased tasks.
+	tasks, taskErr := c.GetTransportTasks(ctx, transportNumber)
+	if taskErr != nil || len(tasks) == 0 {
+		return err
+	}
+
+	if !releaseTasks {
+		return fmt.Errorf("transport %s has %d unreleased task(s): %s — release them first or use ReleaseTransportWithTasks",
+			transportNumber, len(tasks), strings.Join(tasks, ", "))
+	}
+
+	for _, task := range tasks {
+		if taskReleaseErr := c.releaseTransportDirect(ctx, task); taskReleaseErr != nil {
+			return fmt.Errorf("ReleaseTransport: releasing task %s failed: %w", task, taskReleaseErr)
+		}
+	}
+	return c.releaseTransportDirect(ctx, transportNumber)
+}
+
+// releaseTransportDirect releases a single transport or task.
+// Tasks use /releasejobs (works on ECC and S4).
+// Requests use /newreleasejobs (S4 only — ECC returns 400, see #224).
+// Falls back to /releasejobs if /newreleasejobs is not available.
+//
+// The release may complete synchronously (response contains release report)
+// or asynchronously (response contains a background run to poll).
+func (c *httpClient) releaseTransportDirect(ctx context.Context, transportNumber string) error {
+	headers := map[string]string{
+		"Accept":                "application/vnd.sap.adt.transportorganizer.v1+xml",
+		"X-sap-adt-sessiontype": "stateful",
+	}
+
+	// Try /newreleasejobs first (works for requests on S4).
+	path := "/sap/bc/adt/cts/transportrequests/" + transportNumber + "/newreleasejobs"
+	resp, err := c.doMutate(ctx, http.MethodPost, path, nil, headers)
+	if err != nil {
+		return fmt.Errorf("ReleaseTransport %s: %w", transportNumber, err)
+	}
+	data, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode < 400 {
+		// Check if this is an async background run response.
+		if pollURI := ParseBackgroundRunPollURI(data); pollURI != "" {
+			return c.pollBackgroundRelease(ctx, transportNumber, pollURI)
+		}
+		return checkReleaseResponse(transportNumber, data)
+	}
+
+	// Fallback to /releasejobs (works for tasks on ECC and S4).
+	path = "/sap/bc/adt/cts/transportrequests/" + transportNumber + "/releasejobs"
+	resp, err = c.doMutate(ctx, http.MethodPost, path, nil, headers)
+	if err != nil {
+		return fmt.Errorf("ReleaseTransport %s: %w", transportNumber, err)
+	}
+	data, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if err := checkResponse(resp); err != nil {
+		return err
+	}
+	return checkReleaseResponse(transportNumber, data)
+}
+
+const backgroundRunPollInterval = 10 * time.Second
+
+// ParseBackgroundRunPollURI checks if the response is a background run
+// and returns the poll URI if so. Returns empty string for sync responses.
+func ParseBackgroundRunPollURI(data []byte) string {
+	if len(data) == 0 {
+		return ""
+	}
+	var bgRun struct {
+		XMLName xml.Name `xml:"run"`
+		Status  string   `xml:"status"`
+		Links   []struct {
+			Rel  string `xml:"rel,attr"`
+			Href string `xml:"href,attr"`
+		} `xml:"link"`
+	}
+	if err := xml.Unmarshal(data, &bgRun); err != nil {
+		return ""
+	}
+	// A background run has a status like "running" or "new".
+	if bgRun.Status == "" {
+		return ""
+	}
+	// The poll URI is the run itself — return a marker so the caller knows.
+	// Eclipse reads the Location header, but we can also self-link.
+	for _, link := range bgRun.Links {
+		if strings.Contains(link.Rel, "self") && link.Href != "" {
+			return link.Href
+		}
+	}
+	return ""
+}
+
+// pollBackgroundRelease polls a background release job until it completes.
+// SAP background runs use 10-second minimum polling intervals.
+func (c *httpClient) pollBackgroundRelease(ctx context.Context, transportNumber, pollURI string) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("ReleaseTransport %s: %w", transportNumber, ctx.Err())
+		case <-time.After(c.pollInterval):
+		}
+
+		resp, err := c.doRead(ctx, pollURI, map[string]string{
+			"Accept": "application/vnd.sap.adt.bgrun.v1+xml",
+		})
+		if err != nil {
+			return fmt.Errorf("ReleaseTransport %s poll: %w", transportNumber, err)
+		}
+		data, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+
+		var bgRun struct {
+			Status string `xml:"status"`
+			Links  []struct {
+				Rel  string `xml:"rel,attr"`
+				Href string `xml:"href,attr"`
+				Type string `xml:"type,attr"`
+			} `xml:"link"`
+		}
+		if err := xml.Unmarshal(data, &bgRun); err != nil {
+			return fmt.Errorf("ReleaseTransport %s: parsing poll response: %w", transportNumber, err)
+		}
+
+		switch strings.ToLower(bgRun.Status) {
+		case "finished":
+			// Try to fetch the result from the result link.
+			for _, link := range bgRun.Links {
+				if strings.Contains(link.Rel, "result") && link.Href != "" {
+					return c.fetchReleaseResult(ctx, transportNumber, link.Href)
+				}
+			}
+			return nil // finished without result link — assume OK
+		case "failed", "processnotstarted":
+			return fmt.Errorf("ReleaseTransport %s: background run status: %s", transportNumber, bgRun.Status)
+		default:
+			// Still running — continue polling.
+		}
+	}
+}
+
+// fetchReleaseResult fetches the result of a completed background release.
+func (c *httpClient) fetchReleaseResult(ctx context.Context, transportNumber, resultURI string) error {
+	resp, err := c.doRead(ctx, resultURI, map[string]string{
+		"Accept": "application/vnd.sap.adt.transportorganizer.v1+xml",
+	})
+	if err != nil {
+		return fmt.Errorf("ReleaseTransport %s result: %w", transportNumber, err)
+	}
+	data, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	return checkReleaseResponse(transportNumber, data)
 }
 
 func (c *httpClient) GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error) {
@@ -234,4 +397,219 @@ func (c *httpClient) AddToTransport(ctx context.Context, objectURI, transport st
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return checkResponse(resp)
+}
+
+// checkReleaseResponse parses the release job response and returns an error
+// if the release failed. SAP returns HTTP 200 even on failure — the actual
+// status is in chkrun:status attribute ("released" = OK, "abortrelapifail" = error).
+func checkReleaseResponse(transportNumber string, data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+	var root struct {
+		Reports struct {
+			Report struct {
+				Status     string `xml:"status,attr"`
+				StatusText string `xml:"statusText,attr"`
+				Messages   struct {
+					Items []struct {
+						Type      string `xml:"type,attr"`
+						ShortText string `xml:"shortText,attr"`
+					} `xml:"checkMessage"`
+				} `xml:"checkMessageList"`
+			} `xml:"checkReport"`
+		} `xml:"releasereports"`
+	}
+	if err := xml.Unmarshal(data, &root); err != nil {
+		return nil // can't parse — assume OK
+	}
+	if root.Reports.Report.Status == "" || root.Reports.Report.Status == "released" {
+		return nil
+	}
+	// Collect error messages
+	msg := root.Reports.Report.StatusText
+	for _, m := range root.Reports.Report.Messages.Items {
+		if m.Type == "E" {
+			msg += ": " + m.ShortText
+		}
+	}
+	return fmt.Errorf("ReleaseTransport %s failed: %s", transportNumber, msg)
+}
+
+// TransportObject describes an object recorded in a transport request.
+type TransportObject struct {
+	PgmID  string `json:"pgmid"`
+	Type   string `json:"type"`
+	Name   string `json:"name"`
+	WBType string `json:"wb_type"`
+}
+
+// readTransportXML fetches the raw XML for a single transport request.
+// Tries the given accept type first, falls back to the alternative if 406.
+func (c *httpClient) readTransportXML(ctx context.Context, transportNumber, accept string) ([]byte, error) {
+	path := "/sap/bc/adt/cts/transportrequests/" + url.PathEscape(transportNumber)
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": accept})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkResponse(resp); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// GetTransportInfo retrieves status and description of a single transport by number.
+func (c *httpClient) GetTransportInfo(ctx context.Context, transportNumber string) (*TransportRequest, error) {
+	data, err := c.readTransportXML(ctx, transportNumber, "application/vnd.sap.adt.transportorganizer.v1+xml")
+	if err != nil {
+		return nil, fmt.Errorf("GetTransportInfo: %w", err)
+	}
+	return parseTransportInfo(data, transportNumber)
+}
+
+// GetTransportObjects reads the object list of a transport request, deduplicated across request and tasks.
+func (c *httpClient) GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error) {
+	data, err := c.readTransportXML(ctx, transportNumber, "application/vnd.sap.adt.transportorganizer.v1+xml, application/xml")
+	if err != nil {
+		return nil, fmt.Errorf("GetTransportObjects: %w", err)
+	}
+	return parseTransportObjectsXML(data)
+}
+
+// GetTransportTasks returns the task numbers belonging to a transport request.
+func (c *httpClient) GetTransportTasks(ctx context.Context, transportNumber string) ([]string, error) {
+	data, err := c.readTransportXML(ctx, transportNumber, "application/vnd.sap.adt.transportorganizer.v1+xml, application/xml")
+	if err != nil {
+		return nil, fmt.Errorf("GetTransportTasks: %w", err)
+	}
+	return parseTransportTaskNumbers(data, transportNumber)
+}
+
+func parseTransportInfo(data []byte, transportNumber string) (*TransportRequest, error) {
+	// Single transport response: <tm:root><tm:request tm:number=... tm:desc=... tm:status=.../>
+	var doc struct {
+		Request struct {
+			Number      string `xml:"number,attr"`
+			Owner       string `xml:"owner,attr"`
+			Description string `xml:"desc,attr"`
+			Status      string `xml:"status,attr"`
+		} `xml:"request"`
+	}
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parsing transport info: %w", err)
+	}
+	if doc.Request.Number == "" {
+		return nil, fmt.Errorf("transport %s: no request element in response", transportNumber)
+	}
+	return &TransportRequest{
+		Number:      doc.Request.Number,
+		Owner:       doc.Request.Owner,
+		Description: doc.Request.Description,
+		Status:      doc.Request.Status,
+	}, nil
+}
+
+func parseTransportTaskNumbers(data []byte, transportNumber string) ([]string, error) {
+	var doc struct {
+		// Format 1: transportorganizer.v1 — <tm:root><tm:request>
+		Request xmlRequest `xml:"request"`
+		// Format 2: application/xml — <root><workbench><section><request>
+		Workbench struct {
+			Sections []struct {
+				Requests []xmlRequest `xml:"request"`
+			} `xml:",any"`
+		} `xml:"workbench"`
+	}
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parsing transport tasks: %w", err)
+	}
+
+	var tasks []string
+	addTasks := func(req xmlRequest) {
+		if transportNumber != "" && req.Number != transportNumber && req.Number != "" {
+			return
+		}
+		for _, task := range req.Tasks {
+			if task.Number != "" {
+				tasks = append(tasks, task.Number)
+			}
+		}
+	}
+
+	// Format 1
+	addTasks(doc.Request)
+
+	// Format 2
+	for _, section := range doc.Workbench.Sections {
+		for _, req := range section.Requests {
+			addTasks(req)
+		}
+	}
+	return tasks, nil
+}
+
+type xmlObject struct {
+	PgmID  string `xml:"pgmid,attr"`
+	Type   string `xml:"type,attr"`
+	Name   string `xml:"name,attr"`
+	WBType string `xml:"wbtype,attr"`
+}
+
+type xmlTask struct {
+	Number  string      `xml:"number,attr"`
+	Objects []xmlObject `xml:"abap_object"`
+}
+
+type xmlRequest struct {
+	Number  string      `xml:"number,attr"`
+	Objects []xmlObject `xml:"abap_object"`
+	Tasks   []xmlTask   `xml:"task"`
+}
+
+func parseTransportObjectsXML(data []byte) ([]TransportObject, error) {
+	var doc struct {
+		// Format 1: transportorganizer.v1 — <tm:root><tm:request>...</tm:request>
+		Request xmlRequest `xml:"request"`
+		// Format 2: application/xml — <root><workbench><section><request>...</request>
+		Workbench struct {
+			Sections []struct {
+				Requests []xmlRequest `xml:"request"`
+			} `xml:",any"`
+		} `xml:"workbench"`
+	}
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parsing transport objects: %w", err)
+	}
+
+	seen := make(map[string]bool)
+	var objects []TransportObject
+	addObj := func(pgmid, typ, name, wbtype string) {
+		key := pgmid + "/" + typ + "/" + name
+		if !seen[key] && name != "" {
+			seen[key] = true
+			objects = append(objects, TransportObject{PgmID: pgmid, Type: typ, Name: name, WBType: wbtype})
+		}
+	}
+	addFromRequest := func(req xmlRequest) {
+		for _, obj := range req.Objects {
+			addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType)
+		}
+		for _, task := range req.Tasks {
+			for _, obj := range task.Objects {
+				addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType)
+			}
+		}
+	}
+
+	// Format 1: direct request under root (transportorganizer.v1)
+	addFromRequest(doc.Request)
+
+	// Format 2: workbench > sections > requests (application/xml)
+	for _, section := range doc.Workbench.Sections {
+		for _, req := range section.Requests {
+			addFromRequest(req)
+		}
+	}
+	return objects, nil
 }
