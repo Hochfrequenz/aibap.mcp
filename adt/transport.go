@@ -74,7 +74,6 @@ func (c *httpClient) CreateTransport(ctx context.Context, category, target, desc
 		Target:      strings.ToUpper(target),
 		Text:        description,
 		Description: description,
-		Text:        description,
 		DevClass:    strings.ToUpper(devClass),
 	}
 	body, err := adtxml.MarshalASXData(reqData)
