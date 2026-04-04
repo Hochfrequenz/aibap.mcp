@@ -165,7 +165,8 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	}
 
 	// 2. Create a program in a real package, assigned to this transport.
-	// If it exists from a previous aborted run, reuse it.
+	// If it already exists (from an aborted run), check if it's locked in
+	// another transport and switch to that one instead of creating a new one.
 	const objName = "Z_ADT_MCP_FULLCYCLE"
 	objectURI := "/sap/bc/adt/programs/programs/" + objName
 	err = client.CreateObject(ctx, "PROG", objName, testPackage, "Full cycle test", trNumber)
@@ -174,7 +175,16 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 			_ = client.ReleaseTransportWithTasks(ctx, trNumber)
 			t.Fatalf("CreateObject failed and object does not exist: %v", err)
 		}
-		t.Logf("[2] object %s already exists, reusing", objName)
+		// Object exists — check if it's locked in an open transport we can reuse.
+		check, checkErr := client.CheckTransport(ctx, "R3TR", "PROG", objName)
+		if checkErr == nil && len(check.Requests) > 0 {
+			oldTR := trNumber
+			trNumber = check.Requests[0].Number
+			t.Logf("[2] object %s locked in %s, switching from %s", objName, trNumber, oldTR)
+			_ = client.DeleteTransport(ctx, oldTR)
+		} else {
+			t.Logf("[2] object %s already exists, reusing with transport %s", objName, trNumber)
+		}
 	} else {
 		t.Logf("[2] created %s in %s (transport %s)", objName, testPackage, trNumber)
 	}
