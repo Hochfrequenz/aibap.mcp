@@ -149,6 +149,9 @@ func (m *mockClient) AddToTransport(ctx context.Context, uri, transport string) 
 	}
 	return nil
 }
+func (m *mockClient) GetTransportInfo(context.Context, string) (*adt.TransportRequest, error) {
+	return nil, nil
+}
 func (m *mockClient) GetTransportObjects(context.Context, string) ([]adt.TransportObject, error) {
 	return nil, nil
 }

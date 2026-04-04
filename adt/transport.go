@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"
 )
@@ -206,6 +207,9 @@ func (c *httpClient) releaseTransport(ctx context.Context, transportNumber strin
 // Tasks use /releasejobs (works on ECC and S4).
 // Requests use /newreleasejobs (S4 only — ECC returns 400, see #224).
 // Falls back to /releasejobs if /newreleasejobs is not available.
+//
+// The release may complete synchronously (response contains release report)
+// or asynchronously (response contains a background run to poll).
 func (c *httpClient) releaseTransportDirect(ctx context.Context, transportNumber string) error {
 	headers := map[string]string{
 		"Accept":                "application/vnd.sap.adt.transportorganizer.v1+xml",
@@ -221,6 +225,10 @@ func (c *httpClient) releaseTransportDirect(ctx context.Context, transportNumber
 	data, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 	if resp.StatusCode < 400 {
+		// Check if this is an async background run response.
+		if pollURI := ParseBackgroundRunPollURI(data); pollURI != "" {
+			return c.pollBackgroundRelease(ctx, transportNumber, pollURI)
+		}
 		return checkReleaseResponse(transportNumber, data)
 	}
 
@@ -235,6 +243,100 @@ func (c *httpClient) releaseTransportDirect(ctx context.Context, transportNumber
 	if err := checkResponse(resp); err != nil {
 		return err
 	}
+	return checkReleaseResponse(transportNumber, data)
+}
+
+const backgroundRunPollInterval = 10 * time.Second
+
+// ParseBackgroundRunPollURI checks if the response is a background run
+// and returns the poll URI if so. Returns empty string for sync responses.
+func ParseBackgroundRunPollURI(data []byte) string {
+	if len(data) == 0 {
+		return ""
+	}
+	var bgRun struct {
+		XMLName xml.Name `xml:"run"`
+		Status  string   `xml:"status"`
+		Links   []struct {
+			Rel  string `xml:"rel,attr"`
+			Href string `xml:"href,attr"`
+		} `xml:"link"`
+	}
+	if err := xml.Unmarshal(data, &bgRun); err != nil {
+		return ""
+	}
+	// A background run has a status like "running" or "new".
+	if bgRun.Status == "" {
+		return ""
+	}
+	// The poll URI is the run itself — return a marker so the caller knows.
+	// Eclipse reads the Location header, but we can also self-link.
+	for _, link := range bgRun.Links {
+		if strings.Contains(link.Rel, "self") && link.Href != "" {
+			return link.Href
+		}
+	}
+	return ""
+}
+
+// pollBackgroundRelease polls a background release job until it completes.
+// SAP background runs use 10-second minimum polling intervals.
+func (c *httpClient) pollBackgroundRelease(ctx context.Context, transportNumber, pollURI string) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("ReleaseTransport %s: %w", transportNumber, ctx.Err())
+		case <-time.After(c.pollInterval):
+		}
+
+		resp, err := c.doRead(ctx, pollURI, map[string]string{
+			"Accept": "application/vnd.sap.adt.bgrun.v1+xml",
+		})
+		if err != nil {
+			return fmt.Errorf("ReleaseTransport %s poll: %w", transportNumber, err)
+		}
+		data, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+
+		var bgRun struct {
+			Status string `xml:"status"`
+			Links  []struct {
+				Rel  string `xml:"rel,attr"`
+				Href string `xml:"href,attr"`
+				Type string `xml:"type,attr"`
+			} `xml:"link"`
+		}
+		if err := xml.Unmarshal(data, &bgRun); err != nil {
+			return fmt.Errorf("ReleaseTransport %s: parsing poll response: %w", transportNumber, err)
+		}
+
+		switch strings.ToLower(bgRun.Status) {
+		case "finished":
+			// Try to fetch the result from the result link.
+			for _, link := range bgRun.Links {
+				if strings.Contains(link.Rel, "result") && link.Href != "" {
+					return c.fetchReleaseResult(ctx, transportNumber, link.Href)
+				}
+			}
+			return nil // finished without result link — assume OK
+		case "failed", "processnotstarted":
+			return fmt.Errorf("ReleaseTransport %s: background run status: %s", transportNumber, bgRun.Status)
+		default:
+			// Still running — continue polling.
+		}
+	}
+}
+
+// fetchReleaseResult fetches the result of a completed background release.
+func (c *httpClient) fetchReleaseResult(ctx context.Context, transportNumber, resultURI string) error {
+	resp, err := c.doRead(ctx, resultURI, map[string]string{
+		"Accept": "application/vnd.sap.adt.transportorganizer.v1+xml",
+	})
+	if err != nil {
+		return fmt.Errorf("ReleaseTransport %s result: %w", transportNumber, err)
+	}
+	data, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
 	return checkReleaseResponse(transportNumber, data)
 }
 
@@ -342,40 +444,69 @@ type TransportObject struct {
 	WBType string `json:"wb_type"`
 }
 
-// GetTransportObjects reads the object list of a transport request, deduplicated across request and tasks.
-func (c *httpClient) GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error) {
+// readTransportXML fetches the raw XML for a single transport request.
+func (c *httpClient) readTransportXML(ctx context.Context, transportNumber, accept string) ([]byte, error) {
 	path := "/sap/bc/adt/cts/transportrequests/" + url.PathEscape(transportNumber)
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	resp, err := c.doRead(ctx, path, map[string]string{"Accept": accept})
 	if err != nil {
-		return nil, fmt.Errorf("GetTransportObjects: %w", err)
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if err := checkResponse(resp); err != nil {
 		return nil, err
 	}
-	data, err := io.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
+}
+
+// GetTransportInfo retrieves status and description of a single transport by number.
+func (c *httpClient) GetTransportInfo(ctx context.Context, transportNumber string) (*TransportRequest, error) {
+	data, err := c.readTransportXML(ctx, transportNumber, "application/vnd.sap.adt.transportorganizer.v1+xml")
 	if err != nil {
-		return nil, fmt.Errorf("GetTransportObjects: reading body: %w", err)
+		return nil, fmt.Errorf("GetTransportInfo: %w", err)
+	}
+	return parseTransportInfo(data, transportNumber)
+}
+
+// GetTransportObjects reads the object list of a transport request, deduplicated across request and tasks.
+func (c *httpClient) GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error) {
+	data, err := c.readTransportXML(ctx, transportNumber, "application/xml")
+	if err != nil {
+		return nil, fmt.Errorf("GetTransportObjects: %w", err)
 	}
 	return parseTransportObjectsXML(data)
 }
 
 // GetTransportTasks returns the task numbers belonging to a transport request.
 func (c *httpClient) GetTransportTasks(ctx context.Context, transportNumber string) ([]string, error) {
-	path := "/sap/bc/adt/cts/transportrequests/" + url.PathEscape(transportNumber)
-	resp, err := c.doRead(ctx, path, map[string]string{"Accept": "application/xml"})
+	data, err := c.readTransportXML(ctx, transportNumber, "application/xml")
 	if err != nil {
 		return nil, fmt.Errorf("GetTransportTasks: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	if err := checkResponse(resp); err != nil {
-		return nil, err
-	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("GetTransportTasks: reading body: %w", err)
-	}
 	return parseTransportTaskNumbers(data, transportNumber)
+}
+
+func parseTransportInfo(data []byte, transportNumber string) (*TransportRequest, error) {
+	// Single transport response: <tm:root><tm:request tm:number=... tm:desc=... tm:status=.../>
+	var doc struct {
+		Request struct {
+			Number      string `xml:"number,attr"`
+			Owner       string `xml:"owner,attr"`
+			Description string `xml:"desc,attr"`
+			Status      string `xml:"status,attr"`
+		} `xml:"request"`
+	}
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parsing transport info: %w", err)
+	}
+	if doc.Request.Number == "" {
+		return nil, fmt.Errorf("transport %s: no request element in response", transportNumber)
+	}
+	return &TransportRequest{
+		Number:      doc.Request.Number,
+		Owner:       doc.Request.Owner,
+		Description: doc.Request.Description,
+		Status:      doc.Request.Status,
+	}, nil
 }
 
 func parseTransportTaskNumbers(data []byte, transportNumber string) ([]string, error) {

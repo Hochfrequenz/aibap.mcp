@@ -195,6 +195,9 @@ func (r *ClientRegistry) AddToTransport(ctx context.Context, objectURI, transpor
 func (r *ClientRegistry) ReleaseTransportWithTasks(ctx context.Context, transportNumber string) error {
 	return r.activeClient().ReleaseTransportWithTasks(ctx, transportNumber)
 }
+func (r *ClientRegistry) GetTransportInfo(ctx context.Context, transportNumber string) (*TransportRequest, error) {
+	return r.activeClient().GetTransportInfo(ctx, transportNumber)
+}
 func (r *ClientRegistry) GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error) {
 	return r.activeClient().GetTransportObjects(ctx, transportNumber)
 }
