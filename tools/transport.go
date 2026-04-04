@@ -83,9 +83,10 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Create a new CTS transport request. Returns the transport number. "+
-				"Use category 'K' for workbench requests (development) or 'T' for customizing.",
+				"Categories: K=workbench (development objects), W=customizing, T=transport of copies, "+
+				"C=relocation without package change, O=relocation with package change, E=relocation of complete package.",
 		),
-		mcp.WithString("category", mcp.Required(), mcp.Description("Transport category: K (workbench) or T (customizing)")),
+		mcp.WithString("category", mcp.Required(), mcp.Description("Transport category: K (workbench), W (customizing), T (transport of copies)")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("Short description for the transport")),
 		mcp.WithString("target", mcp.Description("Target system (e.g. PRD). Required for cross-system transports.")),
 		mcp.WithString("package", mcp.Description("Development class / package name")),
