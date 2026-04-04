@@ -4,9 +4,20 @@ package adt_test
 
 import (
 	"context"
+	"regexp"
 	"testing"
 	"time"
 )
+
+// extractTransportFromError parses a transport number from SAP error messages
+// like "already locked in request S4UK902592 of user ...".
+func extractTransportFromError(err error) string {
+	re := regexp.MustCompile(`(?:request|Auftrag)\s+([A-Z0-9]{10})`)
+	if m := re.FindStringSubmatch(err.Error()); len(m) > 1 {
+		return m[1]
+	}
+	return ""
+}
 
 // Tests in this file create, modify, and release transport requests on the
 // SAP system. They are excluded from normal integration runs and require:
@@ -175,16 +186,19 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 			_ = client.ReleaseTransportWithTasks(ctx, trNumber)
 			t.Fatalf("CreateObject failed and object does not exist: %v", err)
 		}
-		// Object exists — check if it's locked in an open transport we can reuse.
-		check, checkErr := client.CheckTransport(ctx, "R3TR", "PROG", objName)
-		if checkErr == nil && len(check.Requests) > 0 {
-			oldTR := trNumber
-			trNumber = check.Requests[0].Number
-			t.Logf("[2] object %s locked in %s, switching from %s", objName, trNumber, oldTR)
-			_ = client.DeleteTransport(ctx, oldTR)
-		} else {
-			t.Logf("[2] object %s already exists, reusing with transport %s", objName, trNumber)
+		// Object exists from a previous aborted run. If it's locked in another
+		// transport, release that transport first to free the object.
+		if lockingTR := extractTransportFromError(err); lockingTR != "" && lockingTR != trNumber {
+			t.Logf("[2] object %s locked in %s, releasing it first", objName, lockingTR)
+			_ = client.ReleaseTransportWithTasks(ctx, lockingTR)
+			// Wait for async release to complete.
+			time.Sleep(15 * time.Second)
 		}
+		// Add the existing object to our transport.
+		if addErr := client.AddToTransport(ctx, objectURI, trNumber); addErr != nil {
+			t.Logf("[2] AddToTransport: %v (continuing anyway)", addErr)
+		}
+		t.Logf("[2] object %s already exists, added to transport %s", objName, trNumber)
 	} else {
 		t.Logf("[2] created %s in %s (transport %s)", objName, testPackage, trNumber)
 	}
