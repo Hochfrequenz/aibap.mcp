@@ -176,8 +176,7 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	}
 
 	// 2. Create a program in a real package, assigned to this transport.
-	// If it already exists (from an aborted run), check if it's locked in
-	// another transport and switch to that one instead of creating a new one.
+	// If it exists from a previous aborted run, clean it up first.
 	const objName = "Z_ADT_MCP_FULLCYCLE"
 	objectURI := "/sap/bc/adt/programs/programs/" + objName
 	err = client.CreateObject(ctx, "PROG", objName, testPackage, "Full cycle test", trNumber)
@@ -186,19 +185,29 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 			_ = client.ReleaseTransportWithTasks(ctx, trNumber)
 			t.Fatalf("CreateObject failed and object does not exist: %v", err)
 		}
-		// Object exists from a previous aborted run. If it's locked in another
-		// transport, release that transport first to free the object.
-		if lockingTR := extractTransportFromError(err); lockingTR != "" && lockingTR != trNumber {
-			t.Logf("[2] object %s locked in %s, releasing it first", objName, lockingTR)
-			_ = client.ReleaseTransportWithTasks(ctx, lockingTR)
-			// Wait for async release to complete.
-			time.Sleep(15 * time.Second)
+		// Object exists from a previous aborted run. It may be locked in
+		// another transport. Extract that transport number from the error
+		// or from CheckTransport, then attach our own task to it so we can
+		// work with the object (same as the SAP GUI dialog offers).
+		lockingTR := extractTransportFromError(err)
+		if lockingTR == "" {
+			if chk, chkErr := client.CheckTransport(ctx, "R3TR", "PROG", objName); chkErr == nil && len(chk.Requests) > 0 {
+				lockingTR = chk.Requests[0].Number
+			}
 		}
-		// Add the existing object to our transport.
-		if addErr := client.AddToTransport(ctx, objectURI, trNumber); addErr != nil {
-			t.Logf("[2] AddToTransport: %v (continuing anyway)", addErr)
+		if lockingTR != "" && lockingTR != trNumber {
+			// Delete our empty transport — we'll use the existing one.
+			_ = client.DeleteTransport(ctx, trNumber)
+			trNumber = lockingTR
+			// Create our own task on the existing transport.
+			taskNr, taskErr := client.CreateTransportTask(ctx, trNumber, "", "Full cycle test cleanup")
+			if taskErr != nil {
+				t.Fatalf("[2] cannot create task on %s: %v", trNumber, taskErr)
+			}
+			t.Logf("[2] object %s locked in %s, created task %s", objName, trNumber, taskNr)
+		} else {
+			t.Logf("[2] object %s already exists, reusing with transport %s", objName, trNumber)
 		}
-		t.Logf("[2] object %s already exists, added to transport %s", objName, trNumber)
 	} else {
 		t.Logf("[2] created %s in %s (transport %s)", objName, testPackage, trNumber)
 	}
