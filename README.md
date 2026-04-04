@@ -21,77 +21,67 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (70)
+## Available tools (64)
+
+Tools are organized into groups. By default, all groups except `debug` and `export` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
 <details>
-<summary><strong>Source code</strong> (7 tools)</summary>
+<summary><strong>Source code</strong> — <code>source</code> (7 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `get_source` | Read ABAP source code of any object |
+| `get_source` | Read ABAP source code of any object (supports batch) |
 | `get_class_definition` | Read only the class definition (no implementations) — saves ~95% tokens on large classes |
-| `batch_get_source` | Read source code for multiple objects in parallel |
 | `get_include_source` | Read class include source (testclasses, definitions, implementations, macros) |
 | `set_source_from_file` | Write ABAP source from a local file (auto-locks) |
 | `set_include_source` | Write class include source (requires lock on the class) |
 | `patch_source` | Apply line-based or search/replace edits to source code (auto-locks) |
-
-</details>
-
-<details>
-<summary><strong>Code intelligence</strong> (4 tools)</summary>
-
-| Tool | Description |
-|------|-------------|
 | `pretty_print` | Format ABAP source code using SAP Pretty Printer |
-| `get_completions` | Get code completion proposals at a cursor position |
-| `rename` | Rename a symbol and update all references automatically |
-| `navigate_to_definition` | Jump to the definition of a symbol at a source position |
 
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> (10 tools)</summary>
+<summary><strong>Code intelligence</strong> — <code>code-intelligence</code> (4 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `object_exists` | Check if an ABAP object exists (true/false + metadata) |
-| `batch_object_exists` | Check existence of multiple objects concurrently |
+| `get_completions` | Get code completion proposals at a cursor position |
+| `navigate_to_definition` | Jump to the definition of a symbol at a source position |
+| `get_abap_doc` | Look up ABAP keyword documentation |
+| `verify_source` | Syntax-check source code without saving to SAP |
+
+</details>
+
+<details>
+<summary><strong>Objects and packages</strong> — <code>objects</code> (9 tools)</summary>
+
+| Tool | Description |
+|------|-------------|
 | `search_objects` | Search for objects by name pattern and type (supports wildcards) |
 | `browse_package` | List all objects in a package (flat, one level) |
-| `get_object_info` | Get object metadata: type, package, description |
-| `batch_get_object_info` | Get metadata for multiple objects concurrently |
+| `get_object_info` | Get object metadata: type, package, description (supports batch) |
+| `object_exists` | Check if an ABAP object exists (true/false + metadata, supports batch) |
+| `where_used` | Find all objects that reference a given object (supports batch) |
 | `get_table_fields` | Get DDIC table/structure field definitions (DD03L) |
 | `create_object` | Create a new ABAP object (PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA) |
 | `delete_object` | Delete an ABAP object (uses optimistic locking) |
-| `diff_active_inactive` | Compare active vs inactive source — like `git diff` |
+| `rename` | Rename a symbol and update all references automatically |
 
 </details>
 
 <details>
-<summary><strong>Search and analysis</strong> (4 tools)</summary>
-
-| Tool | Description |
-|------|-------------|
-| `where_used` | Find all objects that reference a given object |
-| `batch_where_used` | Find references for multiple objects in parallel |
-| `run_query` | Execute a SELECT query on SAP database tables (read-only) |
-| `get_abap_doc` | Look up ABAP keyword documentation |
-
-</details>
-
-<details>
-<summary><strong>Version history</strong> (2 tools)</summary>
+<summary><strong>Version history</strong> — <code>version</code> (3 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `get_version_history` | List version history of an object — like `git log` |
 | `get_version_source` | Read source of a specific version — like `git show` |
+| `diff_active_inactive` | Compare active vs inactive source — like `git diff` |
 
 </details>
 
 <details>
-<summary><strong>Locking and activation</strong> (5 tools)</summary>
+<summary><strong>Locking and activation</strong> — <code>locking</code> (5 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -104,22 +94,19 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Testing and quality</strong> (7 tools)</summary>
+<summary><strong>Testing and quality</strong> — <code>testing</code> (4 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `syntax_check` | Run syntax check on an object |
-| `batch_syntax_check` | Run syntax checks on multiple objects in parallel |
-| `verify_source` | Syntax-check source code without saving to SAP |
-| `run_unit_tests` | Run ABAP Unit tests on an object |
-| `batch_run_unit_tests` | Run unit tests on multiple objects concurrently |
+| `syntax_check` | Run syntax check on an object (supports batch) |
+| `run_unit_tests` | Run ABAP Unit tests on an object (supports batch) |
 | `run_atc_check` | Run ATC (ABAP Test Cockpit) static analysis |
 | `get_atc_customizing` | Get ATC check variant configuration |
 
 </details>
 
 <details>
-<summary><strong>Messages and texts</strong> (4 tools)</summary>
+<summary><strong>Messages and texts</strong> — <code>messages</code> (4 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -131,7 +118,7 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Runtime errors (ST22)</strong> (2 tools)</summary>
+<summary><strong>Runtime errors (ST22)</strong> — <code>shortdumps</code> (2 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -141,7 +128,7 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Transport management</strong> (8 tools)</summary>
+<summary><strong>Transport management</strong> — <code>transport</code> (8 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -157,18 +144,7 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Export</strong> (3 tools)</summary>
-
-| Tool | Description |
-|------|-------------|
-| `export_package` | Export an ABAP package as abapGit ZIP or folder ([requires companion](https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT)) |
-| `export_packages` | Bulk export with wildcard patterns and include/exclude filters |
-| `export_customizing` | Export all customizing tables to SQLite + JSON (read-only, ~16K tables with `customer_only`) |
-
-</details>
-
-<details>
-<summary><strong>Enhancements / BAdIs</strong> (3 tools)</summary>
+<summary><strong>Enhancements / BAdIs</strong> — <code>enhancements</code> (3 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -179,7 +155,7 @@ graph TD
 </details>
 
 <details>
-<summary><strong>Debugging</strong> (10 tools)</summary>
+<summary><strong>Debugging</strong> — <code>debug</code> (10 tools, off by default)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -197,11 +173,23 @@ graph TD
 </details>
 
 <details>
-<summary><strong>System</strong> (1 tool)</summary>
+<summary><strong>Export</strong> — <code>export</code> (3 tools, off by default)</summary>
+
+| Tool | Description |
+|------|-------------|
+| `export_package` | Export an ABAP package as abapGit ZIP or folder ([requires companion](https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT)) |
+| `export_packages` | Bulk export with wildcard patterns and include/exclude filters |
+| `export_customizing` | Export all customizing tables to SQLite + JSON (read-only, ~16K tables with `customer_only`) |
+
+</details>
+
+<details>
+<summary><strong>System</strong> — <code>system</code> (2 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `select_system` | Switch the active SAP system (multi-system config) |
+| `run_query` | Execute a SELECT query on SAP database tables (read-only) |
 
 </details>
 
@@ -294,6 +282,33 @@ cp config.json.example config.json
 }
 ```
 
+### Tool groups
+
+By default, all tool groups except `debug` and `export` are enabled. You can customize which groups are loaded:
+
+**In `systems.json`** (top-level):
+
+```json
+{
+  "default_system": "dev",
+  "tools": ["source", "objects", "transport", "debug"],
+  "systems": { ... }
+}
+```
+
+**Via CLI flag** (overrides config):
+
+```bash
+mcp-server-abap --tools=source,objects,transport,debug
+```
+
+**Special values:**
+
+- `--tools=all` — enable all tool groups
+- No config and no flag — default set (everything except `debug` and `export`)
+
+Available groups: `source`, `code-intelligence`, `objects`, `version`, `locking`, `testing`, `messages`, `shortdumps`, `transport`, `enhancements`, `debug`, `export`, `system`.
+
 ### OAuth2 / SSO
 
 For systems with SAML SSO, omit `user` and `password` to use OAuth2:
@@ -337,6 +352,22 @@ Add to your `claude_desktop_config.json`:
     "abap": {
       "command": "/path/to/mcp-server-abap",
       "args": [],
+      "env": {
+        "SAP_CONFIG_FILE": "/path/to/config.json"
+      }
+    }
+  }
+}
+```
+
+To reduce token footprint, load only the tool groups you need:
+
+```json
+{
+  "mcpServers": {
+    "abap": {
+      "command": "/path/to/mcp-server-abap",
+      "args": ["--tools=source,objects,testing,transport"],
       "env": {
         "SAP_CONFIG_FILE": "/path/to/config.json"
       }
