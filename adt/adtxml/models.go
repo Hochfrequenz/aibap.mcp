@@ -79,8 +79,8 @@ type TransportCheckRequest struct {
 // Verified: 2026-03-23 against srvhfuhana.sap.msp.local:44300
 type CreateTransportData struct {
 	Category    string `xml:"CATEGORY"`
-	Target      string `xml:"TARGET"`
+	Target      string `xml:"TARGET,omitempty"`
 	Text        string `xml:"REQUEST_TEXT"`
 	Description string `xml:"DESCRIPTION"`
-	DevClass    string `xml:"DEVCLASS"`
+	DevClass    string `xml:"DEVCLASS,omitempty"`
 }
