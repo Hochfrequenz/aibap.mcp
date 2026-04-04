@@ -2,8 +2,10 @@ package adt_test
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
@@ -135,6 +137,57 @@ func TestAddToTransport(t *testing.T) {
 	expected := "/sap/bc/adt/cts/transportrequests/DEVK900123/abaptransportcomponents"
 	if gotPath != expected {
 		t.Errorf("path: got %q, want %q", gotPath, expected)
+	}
+}
+
+func TestCreateTransport(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.URL.Path != "/sap/bc/adt/cts/transports" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		data, _ := io.ReadAll(r.Body)
+		gotBody = string(data)
+		w.Header().Set("Content-Type", "application/vnd.sap.as+xml")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+    <DATA>
+      <TRKORR>DEVK900999</TRKORR>
+    </DATA>
+  </asx:values>
+</asx:abap>`))
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	nr, err := client.CreateTransport(context.Background(), "K", "DUM", "My description", "ZTEST")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if nr != "DEVK900999" {
+		t.Errorf("transport number: got %q, want %q", nr, "DEVK900999")
+	}
+	// REQUEST_TEXT sets AS4TEXT (short text) on both ECC and S4 (see #226).
+	// DESCRIPTION sets the documentation tab (required for release on some systems).
+	if !strings.Contains(gotBody, "<REQUEST_TEXT>My description</REQUEST_TEXT>") {
+		t.Errorf("body must contain REQUEST_TEXT, got:\n%s", gotBody)
+	}
+	if !strings.Contains(gotBody, "<DESCRIPTION>My description</DESCRIPTION>") {
+		t.Errorf("body must contain DESCRIPTION, got:\n%s", gotBody)
+	}
+	if strings.Contains(gotBody, "<AS4TEXT>") {
+		t.Error("body must not contain AS4TEXT (use REQUEST_TEXT instead)")
 	}
 }
 
