@@ -90,12 +90,20 @@ func TestGetTransportRequests(t *testing.T) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
-<tm:root adtcore:name="DEVELOPER"
-  xmlns:tm="http://www.sap.com/cts/adt/tm"
-  xmlns:adtcore="http://www.sap.com/adt/core">
-  <tm:workbenchRequests>
-    <tm:workbenchRequest tm:number="DEVK900123" tm:owner="DEVELOPER" tm:shortDescription="Feature transport" tm:status="D"/>
-  </tm:workbenchRequests>
+<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm" xmlns:adtcore="http://www.sap.com/adt/core">
+  <tm:workbench tm:category="Workbench">
+    <tm:modifiable tm:status="Modifiable">
+      <tm:request tm:number="DEVK900123" tm:owner="DEVELOPER" tm:desc="Feature transport" tm:status="D"/>
+    </tm:modifiable>
+    <tm:released tm:status="Released">
+      <tm:request tm:number="DEVK900124" tm:owner="DEVELOPER" tm:desc="Released transport" tm:status="L"/>
+    </tm:released>
+  </tm:workbench>
+  <tm:customizing tm:category="Customizing">
+    <tm:modifiable tm:status="Modifiable">
+      <tm:request tm:number="DEVK900125" tm:owner="DEVELOPER" tm:desc="Customizing transport" tm:status="D"/>
+    </tm:modifiable>
+  </tm:customizing>
 </tm:root>`))
 	}))
 	defer srv.Close()
@@ -107,11 +115,17 @@ func TestGetTransportRequests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(transports) != 1 {
-		t.Fatalf("expected 1 transport, got %d", len(transports))
+	if len(transports) != 3 {
+		t.Fatalf("expected 3 transports (1 modifiable wb + 1 released wb + 1 customizing), got %d", len(transports))
 	}
 	if transports[0].Number != "DEVK900123" {
-		t.Errorf("number: got %q", transports[0].Number)
+		t.Errorf("workbench modifiable: got %q", transports[0].Number)
+	}
+	if transports[1].Number != "DEVK900124" {
+		t.Errorf("workbench released: got %q", transports[1].Number)
+	}
+	if transports[2].Number != "DEVK900125" {
+		t.Errorf("customizing: got %q", transports[2].Number)
 	}
 }
 

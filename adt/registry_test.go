@@ -111,7 +111,7 @@ func allEndpointsHandler() http.Handler {
 		emptyNodeStructure = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><TREE_CONTENT></TREE_CONTENT></DATA></asx:values></asx:abap>`
 		emptyCheckReports  = `<chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun"/>`
 		emptyRunResult     = `<runResult></runResult>`
-		emptyTransports    = `<root><workbenchRequests></workbenchRequests></root>`
+		emptyTransports    = `<root><workbench><modifiable/><released/></workbench><customizing><modifiable/><released/></customizing></root>`
 		emptyCompletions   = `<completions></completions>`
 		activatePath       = "/sap/bc/adt/activation"
 	)
