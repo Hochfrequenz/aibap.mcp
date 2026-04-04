@@ -82,6 +82,5 @@ type CreateTransportData struct {
 	Target      string `xml:"TARGET"`
 	Text        string `xml:"REQUEST_TEXT"`
 	Description string `xml:"DESCRIPTION"`
-	Text        string `xml:"AS4TEXT"`
 	DevClass    string `xml:"DEVCLASS"`
 }
