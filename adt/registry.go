@@ -261,3 +261,17 @@ func (r *ClientRegistry) SystemInfo() (host, client string) {
 func (r *ClientRegistry) Logout(ctx context.Context) error {
 	return r.activeClient().Logout(ctx)
 }
+
+// LogoutAll calls Logout on every registered client to end stateful SAP sessions
+// and release ENQUEUE locks. Errors are collected but do not stop other logouts.
+func (r *ClientRegistry) LogoutAll(ctx context.Context) error {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var firstErr error
+	for _, c := range r.clients {
+		if err := c.Logout(ctx); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
