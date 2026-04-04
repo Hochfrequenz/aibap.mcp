@@ -15,39 +15,25 @@ func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Run ABAP syntax check on a saved object. Checks the inactive (saved but not yet activated) version. Returns messages with type (E/W/I), line, column. To check code without saving to an object, use verify_source instead."),
-		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString(paramObjectURI, "")
-		msgs, err := client.SyntaxCheck(ctx, uri)
-		if err != nil {
-			return errorResult(err), nil
-		}
-		out, _ := json.Marshal(msgs)
-		return mcp.NewToolResultText(string(out)), nil
-	})
-
-	s.AddTool(mcp.NewTool("batch_syntax_check",
-		mcp.WithTitleAnnotation("Batch Syntax Check"),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithDestructiveHintAnnotation(false),
-		mcp.WithIdempotentHintAnnotation(true),
-		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
-			"Run syntax checks on multiple ABAP objects in a single tool call. "+
-				"Uses the native batch capability of SAP's checkruns endpoint. "+
-				"Objects are checked in chunks of 10 per request. "+
-				"Returns per-object results with messages and errors. "+
-				"Use this instead of calling syntax_check in a loop to reduce round-trips.",
+			"Run ABAP syntax check on one or more saved objects. Checks the inactive (saved but not yet activated) version. "+
+				"Pass a single URI string for one object: returns messages with type (E/W/I), line, column. "+
+				"Pass an array of URIs to use SAP's native batch endpoint (chunks of 10): returns {total, clean, total_errors, total_warnings, results:[...]}. "+
+				"To check code without saving to an object, use verify_source instead.",
 		),
-		mcp.WithArray(paramObjectURI+"s", mcp.Required(), mcp.Description("List of ADT object URIs to check")),
+		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uris := req.GetStringSlice(paramObjectURI+"s", nil)
-		if len(uris) == 0 {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "object_uris must be a non-empty array of strings"}), nil
+		single, multi := getStringOrSlice(req.GetArguments(), paramObjectURI)
+		if multi == nil {
+			msgs, err := client.SyntaxCheck(ctx, single)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			out, _ := json.Marshal(msgs)
+			return mcp.NewToolResultText(string(out)), nil
 		}
 
-		results := client.BatchSyntaxCheck(ctx, uris)
+		results := client.BatchSyntaxCheck(ctx, multi)
 
 		// Compute summary counts.
 		totalErrors, totalWarnings, clean := 0, 0, 0
@@ -68,7 +54,7 @@ func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 		}
 
 		out, _ := json.Marshal(map[string]any{
-			"total":          len(uris),
+			"total":          len(multi),
 			"clean":          clean,
 			"total_errors":   totalErrors,
 			"total_warnings": totalWarnings,
