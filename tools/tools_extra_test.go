@@ -1035,8 +1035,8 @@ func TestBatchGetSourceTool(t *testing.T) {
 		},
 	}
 	s := newTestServerWithLockMap(mock, lockMap)
-	result := callTool(t, s, "batch_get_source", map[string]interface{}{
-		"object_uris": []string{
+	result := callTool(t, s, "get_source", map[string]interface{}{
+		"object_uri": []string{
 			testObjectURIOK,
 			testObjectURIFail,
 		},
@@ -1104,8 +1104,8 @@ func TestBatchGetSourceSingleURI(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_get_source", map[string]interface{}{
-		"object_uris": []string{testObjectURI},
+	result := callTool(t, s, "get_source", map[string]interface{}{
+		"object_uri": []string{testObjectURI},
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", firstText(result))
@@ -1138,8 +1138,8 @@ func TestBatchGetSourceAllErrors(t *testing.T) {
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_get_source", map[string]interface{}{
-		"object_uris": []string{
+	result := callTool(t, s, "get_source", map[string]interface{}{
+		"object_uri": []string{
 			"/sap/bc/adt/programs/programs/ZFAIL1",
 			"/sap/bc/adt/programs/programs/ZFAIL2",
 		},
@@ -1166,10 +1166,20 @@ func TestBatchGetSourceAllErrors(t *testing.T) {
 func TestBatchGetSourceEmptyURIs(t *testing.T) {
 	mock := &mockClient{}
 	s := newTestServer(mock)
-	result := callTool(t, s, "batch_get_source", map[string]interface{}{
-		"object_uris": []string{},
+	result := callTool(t, s, "get_source", map[string]interface{}{
+		"object_uri": []string{},
 	})
-	if !result.IsError {
-		t.Error("expected error for empty URIs")
+	if result.IsError {
+		t.Errorf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Total int `json:"total"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Total != 0 {
+		t.Errorf("total: got %d, want 0", out.Total)
 	}
 }

@@ -401,6 +401,46 @@ func TestGetSourceUpdatesLockMapETag(t *testing.T) {
 	}
 }
 
+func TestGetSourceBatch(t *testing.T) {
+	callCount := 0
+	mock := &mockClient{
+		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
+			callCount++
+			return &adt.SourceResult{Source: "REPORT " + uri + ".", ETag: `"etag-` + uri + `"`}, nil
+		},
+	}
+	s := newTestServer(mock)
+
+	result := callTool(t, s, "get_source", map[string]interface{}{
+		"object_uri": []any{
+			"/sap/bc/adt/programs/programs/ZA",
+			"/sap/bc/adt/programs/programs/ZB",
+		},
+	})
+
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 calls, got %d", callCount)
+	}
+
+	var text string
+	for _, c := range result.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			text = tc.Text
+			break
+		}
+	}
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		t.Fatalf("parsing response: %v", err)
+	}
+	if resp["total"] != float64(2) {
+		t.Errorf("total: got %v", resp["total"])
+	}
+}
+
 func TestActivateObjectTool(t *testing.T) {
 	mock := &mockClient{
 		activateObjectsFn: func(ctx context.Context, uris []string) (*adt.ActivationResult, error) {
