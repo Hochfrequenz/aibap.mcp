@@ -6,6 +6,55 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+func TestDefaultGroups(t *testing.T) {
+	groups := DefaultGroups()
+	if groups["debug"] {
+		t.Error("debug should be off by default")
+	}
+	if groups["export"] {
+		t.Error("export should be off by default")
+	}
+	if !groups["source"] {
+		t.Error("source should be on by default")
+	}
+	if !groups["transport"] {
+		t.Error("transport should be on by default")
+	}
+}
+
+func TestParseToolGroups_All(t *testing.T) {
+	groups := ParseToolGroups([]string{"all"})
+	if !groups["debug"] {
+		t.Error("all should enable debug")
+	}
+	if !groups["export"] {
+		t.Error("all should enable export")
+	}
+}
+
+func TestParseToolGroups_Explicit(t *testing.T) {
+	groups := ParseToolGroups([]string{"source", "debug"})
+	if !groups["source"] {
+		t.Error("source should be enabled")
+	}
+	if !groups["debug"] {
+		t.Error("debug should be enabled")
+	}
+	if groups["transport"] {
+		t.Error("transport should not be enabled")
+	}
+}
+
+func TestParseToolGroups_Empty(t *testing.T) {
+	groups := ParseToolGroups(nil)
+	if groups["debug"] {
+		t.Error("nil should use defaults (debug off)")
+	}
+	if !groups["source"] {
+		t.Error("nil should use defaults (source on)")
+	}
+}
+
 func TestWithStringOrArray(t *testing.T) {
 	tool := mcp.NewTool("test_tool",
 		withStringOrArray("object_uri", mcp.Required(), mcp.Description("ADT object URI")),

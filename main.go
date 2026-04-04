@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/Hochfrequenz/mcp-server-abap/cmd"
@@ -49,6 +51,10 @@ func main() {
 func run() error {
 	logging.Setup()
 
+	var toolsFlag string
+	flag.StringVar(&toolsFlag, "tools", "", "Comma-separated tool groups to enable (default: all except debug,export; 'all' for everything)")
+	flag.Parse()
+
 	configPath := os.Getenv("SAP_CONFIG_FILE")
 	if configPath == "" {
 		configPath = findConfigFile()
@@ -57,6 +63,17 @@ func run() error {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
+	}
+
+	// Determine enabled tool groups: CLI > config > defaults.
+	var enabledGroups map[string]bool
+	switch {
+	case toolsFlag != "":
+		enabledGroups = tools.ParseToolGroups(strings.Split(toolsFlag, ","))
+	case len(cfg.Tools) > 0:
+		enabledGroups = tools.ParseToolGroups(cfg.Tools)
+	default:
+		enabledGroups = tools.DefaultGroups()
 	}
 
 	registry, err := adt.NewClientRegistry(cfg)
@@ -68,14 +85,22 @@ func run() error {
 	for name := range cfg.Systems {
 		systemNames = append(systemNames, name)
 	}
+
+	var activeGroups []string
+	for _, g := range tools.AllGroups {
+		if enabledGroups[g] {
+			activeGroups = append(activeGroups, g)
+		}
+	}
 	slog.Info("server started",
 		"version", version,
 		"systems", systemNames,
 		"default_system", cfg.DefaultSystem,
+		"tool_groups", activeGroups,
 	)
 
 	s := server.NewMCPServer("SAP ADT MCP Server", version)
-	tools.RegisterAll(s, registry, registry)
+	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups)
 
 	stdioServer := server.NewStdioServer(s)
 	ctx := context.Background()

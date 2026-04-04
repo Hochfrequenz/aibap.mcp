@@ -20,9 +20,50 @@ type SystemSelector interface {
 	ActiveName() string
 }
 
+// AllGroups lists every tool group name.
+var AllGroups = []string{
+	"source", "code-intelligence", "objects", "version", "locking",
+	"testing", "messages", "shortdumps", "transport", "enhancements",
+	"debug", "export", "system",
+}
+
+var defaultOffGroups = map[string]bool{
+	"debug":  true,
+	"export": true,
+}
+
+// DefaultGroups returns the default enabled/disabled state for each group.
+func DefaultGroups() map[string]bool {
+	groups := make(map[string]bool, len(AllGroups))
+	for _, g := range AllGroups {
+		groups[g] = !defaultOffGroups[g]
+	}
+	return groups
+}
+
+// ParseToolGroups converts a list of group names to an enabled map.
+// If names is empty, DefaultGroups is returned.
+// The special name "all" enables every group.
+func ParseToolGroups(names []string) map[string]bool {
+	if len(names) == 0 {
+		return DefaultGroups()
+	}
+	groups := make(map[string]bool, len(AllGroups))
+	for _, name := range names {
+		if name == "all" {
+			for _, g := range AllGroups {
+				groups[g] = true
+			}
+			return groups
+		}
+		groups[name] = true
+	}
+	return groups
+}
+
 // RegisterAll registers all SAP ADT MCP tools on the given server.
 func RegisterAll(s *server.MCPServer, client adt.Client, selector SystemSelector) {
-	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap())
+	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), DefaultGroups())
 }
 
 // toolAdder is the subset of server.MCPServer used by register functions.
@@ -83,38 +124,70 @@ func getStringOrSlice(args map[string]any, key string) (string, []string) {
 	return "", nil
 }
 
-// RegisterAllWithLockMap registers all SAP ADT MCP tools using a provided lock map.
+// RegisterAllWithLockMap registers SAP ADT MCP tools using a provided lock map
+// and an enabledGroups map controlling which tool groups are active.
 // Use this when you need to pre-populate or inspect the lock map (e.g. in tests).
-func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap) {
+func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool) {
 	ls := &loggingServer{inner: s, selector: selector}
-	registerSourceTools(ls, client, lockMap, selector)
-	registerActivateTools(ls, client)
-	registerSearchTools(ls, client)
-	registerRepositoryTools(ls, client)
-	registerSyntaxCheckTools(ls, client)
-	registerUnitTestTools(ls, client)
-	registerTransportTools(ls, client)
-	registerLockTools(ls, client, lockMap, selector)
-	registerPatchTools(ls, client, lockMap, selector)
-	registerPrettyPrinterTools(ls, client)
-	registerObjectTools(ls, client)
-	registerCompletionTools(ls, client)
-	registerSystemTools(ls, selector)
-	registerATCTools(ls, client)
-	registerFileSourceTools(ls, client, lockMap, selector)
-	registerDebuggerTools(ls, client, selector)
-	registerExportTools(ls, client)
-	registerCustomizingTools(ls, client)
-	registerVerifyTools(ls, client)
-	registerDocuTools(ls, client)
-	registerNavigationTools(ls, client)
-	registerRefactoringTools(ls, client)
-	registerDDICTools(ls, client)
-	registerVersionTools(ls, client)
-	registerTextElementTools(ls, client)
-	registerMessageClassTools(ls, client)
-	registerQueryTools(ls, client)
-	registerRollbackTools(ls, client)
-	registerEnhancementTools(ls, client)
-	registerShortDumpTools(ls, client)
+
+	type group struct {
+		name     string
+		register func()
+	}
+	groups := []group{
+		{"source", func() {
+			registerSourceTools(ls, client, lockMap, selector)
+			registerPatchTools(ls, client, lockMap, selector)
+			registerFileSourceTools(ls, client, lockMap, selector)
+			registerPrettyPrinterTools(ls, client)
+		}},
+		{"code-intelligence", func() {
+			registerCompletionTools(ls, client)
+			registerNavigationTools(ls, client)
+			registerDocuTools(ls, client)
+			registerVerifyTools(ls, client)
+		}},
+		{"objects", func() {
+			registerSearchTools(ls, client)
+			registerRepositoryTools(ls, client)
+			registerObjectTools(ls, client)
+			registerRefactoringTools(ls, client)
+			registerDDICTools(ls, client)
+		}},
+		{"version", func() { registerVersionTools(ls, client) }},
+		{"locking", func() {
+			registerLockTools(ls, client, lockMap, selector)
+			registerActivateTools(ls, client)
+		}},
+		{"testing", func() {
+			registerSyntaxCheckTools(ls, client)
+			registerUnitTestTools(ls, client)
+			registerATCTools(ls, client)
+		}},
+		{"messages", func() {
+			registerMessageClassTools(ls, client)
+			registerTextElementTools(ls, client)
+		}},
+		{"shortdumps", func() { registerShortDumpTools(ls, client) }},
+		{"transport", func() {
+			registerTransportTools(ls, client)
+			registerRollbackTools(ls, client)
+		}},
+		{"enhancements", func() { registerEnhancementTools(ls, client) }},
+		{"debug", func() { registerDebuggerTools(ls, client, selector) }},
+		{"export", func() {
+			registerExportTools(ls, client)
+			registerCustomizingTools(ls, client)
+		}},
+		{"system", func() {
+			registerSystemTools(ls, selector)
+			registerQueryTools(ls, client)
+		}},
+	}
+
+	for _, g := range groups {
+		if enabledGroups[g.name] {
+			g.register()
+		}
+	}
 }
