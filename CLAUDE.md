@@ -18,6 +18,8 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 - **Integration tests**: `go test ./adt/ -tags integration` — run against a real SAP system. Require `SAP_INTEGRATION_*` env vars from `.env`.
 - **Transport tests**: `go test ./adt/ -tags 'integration transport'` — create, release, and modify transports on SAP. **Only run when explicitly requested** — these leave artifacts on the system.
 - **Never run transport tests automatically** as part of a general integration test run.
+- **Never run the full integration suite unprompted.** Always use `-run TestSpecificFunc` to test individual functions. Only run the full suite when explicitly asked.
+- **Fix before creating:** When a SAP object (transport, program, etc.) has a problem, fix the existing one first. Don't keep creating new objects to work around issues.
 - **Coverage thresholds** (enforced in CI per package): `config` 80%, `auth` 75%, `adt/custexport` 60%, `adt/adtxml` 50%, `adt` 40%. `tools`/`logging`/`cmd` are integration-tested only (0%).
 - **Test package dependency**: Integration tests require SAP package `Z_ADT_MCP_TEST` on the target system. Install from [Hochfrequenz/Z_ADT_MCP_TEST](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST).
 

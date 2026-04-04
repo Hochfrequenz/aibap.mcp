@@ -5,6 +5,7 @@ package adt_test
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // Tests in this file create, modify, and release transport requests on the
@@ -27,6 +28,20 @@ func TestCreateTransport_Integration(t *testing.T) {
 		t.Errorf("expected 10-char transport number (e.g. S4UK900001), got %q", trNumber)
 	}
 	t.Logf("created transport: %s", trNumber)
+
+	// Verify description is set (regression test for #226).
+	info, err := client.GetTransportInfo(ctx, trNumber)
+	if err != nil {
+		t.Fatalf("GetTransportInfo: %v", err)
+	}
+	if info.Description == "" {
+		t.Errorf("transport %s has empty description — REQUEST_TEXT not working", trNumber)
+	} else {
+		t.Logf("description: %q", info.Description)
+	}
+	if info.Status != "D" {
+		t.Errorf("expected status D, got %q", info.Status)
+	}
 }
 
 func TestReleaseTransport_Integration(t *testing.T) {
@@ -39,11 +54,31 @@ func TestReleaseTransport_Integration(t *testing.T) {
 	}
 	t.Logf("created transport: %s", trNumber)
 
-	err = client.ReleaseTransport(ctx, trNumber)
+	err = client.ReleaseTransportWithTasks(ctx, trNumber)
 	if err != nil {
-		t.Fatalf("ReleaseTransport failed: %v", err)
+		t.Fatalf("ReleaseTransportWithTasks failed: %v", err)
 	}
 	t.Logf("released transport: %s", trNumber)
+
+	// Verify transport is actually released.
+	// Release may be async — poll until status changes or timeout.
+	released := false
+	for i := 0; i < 6; i++ {
+		info, err := client.GetTransportInfo(ctx, trNumber)
+		if err != nil {
+			t.Fatalf("GetTransportInfo: %v", err)
+		}
+		if info.Status == "L" || info.Status == "R" {
+			t.Logf("verified: %s status=%s (released)", trNumber, info.Status)
+			released = true
+			break
+		}
+		t.Logf("status=%q, waiting for release to complete...", info.Status)
+		time.Sleep(10 * time.Second)
+	}
+	if !released {
+		t.Errorf("transport %s not released after polling", trNumber)
+	}
 }
 
 func TestAddToTransport_Integration(t *testing.T) {
@@ -55,7 +90,7 @@ func TestAddToTransport_Integration(t *testing.T) {
 		t.Fatalf("CreateTransport: %v", err)
 	}
 	t.Logf("created transport: %s", trNumber)
-	t.Cleanup(func() { _ = client.ReleaseTransport(context.Background(), trNumber) })
+	t.Cleanup(func() { _ = client.ReleaseTransportWithTasks(context.Background(), trNumber) })
 
 	const objName = "Z_ADT_MCP_TR_ADD_TST"
 	objectURI := "/sap/bc/adt/programs/programs/" + objName
@@ -83,6 +118,22 @@ func TestAddToTransport_Integration(t *testing.T) {
 		t.Fatalf("AddToTransport: %v", err)
 	}
 	t.Logf("added %s to %s", objectURI, taskNumber)
+
+	// Verify object appears in transport object list.
+	objects, err := client.GetTransportObjects(ctx, trNumber)
+	if err != nil {
+		t.Fatalf("GetTransportObjects: %v", err)
+	}
+	found := false
+	for _, obj := range objects {
+		if obj.Name == objName {
+			found = true
+			t.Logf("verified: %s found in transport (pgmid=%s type=%s)", obj.Name, obj.PgmID, obj.Type)
+		}
+	}
+	if !found {
+		t.Errorf("object %s not found in transport %s objects: %v", objName, trNumber, objects)
+	}
 }
 
 // TestTransportFullCycle_Integration tests the complete transport lifecycle:
@@ -92,7 +143,7 @@ func TestAddToTransport_Integration(t *testing.T) {
 // 4. Activate the object (creates a version in VRSD)
 // 5. Verify version history and retrieve historical source
 // 6. Delete the program
-// 7. Release the transport
+// 7. Release the transport and verify status
 func TestTransportFullCycle_Integration(t *testing.T) {
 	client := newIntegrationClient(t)
 	ctx := context.Background()
@@ -104,12 +155,21 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	}
 	t.Logf("[1] created transport: %s", trNumber)
 
+	// Verify description is set.
+	info, err := client.GetTransportInfo(ctx, trNumber)
+	if err != nil {
+		t.Fatalf("GetTransportInfo: %v", err)
+	}
+	if info.Description == "" {
+		t.Errorf("transport %s has empty description", trNumber)
+	}
+
 	// 2. Create a program in a real package, assigned to this transport
 	const objName = "Z_ADT_MCP_FULLCYCLE"
 	objectURI := "/sap/bc/adt/programs/programs/" + objName
 	err = client.CreateObject(ctx, "PROG", objName, testPackage, "Full cycle test", trNumber)
 	if err != nil {
-		_ = client.ReleaseTransport(ctx, trNumber)
+		_ = client.ReleaseTransportWithTasks(ctx, trNumber)
 		t.Fatalf("CreateObject: %v", err)
 	}
 	t.Logf("[2] created %s in %s (transport %s)", objName, testPackage, trNumber)
@@ -162,6 +222,26 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	}
 	t.Logf("[5] retrieved version source (%d bytes)", len(src))
 
+	// Verify objects are in the transport before release.
+	objects, err := client.GetTransportObjects(ctx, trNumber)
+	if err != nil {
+		t.Fatalf("GetTransportObjects: %v", err)
+	}
+	if len(objects) == 0 {
+		t.Error("expected objects in transport before release, got none")
+	}
+	t.Logf("[5b] transport has %d object(s)", len(objects))
+	foundObj := false
+	for _, obj := range objects {
+		t.Logf("     %s %s %s", obj.PgmID, obj.Type, obj.Name)
+		if obj.Name == objName {
+			foundObj = true
+		}
+	}
+	if !foundObj {
+		t.Errorf("expected %s in transport objects, not found", objName)
+	}
+
 	// 6. Delete the program (needs lock + transport)
 	lockHandle, err := client.LockObject(ctx, objectURI)
 	if err != nil {
@@ -174,10 +254,28 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	}
 	t.Logf("[6] deleted %s", objName)
 
-	// 7. Release the transport
-	err = client.ReleaseTransport(ctx, trNumber)
+	// 7. Release the transport and verify status
+	err = client.ReleaseTransportWithTasks(ctx, trNumber)
 	if err != nil {
-		t.Fatalf("ReleaseTransport: %v", err)
+		t.Fatalf("ReleaseTransportWithTasks: %v", err)
 	}
 	t.Logf("[7] released transport %s", trNumber)
+
+	released := false
+	for i := 0; i < 6; i++ {
+		info, err = client.GetTransportInfo(ctx, trNumber)
+		if err != nil {
+			t.Fatalf("GetTransportInfo after release: %v", err)
+		}
+		if info.Status == "L" || info.Status == "R" {
+			t.Logf("[7] verified: %s status=%s (released)", trNumber, info.Status)
+			released = true
+			break
+		}
+		t.Logf("[7] status=%q, waiting...", info.Status)
+		time.Sleep(10 * time.Second)
+	}
+	if !released {
+		t.Errorf("transport %s not released after polling", trNumber)
+	}
 }

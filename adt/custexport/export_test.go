@@ -73,6 +73,9 @@ func (m *mockClient) GetTransportRequests(context.Context, string, string) ([]ad
 func (m *mockClient) AddToTransport(context.Context, string, string) error {
 	panic("not implemented")
 }
+func (m *mockClient) GetTransportInfo(context.Context, string) (*adt.TransportRequest, error) {
+	panic("not implemented")
+}
 func (m *mockClient) GetTransportObjects(context.Context, string) ([]adt.TransportObject, error) {
 	panic("not implemented")
 }
