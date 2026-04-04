@@ -40,13 +40,15 @@ func TestEffectiveOAuth2ClientID(t *testing.T) {
 func TestLoadWithTools(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	os.WriteFile(path, []byte(`{
+	if err := os.WriteFile(path, []byte(`{
 		"default_system": "dev",
 		"tools": ["source", "objects", "debug"],
 		"systems": {
 			"dev": {"host": "https://example.com", "user": "U", "password": "P", "client": "100"}
 		}
-	}`), 0644)
+	}`), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -62,12 +64,14 @@ func TestLoadWithTools(t *testing.T) {
 func TestLoadWithoutTools(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
-	os.WriteFile(path, []byte(`{
+	if err := os.WriteFile(path, []byte(`{
 		"default_system": "dev",
 		"systems": {
 			"dev": {"host": "https://example.com", "user": "U", "password": "P", "client": "100"}
 		}
-	}`), 0644)
+	}`), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
