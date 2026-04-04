@@ -280,6 +280,30 @@ func TestRegistryDelegatesAllMethods(t *testing.T) {
 	})
 }
 
+func TestLogoutAllCallsAllClients(t *testing.T) {
+	logoutCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sap/public/bc/icf/logoff" {
+			logoutCount++
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := makeRegistryConfig(map[string]string{"dev": srv.URL, "prod": srv.URL}, "dev")
+	registry, err := adt.NewClientRegistry(cfg)
+	if err != nil {
+		t.Fatalf("NewClientRegistry: %v", err)
+	}
+
+	if err := registry.LogoutAll(context.Background()); err != nil {
+		t.Fatalf("LogoutAll: %v", err)
+	}
+	if logoutCount != 2 {
+		t.Errorf("expected 2 logout calls (one per system), got %d", logoutCount)
+	}
+}
+
 // TestNewClientRegistryOAuth2Error verifies that NewClientRegistry returns an error
 // when a system is configured for OAuth2 (no user/password) but no token file exists.
 func TestNewClientRegistryOAuth2Error(t *testing.T) {
