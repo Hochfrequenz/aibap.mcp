@@ -34,63 +34,21 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Get metadata for an ABAP repository object: name, type, package, and description."),
-		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString(paramObjectURI, "")
-		info, err := client.GetObjectInfo(ctx, uri)
-		if err != nil {
-			return errorResult(err), nil
-		}
-		out, _ := json.Marshal(info)
-		return mcp.NewToolResultText(string(out)), nil
-	})
-
-	s.AddTool(mcp.NewTool("object_exists",
-		mcp.WithTitleAnnotation("Check Object Exists"),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithDestructiveHintAnnotation(false),
-		mcp.WithIdempotentHintAnnotation(true),
-		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
-			"Check whether an ABAP object exists. Returns true/false with basic metadata if found. "+
-				"Use this to verify object names before reading source or navigating, avoiding hallucinated references.",
+			"Get metadata for one or more ABAP repository objects: name, type, package, and description. "+
+				"Pass a single URI string for one object, or an array of URIs for batch lookup (up to 10 concurrent requests). "+
+				"Batch mode returns {total, succeeded, failed, results:[{object_uri, info, error}]}.",
 		),
-		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
+		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString(paramObjectURI, "")
-		info, err := client.GetObjectInfo(ctx, uri)
-		if err != nil {
-			out, _ := json.Marshal(map[string]any{"exists": false, "object_uri": uri})
+		single, multi := getStringOrSlice(req.GetArguments(), paramObjectURI)
+		if multi == nil {
+			info, err := client.GetObjectInfo(ctx, single)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			out, _ := json.Marshal(info)
 			return mcp.NewToolResultText(string(out)), nil
-		}
-		out, _ := json.Marshal(map[string]any{
-			"exists":      true,
-			"object_uri":  uri,
-			"name":        info.Name,
-			"type":        info.Type,
-			"description": info.Description,
-		})
-		return mcp.NewToolResultText(string(out)), nil
-	})
-
-	s.AddTool(mcp.NewTool("batch_get_object_info",
-		mcp.WithTitleAnnotation("Batch Get Object Info"),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithDestructiveHintAnnotation(false),
-		mcp.WithIdempotentHintAnnotation(true),
-		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription(
-			"Get metadata for multiple ABAP repository objects concurrently. "+
-				"Wraps get_object_info with parallel execution (up to 10 concurrent requests). "+
-				"Returns per-object results with metadata and errors. "+
-				"Use this instead of calling get_object_info in a loop to reduce round-trips.",
-		),
-		mcp.WithArray(paramObjectURI+"s", mcp.Required(), mcp.Description("List of ADT object URIs to retrieve metadata for")),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uris := req.GetStringSlice(paramObjectURI+"s", nil)
-		if len(uris) == 0 {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "object_uris must be a non-empty array of strings"}), nil
 		}
 
 		type objectInfoResult struct {
@@ -99,11 +57,11 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 			Error     string          `json:"error,omitempty"`
 		}
 
-		results := make([]objectInfoResult, len(uris))
+		results := make([]objectInfoResult, len(multi))
 		sem := make(chan struct{}, 10)
 		var wg sync.WaitGroup
-		wg.Add(len(uris))
-		for i, uri := range uris {
+		wg.Add(len(multi))
+		for i, uri := range multi {
 			go func(idx int, u string) {
 				defer wg.Done()
 				sem <- struct{}{}
@@ -128,7 +86,7 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 		}
 
 		out, _ := json.Marshal(map[string]any{
-			"total":     len(uris),
+			"total":     len(multi),
 			"succeeded": succeeded,
 			"failed":    failed,
 			"results":   results,
@@ -136,21 +94,35 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 		return mcp.NewToolResultText(string(out)), nil
 	})
 
-	s.AddTool(mcp.NewTool("batch_object_exists",
-		mcp.WithTitleAnnotation("Batch Check Objects Exist"),
+	s.AddTool(mcp.NewTool("object_exists",
+		mcp.WithTitleAnnotation("Check Object Exists"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
-			"Check existence of multiple ABAP objects concurrently. "+
-				"Returns true/false per object. Use this to validate a list of object references in bulk.",
+			"Check whether one or more ABAP objects exist. "+
+				"Pass a single URI string to get {exists, object_uri, name, type, description}. "+
+				"Pass an array of URIs for batch mode (up to 10 concurrent): returns {total, found, missing, results:[{object_uri, exists, name, type}]}. "+
+				"Use this to verify object names before reading source or navigating, avoiding hallucinated references.",
 		),
-		mcp.WithArray(paramObjectURI+"s", mcp.Required(), mcp.Description("List of ADT object URIs to check")),
+		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uris := req.GetStringSlice(paramObjectURI+"s", nil)
-		if len(uris) == 0 {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "object_uris must be a non-empty array of strings"}), nil
+		single, multi := getStringOrSlice(req.GetArguments(), paramObjectURI)
+		if multi == nil {
+			info, err := client.GetObjectInfo(ctx, single)
+			if err != nil {
+				out, _ := json.Marshal(map[string]any{"exists": false, "object_uri": single})
+				return mcp.NewToolResultText(string(out)), nil
+			}
+			out, _ := json.Marshal(map[string]any{
+				"exists":      true,
+				"object_uri":  single,
+				"name":        info.Name,
+				"type":        info.Type,
+				"description": info.Description,
+			})
+			return mcp.NewToolResultText(string(out)), nil
 		}
 
 		type existsResult struct {
@@ -160,11 +132,11 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 			Type      string `json:"type,omitempty"`
 		}
 
-		results := make([]existsResult, len(uris))
+		results := make([]existsResult, len(multi))
 		sem := make(chan struct{}, 10)
 		var wg sync.WaitGroup
-		wg.Add(len(uris))
-		for i, uri := range uris {
+		wg.Add(len(multi))
+		for i, uri := range multi {
 			go func(idx int, u string) {
 				defer wg.Done()
 				sem <- struct{}{}
@@ -187,9 +159,9 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 		}
 
 		out, _ := json.Marshal(map[string]any{
-			"total":   len(uris),
+			"total":   len(multi),
 			"found":   found,
-			"missing": len(uris) - found,
+			"missing": len(multi) - found,
 			"results": results,
 		})
 		return mcp.NewToolResultText(string(out)), nil
