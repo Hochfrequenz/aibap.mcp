@@ -38,34 +38,21 @@ func registerSearchTools(s toolAdder, client adt.SearchClient) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Find all ABAP objects that use the given object."),
-		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString(paramObjectURI, "")
-		results, err := client.WhereUsed(ctx, uri)
-		if err != nil {
-			return errorResult(err), nil
-		}
-		out, _ := json.Marshal(results)
-		return mcp.NewToolResultText(string(out)), nil
-	})
-
-	s.AddTool(mcp.NewTool("batch_where_used",
-		mcp.WithTitleAnnotation("Batch Where-Used List"),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithDestructiveHintAnnotation(false),
-		mcp.WithIdempotentHintAnnotation(true),
-		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
-			"Find all ABAP objects that use the given objects. "+
-				"Runs where-used lookups concurrently for all provided URIs. "+
-				"Use this instead of calling where_used in a loop to reduce round-trips.",
+			"Find all ABAP objects that use the given object(s). "+
+				"Pass a single URI string for one lookup, or an array of URIs to run lookups concurrently (up to 10). "+
+				"Batch mode returns {total, total_references, results:[{object_uri, references, error}]}.",
 		),
-		mcp.WithArray(paramObjectURI+"s", mcp.Required(), mcp.Description("List of ADT object URIs to look up")),
+		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uris := req.GetStringSlice(paramObjectURI+"s", nil)
-		if len(uris) == 0 {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "object_uris must be a non-empty array of strings"}), nil
+		single, multi := getStringOrSlice(req.GetArguments(), paramObjectURI)
+		if multi == nil {
+			results, err := client.WhereUsed(ctx, single)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			out, _ := json.Marshal(results)
+			return mcp.NewToolResultText(string(out)), nil
 		}
 
 		type whereUsedResult struct {
@@ -74,11 +61,11 @@ func registerSearchTools(s toolAdder, client adt.SearchClient) {
 			Error      string           `json:"error,omitempty"`
 		}
 
-		results := make([]whereUsedResult, len(uris))
+		results := make([]whereUsedResult, len(multi))
 		var wg sync.WaitGroup
 		sem := make(chan struct{}, 10)
-		wg.Add(len(uris))
-		for i, uri := range uris {
+		wg.Add(len(multi))
+		for i, uri := range multi {
 			go func(i int, uri string) {
 				defer wg.Done()
 				sem <- struct{}{}
@@ -98,7 +85,7 @@ func registerSearchTools(s toolAdder, client adt.SearchClient) {
 		}
 
 		out, _ := json.Marshal(map[string]any{
-			"total":            len(uris),
+			"total":            len(multi),
 			"total_references": totalRefs,
 			"results":          results,
 		})
