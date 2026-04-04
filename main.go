@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/Hochfrequenz/mcp-server-abap/cmd"
@@ -99,11 +101,20 @@ func run() error {
 		"tool_groups", activeGroups,
 	)
 
+	// Ensure SAP sessions are closed on shutdown to release ENQUEUE locks.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	defer func() {
+		slog.Info("shutting down, logging out SAP sessions")
+		if err := registry.LogoutAll(context.Background()); err != nil {
+			slog.Warn("logout error during shutdown", "error", err)
+		}
+	}()
+
 	s := server.NewMCPServer("SAP ADT MCP Server", version)
 	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups)
 
 	stdioServer := server.NewStdioServer(s)
-	ctx := context.Background()
 	return stdioServer.Listen(ctx, os.Stdin, os.Stdout)
 }
 
