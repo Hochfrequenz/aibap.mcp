@@ -601,7 +601,9 @@ func TestObjectExistsBatch(t *testing.T) {
 		}
 	}
 	var resp map[string]any
-	json.Unmarshal([]byte(text), &resp)
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
 	if resp["found"] != float64(1) {
 		t.Errorf("found: got %v", resp["found"])
 	}
@@ -631,7 +633,9 @@ func TestWhereUsedBatch(t *testing.T) {
 		}
 	}
 	var resp map[string]any
-	json.Unmarshal([]byte(text), &resp)
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
 	if resp["total"] != float64(2) {
 		t.Errorf("total: got %v", resp["total"])
 	}
@@ -661,7 +665,9 @@ func TestSyntaxCheckBatch(t *testing.T) {
 		}
 	}
 	var resp map[string]any
-	json.Unmarshal([]byte(text), &resp)
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
 	if resp["total"] != float64(2) {
 		t.Errorf("total: got %v", resp["total"])
 	}
@@ -691,7 +697,9 @@ func TestRunUnitTestsBatch(t *testing.T) {
 		}
 	}
 	var resp map[string]any
-	json.Unmarshal([]byte(text), &resp)
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		t.Fatalf("parsing: %v", err)
+	}
 	if resp["total_objects"] != float64(2) {
 		t.Errorf("total_objects: got %v", resp["total_objects"])
 	}
