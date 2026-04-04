@@ -445,6 +445,7 @@ type TransportObject struct {
 }
 
 // readTransportXML fetches the raw XML for a single transport request.
+// Tries the given accept type first, falls back to the alternative if 406.
 func (c *httpClient) readTransportXML(ctx context.Context, transportNumber, accept string) ([]byte, error) {
 	path := "/sap/bc/adt/cts/transportrequests/" + url.PathEscape(transportNumber)
 	resp, err := c.doRead(ctx, path, map[string]string{"Accept": accept})
@@ -469,7 +470,7 @@ func (c *httpClient) GetTransportInfo(ctx context.Context, transportNumber strin
 
 // GetTransportObjects reads the object list of a transport request, deduplicated across request and tasks.
 func (c *httpClient) GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error) {
-	data, err := c.readTransportXML(ctx, transportNumber, "application/xml")
+	data, err := c.readTransportXML(ctx, transportNumber, "application/vnd.sap.adt.transportorganizer.v1+xml, application/xml")
 	if err != nil {
 		return nil, fmt.Errorf("GetTransportObjects: %w", err)
 	}
@@ -478,7 +479,7 @@ func (c *httpClient) GetTransportObjects(ctx context.Context, transportNumber st
 
 // GetTransportTasks returns the task numbers belonging to a transport request.
 func (c *httpClient) GetTransportTasks(ctx context.Context, transportNumber string) ([]string, error) {
-	data, err := c.readTransportXML(ctx, transportNumber, "application/xml")
+	data, err := c.readTransportXML(ctx, transportNumber, "application/vnd.sap.adt.transportorganizer.v1+xml, application/xml")
 	if err != nil {
 		return nil, fmt.Errorf("GetTransportTasks: %w", err)
 	}
@@ -511,56 +512,69 @@ func parseTransportInfo(data []byte, transportNumber string) (*TransportRequest,
 
 func parseTransportTaskNumbers(data []byte, transportNumber string) ([]string, error) {
 	var doc struct {
+		// Format 1: transportorganizer.v1 — <tm:root><tm:request>
+		Request xmlRequest `xml:"request"`
+		// Format 2: application/xml — <root><workbench><section><request>
 		Workbench struct {
 			Sections []struct {
-				Requests []struct {
-					Number string `xml:"number,attr"`
-					Tasks  []struct {
-						Number string `xml:"number,attr"`
-					} `xml:"task"`
-				} `xml:"request"`
+				Requests []xmlRequest `xml:"request"`
 			} `xml:",any"`
 		} `xml:"workbench"`
 	}
 	if err := xml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("parsing transport tasks: %w", err)
 	}
+
 	var tasks []string
+	addTasks := func(req xmlRequest) {
+		if transportNumber != "" && req.Number != transportNumber && req.Number != "" {
+			return
+		}
+		for _, task := range req.Tasks {
+			if task.Number != "" {
+				tasks = append(tasks, task.Number)
+			}
+		}
+	}
+
+	// Format 1
+	addTasks(doc.Request)
+
+	// Format 2
 	for _, section := range doc.Workbench.Sections {
 		for _, req := range section.Requests {
-			if transportNumber != "" && req.Number != transportNumber {
-				continue
-			}
-			for _, task := range req.Tasks {
-				if task.Number != "" {
-					tasks = append(tasks, task.Number)
-				}
-			}
+			addTasks(req)
 		}
 	}
 	return tasks, nil
 }
 
+type xmlObject struct {
+	PgmID  string `xml:"pgmid,attr"`
+	Type   string `xml:"type,attr"`
+	Name   string `xml:"name,attr"`
+	WBType string `xml:"wbtype,attr"`
+}
+
+type xmlTask struct {
+	Number  string      `xml:"number,attr"`
+	Objects []xmlObject `xml:"abap_object"`
+}
+
+type xmlRequest struct {
+	Number  string      `xml:"number,attr"`
+	Objects []xmlObject `xml:"abap_object"`
+	Tasks   []xmlTask   `xml:"task"`
+}
+
 func parseTransportObjectsXML(data []byte) ([]TransportObject, error) {
 	var doc struct {
+		// Format 1: transportorganizer.v1 — <tm:root><tm:request>...</tm:request>
+		Request xmlRequest `xml:"request"`
+		// Format 2: application/xml — <root><workbench><section><request>...</request>
 		Workbench struct {
 			Sections []struct {
-				Requests []struct {
-					Objects []struct {
-						PgmID  string `xml:"pgmid,attr"`
-						Type   string `xml:"type,attr"`
-						Name   string `xml:"name,attr"`
-						WBType string `xml:"wbtype,attr"`
-					} `xml:"abap_object"`
-					Tasks []struct {
-						Objects []struct {
-							PgmID  string `xml:"pgmid,attr"`
-							Type   string `xml:"type,attr"`
-							Name   string `xml:"name,attr"`
-							WBType string `xml:"wbtype,attr"`
-						} `xml:"abap_object"`
-					} `xml:"task"`
-				} `xml:"request"`
+				Requests []xmlRequest `xml:"request"`
 			} `xml:",any"`
 		} `xml:"workbench"`
 	}
@@ -577,17 +591,24 @@ func parseTransportObjectsXML(data []byte) ([]TransportObject, error) {
 			objects = append(objects, TransportObject{PgmID: pgmid, Type: typ, Name: name, WBType: wbtype})
 		}
 	}
-
-	for _, section := range doc.Workbench.Sections {
-		for _, req := range section.Requests {
-			for _, obj := range req.Objects {
+	addFromRequest := func(req xmlRequest) {
+		for _, obj := range req.Objects {
+			addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType)
+		}
+		for _, task := range req.Tasks {
+			for _, obj := range task.Objects {
 				addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType)
 			}
-			for _, task := range req.Tasks {
-				for _, obj := range task.Objects {
-					addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType)
-				}
-			}
+		}
+	}
+
+	// Format 1: direct request under root (transportorganizer.v1)
+	addFromRequest(doc.Request)
+
+	// Format 2: workbench > sections > requests (application/xml)
+	for _, section := range doc.Workbench.Sections {
+		for _, req := range section.Requests {
+			addFromRequest(req)
 		}
 	}
 	return objects, nil

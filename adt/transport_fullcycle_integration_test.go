@@ -164,15 +164,20 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 		t.Errorf("transport %s has empty description", trNumber)
 	}
 
-	// 2. Create a program in a real package, assigned to this transport
+	// 2. Create a program in a real package, assigned to this transport.
+	// If it exists from a previous aborted run, reuse it.
 	const objName = "Z_ADT_MCP_FULLCYCLE"
 	objectURI := "/sap/bc/adt/programs/programs/" + objName
 	err = client.CreateObject(ctx, "PROG", objName, testPackage, "Full cycle test", trNumber)
 	if err != nil {
-		_ = client.ReleaseTransportWithTasks(ctx, trNumber)
-		t.Fatalf("CreateObject: %v", err)
+		if _, infoErr := client.GetObjectInfo(ctx, objectURI); infoErr != nil {
+			_ = client.ReleaseTransportWithTasks(ctx, trNumber)
+			t.Fatalf("CreateObject failed and object does not exist: %v", err)
+		}
+		t.Logf("[2] object %s already exists, reusing", objName)
+	} else {
+		t.Logf("[2] created %s in %s (transport %s)", objName, testPackage, trNumber)
 	}
-	t.Logf("[2] created %s in %s (transport %s)", objName, testPackage, trNumber)
 
 	// 3. CheckTransport — verify the object is known to CTS
 	check, err := client.CheckTransport(ctx, "R3TR", "PROG", objName)
@@ -243,6 +248,10 @@ func TestTransportFullCycle_Integration(t *testing.T) {
 	}
 
 	// 6. Delete the program (needs lock + transport)
+	// Clear any residual ENQUEUE lock before re-locking for delete.
+	if lh, lockErr := client.LockObject(ctx, objectURI); lockErr == nil {
+		_ = client.UnlockObject(ctx, objectURI, lh)
+	}
 	lockHandle, err := client.LockObject(ctx, objectURI)
 	if err != nil {
 		t.Fatalf("LockObject: %v", err)
