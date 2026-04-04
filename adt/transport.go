@@ -72,6 +72,7 @@ func (c *httpClient) CreateTransport(ctx context.Context, category, target, desc
 	reqData := adtxml.CreateTransportData{
 		Category:    strings.ToUpper(category),
 		Target:      strings.ToUpper(target),
+		Text:        description,
 		Description: description,
 		DevClass:    strings.ToUpper(devClass),
 	}
