@@ -63,7 +63,7 @@ func ParseToolGroups(names []string) map[string]bool {
 
 // RegisterAll registers all SAP ADT MCP tools on the given server.
 func RegisterAll(s *server.MCPServer, client adt.Client, selector SystemSelector) {
-	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), DefaultGroups())
+	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), DefaultGroups(), nil)
 }
 
 // toolAdder is the subset of server.MCPServer used by register functions.
@@ -126,8 +126,8 @@ func getStringOrSlice(args map[string]any, key string) (string, []string) {
 
 // RegisterAllWithLockMap registers SAP ADT MCP tools using a provided lock map
 // and an enabledGroups map controlling which tool groups are active.
-// Use this when you need to pre-populate or inspect the lock map (e.g. in tests).
-func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool) {
+// The fallback parameter is optional (nil = no fallback for unsupported operations).
+func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient) {
 	ls := &loggingServer{inner: s, selector: selector}
 
 	type group struct {

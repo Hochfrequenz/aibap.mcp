@@ -18,6 +18,11 @@ import (
 
 var version = "dev"
 
+// blackMagic is an optional fallback client for operations where ADT REST
+// endpoints are not available. Set via init() in a build-tagged file.
+// nil means no fallback — the server works fine without it.
+var blackMagic tools.BlackMagicClient
+
 func main() {
 	// Handle --version flag
 	if len(os.Args) >= 2 && os.Args[1] == "--version" {
@@ -100,7 +105,7 @@ func run() error {
 	)
 
 	s := server.NewMCPServer("SAP ADT MCP Server", version)
-	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups)
+	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups, blackMagic)
 
 	stdioServer := server.NewStdioServer(s)
 	ctx := context.Background()
