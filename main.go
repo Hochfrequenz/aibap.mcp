@@ -126,7 +126,7 @@ func serverInstructions(systemNames []string, defaultSystem string) string {
 BEST FOR:
 - Reading/writing ABAP source code (get_source, patch_source, set_source_from_file)
 - Creating ABAP objects (create_object: PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA)
-- Transport management (get_transport_requests, create_transport, release_transport)
+- Transport management (get_transport_requests, create_transport, release_transport on S4)
 - Activation, syntax checks, ATC checks, unit tests
 - Code completion, pretty printing, refactoring
 - DDIC lookups (get_object_info, get_ddic_info)
@@ -141,8 +141,8 @@ If SAP GUI MCP tools are available, prefer them for:
 - Visual verification of screen state
 - abapGit operations via SAP GUI
 
-AVAILABLE SYSTEMS: %v (default: %q)
-Use select_system to switch between systems.`, systemNames, defaultSystem)
+AVAILABLE SYSTEMS: %s (default: %q)
+Use select_system to switch between systems.`, strings.Join(systemNames, ", "), defaultSystem)
 }
 
 // findConfigFile searches for the config file in standard locations.
