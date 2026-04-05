@@ -118,7 +118,9 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 			"Release a transport request or task. Released transports are queued for import "+
 				"into the target system and cannot be modified afterwards. "+
 				"All tasks must be released before the parent request — if include_tasks is true, "+
-				"tasks are released automatically first.",
+				"tasks are released automatically first. "+
+				"NOTE: On ECC systems, release via ADT may silently fail (returns 200 but status stays modifiable). "+
+				"If release fails on ECC, use the sap-desktop MCP server to release via SE09 instead.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to release")),
 		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),
