@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<tm:root xmlns:tm="http://www.sap.com/cts/transport">
-  <tm:workbenchRequests>
-    <tm:workbenchRequest tm:number="DEVK900123" tm:owner="DEVELOPER" tm:shortDescription="Feature transport" tm:status="D"/>
-    <tm:workbenchRequest tm:number="DEVK900124" tm:owner="DEVELOPER" tm:shortDescription="Released transport" tm:status="L"/>
-  </tm:workbenchRequests>
+<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm" xmlns:adtcore="http://www.sap.com/adt/core">
+  <tm:workbench tm:category="Workbench">
+    <tm:modifiable tm:status="Modifiable">
+      <tm:request tm:number="DEVK900123" tm:owner="DEVELOPER" tm:desc="Feature transport" tm:status="D"/>
+    </tm:modifiable>
+    <tm:released tm:status="Released">
+      <tm:request tm:number="DEVK900124" tm:owner="DEVELOPER" tm:desc="Released transport" tm:status="L"/>
+    </tm:released>
+  </tm:workbench>
+  <tm:customizing tm:category="Customizing">
+    <tm:modifiable tm:status="Modifiable">
+      <tm:request tm:number="DEVK900125" tm:owner="DEVELOPER" tm:desc="Customizing transport" tm:status="D"/>
+    </tm:modifiable>
+  </tm:customizing>
 </tm:root>

@@ -90,12 +90,20 @@ func TestGetTransportRequests(t *testing.T) {
 		w.Header().Set("Content-Type", "application/xml")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
-<tm:root adtcore:name="DEVELOPER"
-  xmlns:tm="http://www.sap.com/cts/adt/tm"
-  xmlns:adtcore="http://www.sap.com/adt/core">
-  <tm:workbenchRequests>
-    <tm:workbenchRequest tm:number="DEVK900123" tm:owner="DEVELOPER" tm:shortDescription="Feature transport" tm:status="D"/>
-  </tm:workbenchRequests>
+<tm:root xmlns:tm="http://www.sap.com/cts/adt/tm" xmlns:adtcore="http://www.sap.com/adt/core">
+  <tm:workbench tm:category="Workbench">
+    <tm:modifiable tm:status="Modifiable">
+      <tm:request tm:number="DEVK900123" tm:owner="DEVELOPER" tm:desc="Feature transport" tm:status="D"/>
+    </tm:modifiable>
+    <tm:released tm:status="Released">
+      <tm:request tm:number="DEVK900124" tm:owner="DEVELOPER" tm:desc="Released transport" tm:status="L"/>
+    </tm:released>
+  </tm:workbench>
+  <tm:customizing tm:category="Customizing">
+    <tm:modifiable tm:status="Modifiable">
+      <tm:request tm:number="DEVK900125" tm:owner="DEVELOPER" tm:desc="Customizing transport" tm:status="D"/>
+    </tm:modifiable>
+  </tm:customizing>
 </tm:root>`))
 	}))
 	defer srv.Close()
@@ -107,11 +115,17 @@ func TestGetTransportRequests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(transports) != 1 {
-		t.Fatalf("expected 1 transport, got %d", len(transports))
+	if len(transports) != 3 {
+		t.Fatalf("expected 3 transports (1 modifiable wb + 1 released wb + 1 customizing), got %d", len(transports))
 	}
 	if transports[0].Number != "DEVK900123" {
-		t.Errorf("number: got %q", transports[0].Number)
+		t.Errorf("workbench modifiable: got %q", transports[0].Number)
+	}
+	if transports[1].Number != "DEVK900124" {
+		t.Errorf("workbench released: got %q", transports[1].Number)
+	}
+	if transports[2].Number != "DEVK900125" {
+		t.Errorf("customizing: got %q", transports[2].Number)
 	}
 }
 
@@ -189,6 +203,47 @@ func TestCreateTransport(t *testing.T) {
 	}
 	if strings.Contains(gotBody, "<AS4TEXT>") {
 		t.Error("body must not contain AS4TEXT (use REQUEST_TEXT instead)")
+	}
+}
+
+func TestCreateTransportWithoutPackage(t *testing.T) {
+	var gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		data, _ := io.ReadAll(r.Body)
+		gotBody = string(data)
+		w.Header().Set("Content-Type", "application/vnd.sap.as+xml")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+    <DATA>
+      <TRKORR>DEVK900888</TRKORR>
+    </DATA>
+  </asx:values>
+</asx:abap>`))
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	nr, err := client.CreateTransport(context.Background(), "K", "", "No package transport", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if nr != "DEVK900888" {
+		t.Errorf("transport number: got %q", nr)
+	}
+	if strings.Contains(gotBody, "<DEVCLASS>") {
+		t.Errorf("body must not contain DEVCLASS when package is empty, got:\n%s", gotBody)
+	}
+	if strings.Contains(gotBody, "<TARGET>") {
+		t.Errorf("body must not contain TARGET when target is empty, got:\n%s", gotBody)
 	}
 }
 
