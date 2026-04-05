@@ -83,12 +83,16 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Create a new CTS transport request. Returns the transport number. "+
-				"Use category 'K' for workbench requests (development) or 'T' for customizing.",
+				"Categories: K=workbench (development objects), W=customizing, T=transport of copies, "+
+				"C=relocation without package change, O=relocation with package change, E=relocation of complete package. "+
+				"Package and target are optional — omit them to create an unassigned request. "+
+				"To find the correct target, query: SELECT SYSNAME, TRANSLAYER FROM TCESYST WHERE VERSION = '0002'. "+
+				"To find a package's transport layer: SELECT DEVCLASS, PDEVCLASS FROM TDEVC WHERE DEVCLASS = 'Z_MY_PKG'.",
 		),
-		mcp.WithString("category", mcp.Required(), mcp.Description("Transport category: K (workbench) or T (customizing)")),
+		mcp.WithString("category", mcp.Required(), mcp.Description("Transport category: K (workbench), W (customizing), T (transport of copies)")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("Short description for the transport")),
-		mcp.WithString("target", mcp.Description("Target system (e.g. PRD). Required for cross-system transports.")),
-		mcp.WithString("package", mcp.Description("Development class / package name")),
+		mcp.WithString("target", mcp.Description("Target system (e.g. DUM, PRD). Query TCESYST to find available targets.")),
+		mcp.WithString("package", mcp.Description("Development class / package name. Optional — omit for unassigned requests.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		cat := req.GetString("category", "")
 		desc := req.GetString("description", "")
@@ -114,7 +118,9 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 			"Release a transport request or task. Released transports are queued for import "+
 				"into the target system and cannot be modified afterwards. "+
 				"All tasks must be released before the parent request — if include_tasks is true, "+
-				"tasks are released automatically first.",
+				"tasks are released automatically first. "+
+				"NOTE: On ECC systems, release via ADT may silently fail (returns 200 but status stays modifiable). "+
+				"If release fails on ECC, use the sap-desktop MCP server to release via SE09 instead.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to release")),
 		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),

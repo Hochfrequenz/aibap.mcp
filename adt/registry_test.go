@@ -111,7 +111,7 @@ func allEndpointsHandler() http.Handler {
 		emptyNodeStructure = `<asx:abap xmlns:asx="http://www.sap.com/abapxml"><asx:values><DATA><TREE_CONTENT></TREE_CONTENT></DATA></asx:values></asx:abap>`
 		emptyCheckReports  = `<chkrun:checkRunReports xmlns:chkrun="http://www.sap.com/adt/checkrun"/>`
 		emptyRunResult     = `<runResult></runResult>`
-		emptyTransports    = `<root><workbenchRequests></workbenchRequests></root>`
+		emptyTransports    = `<root><workbench><modifiable/><released/></workbench><customizing><modifiable/><released/></customizing></root>`
 		emptyCompletions   = `<completions></completions>`
 		activatePath       = "/sap/bc/adt/activation"
 	)
@@ -278,6 +278,30 @@ func TestRegistryDelegatesAllMethods(t *testing.T) {
 			t.Fatalf("GetCompletions: %v", err)
 		}
 	})
+}
+
+func TestLogoutAllCallsAllClients(t *testing.T) {
+	logoutCount := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sap/public/bc/icf/logoff" {
+			logoutCount++
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := makeRegistryConfig(map[string]string{"dev": srv.URL, "prod": srv.URL}, "dev")
+	registry, err := adt.NewClientRegistry(cfg)
+	if err != nil {
+		t.Fatalf("NewClientRegistry: %v", err)
+	}
+
+	if err := registry.LogoutAll(context.Background()); err != nil {
+		t.Fatalf("LogoutAll: %v", err)
+	}
+	if logoutCount != 2 {
+		t.Errorf("expected 2 logout calls (one per system), got %d", logoutCount)
+	}
 }
 
 // TestNewClientRegistryOAuth2Error verifies that NewClientRegistry returns an error
