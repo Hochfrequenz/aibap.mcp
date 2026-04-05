@@ -111,11 +111,38 @@ func run() error {
 		}
 	}()
 
-	s := server.NewMCPServer("SAP ADT MCP Server", version)
+	s := server.NewMCPServer("SAP ADT MCP Server", version,
+		server.WithInstructions(serverInstructions(systemNames, cfg.DefaultSystem)),
+	)
 	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups)
 
 	stdioServer := server.NewStdioServer(s)
 	return stdioServer.Listen(ctx, os.Stdin, os.Stdout)
+}
+
+func serverInstructions(systemNames []string, defaultSystem string) string {
+	return fmt.Sprintf(`SAP ADT (ABAP Development Tools) MCP server. Operates on SAP via HTTP/REST — no GUI required.
+
+BEST FOR:
+- Reading/writing ABAP source code (get_source, patch_source, set_source_from_file)
+- Creating ABAP objects (create_object: PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA)
+- Transport management (get_transport_requests, create_transport, release_transport)
+- Activation, syntax checks, ATC checks, unit tests
+- Code completion, pretty printing, refactoring
+- DDIC lookups (get_object_info, get_ddic_info)
+- Debugging (breakpoints, stepping, variable inspection)
+
+WHEN TO USE sap-desktop/sap-webgui MCP INSTEAD:
+If SAP GUI MCP tools are available, prefer them for:
+- Customizing transactions (SPRO, SM30, SM34)
+- Transport release on ECC (SE09 — the ADT release endpoint does not work on ECC)
+- Complex GUI interactions (popups, drag-and-drop, tree navigation)
+- Transactions without ADT endpoints (SE21 on ECC, SM37, SLG1, ST22, SQVI)
+- Visual verification of screen state
+- abapGit operations via SAP GUI
+
+AVAILABLE SYSTEMS: %v (default: %q)
+Use select_system to switch between systems.`, systemNames, defaultSystem)
 }
 
 // findConfigFile searches for the config file in standard locations.
