@@ -248,6 +248,11 @@ func TestRegistryDelegatesAllMethods(t *testing.T) {
 			t.Fatalf("AddToTransport: %v", err)
 		}
 	})
+	t.Run("RemoveFromTransport", func(t *testing.T) {
+		if err := registry.RemoveFromTransport(ctx, "NPLK000002", "NPLK000001", "R3TR", "PROG", "ZTEST", "PROG/P", "000001"); err != nil {
+			t.Fatalf("RemoveFromTransport: %v", err)
+		}
+	})
 	t.Run("LockObject", func(t *testing.T) {
 		if _, err := registry.LockObject(ctx, objURI); err != nil {
 			t.Fatalf("LockObject: %v", err)

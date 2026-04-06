@@ -155,6 +155,54 @@ func TestAddToTransport(t *testing.T) {
 	}
 }
 
+func TestRemoveFromTransport(t *testing.T) {
+	var gotPath, gotMethod, gotBody, gotContentType string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		gotPath = r.URL.Path
+		gotMethod = r.Method
+		gotContentType = r.Header.Get("Content-Type")
+		data, _ := io.ReadAll(r.Body)
+		gotBody = string(data)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	err := client.RemoveFromTransport(context.Background(),
+		"DEVK900124", "DEVK900123", "R3TR", "PROG", "ZTEST", "PROG/P", "000001")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPath != "/sap/bc/adt/cts/transportrequests/DEVK900124" {
+		t.Errorf("path: got %q, want task number in path", gotPath)
+	}
+	if gotMethod != http.MethodPut {
+		t.Errorf("method: got %q, want PUT", gotMethod)
+	}
+	if gotContentType != "application/vnd.sap.adt.transportorganizer.v1+xml" {
+		t.Errorf("content-type: got %q", gotContentType)
+	}
+	for _, want := range []string{
+		`tm:useraction="removeobject"`,
+		`tm:number="DEVK900124"`,
+		`tm:number="DEVK900123"`,
+		`tm:name="ZTEST"`,
+		`tm:wbtype="PROG/P"`,
+		`tm:position="000001"`,
+	} {
+		if !strings.Contains(gotBody, want) {
+			t.Errorf("body missing %q:\n%s", want, gotBody)
+		}
+	}
+}
+
 func TestCreateTransport(t *testing.T) {
 	var gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
