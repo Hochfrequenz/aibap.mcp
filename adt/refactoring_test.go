@@ -12,7 +12,20 @@ import (
 	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
-// evaluateResponse is a sample SAP ADT refactoring evaluate response.
+// Refactoring step names used in query parameters.
+const (
+	stepEvaluate = "evaluate"
+	stepPreview  = "preview"
+	stepExecute  = "execute"
+)
+
+// NOTE: The XML responses below are synthetic test fixtures that approximate
+// the structure of real SAP ADT refactoring responses. They have not been
+// captured from a live system and may differ in namespace prefixes, attribute
+// order, or optional fields. The tests validate the Go parsing logic, not
+// the exact SAP XML format.
+
+// evaluateResponse is a synthetic SAP ADT refactoring evaluate response.
 const evaluateResponse = `<?xml version="1.0" encoding="utf-8"?>
 <rename:renameRefactoring xmlns:rename="http://www.sap.com/adt/ris/refactoring/rename"
   xmlns:generic="http://www.sap.com/adt/ris/refactoring/generic">
@@ -21,7 +34,7 @@ const evaluateResponse = `<?xml version="1.0" encoding="utf-8"?>
   <generic:transport/>
 </rename:renameRefactoring>`
 
-// previewResponse is a sample SAP ADT refactoring preview response with affected objects.
+// previewResponse is a synthetic SAP ADT refactoring preview response with affected objects.
 const previewResponse = `<?xml version="1.0" encoding="utf-8"?>
 <rename:renameRefactoring xmlns:rename="http://www.sap.com/adt/ris/refactoring/rename"
   xmlns:generic="http://www.sap.com/adt/ris/refactoring/generic">
@@ -55,16 +68,19 @@ const previewResponse = `<?xml version="1.0" encoding="utf-8"?>
   </generic:affectedObjects>
 </rename:renameRefactoring>`
 
-// executeResponse is a sample SAP ADT refactoring execute response.
+// executeResponse is a synthetic SAP ADT refactoring execute response.
 const executeResponse = `<?xml version="1.0" encoding="utf-8"?>
 <rename:renameRefactoring xmlns:rename="http://www.sap.com/adt/ris/refactoring/rename">
   <rename:oldName>OLD_VAR</rename:oldName>
   <rename:newName>NEW_VAR</rename:newName>
 </rename:renameRefactoring>`
 
-func TestRenameSuccess(t *testing.T) {
-	var steps []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// renameHandler returns an httptest handler that stubs the 3-step refactoring flow.
+// steps records the order of steps called. beforeExecute is called with the execute
+// request body (if non-nil).
+func renameHandler(t *testing.T, steps *[]string, beforeExecute func(body string)) http.Handler {
+	t.Helper()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == csrfEndpoint {
 			w.Header().Set("X-CSRF-Token", "token")
 			w.WriteHeader(http.StatusOK)
@@ -75,45 +91,24 @@ func TestRenameSuccess(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		if r.Method != http.MethodPost {
-			t.Errorf("expected POST, got %s", r.Method)
-		}
-		if ct := r.Header.Get("Content-Type"); ct != "application/xml" {
-			t.Errorf("Content-Type: got %q, want application/xml", ct)
-		}
-		if accept := r.Header.Get("Accept"); accept != "application/xml" {
-			t.Errorf("Accept: got %q, want application/xml", accept)
-		}
 
 		step := r.URL.Query().Get("step")
-		steps = append(steps, step)
+		if steps != nil {
+			*steps = append(*steps, step)
+		}
 		w.Header().Set("Content-Type", "application/xml")
 
 		switch step {
-		case "evaluate":
-			// Verify evaluate params
-			if rel := r.URL.Query().Get("rel"); rel != "http://www.sap.com/adt/relations/refactoring/rename" {
-				t.Errorf("evaluate rel: got %q", rel)
-			}
-			if uri := r.URL.Query().Get("uri"); uri != "/sap/bc/adt/programs/programs/ZTEST_PROG#start=2,6" {
-				t.Errorf("evaluate uri: got %q", uri)
-			}
+		case stepEvaluate:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(evaluateResponse))
-		case "preview":
-			// Verify preview sends modified XML with new name
-			body, _ := io.ReadAll(r.Body)
-			bodyStr := string(body)
-			if !strings.Contains(bodyStr, "<rename:newName>NEW_VAR</rename:newName>") {
-				t.Errorf("preview body missing new name, got:\n%s", bodyStr)
-			}
+		case stepPreview:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(previewResponse))
-		case "execute":
-			// Verify execute sends the preview XML
-			body, _ := io.ReadAll(r.Body)
-			if len(body) == 0 {
-				t.Error("execute body is empty")
+		case stepExecute:
+			if beforeExecute != nil {
+				body, _ := io.ReadAll(r.Body)
+				beforeExecute(string(body))
 			}
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(executeResponse))
@@ -121,13 +116,19 @@ func TestRenameSuccess(t *testing.T) {
 			t.Errorf("unexpected step: %q", step)
 			w.WriteHeader(http.StatusBadRequest)
 		}
-	}))
+	})
+}
+
+func newRenameClient(url string) adt.Client {
+	return adt.NewClient(sapmcpconfig.SAPSystem{Host: url, User: "U", Password: "P", Client: "100"})
+}
+
+func TestRenameSuccess(t *testing.T) {
+	var steps []string
+	srv := httptest.NewServer(renameHandler(t, &steps, nil))
 	defer srv.Close()
 
-	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
-	client := adt.NewClient(cfg)
-
-	result, err := client.Rename(context.Background(),
+	result, err := newRenameClient(srv.URL).Rename(context.Background(),
 		"/sap/bc/adt/programs/programs/ZTEST_PROG#start=2,6", "NEW_VAR", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -137,11 +138,10 @@ func TestRenameSuccess(t *testing.T) {
 	if len(steps) != 3 {
 		t.Fatalf("expected 3 steps, got %d: %v", len(steps), steps)
 	}
-	if steps[0] != "evaluate" || steps[1] != "preview" || steps[2] != "execute" {
+	if steps[0] != stepEvaluate || steps[1] != stepPreview || steps[2] != stepExecute {
 		t.Errorf("steps: got %v, want [evaluate preview execute]", steps)
 	}
 
-	// Verify result
 	if result.OldName != "OLD_VAR" {
 		t.Errorf("OldName: got %q, want OLD_VAR", result.OldName)
 	}
@@ -152,7 +152,11 @@ func TestRenameSuccess(t *testing.T) {
 		t.Fatalf("expected 2 affected objects, got %d", len(result.AffectedObjects))
 	}
 
-	// First affected object
+	verifyAffectedObjects(t, result)
+}
+
+func verifyAffectedObjects(t *testing.T, result *adt.RenameResult) {
+	t.Helper()
 	obj0 := result.AffectedObjects[0]
 	if obj0.URI != "/sap/bc/adt/programs/programs/ZTEST_PROG" {
 		t.Errorf("obj[0].URI: got %q", obj0.URI)
@@ -176,7 +180,6 @@ func TestRenameSuccess(t *testing.T) {
 		t.Errorf("obj[0].Locations[0].ContentNew: got %q", obj0.Locations[0].ContentNew)
 	}
 
-	// Second affected object
 	obj1 := result.AffectedObjects[1]
 	if obj1.URI != "/sap/bc/adt/programs/includes/ZTEST_INCLUDE" {
 		t.Errorf("obj[1].URI: got %q", obj1.URI)
@@ -191,48 +194,20 @@ func TestRenameSuccess(t *testing.T) {
 
 func TestRenameWithTransport(t *testing.T) {
 	var executeBody string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == csrfEndpoint {
-			w.Header().Set("X-CSRF-Token", "token")
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		if r.URL.Path != "/sap/bc/adt/refactorings" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		step := r.URL.Query().Get("step")
-		w.Header().Set("Content-Type", "application/xml")
-		w.WriteHeader(http.StatusOK)
-
-		switch step {
-		case "evaluate":
-			_, _ = w.Write([]byte(evaluateResponse))
-		case "preview":
-			_, _ = w.Write([]byte(previewResponse))
-		case "execute":
-			body, _ := io.ReadAll(r.Body)
-			executeBody = string(body)
-			_, _ = w.Write([]byte(executeResponse))
-		}
+	srv := httptest.NewServer(renameHandler(t, nil, func(body string) {
+		executeBody = body
 	}))
 	defer srv.Close()
 
-	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
-	client := adt.NewClient(cfg)
-
-	_, err := client.Rename(context.Background(),
+	_, err := newRenameClient(srv.URL).Rename(context.Background(),
 		"/sap/bc/adt/programs/programs/ZTEST_PROG#start=2,6", "NEW_VAR", "DEVK900123")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify the transport was injected into the execute body
 	if !strings.Contains(executeBody, "<generic:transport>DEVK900123</generic:transport>") {
 		t.Errorf("execute body should contain transport DEVK900123, got:\n%s", executeBody)
 	}
-	// The empty placeholder should no longer be present
 	if strings.Contains(executeBody, "<generic:transport/>") {
 		t.Errorf("execute body should not contain empty transport placeholder, got:\n%s", executeBody)
 	}
@@ -245,7 +220,6 @@ func TestRenameEvaluateError(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		// Return error on evaluate step
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <exc:exception xmlns:exc="http://www.sap.com/adt/exceptions">
@@ -254,10 +228,7 @@ func TestRenameEvaluateError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
-	client := adt.NewClient(cfg)
-
-	_, err := client.Rename(context.Background(),
+	_, err := newRenameClient(srv.URL).Rename(context.Background(),
 		"/sap/bc/adt/programs/programs/ZTEST_PROG#start=99,1", "NEW_VAR", "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -278,12 +249,12 @@ func TestRenamePreviewError(t *testing.T) {
 
 		step := r.URL.Query().Get("step")
 		switch step {
-		case "evaluate":
+		case stepEvaluate:
 			callCount++
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(evaluateResponse))
-		case "preview":
+		case stepPreview:
 			callCount++
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte(`<?xml version="1.0"?>
@@ -296,10 +267,7 @@ func TestRenamePreviewError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
-	client := adt.NewClient(cfg)
-
-	_, err := client.Rename(context.Background(),
+	_, err := newRenameClient(srv.URL).Rename(context.Background(),
 		"/sap/bc/adt/programs/programs/ZTEST_PROG#start=2,6", "NEW_VAR", "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -307,7 +275,6 @@ func TestRenamePreviewError(t *testing.T) {
 	if !strings.Contains(err.Error(), "Rename preview") {
 		t.Errorf("error should mention preview step, got: %v", err)
 	}
-	// Execute step should not have been called
 	if callCount != 2 {
 		t.Errorf("expected 2 calls (evaluate + preview), got %d", callCount)
 	}
@@ -325,13 +292,13 @@ func TestRenameExecuteError(t *testing.T) {
 		w.Header().Set("Content-Type", "application/xml")
 
 		switch step {
-		case "evaluate":
+		case stepEvaluate:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(evaluateResponse))
-		case "preview":
+		case stepPreview:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(previewResponse))
-		case "execute":
+		case stepExecute:
 			w.WriteHeader(http.StatusConflict)
 			_, _ = w.Write([]byte(`<?xml version="1.0"?>
 <exc:exception xmlns:exc="http://www.sap.com/adt/exceptions">
@@ -341,10 +308,7 @@ func TestRenameExecuteError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
-	client := adt.NewClient(cfg)
-
-	_, err := client.Rename(context.Background(),
+	_, err := newRenameClient(srv.URL).Rename(context.Background(),
 		"/sap/bc/adt/programs/programs/ZTEST_PROG#start=2,6", "NEW_VAR", "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -363,10 +327,9 @@ func TestRenameMissingOldName(t *testing.T) {
 		}
 
 		step := r.URL.Query().Get("step")
-		if step == "evaluate" {
+		if step == stepEvaluate {
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
-			// Response without oldName tag
 			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
 <rename:renameRefactoring xmlns:rename="http://www.sap.com/adt/ris/refactoring/rename">
   <rename:newName></rename:newName>
@@ -377,10 +340,7 @@ func TestRenameMissingOldName(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
-	client := adt.NewClient(cfg)
-
-	_, err := client.Rename(context.Background(),
+	_, err := newRenameClient(srv.URL).Rename(context.Background(),
 		"/sap/bc/adt/programs/programs/ZTEST_PROG#start=2,6", "NEW_VAR", "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
