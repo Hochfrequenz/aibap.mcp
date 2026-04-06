@@ -72,3 +72,63 @@ func TestResolveTextElementPath(t *testing.T) {
 		t.Error("expected error for unsupported type")
 	}
 }
+
+func TestFormatTextSymbols(t *testing.T) {
+	symbols := []TextSymbol{
+		{Key: "001", Text: "Hello World", MaxLength: 50},
+		{Key: "002", Text: "Second line"},
+	}
+	got := formatTextSymbols(symbols)
+	want := "@MaxLength:50\n001=Hello World\n002=Second line\n"
+	if got != want {
+		t.Errorf("formatTextSymbols:\ngot:  %q\nwant: %q", got, want)
+	}
+}
+
+func TestFormatSelectionTexts(t *testing.T) {
+	selections := []SelectionText{
+		{Name: "P_PARAM", Text: "My parameter"},
+	}
+	got := formatSelectionTexts(selections)
+	// Check that name is padded to 8 chars
+	if len(got) == 0 || got[0:8] != "P_PARAM " {
+		t.Errorf("expected 8-char padded name, got: %q", got)
+	}
+	if got != "P_PARAM =My parameter\n" {
+		t.Errorf("formatSelectionTexts:\ngot:  %q\nwant: %q", got, "P_PARAM =My parameter\n")
+	}
+}
+
+func TestRoundtripTextSymbols(t *testing.T) {
+	original := []TextSymbol{
+		{Key: "001", Text: "Test text", MaxLength: 132},
+		{Key: "002", Text: "Another"},
+	}
+	formatted := formatTextSymbols(original)
+	parsed := parseTextSymbols(formatted)
+	if len(parsed) != len(original) {
+		t.Fatalf("roundtrip: got %d symbols, want %d", len(parsed), len(original))
+	}
+	for i, s := range parsed {
+		if s.Key != original[i].Key || s.Text != original[i].Text {
+			t.Errorf("roundtrip[%d]: got %+v, want %+v", i, s, original[i])
+		}
+	}
+}
+
+func TestRoundtripSelectionTexts(t *testing.T) {
+	original := []SelectionText{
+		{Name: "P_PARAM", Text: "Label text"},
+		{Name: "S_DATE", Text: "Date range"},
+	}
+	formatted := formatSelectionTexts(original)
+	parsed := parseSelectionTexts(formatted)
+	if len(parsed) != len(original) {
+		t.Fatalf("roundtrip: got %d selections, want %d", len(parsed), len(original))
+	}
+	for i, s := range parsed {
+		if s.Name != original[i].Name || s.Text != original[i].Text {
+			t.Errorf("roundtrip[%d]: got %+v, want %+v", i, s, original[i])
+		}
+	}
+}

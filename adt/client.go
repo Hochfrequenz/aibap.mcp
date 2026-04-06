@@ -51,6 +51,7 @@ type DocuClient interface {
 	GetMessageClass(ctx context.Context, messageClassName string) (*MessageClassInfo, error)
 	SearchMessages(ctx context.Context, query string, maxResults int) ([]MessageSearchResult, error)
 	SetMessages(ctx context.Context, messageClassName, etag string, messages []Message) error
+	SetTextElements(ctx context.Context, objectURI string, symbols []TextSymbol, selections []SelectionText, lockHandle, transport string) error
 }
 
 // NavigationClient resolves source references.

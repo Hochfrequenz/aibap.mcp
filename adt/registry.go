@@ -132,6 +132,9 @@ func (r *ClientRegistry) SearchMessages(ctx context.Context, query string, maxRe
 func (r *ClientRegistry) SetMessages(ctx context.Context, messageClassName, etag string, messages []Message) error {
 	return r.activeClient().SetMessages(ctx, messageClassName, etag, messages)
 }
+func (r *ClientRegistry) SetTextElements(ctx context.Context, objectURI string, symbols []TextSymbol, selections []SelectionText, lockHandle, transport string) error {
+	return r.activeClient().SetTextElements(ctx, objectURI, symbols, selections, lockHandle, transport)
+}
 func (r *ClientRegistry) NavigateToDefinition(ctx context.Context, sourceURI string) (string, error) {
 	return r.activeClient().NavigateToDefinition(ctx, sourceURI)
 }
