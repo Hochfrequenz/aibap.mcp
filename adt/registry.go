@@ -195,6 +195,9 @@ func (r *ClientRegistry) CheckTransport(ctx context.Context, pgmID, object, obje
 func (r *ClientRegistry) AddToTransport(ctx context.Context, objectURI, transport string) error {
 	return r.activeClient().AddToTransport(ctx, objectURI, transport)
 }
+func (r *ClientRegistry) RemoveFromTransport(ctx context.Context, taskNumber, parentTransport, pgmID, objectType, objectName, wbType, position string) error {
+	return r.activeClient().RemoveFromTransport(ctx, taskNumber, parentTransport, pgmID, objectType, objectName, wbType, position)
+}
 func (r *ClientRegistry) ReleaseTransportWithTasks(ctx context.Context, transportNumber string) error {
 	return r.activeClient().ReleaseTransportWithTasks(ctx, transportNumber)
 }

@@ -178,6 +178,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		{"export", func() {
 			registerExportTools(ls, client)
 			registerCustomizingTools(ls, client)
+			registerCustomizingWriteTools(ls, fallback)
 		}},
 		{"system", func() {
 			registerSystemTools(ls, selector)
