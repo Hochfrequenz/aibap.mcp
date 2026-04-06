@@ -146,6 +146,9 @@ func (m *mockClient) SearchMessages(context.Context, string, int) ([]adt.Message
 func (m *mockClient) SetMessages(context.Context, string, string, []adt.Message) error {
 	panic("not implemented")
 }
+func (m *mockClient) SetTextElements(context.Context, string, []adt.TextSymbol, []adt.SelectionText, string, string) error {
+	panic("not implemented")
+}
 func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error) {
 	panic("not implemented")
 }

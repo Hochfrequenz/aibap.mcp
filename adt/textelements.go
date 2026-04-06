@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 )
 
@@ -68,6 +69,59 @@ func (c *httpClient) GetTextElements(ctx context.Context, objectURI string) (*Te
 	}
 
 	return result, nil
+}
+
+// SetTextElements writes text symbols and/or selection texts for an ABAP object.
+// At least one of symbols or selections must be non-nil.
+// The lockHandle and transport are passed as query parameters (not headers).
+func (c *httpClient) SetTextElements(ctx context.Context, objectURI string, symbols []TextSymbol, selections []SelectionText, lockHandle, transport string) error {
+	basePath, err := resolveTextElementPath(objectURI)
+	if err != nil {
+		return err
+	}
+
+	if symbols != nil {
+		if err := c.writeTextElementSource(ctx, basePath+"/source/symbols",
+			"application/vnd.sap.adt.textelements.symbols.v1",
+			formatTextSymbols(symbols), lockHandle, transport); err != nil {
+			return fmt.Errorf("SetTextElements symbols: %w", err)
+		}
+	}
+
+	if selections != nil {
+		if err := c.writeTextElementSource(ctx, basePath+"/source/selections",
+			"application/vnd.sap.adt.textelements.selections.v1",
+			formatSelectionTexts(selections), lockHandle, transport); err != nil {
+			return fmt.Errorf("SetTextElements selections: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (c *httpClient) writeTextElementSource(ctx context.Context, path, contentType, body, lockHandle, transport string) error {
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	if lockHandle != "" {
+		path += sep + "lockHandle=" + lockHandle
+		sep = "&"
+	}
+	if transport != "" {
+		path += sep + "corrNr=" + transport
+	}
+
+	resp, err := c.doMutate(ctx, http.MethodPut, path, strings.NewReader(body),
+		map[string]string{
+			"Content-Type": contentType,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return checkResponse(resp)
 }
 
 func resolveTextElementPath(objectURI string) (string, error) {
@@ -144,4 +198,25 @@ func parseSelectionTexts(source string) []SelectionText {
 		}
 	}
 	return texts
+}
+
+// formatTextSymbols builds the plaintext body for PUT text symbols.
+func formatTextSymbols(symbols []TextSymbol) string {
+	var b strings.Builder
+	for _, s := range symbols {
+		if s.MaxLength > 0 {
+			fmt.Fprintf(&b, "@MaxLength:%d\n", s.MaxLength)
+		}
+		fmt.Fprintf(&b, "%s=%s\n", s.Key, s.Text)
+	}
+	return b.String()
+}
+
+// formatSelectionTexts builds the plaintext body for PUT selection texts.
+func formatSelectionTexts(selections []SelectionText) string {
+	var b strings.Builder
+	for _, s := range selections {
+		fmt.Fprintf(&b, "%-8s=%s\n", s.Name, s.Text)
+	}
+	return b.String()
 }
