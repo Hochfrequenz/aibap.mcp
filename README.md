@@ -174,13 +174,14 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 </details>
 
 <details>
-<summary><strong>Export</strong> — <code>export</code> (3 tools, off by default)</summary>
+<summary><strong>Export</strong> — <code>export</code> (4 tools, off by default)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `export_package` | Export an ABAP package as abapGit ZIP or folder ([requires companion](https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT)) |
 | `export_packages` | Bulk export with wildcard patterns and include/exclude filters |
 | `export_customizing` | Export all customizing tables to SQLite + JSON (read-only, ~16K tables with `customer_only`) |
+| `update_customizing` | Write entries to a customizing table (SM30/SM34) — requires BlackMagic fallback (SAP GUI automation) |
 
 </details>
 
