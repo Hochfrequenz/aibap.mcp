@@ -116,8 +116,8 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				return mcp.NewToolResultText(string(out)), nil
 			}
 			return errorResult(fmt.Errorf(
-				"customizing transports (category W) cannot be created via the ADT REST API — "+
-					"this is a known SAP limitation. Configure a BlackMagic fallback or create "+
+				"customizing transports (category W) cannot be created via the ADT REST API — " +
+					"this is a known SAP limitation. Configure a BlackMagic fallback or create " +
 					"the transport manually in SAP GUI (SE09/SE10)")), nil
 		}
 
