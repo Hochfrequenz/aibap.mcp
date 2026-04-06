@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/mcp-server-abap/auth"
 	"github.com/Hochfrequenz/mcp-server-abap/cmd"
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 	"github.com/Hochfrequenz/mcp-server-abap/logging"
@@ -26,6 +28,17 @@ var version = "dev"
 var blackMagic tools.BlackMagicClient
 
 func main() {
+	// Override the default token path so existing users keep their tokens at
+	// the old mcp-server-abap location. The auth package now defaults to the
+	// generic "sap-adt" directory for standalone library use.
+	auth.DefaultTokenPath = func() string {
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			configDir = filepath.Join(os.Getenv("HOME"), ".config")
+		}
+		return filepath.Join(configDir, "mcp-server-abap", "tokens.json")
+	}
+
 	// Handle --version flag
 	if len(os.Args) >= 2 && os.Args[1] == "--version" {
 		fmt.Printf("mcp-server-abap %s\n", version)
