@@ -42,6 +42,7 @@ type mockClient struct {
 	createObjectFn    func(ctx context.Context, objectType, name, pkg, desc, transport string) error
 	deleteObjectFn    func(ctx context.Context, uri, lockHandle, transport string) error
 	getCompletionsFn  func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
+	createTransportFn func(ctx context.Context, category, target, description, devClass string) (string, error)
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -128,7 +129,10 @@ func (m *mockClient) RunUnitTests(ctx context.Context, uri string, timeout int) 
 func (m *mockClient) CheckTransport(context.Context, string, string, string) (*adt.TransportCheckResult, error) {
 	return &adt.TransportCheckResult{}, nil
 }
-func (m *mockClient) CreateTransport(context.Context, string, string, string, string) (string, error) {
+func (m *mockClient) CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error) {
+	if m.createTransportFn != nil {
+		return m.createTransportFn(ctx, category, target, description, devClass)
+	}
 	return "DEVK999999", nil
 }
 func (m *mockClient) CreateTransportTask(context.Context, string, string, string) (string, error) {
