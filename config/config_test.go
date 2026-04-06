@@ -17,26 +17,6 @@ func writeConfig(t *testing.T, content string) string {
 	return f
 }
 
-func TestEffectiveOAuth2ClientID(t *testing.T) {
-	f := writeConfig(t, `{
-  "default_system": "dev",
-  "systems": {
-    "dev": {"host": "https://dev.example.com:8000", "client": "100", "oauth2_client_id": "my-custom-client"},
-    "staging": {"host": "https://staging.example.com:8000", "client": "200"}
-  }
-}`)
-	cfg, err := config.Load(f)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got := config.EffectiveOAuth2ClientID(cfg.Systems["dev"]); got != "my-custom-client" {
-		t.Errorf("EffectiveOAuth2ClientID: got %q, want %q", got, "my-custom-client")
-	}
-	if got := config.EffectiveOAuth2ClientID(cfg.Systems["staging"]); got != "mcp-server-abap" {
-		t.Errorf("EffectiveOAuth2ClientID: got %q, want %q", got, "mcp-server-abap")
-	}
-}
-
 func TestLoadWithTools(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")

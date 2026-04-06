@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<adtcore:objectReferences xmlns:adtcore="http://www.sap.com/adt/core">
-  <adtcore:objectReference
-    adtcore:uri="/sap/bc/adt/programs/programs/ZCALLER"
-    adtcore:type="PROG/P"
-    adtcore:name="ZCALLER"
-    adtcore:description="Caller Program"/>
-</adtcore:objectReferences>
