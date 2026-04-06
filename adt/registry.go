@@ -31,7 +31,7 @@ func NewClientRegistry(cfg *sapmcpconfig.Config, oauth2ClientID string) (*Client
 			store := auth.NewTokenStore(auth.DefaultTokenPath())
 			tokenData, err := store.TokenForSystem(name)
 			if err != nil {
-				return nil, fmt.Errorf("system %q requires OAuth2 login. Run: mcp-server-abap login %s", name, name)
+				return nil, fmt.Errorf("system %q requires OAuth2 login — no stored token found", name)
 			}
 			systemName := name   // capture for closure
 			sysCfgCopy := sysCfg // capture for closure
@@ -48,7 +48,7 @@ func NewClientRegistry(cfg *sapmcpconfig.Config, oauth2ClientID string) (*Client
 					sysCfgCopy.TLSSkipVerify,
 				)
 				if err != nil {
-					return "", fmt.Errorf("token refresh failed for %q: %w. Run: mcp-server-abap login %s", systemName, err, systemName)
+					return "", fmt.Errorf("token refresh failed for %q: %w", systemName, err)
 				}
 				// Save refreshed token
 				_ = store.Save(systemName, newToken)
