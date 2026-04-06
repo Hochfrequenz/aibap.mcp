@@ -428,6 +428,22 @@ SAP_CONFIG_FILE=config.json ./mcp-server-abap
 
 Logs are sent over TLS. Both stderr and Papertrail receive every log event.
 
+## Architecture
+
+The MCP server is a thin layer over the **ADT client library** (`adt/`), which can also be used as a standalone Go library. See [`adt/README.md`](adt/README.md) for the library API, interfaces, and usage examples.
+
+```
+mcp-server-abap
+├── adt/           — SAP ADT HTTP client (standalone library)
+├── adt/adtxml/    — XML serialization for ADT responses
+├── adt/custexport/ — Customizing table export (SQLite/JSON)
+├── auth/          — OAuth2 token management
+├── tools/         — MCP tool handlers (thin wrappers around adt/)
+├── config/        — Multi-system JSON config loading
+├── cmd/           — CLI (login subcommand)
+└── main.go        — MCP server entry point (stdio transport)
+```
+
 ## Development
 
 ### Unit tests
@@ -444,10 +460,10 @@ They require the `integration` build tag and SAP credentials:
 ```bash
 cp .env.example .env   # fill in your credentials
 source .env
-go test -tags integration ./adt/...
+go test -tags integration ./adt/... -run TestSpecificFunc
 ```
 
-See `testdata/integration_objects.md` for required SAP test fixtures.
+Integration tests require the [Z_ADT_MCP_TEST](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST) package on the target SAP system.
 
 ## Contributing
 
