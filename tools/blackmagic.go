@@ -12,4 +12,5 @@ import "context"
 // Pass nil to reject the dark arts entirely.
 type BlackMagicClient interface {
 	ReleaseTransportFallback(ctx context.Context, transportNumber string) error
+	CreateTransportFallback(ctx context.Context, category, target, description, devClass string) (string, error)
 }
