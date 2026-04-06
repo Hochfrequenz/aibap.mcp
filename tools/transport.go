@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerTransportTools(s toolAdder, client adt.TransportClient) {
+func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient) {
 	s.AddTool(mcp.NewTool("get_transport_requests",
 		mcp.WithTitleAnnotation("Get Transport Requests"),
 		mcp.WithReadOnlyHintAnnotation(true),
