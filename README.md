@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (65)
+## Available tools (66)
 
 Tools are organized into groups. By default, all groups except `debug` and `export` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
@@ -139,6 +139,7 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 | `create_transport_task` | Create a task under an existing transport request |
 | `release_transport` | Release a transport request or task |
 | `add_to_transport` | Assign an object to a transport request |
+| `remove_from_transport` | Remove an object entry from a transport task |
 | `delete_transport` | Delete a transport request or task |
 | `rollback_transport` | Restore all source objects to their pre-transport version |
 
@@ -174,13 +175,14 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 </details>
 
 <details>
-<summary><strong>Export</strong> — <code>export</code> (3 tools, off by default)</summary>
+<summary><strong>Export</strong> — <code>export</code> (4 tools, off by default)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `export_package` | Export an ABAP package as abapGit ZIP or folder ([requires companion](https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT)) |
 | `export_packages` | Bulk export with wildcard patterns and include/exclude filters |
 | `export_customizing` | Export all customizing tables to SQLite + JSON (read-only, ~16K tables with `customer_only`) |
+| `update_customizing` | Write entries to a customizing table (SM30/SM34) — requires BlackMagic fallback (SAP GUI automation) |
 
 </details>
 
