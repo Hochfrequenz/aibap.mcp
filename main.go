@@ -34,7 +34,7 @@ func main() {
 	auth.DefaultTokenPath = func() string {
 		configDir, err := os.UserConfigDir()
 		if err != nil {
-			return "tokens.json"
+			configDir = filepath.Join(os.Getenv("HOME"), ".config")
 		}
 		return filepath.Join(configDir, "mcp-server-abap", "tokens.json")
 	}
