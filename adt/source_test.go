@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
 func TestGetSource(t *testing.T) {
@@ -22,7 +22,7 @@ func TestGetSource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.GetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
@@ -52,7 +52,7 @@ func TestGetIncludeSource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.GetIncludeSource(context.Background(), "/sap/bc/adt/oo/classes/zcl_test", "testclasses")
@@ -86,7 +86,7 @@ func TestSetIncludeSource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	newETag, err := client.SetIncludeSource(context.Background(),
@@ -122,7 +122,7 @@ func TestSetIncludeSource_NoETag(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	// Empty etag = initial write on empty include
@@ -160,7 +160,7 @@ func TestSetSource(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	_, err := client.SetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "REPORT ZTEST.\nNEW CODE.", "", "", `"etag-abc123"`)

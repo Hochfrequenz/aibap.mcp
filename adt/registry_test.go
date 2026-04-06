@@ -11,15 +11,14 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/Hochfrequenz/mcp-server-abap/auth"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
-func makeRegistryConfig(systems map[string]string, defaultSystem string) *config.AppConfig {
-	cfgSystems := make(map[string]config.SAPSystem, len(systems))
+func makeRegistryConfig(systems map[string]string, defaultSystem string) *sapmcpconfig.Config {
+	cfgSystems := make(map[string]sapmcpconfig.SAPSystem, len(systems))
 	for name, host := range systems {
-		cfgSystems[name] = config.SAPSystem{Host: host, Client: "100", User: "U", Password: "P"}
+		cfgSystems[name] = sapmcpconfig.SAPSystem{Host: host, Client: "100", User: "U", Password: "P"}
 	}
-	return &config.AppConfig{Config: sapmcpconfig.Config{DefaultSystem: defaultSystem, Systems: cfgSystems}}
+	return &sapmcpconfig.Config{DefaultSystem: defaultSystem, Systems: cfgSystems}
 }
 
 func TestRegistryDefaultSystem(t *testing.T) {
@@ -30,7 +29,7 @@ func TestRegistryDefaultSystem(t *testing.T) {
 	defer srv.Close()
 
 	cfg := makeRegistryConfig(map[string]string{"dev": srv.URL, "prod": "http://nowhere"}, "dev")
-	registry, err := adt.NewClientRegistry(cfg)
+	registry, err := adt.NewClientRegistry(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -46,7 +45,7 @@ func TestRegistrySelectSwitchesSystem(t *testing.T) {
 	defer srv.Close()
 
 	cfg := makeRegistryConfig(map[string]string{"dev": srv.URL, "prod": srv.URL}, "dev")
-	registry, err := adt.NewClientRegistry(cfg)
+	registry, err := adt.NewClientRegistry(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -65,7 +64,7 @@ func TestRegistrySelectSwitchesSystem(t *testing.T) {
 
 func TestRegistrySelectUnknownSystem(t *testing.T) {
 	cfg := makeRegistryConfig(map[string]string{"dev": "http://dev"}, "dev")
-	registry, err := adt.NewClientRegistry(cfg)
+	registry, err := adt.NewClientRegistry(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -91,7 +90,7 @@ func TestRegistryDelegatesGetSource(t *testing.T) {
 	defer srv.Close()
 
 	cfg := makeRegistryConfig(map[string]string{"dev": srv.URL}, "dev")
-	registry, err := adt.NewClientRegistry(cfg)
+	registry, err := adt.NewClientRegistry(cfg, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -185,7 +184,7 @@ func TestRegistryDelegatesAllMethods(t *testing.T) {
 	defer srv.Close()
 
 	cfg := makeRegistryConfig(map[string]string{"dev": srv.URL}, "dev")
-	registry, err := adt.NewClientRegistry(cfg)
+	registry, err := adt.NewClientRegistry(cfg, "")
 	if err != nil {
 		t.Fatalf("NewClientRegistry: %v", err)
 	}
@@ -296,7 +295,7 @@ func TestLogoutAllCallsAllClients(t *testing.T) {
 	defer srv.Close()
 
 	cfg := makeRegistryConfig(map[string]string{"dev": srv.URL, "prod": srv.URL}, "dev")
-	registry, err := adt.NewClientRegistry(cfg)
+	registry, err := adt.NewClientRegistry(cfg, "")
 	if err != nil {
 		t.Fatalf("NewClientRegistry: %v", err)
 	}
@@ -309,6 +308,70 @@ func TestLogoutAllCallsAllClients(t *testing.T) {
 	}
 }
 
+// TestNewClientRegistryOAuth2MissingClientID verifies that NewClientRegistry returns
+// an error when an OAuth2 system has no client ID configured and no fallback is given.
+func TestNewClientRegistryOAuth2MissingClientID(t *testing.T) {
+	// Create a valid token so we get past the token check.
+	tokenDir := t.TempDir()
+	orig := auth.DefaultTokenPath
+	auth.DefaultTokenPath = func() string { return tokenDir + "/tokens.json" }
+	defer func() { auth.DefaultTokenPath = orig }()
+
+	store := auth.NewTokenStore(auth.DefaultTokenPath())
+	_ = store.Save("oauth-sys", auth.TokenData{AccessToken: "tok", RefreshToken: "ref"})
+
+	cfg := &sapmcpconfig.Config{
+		DefaultSystem: "oauth-sys",
+		Systems: map[string]sapmcpconfig.SAPSystem{
+			"oauth-sys": {
+				Host:   "http://example.com",
+				Client: "100",
+				// No User/Password => IsOAuth2() == true
+				// No OAuth2ClientID
+			},
+		},
+	}
+
+	_, err := adt.NewClientRegistry(cfg, "")
+	if err == nil {
+		t.Fatal("expected error for empty OAuth2 client ID, got nil")
+	}
+	if !strings.Contains(err.Error(), "oauth2_client_id") {
+		t.Errorf("error should mention oauth2_client_id, got: %v", err)
+	}
+}
+
+// TestNewClientRegistryOAuth2FallbackClientID verifies that the fallback client ID
+// is used when the system's own OAuth2ClientID is empty.
+func TestNewClientRegistryOAuth2FallbackClientID(t *testing.T) {
+	tokenDir := t.TempDir()
+	orig := auth.DefaultTokenPath
+	auth.DefaultTokenPath = func() string { return tokenDir + "/tokens.json" }
+	defer func() { auth.DefaultTokenPath = orig }()
+
+	store := auth.NewTokenStore(auth.DefaultTokenPath())
+	_ = store.Save("oauth-sys", auth.TokenData{AccessToken: "tok", RefreshToken: "ref"})
+
+	cfg := &sapmcpconfig.Config{
+		DefaultSystem: "oauth-sys",
+		Systems: map[string]sapmcpconfig.SAPSystem{
+			"oauth-sys": {
+				Host:   "http://example.com",
+				Client: "100",
+			},
+		},
+	}
+
+	// With fallback, should succeed.
+	registry, err := adt.NewClientRegistry(cfg, "my-app")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if registry.ActiveName() != "oauth-sys" {
+		t.Errorf("active: got %q", registry.ActiveName())
+	}
+}
+
 // TestNewClientRegistryOAuth2Error verifies that NewClientRegistry returns an error
 // when a system is configured for OAuth2 (no user/password) but no token file exists.
 func TestNewClientRegistryOAuth2Error(t *testing.T) {
@@ -317,18 +380,18 @@ func TestNewClientRegistryOAuth2Error(t *testing.T) {
 	auth.DefaultTokenPath = func() string { return t.TempDir() + "/nonexistent/tokens.json" }
 	defer func() { auth.DefaultTokenPath = orig }()
 
-	cfg := &config.AppConfig{Config: sapmcpconfig.Config{
+	cfg := &sapmcpconfig.Config{
 		DefaultSystem: "oauth-sys",
-		Systems: map[string]config.SAPSystem{
+		Systems: map[string]sapmcpconfig.SAPSystem{
 			"oauth-sys": {
 				Host:   "http://example.com",
 				Client: "100",
 				// No User/Password => IsOAuth2() == true
 			},
 		},
-	}}
+	}
 
-	_, err := adt.NewClientRegistry(cfg)
+	_, err := adt.NewClientRegistry(cfg, "")
 	if err == nil {
 		t.Fatal("expected error for OAuth2 system without token, got nil")
 	}

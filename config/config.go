@@ -19,15 +19,6 @@ type AppConfig struct {
 	Tools                  []string `json:"tools"`
 }
 
-// EffectiveOAuth2ClientID returns the OAuth2 client ID for the given system,
-// defaulting to "mcp-server-abap" when not configured.
-func EffectiveOAuth2ClientID(sys sapmcpconfig.SAPSystem) string {
-	if sys.OAuth2ClientID != "" {
-		return sys.OAuth2ClientID
-	}
-	return "mcp-server-abap"
-}
-
 // IsTestSystem reports whether the named system should be used for integration tests.
 func (c *AppConfig) IsTestSystem(name string) bool {
 	if len(c.IntegrationTestSystems) == 0 {

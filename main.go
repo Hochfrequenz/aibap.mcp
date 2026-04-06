@@ -83,7 +83,7 @@ func run() error {
 		enabledGroups = tools.DefaultGroups()
 	}
 
-	registry, err := adt.NewClientRegistry(cfg)
+	registry, err := adt.NewClientRegistry(&cfg.Config, "mcp-server-abap")
 	if err != nil {
 		return fmt.Errorf("creating client registry: %w", err)
 	}
