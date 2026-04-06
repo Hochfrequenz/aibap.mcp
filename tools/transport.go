@@ -158,6 +158,38 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 		return mcp.NewToolResultText("Transport " + transport + " deleted"), nil
 	})
 
+	s.AddTool(mcp.NewTool("remove_from_transport",
+		mcp.WithTitleAnnotation("Remove from Transport"),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"Remove an object entry from a transport task. Use get_transport_objects to find the "+
+				"pgmid, type, name, wb_type, and position of the object to remove. "+
+				"The task_number is the task that holds the object (use get_transport_objects on the parent "+
+				"transport to find which task owns it). The parent_transport is the request number.",
+		),
+		mcp.WithString("task_number", mcp.Required(), mcp.Description("Task number that holds the object, e.g. S4UK902001")),
+		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. S4UK902000")),
+		mcp.WithString("pgmid", mcp.Required(), mcp.Description("Program ID, typically R3TR")),
+		mcp.WithString("object_type", mcp.Required(), mcp.Description("Object type, e.g. PROG, CLAS, TABL")),
+		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_PROGRAM")),
+		mcp.WithString("wb_type", mcp.Required(), mcp.Description("Workbench type, e.g. PROG/P, CLAS/OC")),
+		mcp.WithString("position", mcp.Required(), mcp.Description("Object position in transport (from get_transport_objects), e.g. 000001")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		taskNr := req.GetString("task_number", "")
+		parentTr := req.GetString("parent_transport", "")
+		pgmid := req.GetString("pgmid", "")
+		objType := req.GetString("object_type", "")
+		objName := req.GetString("object_name", "")
+		wbType := req.GetString("wb_type", "")
+		position := req.GetString("position", "")
+		if err := client.RemoveFromTransport(ctx, taskNr, parentTr, pgmid, objType, objName, wbType, position); err != nil {
+			return errorResult(err), nil
+		}
+		return mcp.NewToolResultText("Object removed from transport successfully"), nil
+	})
+
 	s.AddTool(mcp.NewTool("get_transport_objects",
 		mcp.WithTitleAnnotation("Get Transport Objects"),
 		mcp.WithReadOnlyHintAnnotation(true),

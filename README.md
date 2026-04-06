@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (64)
+## Available tools (65)
 
 Tools are organized into groups. By default, all groups except `debug` and `export` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
@@ -138,6 +138,7 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 | `create_transport_task` | Create a task under an existing transport request |
 | `release_transport` | Release a transport request or task |
 | `add_to_transport` | Assign an object to a transport request |
+| `remove_from_transport` | Remove an object entry from a transport task |
 | `delete_transport` | Delete a transport request or task |
 | `rollback_transport` | Restore all source objects to their pre-transport version |
 
