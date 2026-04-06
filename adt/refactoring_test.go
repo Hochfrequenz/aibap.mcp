@@ -161,7 +161,7 @@ func verifyAffectedObjects(t *testing.T, result *adt.RenameResult) {
 	if obj0.URI != "/sap/bc/adt/programs/programs/ZTEST_PROG" {
 		t.Errorf("obj[0].URI: got %q", obj0.URI)
 	}
-	if obj0.Type != "PROG/P" {
+	if obj0.Type != "PROG/P" { //nolint:goconst // PROG/P is an SAP constant used across many test files
 		t.Errorf("obj[0].Type: got %q", obj0.Type)
 	}
 	if obj0.Name != "ZTEST_PROG" {
