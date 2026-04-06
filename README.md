@@ -21,7 +21,7 @@ graph TD
     C --> D["SAP System"]
 ```
 
-## Available tools (64)
+## Available tools (65)
 
 Tools are organized into groups. By default, all groups except `debug` and `export` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
@@ -106,7 +106,7 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 </details>
 
 <details>
-<summary><strong>Messages and texts</strong> — <code>messages</code> (4 tools)</summary>
+<summary><strong>Messages and texts</strong> — <code>messages</code> (5 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -114,6 +114,7 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 | `search_messages` | Search messages across all message classes |
 | `set_messages` | Write messages to a message class |
 | `get_text_elements` | Read text symbols and selection texts of a program |
+| `set_text_elements` | Write text symbols and/or selection texts for an ABAP object |
 
 </details>
 

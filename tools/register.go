@@ -166,7 +166,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		}},
 		{"messages", func() {
 			registerMessageClassTools(ls, client)
-			registerTextElementTools(ls, client)
+			registerTextElementTools(ls, client, client, lockMap, selector)
 		}},
 		{"shortdumps", func() { registerShortDumpTools(ls, client) }},
 		{"transport", func() {
