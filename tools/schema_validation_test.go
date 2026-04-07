@@ -131,139 +131,149 @@ func TestKnownArrayItemShapes(t *testing.T) {
 	schemas := listToolInputSchemas(t)
 
 	t.Run("activate_objects.object_uris", func(t *testing.T) {
-		items := arrayItems(t, schemas, "activate_objects", "object_uris")
-		if got := items["type"]; got != "string" {
-			t.Fatalf("items.type=%v want \"string\"", got)
-		}
+		assertStringItems(t, arrayItems(t, schemas, "activate_objects", "object_uris"))
 	})
-
 	t.Run("run_atc_check.object_uris", func(t *testing.T) {
-		items := arrayItems(t, schemas, "run_atc_check", "object_uris")
-		if got := items["type"]; got != "string" {
-			t.Fatalf("items.type=%v want \"string\"", got)
-		}
+		assertStringItems(t, arrayItems(t, schemas, "run_atc_check", "object_uris"))
 	})
-
-	// update_customizing.entries: must be a closed object describing the
-	// CustomizingEntry runtime shape (keys + values, both required).
 	t.Run("update_customizing.entries", func(t *testing.T) {
-		items := arrayItems(t, schemas, "update_customizing", "entries")
-		if got := items["type"]; got != "object" {
-			t.Fatalf("items.type=%v want \"object\"", got)
-		}
-		props, ok := items["properties"].(map[string]any)
-		if !ok || len(props) == 0 {
-			t.Fatalf("items.properties missing or empty (would re-introduce #263): %v", items["properties"])
-		}
-		req, ok := items["required"].([]any)
-		if !ok || len(req) == 0 {
-			t.Fatalf("items.required missing or empty (would re-introduce #263): %v", items["required"])
-		}
-		gotRequired := map[string]bool{}
-		for _, r := range req {
-			if s, ok := r.(string); ok {
-				gotRequired[s] = true
-			}
-		}
-		// Each expected field must appear in BOTH properties and required.
-		// Asymmetric coverage would let a contributor drop a field from one
-		// but not the other, leaving a malformed schema.
-		for _, want := range []string{"keys", "values"} {
-			if _, ok := props[want]; !ok {
-				t.Errorf("items.properties missing %q", want)
-			}
-			if !gotRequired[want] {
-				t.Errorf("items.required missing %q", want)
-			}
-		}
-		if items["additionalProperties"] != false {
-			t.Errorf("items.additionalProperties=%v want false", items["additionalProperties"])
-		}
+		assertCustomizingEntriesItems(t, arrayItems(t, schemas, "update_customizing", "entries"))
 	})
-
-	// patch_source.operations: must be a discriminated oneOf with one branch
-	// per PatchOp variant. Each branch must be a closed object that pins its
-	// `type` field via an enum and lists its op-specific fields in `required`.
 	t.Run("patch_source.operations", func(t *testing.T) {
-		items := arrayItems(t, schemas, "patch_source", "operations")
-		oneOf, ok := items["oneOf"].([]any)
-		if !ok {
-			t.Fatalf("items.oneOf missing or wrong type (would re-introduce #263): %v", items["oneOf"])
-		}
-		wantBranches := map[string][]string{
-			"insert":         {"type", "after_line", "content"},
-			"replace":        {"type", "from_line", "to_line", "content"},
-			"delete":         {"type", "from_line", "to_line"},
-			"search_replace": {"type", "search", "replace"},
-		}
-		if len(oneOf) != len(wantBranches) {
-			t.Fatalf("oneOf has %d branches, want %d", len(oneOf), len(wantBranches))
-		}
-		seen := map[string]bool{}
-		for i, raw := range oneOf {
-			branch, ok := raw.(map[string]any)
-			if !ok {
-				t.Errorf("oneOf[%d]: not an object", i)
-				continue
-			}
-			if branch["type"] != "object" {
-				t.Errorf("oneOf[%d].type=%v want \"object\"", i, branch["type"])
-			}
-			if branch["additionalProperties"] != false {
-				t.Errorf("oneOf[%d].additionalProperties=%v want false", i, branch["additionalProperties"])
-			}
-			props, ok := branch["properties"].(map[string]any)
-			if !ok {
-				t.Errorf("oneOf[%d]: properties missing", i)
-				continue
-			}
-			typeProp, ok := props["type"].(map[string]any)
-			if !ok {
-				t.Errorf("oneOf[%d]: type discriminator missing", i)
-				continue
-			}
-			enum, ok := typeProp["enum"].([]any)
-			if !ok || len(enum) != 1 {
-				t.Errorf("oneOf[%d].type.enum=%v want single-value enum", i, typeProp["enum"])
-				continue
-			}
-			discriminator, _ := enum[0].(string)
-			wantReq, knownDiscriminator := wantBranches[discriminator]
-			if !knownDiscriminator {
-				t.Errorf("oneOf[%d]: unknown discriminator %q", i, discriminator)
-				continue
-			}
-			if seen[discriminator] {
-				t.Errorf("oneOf[%d]: duplicate discriminator %q", i, discriminator)
-			}
-			seen[discriminator] = true
-			req, ok := branch["required"].([]any)
-			if !ok {
-				t.Errorf("oneOf[%d] (%s): required missing", i, discriminator)
-				continue
-			}
-			gotReq := map[string]bool{}
-			for _, r := range req {
-				if s, ok := r.(string); ok {
-					gotReq[s] = true
-				}
-			}
-			// Each expected field must appear in BOTH properties and required —
-			// asymmetric coverage would let a contributor drop a field from one
-			// but not the other, leaving a malformed schema.
-			for _, want := range wantReq {
-				if _, ok := props[want]; !ok {
-					t.Errorf("oneOf[%d] (%s): properties missing %q", i, discriminator, want)
-				}
-				if !gotReq[want] {
-					t.Errorf("oneOf[%d] (%s): required missing %q", i, discriminator, want)
-				}
-			}
-		}
-		for d := range wantBranches {
-			if !seen[d] {
-				t.Errorf("oneOf missing branch for discriminator %q", d)
-			}
-		}
+		assertPatchOperationsItems(t, arrayItems(t, schemas, "patch_source", "operations"))
 	})
+}
+
+// assertStringItems asserts an items schema is a primitive string.
+func assertStringItems(t *testing.T, items map[string]any) {
+	t.Helper()
+	if got := items["type"]; got != "string" {
+		t.Fatalf("items.type=%v want \"string\"", got)
+	}
+}
+
+// stringSet returns the set of string values in a []any (e.g. a JSON Schema
+// `required` array). Non-string entries are ignored.
+func stringSet(raw []any) map[string]bool {
+	out := make(map[string]bool, len(raw))
+	for _, r := range raw {
+		if s, ok := r.(string); ok {
+			out[s] = true
+		}
+	}
+	return out
+}
+
+// assertClosedObjectShape verifies a JSON Schema fragment is a closed object
+// (additionalProperties: false) and that every name in `wantFields` appears
+// in BOTH `properties` and `required`. Asymmetric coverage would let a
+// contributor drop a field from one but not the other, leaving a malformed
+// schema. label is used in error messages.
+func assertClosedObjectShape(t *testing.T, label string, schema map[string]any, wantFields []string) {
+	t.Helper()
+	if schema["type"] != "object" {
+		t.Errorf("%s: type=%v want \"object\"", label, schema["type"])
+	}
+	if schema["additionalProperties"] != false {
+		t.Errorf("%s: additionalProperties=%v want false", label, schema["additionalProperties"])
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok || len(props) == 0 {
+		t.Fatalf("%s: properties missing or empty (would re-introduce #263): %v", label, schema["properties"])
+	}
+	req, ok := schema["required"].([]any)
+	if !ok || len(req) == 0 {
+		t.Fatalf("%s: required missing or empty (would re-introduce #263): %v", label, schema["required"])
+	}
+	gotRequired := stringSet(req)
+	for _, want := range wantFields {
+		if _, ok := props[want]; !ok {
+			t.Errorf("%s: properties missing %q", label, want)
+		}
+		if !gotRequired[want] {
+			t.Errorf("%s: required missing %q", label, want)
+		}
+	}
+}
+
+// assertCustomizingEntriesItems asserts the update_customizing.entries items
+// schema describes the CustomizingEntry runtime shape (keys + values, both
+// required, both string-to-string maps).
+func assertCustomizingEntriesItems(t *testing.T, items map[string]any) {
+	t.Helper()
+	assertClosedObjectShape(t, "items", items, []string{"keys", "values"})
+}
+
+// patchOpWantBranches enumerates the per-discriminator required-field sets
+// the patch_source.operations schema must contain. Mirrors the runtime
+// dispatch in adt/patch.go (applyLineOp + the search_replace block).
+var patchOpWantBranches = map[string][]string{
+	"insert":         {"type", "after_line", "content"},
+	"replace":        {"type", "from_line", "to_line", "content"},
+	"delete":         {"type", "from_line", "to_line"},
+	"search_replace": {"type", "search", "replace"},
+}
+
+// assertPatchOperationsItems asserts the patch_source.operations items schema
+// is a discriminated `oneOf` with one closed-object branch per PatchOp variant.
+func assertPatchOperationsItems(t *testing.T, items map[string]any) {
+	t.Helper()
+	oneOf, ok := items["oneOf"].([]any)
+	if !ok {
+		t.Fatalf("items.oneOf missing or wrong type (would re-introduce #263): %v", items["oneOf"])
+	}
+	if len(oneOf) != len(patchOpWantBranches) {
+		t.Fatalf("oneOf has %d branches, want %d", len(oneOf), len(patchOpWantBranches))
+	}
+	seen := map[string]bool{}
+	for i, raw := range oneOf {
+		branch, ok := raw.(map[string]any)
+		if !ok {
+			t.Errorf("oneOf[%d]: not an object", i)
+			continue
+		}
+		discriminator := patchOpDiscriminator(t, i, branch)
+		if discriminator == "" {
+			continue
+		}
+		wantReq, known := patchOpWantBranches[discriminator]
+		if !known {
+			t.Errorf("oneOf[%d]: unknown discriminator %q", i, discriminator)
+			continue
+		}
+		if seen[discriminator] {
+			t.Errorf("oneOf[%d]: duplicate discriminator %q", i, discriminator)
+		}
+		seen[discriminator] = true
+		assertClosedObjectShape(t, fmt.Sprintf("oneOf[%d] (%s)", i, discriminator), branch, wantReq)
+	}
+	for d := range patchOpWantBranches {
+		if !seen[d] {
+			t.Errorf("oneOf missing branch for discriminator %q", d)
+		}
+	}
+}
+
+// patchOpDiscriminator extracts and returns the single enum value pinned on
+// branch.properties.type. Reports per-branch errors via t and returns "" if
+// the discriminator is malformed.
+func patchOpDiscriminator(t *testing.T, i int, branch map[string]any) string {
+	t.Helper()
+	props, ok := branch["properties"].(map[string]any)
+	if !ok {
+		t.Errorf("oneOf[%d]: properties missing", i)
+		return ""
+	}
+	typeProp, ok := props["type"].(map[string]any)
+	if !ok {
+		t.Errorf("oneOf[%d]: type discriminator missing", i)
+		return ""
+	}
+	enum, ok := typeProp["enum"].([]any)
+	if !ok || len(enum) != 1 {
+		t.Errorf("oneOf[%d].type.enum=%v want single-value enum", i, typeProp["enum"])
+		return ""
+	}
+	d, _ := enum[0].(string)
+	return d
 }
