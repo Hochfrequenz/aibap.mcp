@@ -26,6 +26,7 @@ func registerPatchTools(s toolAdder, client interface {
 		mcp.WithArray("operations",
 			mcp.Required(),
 			mcp.Description(`Array of patch operations. Each has "type" field (insert/replace/delete/search_replace) plus op-specific fields.`),
+			mcp.Items(map[string]any{"type": "object"}),
 		),
 		mcp.WithString("transport",
 			mcp.Description("Transport request number (optional)"),
