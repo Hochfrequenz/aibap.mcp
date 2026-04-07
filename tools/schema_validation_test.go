@@ -4,10 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"testing"
 )
 
+// listToolInputSchemas drives the MCP server through a `tools/list` call and
+// returns each tool's input schema as the raw map[string]any wire form. The
+// schema validation tests in schema_client_validation_test.go feed these
+// maps into a real JSON Schema 2020-12 compiler, which is the source of
+// truth for "would a real client accept this?". This helper is shared by
+// both files so the tools are exercised through the same code path the
+// model uses to discover them.
 func listToolInputSchemas(t *testing.T) map[string]map[string]any {
 	t.Helper()
 
@@ -36,67 +42,6 @@ func listToolInputSchemas(t *testing.T) map[string]map[string]any {
 		schemas[tool.Name] = tool.InputSchema
 	}
 	return schemas
-}
-
-// findArraysMissingItems walks a JSON Schema fragment and returns JSON-pointer-like
-// paths for every `type: "array"` node that lacks an `items` schema. It recurses
-// into `properties`, `items`, and the combinator keywords `oneOf`/`anyOf`/`allOf`
-// so nested array definitions are also checked.
-func findArraysMissingItems(schema any, path string) []string {
-	var problems []string
-	switch node := schema.(type) {
-	case map[string]any:
-		if t, _ := node["type"].(string); t == "array" {
-			if _, hasItems := node["items"]; !hasItems {
-				problems = append(problems, path)
-			}
-		}
-		if props, ok := node["properties"].(map[string]any); ok {
-			keys := make([]string, 0, len(props))
-			for k := range props {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, k := range keys {
-				problems = append(problems, findArraysMissingItems(props[k], path+"/properties/"+k)...)
-			}
-		}
-		if items, ok := node["items"]; ok {
-			problems = append(problems, findArraysMissingItems(items, path+"/items")...)
-		}
-		for _, key := range []string{"oneOf", "anyOf", "allOf"} {
-			if list, ok := node[key].([]any); ok {
-				for i, sub := range list {
-					problems = append(problems, findArraysMissingItems(sub, fmt.Sprintf("%s/%s/%d", path, key, i))...)
-				}
-			}
-		}
-	}
-	return problems
-}
-
-// TestAllToolArraySchemasHaveItems is regression-proof: it walks every registered
-// tool's input schema and fails if any `type: "array"` node is missing `items`.
-// Adding a new tool with `mcp.WithArray(...)` but no items helper will trip this
-// test, preventing the issue #261 class of bug from coming back.
-func TestAllToolArraySchemasHaveItems(t *testing.T) {
-	schemas := listToolInputSchemas(t)
-	if len(schemas) == 0 {
-		t.Fatal("no tools returned from tools/list")
-	}
-
-	names := make([]string, 0, len(schemas))
-	for name := range schemas {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	for _, name := range names {
-		problems := findArraysMissingItems(schemas[name], "")
-		if len(problems) > 0 {
-			t.Errorf("tool %q has array schemas missing items at: %v", name, problems)
-		}
-	}
 }
 
 // arrayItems looks up the items schema for an array property on a tool.
