@@ -24,6 +24,7 @@ func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient) {
 		mcp.WithString("table", mcp.Required(), mcp.Description("Customizing table or view name (e.g. V_T077D, T001W)")),
 		mcp.WithArray("entries", mcp.Required(),
 			mcp.Description("Entries to write. Each entry: {\"keys\": {\"FIELD1\": \"VAL1\"}, \"values\": {\"FIELD2\": \"VAL2\"}}. Keys identify the row, values are the fields to set."),
+			mcp.Items(map[string]any{"type": "object"}),
 		),
 		mcp.WithString("transport", mcp.Description("Transport request number for recording the change")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
