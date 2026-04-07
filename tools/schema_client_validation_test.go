@@ -70,6 +70,13 @@ func compileToolSchemas(t *testing.T) map[string]*jsonschema.Schema {
 		// strictly, so e.g. an unknown keyword is reported instead of
 		// silently ignored.
 		c.AssertVocabs()
+		// AssertFormat makes the compiler populate s.Format on parsed
+		// schemas. Without this, the `format` keyword is treated as
+		// annotation-only and discarded — which would silently break the
+		// Tier-2 check for `format` (Anthropic rejects it). The cost of
+		// enabling assertion is just that unknown format names become
+		// errors at compile time, which is fine for our test schemas.
+		c.AssertFormat()
 
 		// The library wants resources keyed by URL. Synthesize one.
 		resourceURL := fmt.Sprintf("mem://tool/%s.json", name)
@@ -114,10 +121,21 @@ func (p schemaProblem) String() string {
 }
 
 // walkSchemaForOpenCodeProfile recursively walks a compiled *Schema and
-// collects rule violations under the opencode-via-OpenAI profile. It uses
-// the library's already-parsed AST so every JSON Schema 2020-12 keyword
-// that can carry a subschema is visited (no manual keyword list to keep in
+// collects rule violations under the opencode profile. It uses the
+// library's already-parsed AST so every JSON Schema 2020-12 keyword that
+// can carry a subschema is visited (no manual keyword list to keep in
 // sync with the spec).
+//
+// The opencode profile combines:
+//
+//   - Tier-1 (opencode → OpenAI): array-items requirements enforced by
+//     checkArrayItemsRule. Original #261 bug class.
+//   - Tier-2 (opencode → Anthropic via Vercel AI SDK): rejected validation
+//     keywords enforced by checkAnthropicRejectedKeywordsRule. See
+//     vercel/ai#13355 for the rejection list.
+//
+// Both rules apply at every node, so adding a third profile (e.g. OpenAI
+// strict mode) would just be another check called from this function.
 func walkSchemaForOpenCodeProfile(s *jsonschema.Schema, path string, seen map[*jsonschema.Schema]bool) []schemaProblem {
 	if s == nil || seen[s] {
 		return nil
@@ -125,6 +143,7 @@ func walkSchemaForOpenCodeProfile(s *jsonschema.Schema, path string, seen map[*j
 	seen[s] = true
 
 	problems := checkArrayItemsRule(s, path)
+	problems = append(problems, checkAnthropicRejectedKeywordsRule(s, path)...)
 	problems = append(problems, descendSubschemas(s, path, seen)...)
 	return problems
 }
@@ -169,6 +188,77 @@ func checkArrayItemsRule(s *jsonschema.Schema, path string) []schemaProblem {
 	}
 	if !hasItems {
 		problems = append(problems, schemaProblem{path, "type:array missing items (OpenAI rejects with 'array schema missing items')"})
+	}
+	return problems
+}
+
+// checkAnthropicRejectedKeywordsRule enforces the Tier-2 rule: certain
+// JSON Schema *validation* keywords are rejected by the Anthropic Messages
+// API when forwarded raw by the Vercel AI SDK (see vercel/ai#13355).
+// Practical consequence: a schema that works fine through opencode +
+// OpenAI today will 400 through opencode + Anthropic if it sets any of
+// these keywords. The runtime handler is the right place to enforce
+// numeric/string constraints anyway — the schema only needs to describe
+// the shape, not validate the values.
+//
+// The library exposes each rejected keyword as a typed field on *Schema,
+// so we check struct presence rather than scanning the raw map. Adding a
+// new spec draft would surface as a new field, not as a silently-skipped
+// map key — the same correctness story as the descend* helpers.
+func checkAnthropicRejectedKeywordsRule(s *jsonschema.Schema, path string) []schemaProblem {
+	var problems []schemaProblem
+	report := func(keyword string) {
+		problems = append(problems, schemaProblem{path, fmt.Sprintf("uses %q — Anthropic Messages API rejects this validation keyword when forwarded by @ai-sdk/anthropic (vercel/ai#13355). Move the constraint to the description string and let the runtime handler enforce it.", keyword)})
+	}
+	// number
+	if s.Minimum != nil {
+		report("minimum")
+	}
+	if s.Maximum != nil {
+		report("maximum")
+	}
+	if s.ExclusiveMinimum != nil {
+		report("exclusiveMinimum")
+	}
+	if s.ExclusiveMaximum != nil {
+		report("exclusiveMaximum")
+	}
+	if s.MultipleOf != nil {
+		report("multipleOf")
+	}
+	// string
+	if s.MinLength != nil {
+		report("minLength")
+	}
+	if s.MaxLength != nil {
+		report("maxLength")
+	}
+	if s.Pattern != nil {
+		report("pattern")
+	}
+	if s.Format != nil {
+		report("format")
+	}
+	// array
+	if s.MinItems != nil {
+		report("minItems")
+	}
+	if s.MaxItems != nil {
+		report("maxItems")
+	}
+	if s.UniqueItems {
+		// Note: UniqueItems is bool (not *bool), so we cannot distinguish
+		// "explicitly set to false" from "not set" — but `uniqueItems: false`
+		// is the default and effectively imposes no constraint, so we only
+		// flag the truthy case.
+		report("uniqueItems")
+	}
+	// object
+	if s.MinProperties != nil {
+		report("minProperties")
+	}
+	if s.MaxProperties != nil {
+		report("maxProperties")
 	}
 	return problems
 }
@@ -370,12 +460,14 @@ func containsType(tt *jsonschema.Types, want string) bool {
 }
 
 // compileFixture compiles a literal schema fixture for the walker self-tests.
-// Mirrors compileToolSchemas but for arbitrary inline maps so we don't have
-// to break a real tool to prove the walker catches a regression class.
+// Mirrors compileToolSchemas (same draft, same vocab/format assertion) so
+// the fixtures see the same parser state as real tool schemas.
 func compileFixture(t *testing.T, raw map[string]any) *jsonschema.Schema {
 	t.Helper()
 	c := jsonschema.NewCompiler()
 	c.DefaultDraft(jsonschema.Draft2020)
+	c.AssertVocabs()
+	c.AssertFormat()
 	if err := c.AddResource("mem://fixture.json", raw); err != nil {
 		t.Fatalf("AddResource: %v", err)
 	}
@@ -539,6 +631,109 @@ func TestWalkerCatchesBlindSpots(t *testing.T) {
 			},
 			wantPath: "/unevaluatedItems",
 			wantMsg:  "missing items",
+		},
+		// Tier-2 (Anthropic-via-opencode rejected validation keywords).
+		// One fixture per keyword so a future contributor can see at a
+		// glance which keywords trip the rule. Each fixture exercises the
+		// keyword in the context where it's most natural (e.g. minimum on
+		// integer, pattern on string, minItems on array).
+		{
+			name:     "Tier-2: minimum on integer property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "integer", "minimum": 0}}},
+			wantPath: "/properties/x",
+			wantMsg:  "minimum",
+		},
+		{
+			name:     "Tier-2: maximum on integer property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "integer", "maximum": 99}}},
+			wantPath: "/properties/x",
+			wantMsg:  "maximum",
+		},
+		{
+			name:     "Tier-2: exclusiveMinimum on number property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number", "exclusiveMinimum": 0.0}}},
+			wantPath: "/properties/x",
+			wantMsg:  "exclusiveMinimum",
+		},
+		{
+			name:     "Tier-2: exclusiveMaximum on number property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number", "exclusiveMaximum": 1.0}}},
+			wantPath: "/properties/x",
+			wantMsg:  "exclusiveMaximum",
+		},
+		{
+			name:     "Tier-2: multipleOf on number property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"x": map[string]any{"type": "number", "multipleOf": 0.5}}},
+			wantPath: "/properties/x",
+			wantMsg:  "multipleOf",
+		},
+		{
+			name:     "Tier-2: minLength on string property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string", "minLength": 1}}},
+			wantPath: "/properties/name",
+			wantMsg:  "minLength",
+		},
+		{
+			name:     "Tier-2: maxLength on string property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string", "maxLength": 64}}},
+			wantPath: "/properties/name",
+			wantMsg:  "maxLength",
+		},
+		{
+			name:     "Tier-2: pattern on string property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"name": map[string]any{"type": "string", "pattern": "^[A-Z]+$"}}},
+			wantPath: "/properties/name",
+			wantMsg:  "pattern",
+		},
+		{
+			name:     "Tier-2: format on string property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"email": map[string]any{"type": "string", "format": "email"}}},
+			wantPath: "/properties/email",
+			wantMsg:  "format",
+		},
+		{
+			name:     "Tier-2: minItems on array property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"xs": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "minItems": 1}}},
+			wantPath: "/properties/xs",
+			wantMsg:  "minItems",
+		},
+		{
+			name:     "Tier-2: maxItems on array property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"xs": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "maxItems": 100}}},
+			wantPath: "/properties/xs",
+			wantMsg:  "maxItems",
+		},
+		{
+			name:     "Tier-2: uniqueItems on array property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"xs": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "uniqueItems": true}}},
+			wantPath: "/properties/xs",
+			wantMsg:  "uniqueItems",
+		},
+		{
+			name:     "Tier-2: minProperties on object property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"o": map[string]any{"type": "object", "minProperties": 1}}},
+			wantPath: "/properties/o",
+			wantMsg:  "minProperties",
+		},
+		{
+			name:     "Tier-2: maxProperties on object property",
+			schema:   map[string]any{"type": "object", "properties": map[string]any{"o": map[string]any{"type": "object", "maxProperties": 10}}},
+			wantPath: "/properties/o",
+			wantMsg:  "maxProperties",
+		},
+		{
+			// Even nested deep inside oneOf branches the Tier-2 walker
+			// catches the violation, because the descend* helpers walk
+			// every reachable subschema.
+			name: "Tier-2: rejected keyword inside oneOf branch",
+			schema: map[string]any{
+				"oneOf": []any{
+					map[string]any{"type": "object", "properties": map[string]any{"a": map[string]any{"type": "string"}}, "required": []any{"a"}},
+					map[string]any{"type": "object", "properties": map[string]any{"b": map[string]any{"type": "string", "pattern": "^x"}}, "required": []any{"b"}},
+				},
+			},
+			wantPath: "/oneOf/1/properties/b",
+			wantMsg:  "pattern",
 		},
 	}
 

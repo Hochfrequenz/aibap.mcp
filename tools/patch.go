@@ -25,7 +25,7 @@ var patchOpItemsSchema = map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"type":       map[string]any{"type": "string", "enum": []any{"insert"}},
-				"after_line": map[string]any{"type": "integer", "minimum": 0, "description": "Line number after which to insert. 0 inserts before the first line."},
+				"after_line": map[string]any{"type": "integer", "description": "Line number after which to insert (must be >= 0). 0 inserts before the first line."},
 				"content":    map[string]any{"type": "string", "description": "Source line(s) to insert."},
 			},
 			"required":             []any{"type", "after_line", "content"},
@@ -36,8 +36,8 @@ var patchOpItemsSchema = map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"type":      map[string]any{"type": "string", "enum": []any{"replace"}},
-				"from_line": map[string]any{"type": "integer", "minimum": 1, "description": "First line to replace (1-based, inclusive)."},
-				"to_line":   map[string]any{"type": "integer", "minimum": 1, "description": "Last line to replace (1-based, inclusive)."},
+				"from_line": map[string]any{"type": "integer", "description": "First line to replace (1-based, inclusive; must be >= 1)."},
+				"to_line":   map[string]any{"type": "integer", "description": "Last line to replace (1-based, inclusive; must be >= from_line)."},
 				"content":   map[string]any{"type": "string", "description": "Replacement source."},
 			},
 			"required":             []any{"type", "from_line", "to_line", "content"},
@@ -48,8 +48,8 @@ var patchOpItemsSchema = map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"type":      map[string]any{"type": "string", "enum": []any{"delete"}},
-				"from_line": map[string]any{"type": "integer", "minimum": 1, "description": "First line to delete (1-based, inclusive)."},
-				"to_line":   map[string]any{"type": "integer", "minimum": 1, "description": "Last line to delete (1-based, inclusive)."},
+				"from_line": map[string]any{"type": "integer", "description": "First line to delete (1-based, inclusive; must be >= 1)."},
+				"to_line":   map[string]any{"type": "integer", "description": "Last line to delete (1-based, inclusive; must be >= from_line)."},
 			},
 			"required":             []any{"type", "from_line", "to_line"},
 			"additionalProperties": false,
