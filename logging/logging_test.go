@@ -89,6 +89,13 @@ func TestSetup_JSONFormat(t *testing.T) {
 	slog.Debug("json test")
 }
 
+// Test fixtures used by multiple resolve/setup tests. Extracted as constants
+// so the goconst linter is happy with the repetition.
+const (
+	testPTHost = "logs5.papertrailapp.com"
+	testPTPort = "35329"
+)
+
 // withPapertrailDefaults overrides the compile-time Papertrail defaults for the duration
 // of a single test, restoring them in t.Cleanup. Tests using this helper must
 // not call t.Parallel because the package-level vars are shared.
@@ -127,18 +134,18 @@ func TestResolvePapertrail_DefaultsEmpty_NoEnv(t *testing.T) {
 }
 
 func TestResolvePapertrail_DefaultsSet_NoEnv(t *testing.T) {
-	withPapertrailDefaults(t, "logs5.papertrailapp.com", "35329")
+	withPapertrailDefaults(t, testPTHost, testPTPort)
 	unsetEnv(t, "PAPERTRAIL_HOST")
 	unsetEnv(t, "PAPERTRAIL_PORT")
 
 	host, port := resolvePapertrail()
-	if host != "logs5.papertrailapp.com" || port != "35329" {
+	if host != testPTHost || port != testPTPort {
 		t.Errorf("expected baked-in defaults, got %q/%q", host, port)
 	}
 }
 
 func TestResolvePapertrail_DefaultsSet_ExplicitEmptyDisables(t *testing.T) {
-	withPapertrailDefaults(t, "logs5.papertrailapp.com", "35329")
+	withPapertrailDefaults(t, testPTHost, testPTPort)
 	// User explicitly sets HOST to empty — opt-out of baked-in default.
 	t.Setenv("PAPERTRAIL_HOST", "")
 	unsetEnv(t, "PAPERTRAIL_PORT")
@@ -150,7 +157,7 @@ func TestResolvePapertrail_DefaultsSet_ExplicitEmptyDisables(t *testing.T) {
 }
 
 func TestResolvePapertrail_DefaultsSet_ExplicitOverride(t *testing.T) {
-	withPapertrailDefaults(t, "logs5.papertrailapp.com", "35329")
+	withPapertrailDefaults(t, testPTHost, testPTPort)
 	t.Setenv("PAPERTRAIL_HOST", "other.example.com")
 	t.Setenv("PAPERTRAIL_PORT", "12345")
 
@@ -164,14 +171,14 @@ func TestResolvePapertrail_DefaultsSet_ExplicitOverride(t *testing.T) {
 // footgun where a user setting only one of the two env vars would otherwise
 // silently mix with a baked-in default and ship logs to the wrong account.
 func TestResolvePapertrail_PartialOverrideDoesNotMix(t *testing.T) {
-	withPapertrailDefaults(t, "logs5.papertrailapp.com", "35329")
+	withPapertrailDefaults(t, testPTHost, testPTPort)
 
 	// Case A: user sets only PORT — HOST must NOT fall back to default.
 	t.Run("only port set", func(t *testing.T) {
 		unsetEnv(t, "PAPERTRAIL_HOST")
 		t.Setenv("PAPERTRAIL_PORT", "12345")
 		host, port := resolvePapertrail()
-		if host == "logs5.papertrailapp.com" {
+		if host == testPTHost {
 			t.Errorf("partial override leaked baked-in HOST: got %q/%q", host, port)
 		}
 		if host != "" || port != "12345" {
@@ -184,7 +191,7 @@ func TestResolvePapertrail_PartialOverrideDoesNotMix(t *testing.T) {
 		t.Setenv("PAPERTRAIL_HOST", "other.example.com")
 		unsetEnv(t, "PAPERTRAIL_PORT")
 		host, port := resolvePapertrail()
-		if port == "35329" {
+		if port == testPTPort {
 			t.Errorf("partial override leaked baked-in PORT: got %q/%q", host, port)
 		}
 		if host != "other.example.com" || port != "" {
@@ -194,7 +201,7 @@ func TestResolvePapertrail_PartialOverrideDoesNotMix(t *testing.T) {
 }
 
 func TestSetup_BakedInDefaultsAddPapertrailHandler(t *testing.T) {
-	withPapertrailDefaults(t, "logs5.papertrailapp.com", "35329")
+	withPapertrailDefaults(t, testPTHost, testPTPort)
 	unsetEnv(t, "PAPERTRAIL_HOST")
 	unsetEnv(t, "PAPERTRAIL_PORT")
 	t.Setenv("LOG_FORMAT", "")
@@ -203,7 +210,7 @@ func TestSetup_BakedInDefaultsAddPapertrailHandler(t *testing.T) {
 	// resolvePapertrail must return the baked-in pair, which is what Setup
 	// uses to decide whether to add the Papertrail handler.
 	host, port := resolvePapertrail()
-	if host != "logs5.papertrailapp.com" || port != "35329" {
+	if host != testPTHost || port != testPTPort {
 		t.Fatalf("expected baked-in defaults to flow through, got %q/%q", host, port)
 	}
 	Setup()
