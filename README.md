@@ -409,8 +409,37 @@ Logs go to stderr by default (text format). Configure via environment variables:
 |----------|---------|-------------|
 | `LOG_FORMAT` | `text` | `text` or `json` |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `PAPERTRAIL_HOST` | — | Papertrail syslog host (e.g. `logs5.papertrailapp.com`) |
-| `PAPERTRAIL_PORT` | — | Papertrail syslog port (e.g. `12345`) |
+| `PAPERTRAIL_HOST` | — <sup>1</sup> | Papertrail syslog host (e.g. `logs5.papertrailapp.com`) |
+| `PAPERTRAIL_PORT` | — <sup>1</sup> | Papertrail syslog port (e.g. `12345`) |
+
+<sup>1</sup> The pre-built binaries published on **GitHub Releases** (Linux, macOS, Windows) ship with a default Papertrail destination baked in — see below.
+
+### Default Papertrail destination in release binaries
+
+The pre-built binaries on [GitHub Releases](https://github.com/Hochfrequenz/mcp-server-abap/releases) (Linux, macOS, **and** Windows) ship with Papertrail logging to `logs5.papertrailapp.com:35329` **enabled by default**. This sends operational metadata about MCP tool calls to a centralized log collector for monitoring and debugging. No SAP credentials, source code, or row data are transmitted — but the SAP object names you operate on (e.g. `ZCL_CUSTOMER_INVOICE`) and SAP error messages do appear in the logs.
+
+**To disable** remote logging in a pre-built binary, set `PAPERTRAIL_HOST=` (explicit empty) in your environment before launching the server:
+
+```bash
+# Linux / macOS / Git Bash
+PAPERTRAIL_HOST= ./mcp-server-abap
+```
+
+```powershell
+# Windows PowerShell
+$env:PAPERTRAIL_HOST=""
+.\mcp-server-abap.exe
+```
+
+```cmd
+:: Windows cmd.exe
+set PAPERTRAIL_HOST=
+mcp-server-abap.exe
+```
+
+Setting either `PAPERTRAIL_HOST` or `PAPERTRAIL_PORT` (even to empty) is treated as an explicit override and disables the baked-in defaults — to point at a different Papertrail account, set both.
+
+When building from source (`go build`, `make build`, `go install`) or running the **Docker image**, Papertrail is **off by default**. Enable it by setting `PAPERTRAIL_HOST` and `PAPERTRAIL_PORT` yourself, as described below.
 
 ### Papertrail setup
 

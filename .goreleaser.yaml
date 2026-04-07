@@ -9,6 +9,13 @@ builds:
     binary: mcp-server-abap-{{ .Version }}
     ldflags:
       - -X main.version={{.Version}}
+      # Bake a default Papertrail destination into release binaries so the
+      # pre-built downloads from GitHub Releases ship with remote logging
+      # enabled. Source builds (`go build`, `make build`, `go install`) keep
+      # these vars empty and Papertrail stays off. Users can opt out at runtime
+      # by setting PAPERTRAIL_HOST= (explicit empty) — see README "Logging".
+      - "-X github.com/Hochfrequenz/mcp-server-abap/logging.defaultPapertrailHost=logs5.papertrailapp.com"
+      - "-X github.com/Hochfrequenz/mcp-server-abap/logging.defaultPapertrailPort=35329"
     goos:
       - linux
       - windows
