@@ -99,44 +99,171 @@ func TestAllToolArraySchemasHaveItems(t *testing.T) {
 	}
 }
 
-// TestKnownArrayItemTypes pins the item types for the four arrays that originally
-// triggered issue #261. Catches accidental type changes (e.g. switching from
-// string items to object items) that the generic walker would not flag.
-func TestKnownArrayItemTypes(t *testing.T) {
+// arrayItems looks up the items schema for an array property on a tool.
+// Fails the test if any step is missing.
+func arrayItems(t *testing.T, schemas map[string]map[string]any, toolName, propertyName string) map[string]any {
+	t.Helper()
+	schema, ok := schemas[toolName]
+	if !ok {
+		t.Fatalf("tool %q not found", toolName)
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("tool %q: properties missing or wrong type", toolName)
+	}
+	prop, ok := props[propertyName].(map[string]any)
+	if !ok {
+		t.Fatalf("tool %q: property %q missing or wrong type", toolName, propertyName)
+	}
+	items, ok := prop["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("tool %q: property %q missing items schema", toolName, propertyName)
+	}
+	return items
+}
+
+// TestKnownArrayItemShapes pins the item shapes for the four arrays that
+// originally triggered issue #261. The generic walker only checks that
+// `items` exists; this test asserts the *contents* of those items so a
+// future regression cannot quietly loosen them back to bare schemas (the
+// problem #263 fixed).
+func TestKnownArrayItemShapes(t *testing.T) {
 	schemas := listToolInputSchemas(t)
 
-	cases := []struct {
-		toolName      string
-		propertyName  string
-		wantItemsType string
-	}{
-		{toolName: "activate_objects", propertyName: "object_uris", wantItemsType: "string"},
-		{toolName: "run_atc_check", propertyName: "object_uris", wantItemsType: "string"},
-		{toolName: "patch_source", propertyName: "operations", wantItemsType: "object"},
-		{toolName: "update_customizing", propertyName: "entries", wantItemsType: "object"},
-	}
+	t.Run("activate_objects.object_uris", func(t *testing.T) {
+		items := arrayItems(t, schemas, "activate_objects", "object_uris")
+		if got := items["type"]; got != "string" {
+			t.Fatalf("items.type=%v want \"string\"", got)
+		}
+	})
 
-	for _, tc := range cases {
-		t.Run(tc.toolName+"."+tc.propertyName, func(t *testing.T) {
-			schema, ok := schemas[tc.toolName]
+	t.Run("run_atc_check.object_uris", func(t *testing.T) {
+		items := arrayItems(t, schemas, "run_atc_check", "object_uris")
+		if got := items["type"]; got != "string" {
+			t.Fatalf("items.type=%v want \"string\"", got)
+		}
+	})
+
+	// update_customizing.entries: must be a closed object describing the
+	// CustomizingEntry runtime shape (keys + values, both required).
+	t.Run("update_customizing.entries", func(t *testing.T) {
+		items := arrayItems(t, schemas, "update_customizing", "entries")
+		if got := items["type"]; got != "object" {
+			t.Fatalf("items.type=%v want \"object\"", got)
+		}
+		props, ok := items["properties"].(map[string]any)
+		if !ok || len(props) == 0 {
+			t.Fatalf("items.properties missing or empty (would re-introduce #263): %v", items["properties"])
+		}
+		req, ok := items["required"].([]any)
+		if !ok || len(req) == 0 {
+			t.Fatalf("items.required missing or empty (would re-introduce #263): %v", items["required"])
+		}
+		gotRequired := map[string]bool{}
+		for _, r := range req {
+			if s, ok := r.(string); ok {
+				gotRequired[s] = true
+			}
+		}
+		// Each expected field must appear in BOTH properties and required.
+		// Asymmetric coverage would let a contributor drop a field from one
+		// but not the other, leaving a malformed schema.
+		for _, want := range []string{"keys", "values"} {
+			if _, ok := props[want]; !ok {
+				t.Errorf("items.properties missing %q", want)
+			}
+			if !gotRequired[want] {
+				t.Errorf("items.required missing %q", want)
+			}
+		}
+		if items["additionalProperties"] != false {
+			t.Errorf("items.additionalProperties=%v want false", items["additionalProperties"])
+		}
+	})
+
+	// patch_source.operations: must be a discriminated oneOf with one branch
+	// per PatchOp variant. Each branch must be a closed object that pins its
+	// `type` field via an enum and lists its op-specific fields in `required`.
+	t.Run("patch_source.operations", func(t *testing.T) {
+		items := arrayItems(t, schemas, "patch_source", "operations")
+		oneOf, ok := items["oneOf"].([]any)
+		if !ok {
+			t.Fatalf("items.oneOf missing or wrong type (would re-introduce #263): %v", items["oneOf"])
+		}
+		wantBranches := map[string][]string{
+			"insert":         {"type", "after_line", "content"},
+			"replace":        {"type", "from_line", "to_line", "content"},
+			"delete":         {"type", "from_line", "to_line"},
+			"search_replace": {"type", "search", "replace"},
+		}
+		if len(oneOf) != len(wantBranches) {
+			t.Fatalf("oneOf has %d branches, want %d", len(oneOf), len(wantBranches))
+		}
+		seen := map[string]bool{}
+		for i, raw := range oneOf {
+			branch, ok := raw.(map[string]any)
 			if !ok {
-				t.Fatalf("tool %q not found", tc.toolName)
+				t.Errorf("oneOf[%d]: not an object", i)
+				continue
 			}
-			props, ok := schema["properties"].(map[string]any)
+			if branch["type"] != "object" {
+				t.Errorf("oneOf[%d].type=%v want \"object\"", i, branch["type"])
+			}
+			if branch["additionalProperties"] != false {
+				t.Errorf("oneOf[%d].additionalProperties=%v want false", i, branch["additionalProperties"])
+			}
+			props, ok := branch["properties"].(map[string]any)
 			if !ok {
-				t.Fatalf("tool %q: properties missing or wrong type", tc.toolName)
+				t.Errorf("oneOf[%d]: properties missing", i)
+				continue
 			}
-			prop, ok := props[tc.propertyName].(map[string]any)
+			typeProp, ok := props["type"].(map[string]any)
 			if !ok {
-				t.Fatalf("tool %q: property %q missing or wrong type", tc.toolName, tc.propertyName)
+				t.Errorf("oneOf[%d]: type discriminator missing", i)
+				continue
 			}
-			items, ok := prop["items"].(map[string]any)
+			enum, ok := typeProp["enum"].([]any)
+			if !ok || len(enum) != 1 {
+				t.Errorf("oneOf[%d].type.enum=%v want single-value enum", i, typeProp["enum"])
+				continue
+			}
+			discriminator, _ := enum[0].(string)
+			wantReq, knownDiscriminator := wantBranches[discriminator]
+			if !knownDiscriminator {
+				t.Errorf("oneOf[%d]: unknown discriminator %q", i, discriminator)
+				continue
+			}
+			if seen[discriminator] {
+				t.Errorf("oneOf[%d]: duplicate discriminator %q", i, discriminator)
+			}
+			seen[discriminator] = true
+			req, ok := branch["required"].([]any)
 			if !ok {
-				t.Fatalf("tool %q: property %q missing items schema", tc.toolName, tc.propertyName)
+				t.Errorf("oneOf[%d] (%s): required missing", i, discriminator)
+				continue
 			}
-			if got := items["type"]; got != tc.wantItemsType {
-				t.Fatalf("tool %q: property %q items.type=%v want %q", tc.toolName, tc.propertyName, got, tc.wantItemsType)
+			gotReq := map[string]bool{}
+			for _, r := range req {
+				if s, ok := r.(string); ok {
+					gotReq[s] = true
+				}
 			}
-		})
-	}
+			// Each expected field must appear in BOTH properties and required —
+			// asymmetric coverage would let a contributor drop a field from one
+			// but not the other, leaving a malformed schema.
+			for _, want := range wantReq {
+				if _, ok := props[want]; !ok {
+					t.Errorf("oneOf[%d] (%s): properties missing %q", i, discriminator, want)
+				}
+				if !gotReq[want] {
+					t.Errorf("oneOf[%d] (%s): required missing %q", i, discriminator, want)
+				}
+			}
+		}
+		for d := range wantBranches {
+			if !seen[d] {
+				t.Errorf("oneOf missing branch for discriminator %q", d)
+			}
+		}
+	})
 }
