@@ -36,7 +36,7 @@ Multiple handlers, same event goes to all:
 | Handler | Destination | Format | When |
 |---------|-------------|--------|------|
 | stderr | local terminal | text (default) or JSON (`LOG_FORMAT=json`) | always |
-| Papertrail | TLS syslog | JSON | when `PAPERTRAIL_HOST` + `PAPERTRAIL_PORT` are set |
+| Papertrail | TLS syslog | JSON | when `PAPERTRAIL_HOST` + `PAPERTRAIL_PORT` resolve to non-empty values (env or compile-time defaults — see below) |
 
 ## Configuration
 
@@ -46,8 +46,38 @@ Environment variables only (no config.yaml changes):
 |----------|---------|-------------|
 | `LOG_FORMAT` | `text` | `text` or `json` |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `PAPERTRAIL_HOST` | (empty) | Papertrail syslog host, e.g. `logs.papertrailapp.com` |
-| `PAPERTRAIL_PORT` | (empty) | Papertrail syslog port, e.g. `12345` |
+| `PAPERTRAIL_HOST` | (empty) <sup>1</sup> | Papertrail syslog host, e.g. `logs5.papertrailapp.com` |
+| `PAPERTRAIL_PORT` | (empty) <sup>1</sup> | Papertrail syslog port, e.g. `35329` |
+
+<sup>1</sup> Release binaries published via goreleaser bake in a default destination (see "Compile-time defaults" below).
+
+### Compile-time defaults
+
+`logging/logging.go` declares two package-level vars:
+
+```go
+var (
+    defaultPapertrailHost = ""
+    defaultPapertrailPort = ""
+)
+```
+
+`goreleaser` injects values via `-ldflags -X` for the GitHub Releases binaries (Linux/macOS/Windows), so the pre-built downloads ship with `logs5.papertrailapp.com:35329` enabled by default. Source builds (`go build`, `make build`, `go install`) and the Docker image leave the vars empty, so Papertrail stays off.
+
+### Pair-wise override semantics
+
+`Setup()` resolves the destination using pair-wise override:
+
+| `PAPERTRAIL_HOST` env | `PAPERTRAIL_PORT` env | Result                                |
+|-----------------------|-----------------------|---------------------------------------|
+| unset                 | unset                 | both fall back to compile-time defaults |
+| set (any value)       | unset                 | both come from env (port empty → off) |
+| unset                 | set (any value)       | both come from env (host empty → off) |
+| set                   | set                   | both come from env                    |
+
+**Why pair-wise?** Without it, a user setting only `PAPERTRAIL_PORT=12345` on a release binary would silently mix their port with the baked-in host and ship logs to the wrong Papertrail account — a real privacy bug. Treating either env var as an explicit override forces the user to be deliberate.
+
+To **disable** the baked-in default in a release binary, set `PAPERTRAIL_HOST=` (explicit empty). The pair-wise rule then makes both values empty and the handler is not added.
 
 ## Implementation
 
