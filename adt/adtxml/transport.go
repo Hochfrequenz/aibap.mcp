@@ -37,3 +37,28 @@ type TransportComponent struct {
 	NSCore    string   `xml:"xmlns:adtcore,attr"`
 	ObjectURI string   `xml:"adtcore:uri,attr"`
 }
+
+// TMRoot is the XML body for transport organizer actions (removeobject, etc.).
+// Namespace: http://www.sap.com/cts/adt/tm
+type TMRoot struct {
+	XMLName    xml.Name  `xml:"tm:root"`
+	NSTM       string    `xml:"xmlns:tm,attr"`
+	UserAction string    `xml:"tm:useraction,attr"`
+	Number     string    `xml:"tm:number,attr"`
+	Request    TMRequest `xml:"tm:request"`
+}
+
+// TMRequest wraps objects in a transport organizer request body.
+type TMRequest struct {
+	Number  string         `xml:"tm:number,attr"`
+	Objects []TMAbapObject `xml:"tm:abap_object"`
+}
+
+// TMAbapObject identifies an object in a transport request.
+type TMAbapObject struct {
+	PgmID    string `xml:"tm:pgmid,attr"`
+	Type     string `xml:"tm:type,attr"`
+	Name     string `xml:"tm:name,attr"`
+	WBType   string `xml:"tm:wbtype,attr,omitempty"`
+	Position string `xml:"tm:position,attr,omitempty"`
+}

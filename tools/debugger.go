@@ -15,7 +15,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 
 	getSession := func(user string) *adt.DebugSession {
 		if dbg == nil {
-			dbg = adt.NewDebugSession(client, user)
+			dbg = adt.NewDebugSession(client, user, "mcp-server-abap")
 		}
 		return dbg
 	}

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
 func TestCheckTransport(t *testing.T) {
@@ -54,7 +54,7 @@ func TestCheckTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.CheckTransport(context.Background(), "R3TR", "PROG", "ZTEST")
@@ -108,7 +108,7 @@ func TestGetTransportRequests(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	transports, err := client.GetTransportRequests(context.Background(), "", "D")
@@ -142,7 +142,7 @@ func TestAddToTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.AddToTransport(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "DEVK900123")
@@ -152,6 +152,54 @@ func TestAddToTransport(t *testing.T) {
 	expected := "/sap/bc/adt/cts/transportrequests/DEVK900123/abaptransportcomponents"
 	if gotPath != expected {
 		t.Errorf("path: got %q, want %q", gotPath, expected)
+	}
+}
+
+func TestRemoveFromTransport(t *testing.T) {
+	var gotPath, gotMethod, gotBody, gotContentType string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == csrfEndpoint {
+			w.Header().Set("X-CSRF-Token", "token")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		gotPath = r.URL.Path
+		gotMethod = r.Method
+		gotContentType = r.Header.Get("Content-Type")
+		data, _ := io.ReadAll(r.Body)
+		gotBody = string(data)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	client := adt.NewClient(cfg)
+
+	err := client.RemoveFromTransport(context.Background(),
+		"DEVK900124", "DEVK900123", "R3TR", "PROG", "ZTEST", "PROG/P", "000001")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotPath != "/sap/bc/adt/cts/transportrequests/DEVK900124" {
+		t.Errorf("path: got %q, want task number in path", gotPath)
+	}
+	if gotMethod != http.MethodPut {
+		t.Errorf("method: got %q, want PUT", gotMethod)
+	}
+	if gotContentType != "application/vnd.sap.adt.transportorganizer.v1+xml" {
+		t.Errorf("content-type: got %q", gotContentType)
+	}
+	for _, want := range []string{
+		`tm:useraction="removeobject"`,
+		`tm:number="DEVK900124"`,
+		`tm:number="DEVK900123"`,
+		`tm:name="ZTEST"`,
+		`tm:wbtype="PROG/P"`,
+		`tm:position="000001"`,
+	} {
+		if !strings.Contains(gotBody, want) {
+			t.Errorf("body missing %q:\n%s", want, gotBody)
+		}
 	}
 }
 
@@ -183,7 +231,7 @@ func TestCreateTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	nr, err := client.CreateTransport(context.Background(), "K", "DUM", "My description", "ZTEST")
@@ -229,7 +277,7 @@ func TestCreateTransportWithoutPackage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	nr, err := client.CreateTransport(context.Background(), "K", "", "No package transport", "")
@@ -333,7 +381,7 @@ func TestReleaseTransportAsync(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClientWithPollInterval(cfg, 10*time.Millisecond)
 
 	err := client.ReleaseTransport(context.Background(), "DEVK900123")
@@ -364,7 +412,7 @@ func TestCreateTransportTask(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	taskNumber, err := client.CreateTransportTask(context.Background(), "S4UK902339", "", "My task")
@@ -419,7 +467,7 @@ func TestDeleteAndReleaseTransport(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+			cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 			client := adt.NewClient(cfg)
 
 			if err := tt.call(client); err != nil {

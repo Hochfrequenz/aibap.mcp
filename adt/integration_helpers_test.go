@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
+
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
 // testPackage is the SAP package that holds all persistent integration test objects.
@@ -34,13 +35,13 @@ const (
 //  2. Fallback env vars: SAP_INTEGRATION_HOST, SAP_INTEGRATION_USER, etc.
 //
 // JSON paths searched: SAP_CONFIG_FILE env var, ~/.config/sap-mcp/systems.json
-func integrationConfig() config.SAPSystem {
+func integrationConfig() sapmcpconfig.SAPSystem {
 	// Try JSON config first
 	if cfg, ok := integrationConfigFromFile(); ok {
 		return cfg
 	}
 	// Fallback to legacy env vars
-	return config.SAPSystem{
+	return sapmcpconfig.SAPSystem{
 		Host:          strings.TrimSpace(os.Getenv("SAP_INTEGRATION_HOST")),
 		User:          strings.TrimSpace(os.Getenv("SAP_INTEGRATION_USER")),
 		Password:      os.Getenv("SAP_INTEGRATION_PASSWORD"),
@@ -49,41 +50,52 @@ func integrationConfig() config.SAPSystem {
 	}
 }
 
-func integrationConfigFromFile() (config.SAPSystem, bool) {
+func integrationConfigFromFile() (sapmcpconfig.SAPSystem, bool) {
 	paths := []string{os.Getenv("SAP_CONFIG_FILE")}
 	if home, err := os.UserHomeDir(); err == nil {
 		paths = append(paths, home+"/.config/sap-mcp/systems.json")
 	}
 
-	var cfg *config.AppConfig
+	var cfg *sapmcpconfig.Config
 	for _, p := range paths {
 		if p == "" {
 			continue
 		}
 		var err error
-		cfg, err = config.Load(p)
+		cfg, err = sapmcpconfig.Load(p)
 		if err == nil {
 			break
 		}
 	}
 	if cfg == nil {
-		return config.SAPSystem{}, false
+		return sapmcpconfig.SAPSystem{}, false
 	}
 
-	// Pick system: SAP_INTEGRATION_SYSTEM env var, or default_system from YAML
+	// Pick system: SAP_INTEGRATION_SYSTEM env var, or default_system from config
 	systemName := os.Getenv("SAP_INTEGRATION_SYSTEM")
 	if systemName == "" {
 		systemName = cfg.DefaultSystem
 	}
 
-	// Check whitelist — only run tests against explicitly allowed systems
-	if !cfg.IsTestSystem(systemName) {
-		return config.SAPSystem{}, false
+	// Safety guard: only run tests against explicitly allowed systems.
+	// Set SAP_INTEGRATION_SYSTEMS (comma-separated) to whitelist; if unset,
+	// only the default system is allowed.
+	if allowed := os.Getenv("SAP_INTEGRATION_SYSTEMS"); allowed != "" {
+		found := false
+		for _, s := range strings.Split(allowed, ",") {
+			if strings.TrimSpace(s) == systemName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return sapmcpconfig.SAPSystem{}, false
+		}
 	}
 
 	sys, ok := cfg.Systems[systemName]
 	if !ok {
-		return config.SAPSystem{}, false
+		return sapmcpconfig.SAPSystem{}, false
 	}
 	sys.TLSSkipVerify = true
 	return sys, true
