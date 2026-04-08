@@ -459,17 +459,14 @@ Logs are sent over TLS. Both stderr and Papertrail receive every log event.
 
 ## Architecture
 
-The MCP server is a thin layer over the **ADT client library** (`adt/`), which can also be used as a standalone Go library. See [`adt/README.md`](adt/README.md) for the library API, interfaces, and usage examples.
+The MCP server is a thin layer over the **[adtler](https://github.com/Hochfrequenz/adtler)** Go library, which provides the SAP ADT HTTP client and OAuth2 token management. mcp-server-abap depends on adtler the same way any other Go consumer would, and the library can be used standalone in CLIs, CI pipelines, and other integrations.
 
 ```
 mcp-server-abap
-├── adt/           — SAP ADT HTTP client (standalone library)
-├── adt/adtxml/    — XML serialization for ADT responses
-├── adt/custexport/ — Customizing table export (SQLite/JSON)
-├── auth/          — OAuth2 token management
-├── tools/         — MCP tool handlers (thin wrappers around adt/)
+├── tools/         — MCP tool handlers (thin wrappers around adtler)
 ├── config/        — Multi-system JSON config loading
 ├── cmd/           — CLI (login subcommand)
+├── logging/       — slog + Papertrail setup
 └── main.go        — MCP server entry point (stdio transport)
 ```
 
@@ -483,16 +480,9 @@ go test ./...
 
 ### Integration tests
 
-Integration tests run against a real SAP system and are excluded from CI.
-They require the `integration` build tag and SAP credentials:
+The ADT client integration tests live in [adtler](https://github.com/Hochfrequenz/adtler). To run them against a real SAP system, clone that repo and follow its README.
 
-```bash
-cp .env.example .env   # fill in your credentials
-source .env
-go test -tags integration ./adt/... -run TestSpecificFunc
-```
-
-Integration tests require the [Z_ADT_MCP_TEST](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST) package on the target SAP system.
+mcp-server-abap itself only has unit tests covering the MCP tool layer; the SAP-touching tests stayed with the client library.
 
 ## Contributing
 
