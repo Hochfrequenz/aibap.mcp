@@ -9,13 +9,13 @@ import (
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
 const csrfEndpoint = "/sap/bc/adt/discovery"
 
-func newTestConfig(host string) config.SAPSystem {
-	return config.SAPSystem{
+func newTestConfig(host string) sapmcpconfig.SAPSystem {
+	return sapmcpconfig.SAPSystem{
 		Host:     host,
 		Client:   "100",
 		User:     "TESTUSER",
@@ -187,7 +187,7 @@ func TestBearerAuthHeader(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, Client: "100"}
 	client := adt.NewClientWithToken(cfg, "my-access-token", nil)
 
 	_, err := client.GetSource(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
@@ -224,7 +224,7 @@ func TestOAuth2TokenRefreshOn401(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, Client: "100"}
 	onRefresh := func(oldToken string) (string, error) {
 		refreshCalled.Store(true)
 		if oldToken != "expired-token" {

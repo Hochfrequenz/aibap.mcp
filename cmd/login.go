@@ -13,6 +13,17 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
+const defaultOAuth2ClientID = "mcp-server-abap"
+
+// effectiveOAuth2ClientID returns the system's OAuth2 client ID,
+// falling back to defaultOAuth2ClientID.
+func effectiveOAuth2ClientID(sys config.SAPSystem) string {
+	if sys.OAuth2ClientID != "" {
+		return sys.OAuth2ClientID
+	}
+	return defaultOAuth2ClientID
+}
+
 // openBrowserFn is the function used to open a URL in the user's browser.
 // It is a variable so tests can override it.
 var openBrowserFn = openBrowser
@@ -55,7 +66,7 @@ func RunLogin(configPath, systemName string) error {
 
 	codeCh, errCh := startCallbackServer(listener)
 
-	authorizeURL := auth.AuthorizeURL(sysCfg.Host, config.EffectiveOAuth2ClientID(sysCfg), redirectURI, challenge)
+	authorizeURL := auth.AuthorizeURL(sysCfg.Host, effectiveOAuth2ClientID(sysCfg), redirectURI, challenge)
 
 	if err := openBrowserFn(authorizeURL); err != nil {
 		return fmt.Errorf("open browser: %w", err)
@@ -75,7 +86,7 @@ func RunLogin(configPath, systemName string) error {
 		return fmt.Errorf("login timed out after 120 seconds")
 	}
 
-	token, err := auth.ExchangeCode(sysCfg.Host, config.EffectiveOAuth2ClientID(sysCfg), code, verifier, redirectURI, sysCfg.TLSSkipVerify)
+	token, err := auth.ExchangeCode(sysCfg.Host, effectiveOAuth2ClientID(sysCfg), code, verifier, redirectURI, sysCfg.TLSSkipVerify)
 	if err != nil {
 		return fmt.Errorf("exchange code: %w", err)
 	}

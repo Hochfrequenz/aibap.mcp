@@ -18,6 +18,7 @@ func registerActivateTools(s toolAdder, client adt.ObjectClient) {
 		mcp.WithArray("object_uris",
 			mcp.Required(),
 			mcp.Description("List of ADT object URIs to activate"),
+			mcp.WithStringItems(),
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uris := req.GetStringSlice("object_uris", nil)

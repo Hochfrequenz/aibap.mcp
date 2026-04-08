@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
 func TestBrowsePackage(t *testing.T) {
@@ -61,7 +61,7 @@ func TestBrowsePackage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	results, err := client.BrowsePackage(context.Background(), "STUN")
@@ -108,7 +108,7 @@ func TestGetObjectInfoProgram(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	info, err := client.GetObjectInfo(context.Background(), "/sap/bc/adt/programs/programs/RSPARAM")
@@ -151,7 +151,7 @@ func TestGetObjectInfoClass(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	info, err := client.GetObjectInfo(context.Background(), "/sap/bc/adt/oo/classes/ZCL_EXAMPLE")
@@ -187,7 +187,7 @@ func TestGetObjectInfoInterface(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	info, err := client.GetObjectInfo(context.Background(), "/sap/bc/adt/oo/interfaces/ZIF_EXAMPLE")

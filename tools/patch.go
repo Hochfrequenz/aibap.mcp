@@ -9,6 +9,66 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// patchOpItemsSchema describes the per-operation shape of an entry in the
+// patch_source `operations` array. It is a discriminated union over `type`
+// with one branch per operation kind. Each branch lists only its own fields,
+// so MCP clients can validate payloads against the correct shape and the
+// model can use the schema for autocomplete instead of relying on the
+// description string.
+//
+// The branches mirror the runtime fields read by adt.ApplyPatchOps in
+// adt/patch.go. Keep them in sync when adding new operation kinds.
+var patchOpItemsSchema = map[string]any{
+	"oneOf": []any{
+		// insert: insert `content` after line `after_line` (0 = before first line).
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"type":       map[string]any{"type": "string", "enum": []any{"insert"}},
+				"after_line": map[string]any{"type": "integer", "description": "Line number after which to insert (must be >= 0). 0 inserts before the first line."},
+				"content":    map[string]any{"type": "string", "description": "Source line(s) to insert."},
+			},
+			"required":             []any{"type", "after_line", "content"},
+			"additionalProperties": false,
+		},
+		// replace: replace lines from_line..to_line (1-based, inclusive) with `content`.
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"type":      map[string]any{"type": "string", "enum": []any{"replace"}},
+				"from_line": map[string]any{"type": "integer", "description": "First line to replace (1-based, inclusive; must be >= 1)."},
+				"to_line":   map[string]any{"type": "integer", "description": "Last line to replace (1-based, inclusive; must be >= from_line)."},
+				"content":   map[string]any{"type": "string", "description": "Replacement source."},
+			},
+			"required":             []any{"type", "from_line", "to_line", "content"},
+			"additionalProperties": false,
+		},
+		// delete: delete lines from_line..to_line (1-based, inclusive).
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"type":      map[string]any{"type": "string", "enum": []any{"delete"}},
+				"from_line": map[string]any{"type": "integer", "description": "First line to delete (1-based, inclusive; must be >= 1)."},
+				"to_line":   map[string]any{"type": "integer", "description": "Last line to delete (1-based, inclusive; must be >= from_line)."},
+			},
+			"required":             []any{"type", "from_line", "to_line"},
+			"additionalProperties": false,
+		},
+		// search_replace: textual substitution. `all` defaults to false (first match only).
+		map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"type":    map[string]any{"type": "string", "enum": []any{"search_replace"}},
+				"search":  map[string]any{"type": "string", "description": "Literal substring to find."},
+				"replace": map[string]any{"type": "string", "description": "Replacement substring."},
+				"all":     map[string]any{"type": "boolean", "description": "If true, replace all occurrences; otherwise only the first match."},
+			},
+			"required":             []any{"type", "search", "replace"},
+			"additionalProperties": false,
+		},
+	},
+}
+
 // registerPatchTools registers the patch_source MCP tool on the server.
 func registerPatchTools(s toolAdder, client interface {
 	adt.SourceClient
@@ -25,7 +85,8 @@ func registerPatchTools(s toolAdder, client interface {
 		),
 		mcp.WithArray("operations",
 			mcp.Required(),
-			mcp.Description(`Array of patch operations. Each has "type" field (insert/replace/delete/search_replace) plus op-specific fields.`),
+			mcp.Description(`Array of patch operations. Each operation is one of: insert, replace, delete, search_replace. The "type" field discriminates the variant; other fields depend on the type.`),
+			mcp.Items(patchOpItemsSchema),
 		),
 		mcp.WithString("transport",
 			mcp.Description("Transport request number (optional)"),

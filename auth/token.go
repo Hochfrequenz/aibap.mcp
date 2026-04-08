@@ -31,14 +31,15 @@ func NewTokenStore(path string) *TokenStore {
 }
 
 // DefaultTokenPath returns the default path for the token file:
-// ~/.config/mcp-server-abap/tokens.json
-// It is a variable so tests can override it.
+// ~/.config/sap-adt/tokens.json
+// It is a variable so callers (e.g. main.go) can override it for backward
+// compatibility when the library is embedded in a specific application.
 var DefaultTokenPath = func() string {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		configDir = filepath.Join(os.Getenv("HOME"), ".config")
 	}
-	return filepath.Join(configDir, "mcp-server-abap", "tokens.json")
+	return filepath.Join(configDir, "sap-adt", "tokens.json")
 }
 
 // Save stores the given token for the named system. It creates any missing

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
 func TestCheckTransport(t *testing.T) {
@@ -54,7 +54,7 @@ func TestCheckTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.CheckTransport(context.Background(), "R3TR", "PROG", "ZTEST")
@@ -108,7 +108,7 @@ func TestGetTransportRequests(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	transports, err := client.GetTransportRequests(context.Background(), "", "D")
@@ -142,7 +142,7 @@ func TestAddToTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.AddToTransport(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "DEVK900123")
@@ -172,7 +172,7 @@ func TestRemoveFromTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.RemoveFromTransport(context.Background(),
@@ -231,7 +231,7 @@ func TestCreateTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	nr, err := client.CreateTransport(context.Background(), "K", "DUM", "My description", "ZTEST")
@@ -277,7 +277,7 @@ func TestCreateTransportWithoutPackage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	nr, err := client.CreateTransport(context.Background(), "K", "", "No package transport", "")
@@ -381,7 +381,7 @@ func TestReleaseTransportAsync(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClientWithPollInterval(cfg, 10*time.Millisecond)
 
 	err := client.ReleaseTransport(context.Background(), "DEVK900123")
@@ -412,7 +412,7 @@ func TestCreateTransportTask(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	taskNumber, err := client.CreateTransportTask(context.Background(), "S4UK902339", "", "My task")
@@ -467,7 +467,7 @@ func TestDeleteAndReleaseTransport(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+			cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 			client := adt.NewClient(cfg)
 
 			if err := tt.call(client); err != nil {

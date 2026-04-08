@@ -8,6 +8,29 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// customizingEntryItemsSchema describes one entry in the update_customizing
+// `entries` array. It mirrors the runtime CustomizingEntry struct in
+// blackmagic.go: a `keys` map identifying the row and a `values` map of
+// fields to set, both string-to-string. additionalProperties is closed so
+// clients cannot smuggle unrecognised top-level fields onto an entry.
+var customizingEntryItemsSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"keys": map[string]any{
+			"type":                 "object",
+			"description":          "Field-to-value map identifying the row to update (primary-key columns).",
+			"additionalProperties": map[string]any{"type": "string"},
+		},
+		"values": map[string]any{
+			"type":                 "object",
+			"description":          "Field-to-value map of columns to set on the identified row.",
+			"additionalProperties": map[string]any{"type": "string"},
+		},
+	},
+	"required":             []any{"keys", "values"},
+	"additionalProperties": false,
+}
+
 func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient) {
 	s.AddTool(mcp.NewTool("update_customizing",
 		mcp.WithTitleAnnotation("Update Customizing"),
@@ -24,6 +47,7 @@ func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient) {
 		mcp.WithString("table", mcp.Required(), mcp.Description("Customizing table or view name (e.g. V_T077D, T001W)")),
 		mcp.WithArray("entries", mcp.Required(),
 			mcp.Description("Entries to write. Each entry: {\"keys\": {\"FIELD1\": \"VAL1\"}, \"values\": {\"FIELD2\": \"VAL2\"}}. Keys identify the row, values are the fields to set."),
+			mcp.Items(customizingEntryItemsSchema),
 		),
 		mcp.WithString("transport", mcp.Description("Transport request number for recording the change")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
