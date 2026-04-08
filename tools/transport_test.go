@@ -12,6 +12,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const testTransportNumber = "HFQK900001"
+
 // mockBlackMagic implements tools.BlackMagicClient for testing.
 type mockBlackMagic struct {
 	createTransportFn func(ctx context.Context, category, target, description, devClass string) (string, error)
@@ -29,7 +31,7 @@ func (m *mockBlackMagic) CreateTransportFallback(ctx context.Context, category, 
 	if m.createTransportFn != nil {
 		return m.createTransportFn(ctx, category, target, description, devClass)
 	}
-	return "HFQK900001", nil
+	return testTransportNumber, nil
 }
 
 func newTestServerWithFallback(client adt.Client, fallback tools.BlackMagicClient) *server.MCPServer {
@@ -63,7 +65,7 @@ func TestCreateTransport_CategoryW_WithFallback_UsesFallback(t *testing.T) {
 			if category != "W" {
 				t.Errorf("expected category W, got %s", category)
 			}
-			return "HFQK900001", nil
+			return testTransportNumber, nil
 		},
 	}
 	s := newTestServerWithFallback(&mockClient{}, fb)
@@ -79,7 +81,7 @@ func TestCreateTransport_CategoryW_WithFallback_UsesFallback(t *testing.T) {
 	}
 	var out map[string]string
 	_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
-	if out["transport_number"] != "HFQK900001" {
+	if out["transport_number"] != testTransportNumber {
 		t.Errorf("expected HFQK900001, got %s", out["transport_number"])
 	}
 }
