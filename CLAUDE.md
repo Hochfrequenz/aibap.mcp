@@ -49,7 +49,6 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 - `tools/middleware.go` — logging middleware (tool name, system, duration)
 - `config/` — multi-system JSON config loading
 - `auth/` — OAuth2 and basic auth
-- `adtmodel/` — shared type definitions
 - `logging/` — structured logging setup
 
 ## Investigating ADT Endpoints
