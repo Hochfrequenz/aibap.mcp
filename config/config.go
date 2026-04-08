@@ -15,37 +15,7 @@ type SAPSystem = sapmcpconfig.SAPSystem
 // AppConfig extends the shared Config with project-specific fields.
 type AppConfig struct {
 	sapmcpconfig.Config
-	IntegrationTestSystems []string `json:"integration_test_systems"`
-	Tools                  []string `json:"tools"`
-}
-
-// IsTestSystem reports whether the named system should be used for integration tests.
-func (c *AppConfig) IsTestSystem(name string) bool {
-	if len(c.IntegrationTestSystems) == 0 {
-		return name == c.DefaultSystem
-	}
-	for _, s := range c.IntegrationTestSystems {
-		if s == name {
-			return true
-		}
-	}
-	return false
-}
-
-// TestSystems returns the systems configured for integration testing.
-func (c *AppConfig) TestSystems() map[string]SAPSystem {
-	result := make(map[string]SAPSystem)
-	for _, name := range c.IntegrationTestSystems {
-		if sys, ok := c.Systems[name]; ok {
-			result[name] = sys
-		}
-	}
-	if len(result) == 0 {
-		if sys, ok := c.Systems[c.DefaultSystem]; ok {
-			result[c.DefaultSystem] = sys
-		}
-	}
-	return result
+	Tools []string `json:"tools"`
 }
 
 // Load reads config from the given JSON file and validates it.

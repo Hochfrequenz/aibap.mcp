@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/adtler/adt"
 )
 
 type mockSelector struct {

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/auth"
+	"github.com/Hochfrequenz/adtler/adt"
+	"github.com/Hochfrequenz/adtler/auth"
 	"github.com/Hochfrequenz/mcp-server-abap/cmd"
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 	"github.com/Hochfrequenz/mcp-server-abap/logging"
@@ -96,7 +96,11 @@ func run() error {
 		enabledGroups = tools.DefaultGroups()
 	}
 
-	registry, err := adt.NewClientRegistry(&cfg.Config, "mcp-server-abap")
+	clients, err := adt.NewClientsFromConfig(&cfg.Config, "mcp-server-abap")
+	if err != nil {
+		return fmt.Errorf("building ADT clients: %w", err)
+	}
+	registry, err := adt.NewClientRegistry(clients, cfg.DefaultSystem)
 	if err != nil {
 		return fmt.Errorf("creating client registry: %w", err)
 	}

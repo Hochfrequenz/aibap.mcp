@@ -8,15 +8,6 @@ import (
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 
-func writeConfig(t *testing.T, content string) string {
-	t.Helper()
-	f := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(f, []byte(content), 0600); err != nil {
-		t.Fatal(err)
-	}
-	return f
-}
-
 func TestLoadWithTools(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
@@ -61,31 +52,34 @@ func TestLoadWithoutTools(t *testing.T) {
 	}
 }
 
-func TestIntegrationTestSystems(t *testing.T) {
-	f := writeConfig(t, `{
-  "default_system": "dev",
-  "integration_test_systems": ["dev", "staging"],
-  "systems": {
-    "dev": {"host": "https://dev.example.com:8000", "client": "100", "user": "U", "password": "P"},
-    "staging": {"host": "https://staging.example.com:8000", "client": "200", "user": "U", "password": "P"},
-    "prod": {"host": "https://prod.example.com:8000", "client": "300", "user": "U", "password": "P"}
-  }
-}`)
-	cfg, err := config.Load(f)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestLoadFileNotFound(t *testing.T) {
+	_, err := config.Load(filepath.Join(t.TempDir(), "does-not-exist.json"))
+	if err == nil {
+		t.Fatal("expected error for missing file")
 	}
-	if !cfg.IsTestSystem("dev") {
-		t.Error("dev should be a test system")
+}
+
+func TestLoadInvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	// Pass sap-mcp-config validation by including required fields, then break
+	// the JSON for the second AppConfig parse pass.
+	if err := os.WriteFile(path, []byte(`{not valid json`), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
 	}
-	if !cfg.IsTestSystem("staging") {
-		t.Error("staging should be a test system")
+	if _, err := config.Load(path); err == nil {
+		t.Fatal("expected error for invalid JSON")
 	}
-	if cfg.IsTestSystem("prod") {
-		t.Error("prod should NOT be a test system")
+}
+
+func TestLoadValidationFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	// Empty systems map fails sap-mcp-config validation.
+	if err := os.WriteFile(path, []byte(`{"default_system": "dev", "systems": {}}`), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
 	}
-	ts := cfg.TestSystems()
-	if len(ts) != 2 {
-		t.Errorf("expected 2 test systems, got %d", len(ts))
+	if _, err := config.Load(path); err == nil {
+		t.Fatal("expected error for empty systems")
 	}
 }

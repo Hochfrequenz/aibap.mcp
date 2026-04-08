@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Hochfrequenz/mcp-server-abap/auth"
+	"github.com/Hochfrequenz/adtler/auth"
 )
 
 func TestRunLoginFullFlow(t *testing.T) {

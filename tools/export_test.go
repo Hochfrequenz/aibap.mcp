@@ -3,7 +3,7 @@ package tools
 import (
 	"testing"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/adtler/adt"
 )
 
 func TestFilteringLogic(t *testing.T) {

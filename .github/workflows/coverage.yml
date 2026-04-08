@@ -17,15 +17,12 @@ jobs:
       - name: Check per-package coverage
         run: |
           # Per-package coverage thresholds.
-          #   Logic packages (parsing, config, auth): higher thresholds
-          #   HTTP wrappers (adt client methods): medium threshold
+          #   Logic packages (config): higher thresholds
           #   Tool handlers, logging, cmd: no threshold (tested via integration tests)
+          # The adt/auth packages live in github.com/Hochfrequenz/adtler now and
+          # have their own coverage thresholds in that repo's CI.
           declare -A thresholds=(
             ["github.com/Hochfrequenz/mcp-server-abap/config"]=75
-            ["github.com/Hochfrequenz/mcp-server-abap/auth"]=75
-            ["github.com/Hochfrequenz/mcp-server-abap/adt/adtxml"]=50
-            ["github.com/Hochfrequenz/mcp-server-abap/adt/custexport"]=60
-            ["github.com/Hochfrequenz/mcp-server-abap/adt"]=40
           )
 
           failed=0

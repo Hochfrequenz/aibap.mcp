@@ -151,7 +151,8 @@ func assertCustomizingEntriesItems(t *testing.T, items map[string]any) {
 
 // patchOpWantBranches enumerates the per-discriminator required-field sets
 // the patch_source.operations schema must contain. Mirrors the runtime
-// dispatch in adt/patch.go (applyLineOp + the search_replace block).
+// dispatch in adt.ApplyPatchOps (applyLineOp + the search_replace block, in
+// the adtler library).
 var patchOpWantBranches = map[string][]string{
 	"insert":         {"type", "after_line", "content"},
 	"replace":        {"type", "from_line", "to_line", "content"},
