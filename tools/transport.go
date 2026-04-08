@@ -3,12 +3,14 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerTransportTools(s toolAdder, client adt.TransportClient) {
+func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient) {
 	s.AddTool(mcp.NewTool("get_transport_requests",
 		mcp.WithTitleAnnotation("Get Transport Requests"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -93,11 +95,32 @@ func registerTransportTools(s toolAdder, client adt.TransportClient) {
 		mcp.WithString("description", mcp.Required(), mcp.Description("Short description for the transport")),
 		mcp.WithString("target", mcp.Description("Target system (e.g. DUM, PRD). Query TCESYST to find available targets.")),
 		mcp.WithString("package", mcp.Description("Development class / package name. Optional — omit for unassigned requests.")),
+		mcp.WithBoolean("force", mcp.Description("Force ADT request even for unsupported categories. By default, category W (customizing) is intercepted because ADT cannot create customizing transports.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		cat := req.GetString("category", "")
 		desc := req.GetString("description", "")
 		target := req.GetString("target", "")
 		pkg := req.GetString("package", "")
+		force := req.GetBool("force", false)
+
+		if strings.ToUpper(cat) == "W" && !force {
+			if fallback != nil {
+				number, err := fallback.CreateTransportFallback(ctx, cat, target, desc, pkg)
+				if err != nil {
+					return errorResult(err), nil
+				}
+				out, _ := json.Marshal(map[string]string{
+					"transport_number": number,
+					"description":      desc,
+				})
+				return mcp.NewToolResultText(string(out)), nil
+			}
+			return errorResult(fmt.Errorf(
+				"customizing transports (category W) cannot be created via the ADT REST API — " +
+					"this is a known SAP limitation. Configure a BlackMagic fallback or create " +
+					"the transport manually in SAP GUI (SE09/SE10)")), nil
+		}
+
 		number, err := client.CreateTransport(ctx, cat, target, desc, pkg)
 		if err != nil {
 			return errorResult(err), nil
