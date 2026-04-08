@@ -14,11 +14,13 @@ A community-built [MCP (Model Context Protocol)](https://modelcontextprotocol.io
 
 The server connects to your SAP system via the **SAP ADT (ABAP Development Tools) REST API** — the same HTTP API that ABAP Development Tools for Eclipse uses under the hood. No SAP GUI, no RFC, no additional middleware required.
 
+The SAP-touching code lives in [**adtler**](https://github.com/Hochfrequenz/adtler), a standalone Go client library for the ADT REST API. mcp-server-abap is the thin MCP layer that exposes adtler's operations as MCP tools.
+
 ```mermaid
 graph TD
-    A["Claude / AI assistant"] -->|"MCP (stdio)"| B["mcp-server-abap"]
-    B -->|"HTTP + Basic Auth or OAuth2 + CSRF"| C["SAP ADT REST API<br/>/sap/bc/adt/..."]
-    C --> D["SAP System"]
+    A["Claude / AI assistant"] -->|"MCP (stdio)"| B["mcp-server-abap<br/>(tools/ wrappers)"]
+    B -->|"Go API"| C["adtler<br/>(SAP ADT client library)"]
+    C -->|"HTTP + Basic Auth or OAuth2 + CSRF"| D["SAP System<br/>/sap/bc/adt/..."]
 ```
 
 ## Available tools (66)
