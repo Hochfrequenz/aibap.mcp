@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/adt/custexport"
+	"github.com/Hochfrequenz/adtler/adt"
+	"github.com/Hochfrequenz/adtler/adt/custexport"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
