@@ -15,13 +15,10 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 
 - **Test-driven**: Write unit tests before or alongside implementation, not after.
 - **Unit tests**: `go test ./...` — must always pass before committing.
-- **Integration tests**: `go test ./adt/ -tags integration` — run against a real SAP system. Require `SAP_INTEGRATION_*` env vars from `.env`.
-- **Transport tests**: `go test ./adt/ -tags 'integration transport'` — create, release, and modify transports on SAP. **Only run when explicitly requested** — these leave artifacts on the system.
-- **Never run transport tests automatically** as part of a general integration test run.
-- **Never run the full integration suite unprompted.** Always use `-run TestSpecificFunc` to test individual functions. Only run the full suite when explicitly asked.
+- **Integration tests**: live in [adtler](https://github.com/Hochfrequenz/adtler) (the SAP ADT client library). Clone that repo to run them. mcp-server-abap itself only has unit tests covering the MCP tool layer.
 - **Fix before creating:** When a SAP object (transport, program, etc.) has a problem, fix the existing one first. Don't keep creating new objects to work around issues.
-- **Coverage thresholds** (enforced in CI per package): `config` 80%, `auth` 75%, `adt/custexport` 60%, `adt/adtxml` 50%, `adt` 40%. `tools`/`logging`/`cmd` are integration-tested only (0%).
-- **Test package dependency**: Integration tests require SAP package `Z_ADT_MCP_TEST` on the target system. Install from [Hochfrequenz/Z_ADT_MCP_TEST](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST).
+- **Coverage thresholds** (enforced in CI per package): `config` 75%. `tools`/`logging`/`cmd` are covered by unit tests but no minimum is enforced — these packages are thin wrappers around adtler. The adt/auth packages have their own thresholds in adtler's CI.
+- **Test package dependency** (for adtler integration tests): SAP package `Z_ADT_MCP_TEST` on the target system. Install from [Hochfrequenz/Z_ADT_MCP_TEST](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST).
 
 ## Workflow
 
@@ -41,15 +38,14 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 ## Project Structure
 
 - `main.go` — entry point, config loading, MCP server setup (stdio)
-- `adt/` — SAP ADT HTTP client (requests, parsing, session handling)
-- `adt/adtxml/` — XML serialization for ADT responses
-- `adt/custexport/` — customizing table export (SQLite/JSON)
-- `tools/` — MCP tool registrations and handlers
+- `tools/` — MCP tool registrations and handlers (thin wrappers around the adtler library)
 - `tools/register.go` — central tool registration, `toolAdder` interface
 - `tools/middleware.go` — logging middleware (tool name, system, duration)
 - `config/` — multi-system JSON config loading
-- `auth/` — OAuth2 and basic auth
+- `cmd/` — CLI subcommands (login)
 - `logging/` — structured logging setup
+
+The SAP ADT HTTP client, XML marshalling, customizing export, and OAuth2 token management all live in [adtler](https://github.com/Hochfrequenz/adtler) and are imported as `github.com/Hochfrequenz/adtler/adt`, `github.com/Hochfrequenz/adtler/adt/adtxml`, `github.com/Hochfrequenz/adtler/adt/custexport`, and `github.com/Hochfrequenz/adtler/auth`.
 
 ## Investigating ADT Endpoints
 
@@ -59,7 +55,7 @@ When you need to understand how an ADT endpoint works or debug unexpected behavi
 2. **Query TRDIR/TADIR first** — `SELECT NAME, SUBC FROM TRDIR WHERE NAME LIKE 'ZCL_%'` reveals internal program structure. This is ground truth.
 3. **Read the ABAP handler source** — use `get_source` on ADT resource classes (`CL_SEDI_ADT_RES_SOURCE`, `CL_WB_ADT_REST_RESOURCE` etc.) to understand what the server expects. Search for error message IDs to find validation code.
 4. **Write throwaway integration tests** to probe endpoint behavior (paths, headers, response formats). Delete them once the investigation is done.
-5. **Debug handler code** by setting breakpoints in the `adt/` package and running the relevant unit test — see `docs/debugger-investigation.md` for the proven debug flow.
+5. **Debug handler code** by setting breakpoints in the relevant adtler package (cloned alongside this repo) and running the relevant unit test — see `docs/debugger-investigation.md` for the proven debug flow.
 6. **Check ADT discovery** — the server caches `/sap/bc/adt/discovery` XML which lists available endpoints and their accepted content types per system.
 7. **Test against both systems** (`hfq` = ECC, `s4u` = S4) — endpoint behavior often differs.
 8. **Other implementations are inspiration, not truth** — code targeting BTP/Steampunk may not work on S4 on-prem. Always verify against the real system.

@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/Hochfrequenz/mcp-server-abap/auth"
+	"github.com/Hochfrequenz/adtler/auth"
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 )
 

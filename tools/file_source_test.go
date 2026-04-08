@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/adtler/adt"
 )
 
 func TestSetSourceFromFileTool(t *testing.T) {

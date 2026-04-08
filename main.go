@@ -11,8 +11,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/auth"
+	"github.com/Hochfrequenz/adtler/adt"
+	"github.com/Hochfrequenz/adtler/auth"
 	"github.com/Hochfrequenz/mcp-server-abap/cmd"
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 	"github.com/Hochfrequenz/mcp-server-abap/logging"

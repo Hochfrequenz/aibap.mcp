@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Hochfrequenz/mcp-server-abap/adt"
+	"github.com/Hochfrequenz/adtler/adt"
 )
 
 // ---- Integration tests for patch_source MCP tool ----
