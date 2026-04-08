@@ -17,7 +17,7 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 - **Unit tests**: `go test ./...` — must always pass before committing.
 - **Integration tests**: live in [adtler](https://github.com/Hochfrequenz/adtler) (the SAP ADT client library). Clone that repo to run them. mcp-server-abap itself only has unit tests covering the MCP tool layer.
 - **Fix before creating:** When a SAP object (transport, program, etc.) has a problem, fix the existing one first. Don't keep creating new objects to work around issues.
-- **Coverage thresholds** (enforced in CI per package): `config` 75%. `tools`/`logging`/`cmd` are integration-tested only (0%). The adt/auth packages have their own thresholds in adtler's CI.
+- **Coverage thresholds** (enforced in CI per package): `config` 75%. `tools`/`logging`/`cmd` are covered by unit tests but no minimum is enforced — these packages are thin wrappers around adtler. The adt/auth packages have their own thresholds in adtler's CI.
 - **Test package dependency** (for adtler integration tests): SAP package `Z_ADT_MCP_TEST` on the target system. Install from [Hochfrequenz/Z_ADT_MCP_TEST](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST).
 
 ## Workflow
@@ -45,7 +45,7 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 - `cmd/` — CLI subcommands (login)
 - `logging/` — structured logging setup
 
-The SAP ADT HTTP client, XML marshalling, customizing export, and OAuth2 token management all live in [adtler](https://github.com/Hochfrequenz/adtler) and are imported as `github.com/Hochfrequenz/adtler/adt`, `.../adt/adtxml`, `.../adt/custexport`, and `.../auth`.
+The SAP ADT HTTP client, XML marshalling, customizing export, and OAuth2 token management all live in [adtler](https://github.com/Hochfrequenz/adtler) and are imported as `github.com/Hochfrequenz/adtler/adt`, `github.com/Hochfrequenz/adtler/adt/adtxml`, `github.com/Hochfrequenz/adtler/adt/custexport`, and `github.com/Hochfrequenz/adtler/auth`.
 
 ## Investigating ADT Endpoints
 

@@ -16,8 +16,8 @@ import (
 // model can use the schema for autocomplete instead of relying on the
 // description string.
 //
-// The branches mirror the runtime fields read by adt.ApplyPatchOps in
-// adt/patch.go. Keep them in sync when adding new operation kinds.
+// The branches mirror the runtime fields read by adt.ApplyPatchOps (in the
+// adtler library). Keep them in sync when adding new operation kinds.
 var patchOpItemsSchema = map[string]any{
 	"oneOf": []any{
 		// insert: insert `content` after line `after_line` (0 = before first line).

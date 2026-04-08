@@ -2,7 +2,6 @@
 .github
 .idea
 .env
-.env.example
 .claude
 *.md
 Makefile
