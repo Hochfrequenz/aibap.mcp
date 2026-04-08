@@ -51,3 +51,35 @@ func TestLoadWithoutTools(t *testing.T) {
 		t.Errorf("Tools should be nil, got %v", cfg.Tools)
 	}
 }
+
+func TestLoadFileNotFound(t *testing.T) {
+	_, err := config.Load(filepath.Join(t.TempDir(), "does-not-exist.json"))
+	if err == nil {
+		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestLoadInvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	// Pass sap-mcp-config validation by including required fields, then break
+	// the JSON for the second AppConfig parse pass.
+	if err := os.WriteFile(path, []byte(`{not valid json`), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if _, err := config.Load(path); err == nil {
+		t.Fatal("expected error for invalid JSON")
+	}
+}
+
+func TestLoadValidationFailure(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	// Empty systems map fails sap-mcp-config validation.
+	if err := os.WriteFile(path, []byte(`{"default_system": "dev", "systems": {}}`), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	if _, err := config.Load(path); err == nil {
+		t.Fatal("expected error for empty systems")
+	}
+}
