@@ -150,7 +150,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		{"objects", func() {
 			registerSearchTools(ls, client)
 			registerRepositoryTools(ls, client)
-			registerObjectTools(ls, client)
+			registerObjectTools(ls, client, fallback)
 			registerRefactoringTools(ls, client)
 			registerDDICTools(ls, client)
 		}},
