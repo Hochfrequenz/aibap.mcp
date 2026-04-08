@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/Hochfrequenz/mcp-server-abap/auth"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
 // ClientRegistry holds multiple named ADT clients and tracks which is active.
@@ -16,33 +16,39 @@ import (
 type ClientRegistry struct {
 	mu      sync.RWMutex
 	clients map[string]Client
-	configs map[string]config.SAPSystem
+	configs map[string]sapmcpconfig.SAPSystem
 	active  string
 }
 
 // NewClientRegistry creates one Client per system in cfg, with cfg.DefaultSystem active.
 // For OAuth2 systems it loads the stored token and sets up automatic refresh.
-func NewClientRegistry(cfg *config.AppConfig) (*ClientRegistry, error) {
+// The oauth2ClientID is used as the OAuth2 client ID when the system's own
+// OAuth2ClientID field is empty; pass "" to require explicit per-system config.
+func NewClientRegistry(cfg *sapmcpconfig.Config, oauth2ClientID string) (*ClientRegistry, error) {
 	clients := make(map[string]Client, len(cfg.Systems))
 	for name, sysCfg := range cfg.Systems {
 		if sysCfg.IsOAuth2() {
 			store := auth.NewTokenStore(auth.DefaultTokenPath())
 			tokenData, err := store.TokenForSystem(name)
 			if err != nil {
-				return nil, fmt.Errorf("system %q requires OAuth2 login. Run: mcp-server-abap login %s", name, name)
+				return nil, fmt.Errorf("system %q requires OAuth2 login — no stored token found", name)
 			}
 			systemName := name   // capture for closure
 			sysCfgCopy := sysCfg // capture for closure
 			td := tokenData      // mutable copy for closure
+			clientID := effectiveOAuth2ClientID(sysCfgCopy, oauth2ClientID)
+			if clientID == "" {
+				return nil, fmt.Errorf("system %q: OAuth2 requires oauth2_client_id in config or a default client ID", name)
+			}
 			onRefresh := func(currentToken string) (string, error) {
 				newToken, err := auth.RefreshToken(
 					sysCfgCopy.Host,
-					config.EffectiveOAuth2ClientID(sysCfgCopy),
+					clientID,
 					td.RefreshToken,
 					sysCfgCopy.TLSSkipVerify,
 				)
 				if err != nil {
-					return "", fmt.Errorf("token refresh failed for %q: %w. Run: mcp-server-abap login %s", systemName, err, systemName)
+					return "", fmt.Errorf("token refresh failed for %q: %w", systemName, err)
 				}
 				// Save refreshed token
 				_ = store.Save(systemName, newToken)
@@ -59,6 +65,15 @@ func NewClientRegistry(cfg *config.AppConfig) (*ClientRegistry, error) {
 		configs: cfg.Systems,
 		active:  cfg.DefaultSystem,
 	}, nil
+}
+
+// effectiveOAuth2ClientID returns the OAuth2 client ID for the given system,
+// preferring the system's own OAuth2ClientID, then falling back to the provided default.
+func effectiveOAuth2ClientID(sys sapmcpconfig.SAPSystem, fallback string) string {
+	if sys.OAuth2ClientID != "" {
+		return sys.OAuth2ClientID
+	}
+	return fallback
 }
 
 // Select switches the active system. Returns a display string including the system name and host.

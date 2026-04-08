@@ -14,7 +14,7 @@ import (
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
 	"github.com/Hochfrequenz/mcp-server-abap/adt/custexport"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 
 	_ "modernc.org/sqlite"
 )
@@ -36,7 +36,7 @@ func newClient(t *testing.T) adt.Client {
 	if password == "" {
 		t.Fatal("SAP_INTEGRATION_PASSWORD must be set when SAP_INTEGRATION_HOST is set")
 	}
-	return adt.NewClient(config.SAPSystem{
+	return adt.NewClient(sapmcpconfig.SAPSystem{
 		Host:          host,
 		User:          user,
 		Password:      password,
