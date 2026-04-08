@@ -406,6 +406,41 @@ func (c *httpClient) AddToTransport(ctx context.Context, objectURI, transport st
 	return checkResponse(resp)
 }
 
+func (c *httpClient) RemoveFromTransport(ctx context.Context, taskNumber, parentTransport, pgmID, objectType, objectName, wbType, position string) error {
+	body, err := xml.Marshal(adtxml.TMRoot{
+		NSTM:       "http://www.sap.com/cts/adt/tm",
+		UserAction: "removeobject",
+		Number:     taskNumber,
+		Request: adtxml.TMRequest{
+			Number: parentTransport,
+			Objects: []adtxml.TMAbapObject{{
+				PgmID:    pgmID,
+				Type:     objectType,
+				Name:     objectName,
+				WBType:   wbType,
+				Position: position,
+			}},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("marshal remove object request: %w", err)
+	}
+
+	path := "/sap/bc/adt/cts/transportrequests/" + taskNumber
+	resp, err := c.doMutate(ctx, http.MethodPut, path,
+		strings.NewReader(xml.Header+string(body)),
+		map[string]string{
+			"Content-Type": "application/vnd.sap.adt.transportorganizer.v1+xml",
+			"Accept":       "application/vnd.sap.adt.transportorganizer.v1+xml",
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("RemoveFromTransport: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return checkResponse(resp)
+}
+
 // checkReleaseResponse parses the release job response and returns an error
 // if the release failed. SAP returns HTTP 200 even on failure — the actual
 // status is in chkrun:status attribute ("released" = OK, "abortrelapifail" = error).
@@ -445,10 +480,11 @@ func checkReleaseResponse(transportNumber string, data []byte) error {
 
 // TransportObject describes an object recorded in a transport request.
 type TransportObject struct {
-	PgmID  string `json:"pgmid"`
-	Type   string `json:"type"`
-	Name   string `json:"name"`
-	WBType string `json:"wb_type"`
+	PgmID    string `json:"pgmid"`
+	Type     string `json:"type"`
+	Name     string `json:"name"`
+	WBType   string `json:"wb_type"`
+	Position string `json:"position"`
 }
 
 // readTransportXML fetches the raw XML for a single transport request.
@@ -557,10 +593,11 @@ func parseTransportTaskNumbers(data []byte, transportNumber string) ([]string, e
 }
 
 type xmlObject struct {
-	PgmID  string `xml:"pgmid,attr"`
-	Type   string `xml:"type,attr"`
-	Name   string `xml:"name,attr"`
-	WBType string `xml:"wbtype,attr"`
+	PgmID    string `xml:"pgmid,attr"`
+	Type     string `xml:"type,attr"`
+	Name     string `xml:"name,attr"`
+	WBType   string `xml:"wbtype,attr"`
+	Position string `xml:"position,attr"`
 }
 
 type xmlTask struct {
@@ -591,20 +628,20 @@ func parseTransportObjectsXML(data []byte) ([]TransportObject, error) {
 
 	seen := make(map[string]bool)
 	var objects []TransportObject
-	addObj := func(pgmid, typ, name, wbtype string) {
+	addObj := func(pgmid, typ, name, wbtype, position string) {
 		key := pgmid + "/" + typ + "/" + name
 		if !seen[key] && name != "" {
 			seen[key] = true
-			objects = append(objects, TransportObject{PgmID: pgmid, Type: typ, Name: name, WBType: wbtype})
+			objects = append(objects, TransportObject{PgmID: pgmid, Type: typ, Name: name, WBType: wbtype, Position: position})
 		}
 	}
 	addFromRequest := func(req xmlRequest) {
 		for _, obj := range req.Objects {
-			addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType)
+			addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType, obj.Position)
 		}
 		for _, task := range req.Tasks {
 			for _, obj := range task.Objects {
-				addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType)
+				addObj(obj.PgmID, obj.Type, obj.Name, obj.WBType, obj.Position)
 			}
 		}
 	}

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
 // SourceClient reads and writes ABAP source code.
@@ -108,6 +108,7 @@ type TransportClient interface {
 	ReleaseTransportWithTasks(ctx context.Context, transportNumber string) error
 	GetTransportRequests(ctx context.Context, user, status string) ([]TransportRequest, error)
 	AddToTransport(ctx context.Context, objectURI, transport string) error
+	RemoveFromTransport(ctx context.Context, taskNumber, parentTransport, pgmID, objectType, objectName, wbType, position string) error
 	GetTransportInfo(ctx context.Context, transportNumber string) (*TransportRequest, error)
 	GetTransportObjects(ctx context.Context, transportNumber string) ([]TransportObject, error)
 	GetTransportTasks(ctx context.Context, transportNumber string) ([]string, error)
@@ -157,7 +158,7 @@ type Client interface {
 }
 
 type httpClient struct {
-	cfg              config.SAPSystem
+	cfg              sapmcpconfig.SAPSystem
 	http             *http.Client
 	httpLong         *http.Client // long-timeout client for large queries; shares transport + cookie jar
 	mu               sync.Mutex
@@ -170,13 +171,13 @@ type httpClient struct {
 }
 
 // NewClient creates a new ADT HTTP client configured from cfg.
-func NewClient(cfg config.SAPSystem) Client {
+func NewClient(cfg sapmcpconfig.SAPSystem) Client {
 	return NewClientWithPollInterval(cfg, backgroundRunPollInterval)
 }
 
 // NewClientWithPollInterval creates a new ADT HTTP client with a custom polling interval
 // for background release jobs. Use NewClient for the default 10-second interval.
-func NewClientWithPollInterval(cfg config.SAPSystem, pollInterval time.Duration) Client {
+func NewClientWithPollInterval(cfg sapmcpconfig.SAPSystem, pollInterval time.Duration) Client {
 	jar, _ := cookiejar.New(nil)
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
@@ -201,7 +202,7 @@ func NewClientWithPollInterval(cfg config.SAPSystem, pollInterval time.Duration)
 
 // NewClientWithToken creates a Client using Bearer token auth.
 // onRefresh is called with the current access token when a 401 occurs; it should return a new access token.
-func NewClientWithToken(cfg config.SAPSystem, accessToken string, onRefresh func(string) (string, error)) Client {
+func NewClientWithToken(cfg sapmcpconfig.SAPSystem, accessToken string, onRefresh func(string) (string, error)) Client {
 	jar, _ := cookiejar.New(nil)
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{

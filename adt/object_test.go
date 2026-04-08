@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
 func TestCreateObjectProgram(t *testing.T) {
@@ -26,7 +26,7 @@ func TestCreateObjectProgram(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.CreateObject(context.Background(), "PROG", "ZTEST_NEW", "ZPACKAGE", "Test program", "DEVK900001")
@@ -42,7 +42,7 @@ func TestCreateObjectProgram(t *testing.T) {
 }
 
 func TestCreateObjectUnsupportedType(t *testing.T) {
-	cfg := config.SAPSystem{Host: "http://localhost", User: "U", Password: "P"}
+	cfg := sapmcpconfig.SAPSystem{Host: "http://localhost", User: "U", Password: "P"}
 	client := adt.NewClient(cfg)
 
 	err := client.CreateObject(context.Background(), "TABL", "ZTABLE", "ZPACKAGE", "Table", "")
@@ -68,7 +68,7 @@ func TestCreatePackage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.CreatePackage(context.Background(), "Z_MY_PKG", "My Package", "TESTUSER", "HOME", "ZS4U", "DEVK900001")
@@ -111,7 +111,7 @@ func TestCreatePackageWithoutTransport(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.CreatePackage(context.Background(), "z_tmp_pkg", "Temp", "testuser", "", "", "")
@@ -147,7 +147,7 @@ func TestDeleteObject(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	err := client.DeleteObject(context.Background(), "/sap/bc/adt/programs/programs/ZTEST", "", "DEVK900001")

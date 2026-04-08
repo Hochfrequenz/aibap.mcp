@@ -21,6 +21,10 @@ func (m *mockBlackMagic) ReleaseTransportFallback(context.Context, string) error
 	return nil
 }
 
+func (m *mockBlackMagic) UpdateCustomizing(context.Context, string, []tools.CustomizingEntry) error {
+	return nil
+}
+
 func (m *mockBlackMagic) CreateTransportFallback(ctx context.Context, category, target, description, devClass string) (string, error) {
 	if m.createTransportFn != nil {
 		return m.createTransportFn(ctx, category, target, description, devClass)

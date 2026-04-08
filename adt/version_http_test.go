@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
 func TestGetVersionHistory_AcceptHeader(t *testing.T) {
@@ -34,7 +34,7 @@ func TestGetVersionHistory_AcceptHeader(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	versions, err := client.GetVersionHistory(context.Background(), "/sap/bc/adt/programs/programs/ZTEST")
@@ -90,7 +90,7 @@ func TestGetVersionHistory_ClassIncludes(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	versions, err := client.GetVersionHistory(context.Background(), "/sap/bc/adt/oo/classes/ZCL_TEST")
@@ -145,7 +145,7 @@ func TestGetVersionHistory_ClassDoesNotUseSourceMain(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	_, err := client.GetVersionHistory(context.Background(), "/sap/bc/adt/oo/classes/ZCL_TEST")

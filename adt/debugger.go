@@ -41,13 +41,18 @@ func resolveHTTPClient(c Client) *httpClient {
 }
 
 // NewDebugSession creates a debug session sharing the HTTP client from an existing Client.
-func NewDebugSession(c Client, user string) *DebugSession {
+// An optional ideID can be passed to identify the debug client to SAP (default: "go-sap-adt").
+func NewDebugSession(c Client, user string, ideID ...string) *DebugSession {
 	hc := resolveHTTPClient(c)
+	id := "go-sap-adt"
+	if len(ideID) > 0 && ideID[0] != "" {
+		id = ideID[0]
+	}
 	return &DebugSession{
 		client:      hc,
 		user:        strings.ToUpper(user),
 		terminalID:  "MCP01",
-		ideID:       "mcp-server-abap",
+		ideID:       id,
 		breakpoints: make(map[string]string),
 	}
 }

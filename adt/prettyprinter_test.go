@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/Hochfrequenz/mcp-server-abap/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
 )
 
 func TestPrettyPrint(t *testing.T) {
@@ -30,7 +30,7 @@ func TestPrettyPrint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
+	cfg := sapmcpconfig.SAPSystem{Host: srv.URL, User: "U", Password: "P", Client: "100"}
 	client := adt.NewClient(cfg)
 
 	result, err := client.PrettyPrint(context.Background(), "report ztest.\nwrite 'Hello'.")
