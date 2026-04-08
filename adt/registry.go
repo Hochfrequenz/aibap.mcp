@@ -25,12 +25,18 @@ func NewClientRegistry(clients map[string]Client, defaultSystem string) (*Client
 		return nil, fmt.Errorf("NewClientRegistry: no clients provided")
 	}
 	if _, ok := clients[defaultSystem]; !ok {
-		return nil, fmt.Errorf("NewClientRegistry: default system %q not in clients (have: %s)", defaultSystem, strings.Join(slices.Sorted(maps.Keys(clients)), ", "))
+		return nil, fmt.Errorf("NewClientRegistry: default system %q not in clients (have: %s)", defaultSystem, availableSystems(clients))
 	}
 	return &ClientRegistry{
 		clients: clients,
 		active:  defaultSystem,
 	}, nil
+}
+
+// availableSystems returns a comma-separated, sorted list of system names from
+// the clients map for use in user-facing error messages.
+func availableSystems(clients map[string]Client) string {
+	return strings.Join(slices.Sorted(maps.Keys(clients)), ", ")
 }
 
 // Select switches the active system. Returns a display string including the system name and host.
@@ -40,7 +46,7 @@ func (r *ClientRegistry) Select(name string) (string, error) {
 	defer r.mu.Unlock()
 	client, ok := r.clients[name]
 	if !ok {
-		return "", fmt.Errorf("unknown system %q, available: %s", name, strings.Join(slices.Sorted(maps.Keys(r.clients)), ", "))
+		return "", fmt.Errorf("unknown system %q, available: %s", name, availableSystems(r.clients))
 	}
 	r.active = name
 	host, _ := client.SystemInfo()
