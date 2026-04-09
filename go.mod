@@ -3,7 +3,7 @@ module github.com/Hochfrequenz/mcp-server-abap
 go 1.26
 
 require (
-	github.com/Hochfrequenz/adtler v0.0.1
+	github.com/Hochfrequenz/adtler v0.1.3
 	github.com/Hochfrequenz/sap-mcp-config v0.1.0
 	github.com/mark3labs/mcp-go v0.45.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
