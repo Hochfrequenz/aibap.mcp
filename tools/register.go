@@ -157,7 +157,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		{"version", func() { registerVersionTools(ls, client) }},
 		{"locking", func() {
 			registerLockTools(ls, client, lockMap, selector)
-			registerActivateTools(ls, client)
+			registerActivateTools(ls, client, lockMap, selector)
 		}},
 		{"testing", func() {
 			registerSyntaxCheckTools(ls, client)
