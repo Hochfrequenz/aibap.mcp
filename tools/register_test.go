@@ -11,8 +11,8 @@ func TestDefaultGroups(t *testing.T) {
 	if groups["debug"] {
 		t.Error("debug should be off by default")
 	}
-	if groups["export"] {
-		t.Error("export should be off by default")
+	if !groups["export"] {
+		t.Error("export should be on by default")
 	}
 	if !groups["source"] {
 		t.Error("source should be on by default")

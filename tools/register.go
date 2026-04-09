@@ -27,9 +27,36 @@ var AllGroups = []string{
 	"debug", "export", "system",
 }
 
+// defaultOffGroups lists tool groups that are hidden from MCP clients by
+// default. Hidden tools don't appear in the tool list and can't be called.
+//
+// Background (#230): the MCP server exposes 60+ tools. Each tool definition
+// is sent to the client on connect and consumes tokens in the LLM context
+// window. Tool groups were introduced to let users control which tools are
+// loaded. Groups in this map are off unless explicitly enabled via --tools
+// or the config's "tools" array.
+//
+// The problem is that MCP has no "show me what's hidden" mechanism — from
+// the client's perspective, hidden tools simply don't exist. There's no
+// discovery, no hint, nothing. So hiding tools here means users can't know
+// they're available unless they read this source code or the docs.
+//
+// "export" was originally in this map alongside "debug" (#230). Removed in
+// #303 because the export tools (export_package, export_packages,
+// export_customizing) are read-only and production-ready — hiding them
+// just caused confusion when users tried to export packages and couldn't
+// find the tools.
+//
+// "debug" stays off because debugger tools (breakpoints, stepping, variable
+// inspection) can interfere with other active debugger sessions on the same
+// SAP system. They're opt-in by design.
+//
+// TODO: this whole approach is a stopgap. The proper fix is either MCP-level
+// tool categories / lazy loading, or shorter tool descriptions that reduce
+// the token footprint without hiding functionality. We don't have a good
+// solution for this yet.
 var defaultOffGroups = map[string]bool{
-	"debug":  true,
-	"export": true,
+	"debug": true,
 }
 
 // DefaultGroups returns the default enabled/disabled state for each group.
