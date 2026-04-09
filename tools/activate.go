@@ -8,7 +8,24 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerActivateTools(s toolAdder, client adt.ObjectClient) {
+func registerActivateTools(s toolAdder, client interface {
+	adt.ObjectClient
+	adt.LockClient
+}, lockMap *adt.LockMap, selector SystemSelector) {
+	// unlockBeforeActivate releases locks held by the MCP session for the
+	// given URIs. Activation replaces the inactive version — the lock from
+	// set_source_from_file / patch_source is no longer needed and would
+	// block activation with 403 "User is currently editing". See #301.
+	unlockBeforeActivate := func(ctx context.Context, uris []string) {
+		for _, uri := range uris {
+			key := adt.LockKey(selector.ActiveName(), uri)
+			if state, ok := lockMap.Get(key); ok && state.LockHandle != "" {
+				_ = client.UnlockObject(ctx, uri, state.LockHandle)
+				lockMap.Delete(key)
+			}
+		}
+	}
+
 	s.AddTool(mcp.NewTool("activate_objects",
 		mcp.WithTitleAnnotation("Activate Objects"),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -22,6 +39,7 @@ func registerActivateTools(s toolAdder, client adt.ObjectClient) {
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uris := req.GetStringSlice("object_uris", nil)
+		unlockBeforeActivate(ctx, uris)
 		result, err := client.ActivateObjects(ctx, uris)
 		if err != nil {
 			return errorResult(err), nil
@@ -62,6 +80,7 @@ func registerActivateTools(s toolAdder, client adt.ObjectClient) {
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
+		unlockBeforeActivate(ctx, []string{uri})
 		result, err := client.ActivateObjects(ctx, []string{uri})
 		if err != nil {
 			return errorResult(err), nil
