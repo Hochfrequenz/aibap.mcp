@@ -27,6 +27,17 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 - Only pick up **unassigned** issues. Assign yourself before starting work.
 - Run `gofmt`, `go vet ./...`, and `go test ./...` before committing.
 
+## Cross-Repo Issue Tracking (adtler)
+
+Since most fixes now live in [adtler](https://github.com/Hochfrequenz/adtler), issues here often can't be closed until the next adtler release is consumed via `go get`. To keep this visible:
+
+1. **Label proactively**: Whenever you (or an agent) conclude that an mcp-server-abap issue can't be resolved without an adtler change, immediately add the `blocked-by-adtler` label and append it to the tracking issue — don't wait to be asked. Same rule when you spot a new adtler commit/release that resolves an existing open issue here: label it, add a checklist bullet, link the adtler commit or PR. Query open blockers with `gh issue list --label blocked-by-adtler`.
+2. **Tracking issue**: A single open issue titled `Next adtler release: bump to vX.Y.Z` collects all blocked issues as a checklist, each bullet `- [ ] #<n> — short description (adtler: <commit-or-PR>)`. There should only ever be one such tracking issue open at a time.
+3. **When bumping adtler**:
+   - Open a branch `chore/bump-adtler-vX.Y.Z`, run `go get github.com/Hochfrequenz/adtler@vX.Y.Z && go mod tidy`, verify `go test ./...` passes.
+   - In the PR body, list `Closes #<tracking-issue>` **and** `Closes #<each blocked issue>` so GitHub auto-closes them on merge. Walk the tracking issue's checklist — every checked item needs its own `Closes #` line.
+   - After merge, open a fresh tracking issue for the next release.
+
 ## Adding a New Tool
 
 1. Create `tools/myfeature.go`.
@@ -59,6 +70,23 @@ When you need to understand how an ADT endpoint works or debug unexpected behavi
 6. **Check ADT discovery** — the server caches `/sap/bc/adt/discovery` XML which lists available endpoints and their accepted content types per system.
 7. **Test against both systems** (`hfq` = ECC, `s4u` = S4) — endpoint behavior often differs.
 8. **Other implementations are inspiration, not truth** — code targeting BTP/Steampunk may not work on S4 on-prem. Always verify against the real system.
+
+## ADT Discovery & Content-Type Negotiation
+
+SAP ADT endpoints advertise their supported content types and API versions via the **discovery document** (`/sap/bc/adt/discovery`). S/4 and ECC systems often support different versions of the same endpoint. adtler caches this discovery data and provides:
+
+- `NegotiateContentType(endpoint, preferred, default)` — picks the best version the server actually supports
+- `acceptHeaderForURI(objectURI)` — resolves the correct Accept header via longest-prefix match + discovery fallback
+- `objectTypeAcceptHeaders` map — hardcoded fallback when discovery is empty
+
+**When adding or modifying ADT operations in adtler:**
+- **Always use `NegotiateContentType` or `acceptHeaderForURI`** instead of hardcoding content types. The hardcoded map is a fallback, not the primary source of truth.
+- **Source path varies by object type**: Programs use `{uri}/source/main`, class includes use `{uri}/includes/{type}` (no `/source/main`), DDIC objects (DTEL, DOMA, TABL) may not have a `/source/main` endpoint at all.
+- **ETag fetching must be object-type-aware**: `ResolveETag` currently calls `GetSource` (which hardcodes `/source/main`) — this fails for DDIC objects. For non-source objects, fetch ETag via GET on the object URI itself.
+- **Preserve full Content-Type in ETags**: SAP ETags may embed `text/plain; charset=utf-8` — never strip the charset suffix, or the `If-Match` will fail with 412.
+- **Test against both systems** — the discovery response differs between S/4 and ECC. A content type that works on one may 406 on the other.
+
+See adtler#35 for the tracking issue to wire discovery into all source operations.
 
 ## Coding Pitfalls
 
