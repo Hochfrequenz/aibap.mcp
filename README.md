@@ -25,7 +25,7 @@ graph TD
 
 ## Available tools (66)
 
-Tools are organized into groups. By default, all groups except `debug` and `export` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
+Tools are organized into groups. By default, all groups except `debug` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
 <details>
 <summary><strong>Source code</strong> — <code>source</code> (7 tools)</summary>
@@ -176,7 +176,7 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 </details>
 
 <details>
-<summary><strong>Export</strong> — <code>export</code> (4 tools, off by default)</summary>
+<summary><strong>Export</strong> — <code>export</code> (4 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -288,7 +288,7 @@ cp config.json.example config.json
 
 ### Tool groups
 
-By default, all tool groups except `debug` and `export` are enabled. You can customize which groups are loaded:
+By default, all tool groups except `debug` are enabled. You can customize which groups are loaded:
 
 **In `systems.json`** (top-level):
 
@@ -309,7 +309,7 @@ mcp-server-abap --tools=source,objects,transport,debug
 **Special values:**
 
 - `--tools=all` — enable all tool groups
-- No config and no flag — default set (everything except `debug` and `export`)
+- No config and no flag — default set (everything except `debug`)
 
 Available groups: `source`, `code-intelligence`, `objects`, `version`, `locking`, `testing`, `messages`, `shortdumps`, `transport`, `enhancements`, `debug`, `export`, `system`.
 
