@@ -72,7 +72,7 @@ func run() error {
 	logging.Setup()
 
 	var toolsFlag string
-	flag.StringVar(&toolsFlag, "tools", "", "Comma-separated tool groups to enable (default: all except debug,export; 'all' for everything)")
+	flag.StringVar(&toolsFlag, "tools", "", "Comma-separated tool groups to enable (default: all except debug; 'all' for everything)")
 	flag.Parse()
 
 	configPath := os.Getenv("SAP_CONFIG_FILE")
