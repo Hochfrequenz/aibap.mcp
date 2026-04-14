@@ -20,6 +20,16 @@ var (
 	defaultPapertrailPort = ""
 )
 
+// defaultCommit is populated via `-ldflags -X` by GoReleaser with the short
+// commit SHA of the build, so release binaries carry a deterministic commit
+// even when runtime/debug.ReadBuildInfo() VCS settings are absent or stripped
+// (which can happen in CI builds without a `.git` directory). Plain `go build`
+// leaves it empty and BuildInfo() falls back to the runtime/debug path.
+//
+// Same link-time-constant rule as the Papertrail vars: do NOT mutate at
+// runtime outside of tests.
+var defaultCommit = ""
+
 // Setup configures the global slog logger based on environment variables:
 //
 //   - LOG_FORMAT: "text" (default) or "json"
@@ -73,12 +83,29 @@ func Setup(version string) {
 // against the same sentinel.
 const CommitUnknown = "unknown"
 
-// BuildInfo returns the binary's commit identifier from runtime/debug build
-// info. Format: short SHA, optionally suffixed with "+dirty" when the working
-// tree had uncommitted changes at build time. Returns CommitUnknown when no
-// VCS metadata is embedded.
+// BuildInfo returns the binary's commit identifier. Resolution order:
+//
+//  1. The link-time defaultCommit var, if set by GoReleaser via -ldflags -X.
+//     This is the only source that is guaranteed to be present in release
+//     binaries — runtime/debug VCS settings can be silently absent in CI
+//     builds without a `.git` checkout.
+//  2. The vcs.revision build setting from runtime/debug.ReadBuildInfo,
+//     truncated to a 7-char short SHA, optionally suffixed with "+dirty"
+//     when vcs.modified=true. This covers `go build` from a working tree.
+//  3. CommitUnknown when neither source has a value.
 func BuildInfo() string {
-	info, ok := debug.ReadBuildInfo()
+	if defaultCommit != "" {
+		return defaultCommit
+	}
+	return commitFromBuildSettings(debug.ReadBuildInfo)
+}
+
+// commitFromBuildSettings extracts the short SHA from runtime/debug build
+// settings. Split out from BuildInfo so unit tests can inject a fake reader
+// and exercise both the VCS-present and VCS-absent code paths deterministically
+// without depending on how the test binary was linked.
+func commitFromBuildSettings(read func() (*debug.BuildInfo, bool)) string {
+	info, ok := read()
 	if !ok {
 		return CommitUnknown
 	}
