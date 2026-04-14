@@ -69,7 +69,7 @@ func main() {
 }
 
 func run() error {
-	logging.Setup()
+	logging.Setup(version)
 
 	var toolsFlag string
 	flag.StringVar(&toolsFlag, "tools", "", "Comma-separated tool groups to enable (default: all except debug; 'all' for everything)")
@@ -117,7 +117,6 @@ func run() error {
 		}
 	}
 	slog.Info("server started",
-		"version", version,
 		"systems", systemNames,
 		"default_system", cfg.DefaultSystem,
 		"tool_groups", activeGroups,
