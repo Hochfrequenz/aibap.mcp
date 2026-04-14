@@ -2,8 +2,10 @@ package logging
 
 import (
 	"bytes"
+	"io"
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"strings"
 	"testing"
 )
@@ -74,7 +76,7 @@ func TestSetup_DefaultsToTextStderr(t *testing.T) {
 	t.Setenv("PAPERTRAIL_HOST", "")
 	t.Setenv("PAPERTRAIL_PORT", "")
 
-	Setup()
+	Setup("test")
 
 	// Just verify it doesn't panic and sets a default logger.
 	slog.Info("setup test")
@@ -85,7 +87,7 @@ func TestSetup_JSONFormat(t *testing.T) {
 	t.Setenv("LOG_FORMAT", "json")
 	t.Setenv("LOG_LEVEL", "debug")
 
-	Setup()
+	Setup("test")
 	slog.Debug("json test")
 }
 
@@ -213,7 +215,7 @@ func TestSetup_BakedInDefaultsAddPapertrailHandler(t *testing.T) {
 	if host != testPTHost || port != testPTPort {
 		t.Fatalf("expected baked-in defaults to flow through, got %q/%q", host, port)
 	}
-	Setup()
+	Setup("test")
 	// With two handlers (stderr + papertrail), Setup wires a fanout.
 	if _, ok := slog.Default().Handler().(*fanoutHandler); !ok {
 		t.Errorf("expected fanout handler when papertrail is enabled, got %T", slog.Default().Handler())
@@ -227,9 +229,137 @@ func TestSetup_NoDefaults_NoEnv_NoPapertrailHandler(t *testing.T) {
 	t.Setenv("LOG_FORMAT", "")
 	t.Setenv("LOG_LEVEL", "")
 
-	Setup()
+	Setup("test")
 	// With only the stderr handler, Setup uses it directly — no fanout.
+	// The default logger wraps it in a *slog.Logger with default attrs, but
+	// the underlying Handler() must still be the bare stderr handler.
 	if _, ok := slog.Default().Handler().(*fanoutHandler); ok {
 		t.Errorf("expected single handler when papertrail is off, got fanout")
 	}
+}
+
+// TestSetup_AttachesVersionAndCommit calls Setup with a known version,
+// captures the actual stderr output of a slog.Default() emission, and
+// verifies the version+commit default attributes flow through end-to-end.
+//
+// Earlier versions of this test reconstructed the .With() chain manually
+// and asserted against a local buffer, which only proved that
+// slog.Logger.With persists attrs — a stdlib guarantee, not a Setup
+// behaviour. This version exercises Setup itself.
+func TestSetup_AttachesVersionAndCommit(t *testing.T) {
+	withPapertrailDefaults(t, "", "")
+	withDefaultCommit(t, "deadbee")
+	t.Setenv("LOG_FORMAT", "json")
+	t.Setenv("LOG_LEVEL", "info")
+
+	out := captureStderr(t, func() {
+		Setup("v1.2.3")
+		slog.Info("hello")
+	})
+
+	if !strings.Contains(out, `"version":"v1.2.3"`) {
+		t.Errorf("Setup did not attach version to root logger: %q", out)
+	}
+	if !strings.Contains(out, `"commit":"deadbee"`) {
+		t.Errorf("Setup did not attach commit to root logger: %q", out)
+	}
+}
+
+// TestBuildInfo_PrefersLinkTimeDefault verifies the GoReleaser injection
+// path: when defaultCommit is set via -ldflags, it wins over runtime/debug
+// build settings — guaranteeing release binaries report a deterministic
+// commit even if the CI build had no `.git` directory.
+func TestBuildInfo_PrefersLinkTimeDefault(t *testing.T) {
+	withDefaultCommit(t, "f00ba12")
+	if got := BuildInfo(); got != "f00ba12" {
+		t.Errorf("BuildInfo with link-time default: got %q, want %q", got, "f00ba12")
+	}
+}
+
+// TestCommitFromBuildSettings exercises both branches of the runtime/debug
+// fallback path with injected build infos so neither requires a particular
+// build environment.
+func TestCommitFromBuildSettings(t *testing.T) {
+	t.Run("no build info available", func(t *testing.T) {
+		got := commitFromBuildSettings(func() (*debug.BuildInfo, bool) { return nil, false })
+		if got != CommitUnknown {
+			t.Errorf("got %q, want CommitUnknown", got)
+		}
+	})
+	t.Run("vcs.revision absent", func(t *testing.T) {
+		got := commitFromBuildSettings(func() (*debug.BuildInfo, bool) {
+			return &debug.BuildInfo{}, true
+		})
+		if got != CommitUnknown {
+			t.Errorf("got %q, want CommitUnknown", got)
+		}
+	})
+	t.Run("clean revision truncated to 7 chars", func(t *testing.T) {
+		got := commitFromBuildSettings(func() (*debug.BuildInfo, bool) {
+			return &debug.BuildInfo{Settings: []debug.BuildSetting{
+				{Key: "vcs.revision", Value: "abcdef0123456789"},
+				{Key: "vcs.modified", Value: "false"},
+			}}, true
+		})
+		if got != "abcdef0" {
+			t.Errorf("got %q, want %q", got, "abcdef0")
+		}
+	})
+	t.Run("dirty revision gets +dirty suffix", func(t *testing.T) {
+		got := commitFromBuildSettings(func() (*debug.BuildInfo, bool) {
+			return &debug.BuildInfo{Settings: []debug.BuildSetting{
+				{Key: "vcs.revision", Value: "abcdef0123456789"},
+				{Key: "vcs.modified", Value: "true"},
+			}}, true
+		})
+		if got != "abcdef0+dirty" {
+			t.Errorf("got %q, want %q", got, "abcdef0+dirty")
+		}
+	})
+	t.Run("short revision passes through", func(t *testing.T) {
+		got := commitFromBuildSettings(func() (*debug.BuildInfo, bool) {
+			return &debug.BuildInfo{Settings: []debug.BuildSetting{
+				{Key: "vcs.revision", Value: "abc"},
+			}}, true
+		})
+		if got != "abc" {
+			t.Errorf("got %q, want %q", got, "abc")
+		}
+	})
+}
+
+// withDefaultCommit overrides the link-time defaultCommit for one test
+// and restores the prior value via t.Cleanup. Tests using this helper
+// must not call t.Parallel — defaultCommit is a package-level var.
+func withDefaultCommit(t *testing.T, commit string) {
+	t.Helper()
+	prev := defaultCommit
+	defaultCommit = commit
+	t.Cleanup(func() { defaultCommit = prev })
+}
+
+// captureStderr redirects os.Stderr to a pipe for the duration of fn,
+// returning everything written. Used to verify Setup wires slog.Default()
+// to a stderr handler that actually emits the expected attributes.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	t.Cleanup(func() { _ = r.Close() }) // close read end to avoid FD leak
+	prev := os.Stderr
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = prev })
+
+	prevLogger := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(prevLogger) })
+
+	fn()
+	_ = w.Close()
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read pipe: %v", err)
+	}
+	return string(out)
 }
