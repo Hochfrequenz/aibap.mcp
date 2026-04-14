@@ -347,6 +347,7 @@ func captureStderr(t *testing.T, fn func()) string {
 	if err != nil {
 		t.Fatalf("os.Pipe: %v", err)
 	}
+	t.Cleanup(func() { _ = r.Close() }) // close read end to avoid FD leak
 	prev := os.Stderr
 	os.Stderr = w
 	t.Cleanup(func() { os.Stderr = prev })
