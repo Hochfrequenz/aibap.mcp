@@ -74,7 +74,7 @@ func TestSetup_DefaultsToTextStderr(t *testing.T) {
 	t.Setenv("PAPERTRAIL_HOST", "")
 	t.Setenv("PAPERTRAIL_PORT", "")
 
-	Setup()
+	Setup("test")
 
 	// Just verify it doesn't panic and sets a default logger.
 	slog.Info("setup test")
@@ -85,7 +85,7 @@ func TestSetup_JSONFormat(t *testing.T) {
 	t.Setenv("LOG_FORMAT", "json")
 	t.Setenv("LOG_LEVEL", "debug")
 
-	Setup()
+	Setup("test")
 	slog.Debug("json test")
 }
 
@@ -213,7 +213,7 @@ func TestSetup_BakedInDefaultsAddPapertrailHandler(t *testing.T) {
 	if host != testPTHost || port != testPTPort {
 		t.Fatalf("expected baked-in defaults to flow through, got %q/%q", host, port)
 	}
-	Setup()
+	Setup("test")
 	// With two handlers (stderr + papertrail), Setup wires a fanout.
 	if _, ok := slog.Default().Handler().(*fanoutHandler); !ok {
 		t.Errorf("expected fanout handler when papertrail is enabled, got %T", slog.Default().Handler())
@@ -227,9 +227,53 @@ func TestSetup_NoDefaults_NoEnv_NoPapertrailHandler(t *testing.T) {
 	t.Setenv("LOG_FORMAT", "")
 	t.Setenv("LOG_LEVEL", "")
 
-	Setup()
+	Setup("test")
 	// With only the stderr handler, Setup uses it directly — no fanout.
+	// The default logger wraps it in a *slog.Logger with default attrs, but
+	// the underlying Handler() must still be the bare stderr handler.
 	if _, ok := slog.Default().Handler().(*fanoutHandler); ok {
 		t.Errorf("expected single handler when papertrail is off, got fanout")
+	}
+}
+
+// TestSetup_AttachesVersionAndCommit verifies the version+commit default
+// attributes flow into every log line emitted via slog.Default(), so a
+// remote bug report can identify which build the user is running.
+func TestSetup_AttachesVersionAndCommit(t *testing.T) {
+	var buf bytes.Buffer
+	h := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
+	logger := slog.New(h).With("version", "v1.2.3", "commit", BuildInfo())
+	logger.Info("hello")
+
+	out := buf.String()
+	if !strings.Contains(out, `"version":"v1.2.3"`) {
+		t.Errorf("default attr missing: %s", out)
+	}
+	if !strings.Contains(out, `"commit":`) {
+		t.Errorf("commit attr missing: %s", out)
+	}
+}
+
+// TestBuildInfo verifies the commit identifier is non-empty and follows the
+// expected shape (short hex, optionally +dirty) — or the CommitUnknown
+// fallback when no VCS info is embedded.
+func TestBuildInfo(t *testing.T) {
+	got := BuildInfo()
+	if got == "" {
+		t.Fatal("BuildInfo returned empty string")
+	}
+	if got == CommitUnknown {
+		return // valid fallback when built without VCS info
+	}
+	rev := strings.TrimSuffix(got, "+dirty")
+	if len(rev) == 0 || len(rev) > 7 {
+		t.Errorf("commit %q: short SHA should be 1-7 chars (got %d)", got, len(rev))
+	}
+	for _, c := range rev {
+		isDigit := c >= '0' && c <= '9'
+		isHex := c >= 'a' && c <= 'f'
+		if !isDigit && !isHex {
+			t.Errorf("commit %q: short SHA should be lowercase hex, got %q", got, c)
+		}
 	}
 }

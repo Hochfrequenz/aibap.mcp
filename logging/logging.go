@@ -3,6 +3,7 @@ package logging
 import (
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"strings"
 )
 
@@ -30,7 +31,12 @@ var (
 //     is added only when the resolved host AND port are both non-empty.
 //     The pair-wise rule prevents accidental delivery to the wrong Papertrail
 //     account if a release-binary user sets only one of the two env vars.
-func Setup() {
+//
+// The version argument and the commit short-SHA from BuildInfo are attached
+// as default attributes on the root logger so every log line carries both
+// fields without per-call wiring. This lets us identify which build a remote
+// user is running from a single log entry in their bug report.
+func Setup(version string) {
 	level := parseLevel(os.Getenv("LOG_LEVEL"))
 
 	var handlers []slog.Handler
@@ -50,11 +56,51 @@ func Setup() {
 		handlers = append(handlers, newPapertrailHandler(ptHost, ptPort, level))
 	}
 
+	var handler slog.Handler
 	if len(handlers) == 1 {
-		slog.SetDefault(slog.New(handlers[0]))
+		handler = handlers[0]
 	} else {
-		slog.SetDefault(slog.New(newFanoutHandler(handlers...)))
+		handler = newFanoutHandler(handlers...)
 	}
+
+	logger := slog.New(handler).With("version", version, "commit", BuildInfo())
+	slog.SetDefault(logger)
+}
+
+// CommitUnknown is returned by BuildInfo when no VCS metadata is embedded —
+// e.g. plain `go build` outside a git checkout, or a build whose toolchain
+// stripped the build settings. Exported so callers and tests can compare
+// against the same sentinel.
+const CommitUnknown = "unknown"
+
+// BuildInfo returns the binary's commit identifier from runtime/debug build
+// info. Format: short SHA, optionally suffixed with "+dirty" when the working
+// tree had uncommitted changes at build time. Returns CommitUnknown when no
+// VCS metadata is embedded.
+func BuildInfo() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return CommitUnknown
+	}
+	var rev, modified string
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			rev = s.Value
+		case "vcs.modified":
+			modified = s.Value
+		}
+	}
+	if rev == "" {
+		return CommitUnknown
+	}
+	if len(rev) > 7 {
+		rev = rev[:7]
+	}
+	if modified == "true" {
+		rev += "+dirty"
+	}
+	return rev
 }
 
 // resolvePapertrail picks the Papertrail destination using pair-wise override
