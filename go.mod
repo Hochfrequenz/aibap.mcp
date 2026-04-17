@@ -3,8 +3,9 @@ module github.com/Hochfrequenz/mcp-server-abap
 go 1.26
 
 require (
-	github.com/Hochfrequenz/adtler v0.0.1
+	github.com/Hochfrequenz/adtler v0.1.3
 	github.com/Hochfrequenz/sap-mcp-config v0.1.0
+	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.45.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 )
@@ -13,7 +14,6 @@ require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect

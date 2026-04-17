@@ -3,6 +3,7 @@ package logging
 import (
 	"log/slog"
 	"os"
+	"runtime/debug"
 	"strings"
 )
 
@@ -19,6 +20,16 @@ var (
 	defaultPapertrailPort = ""
 )
 
+// defaultCommit is populated via `-ldflags -X` by GoReleaser with the short
+// commit SHA of the build, so release binaries carry a deterministic commit
+// even when runtime/debug.ReadBuildInfo() VCS settings are absent or stripped
+// (which can happen in CI builds without a `.git` directory). Plain `go build`
+// leaves it empty and BuildInfo() falls back to the runtime/debug path.
+//
+// Same link-time-constant rule as the Papertrail vars: do NOT mutate at
+// runtime outside of tests.
+var defaultCommit = ""
+
 // Setup configures the global slog logger based on environment variables:
 //
 //   - LOG_FORMAT: "text" (default) or "json"
@@ -30,7 +41,12 @@ var (
 //     is added only when the resolved host AND port are both non-empty.
 //     The pair-wise rule prevents accidental delivery to the wrong Papertrail
 //     account if a release-binary user sets only one of the two env vars.
-func Setup() {
+//
+// The version argument and the commit short-SHA from BuildInfo are attached
+// as default attributes on the root logger so every log line carries both
+// fields without per-call wiring. This lets us identify which build a remote
+// user is running from a single log entry in their bug report.
+func Setup(version string) {
 	level := parseLevel(os.Getenv("LOG_LEVEL"))
 
 	var handlers []slog.Handler
@@ -50,11 +66,68 @@ func Setup() {
 		handlers = append(handlers, newPapertrailHandler(ptHost, ptPort, level))
 	}
 
+	var handler slog.Handler
 	if len(handlers) == 1 {
-		slog.SetDefault(slog.New(handlers[0]))
+		handler = handlers[0]
 	} else {
-		slog.SetDefault(slog.New(newFanoutHandler(handlers...)))
+		handler = newFanoutHandler(handlers...)
 	}
+
+	logger := slog.New(handler).With("version", version, "commit", BuildInfo())
+	slog.SetDefault(logger)
+}
+
+// CommitUnknown is returned by BuildInfo when no VCS metadata is embedded —
+// e.g. plain `go build` outside a git checkout, or a build whose toolchain
+// stripped the build settings. Exported so callers and tests can compare
+// against the same sentinel.
+const CommitUnknown = "unknown"
+
+// BuildInfo returns the binary's commit identifier. Resolution order:
+//
+//  1. The link-time defaultCommit var, if set by GoReleaser via -ldflags -X.
+//     This is the only source that is guaranteed to be present in release
+//     binaries — runtime/debug VCS settings can be silently absent in CI
+//     builds without a `.git` checkout.
+//  2. The vcs.revision build setting from runtime/debug.ReadBuildInfo,
+//     truncated to a 7-char short SHA, optionally suffixed with "+dirty"
+//     when vcs.modified=true. This covers `go build` from a working tree.
+//  3. CommitUnknown when neither source has a value.
+func BuildInfo() string {
+	if defaultCommit != "" {
+		return defaultCommit
+	}
+	return commitFromBuildSettings(debug.ReadBuildInfo)
+}
+
+// commitFromBuildSettings extracts the short SHA from runtime/debug build
+// settings. Split out from BuildInfo so unit tests can inject a fake reader
+// and exercise both the VCS-present and VCS-absent code paths deterministically
+// without depending on how the test binary was linked.
+func commitFromBuildSettings(read func() (*debug.BuildInfo, bool)) string {
+	info, ok := read()
+	if !ok {
+		return CommitUnknown
+	}
+	var rev, modified string
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			rev = s.Value
+		case "vcs.modified":
+			modified = s.Value
+		}
+	}
+	if rev == "" {
+		return CommitUnknown
+	}
+	if len(rev) > 7 {
+		rev = rev[:7]
+	}
+	if modified == "true" {
+		rev += "+dirty"
+	}
+	return rev
 }
 
 // resolvePapertrail picks the Papertrail destination using pair-wise override
