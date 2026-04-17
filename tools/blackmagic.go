@@ -14,6 +14,7 @@ type BlackMagicClient interface {
 	ReleaseTransportFallback(ctx context.Context, transportNumber string) error
 	CreateTransportFallback(ctx context.Context, category, target, description, devClass string) (string, error)
 	UpdateCustomizing(ctx context.Context, table string, entries []CustomizingEntry) error
+	CreateObjectFallback(ctx context.Context, objectType, name, pkg, description, transport string) error
 }
 
 // CustomizingEntry represents a row to write into a customizing table.

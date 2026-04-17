@@ -2,12 +2,22 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerObjectTools(s toolAdder, client adt.ObjectClient) {
+// ddicTypes are object types that require S4 — on ECC, ADT returns 404 and
+// we fall back to BlackMagic (SAP GUI automation via SE11).
+var ddicTypes = map[string]bool{
+	"TABL": true,
+	"DTEL": true,
+	"DOMA": true,
+}
+
+func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMagicClient) {
 	s.AddTool(mcp.NewTool("create_object",
 		mcp.WithTitleAnnotation("Create ABAP Object"),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -33,12 +43,28 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient) {
 			mcp.Description("Transport request number (required for non-local packages)"),
 		),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		objectType := req.GetString("object_type", "")
+		objectType := strings.ToUpper(req.GetString("object_type", ""))
 		name := req.GetString("name", "")
 		pkg := req.GetString("package", "")
 		desc := req.GetString("description", "")
 		transport := req.GetString("transport", "")
-		if err := client.CreateObject(ctx, objectType, name, pkg, desc, transport); err != nil {
+
+		err := client.CreateObject(ctx, objectType, name, pkg, desc, transport)
+		if err != nil {
+			// DDIC types (TABL, DTEL, DOMA) may not be available via ADT on ECC.
+			// Fall back to BlackMagic (SAP GUI automation via SE11) if configured.
+			if ddicTypes[objectType] && strings.Contains(err.Error(), "404") {
+				if fallback != nil {
+					if fbErr := fallback.CreateObjectFallback(ctx, objectType, name, pkg, desc, transport); fbErr != nil {
+						return errorResult(fbErr), nil
+					}
+					return mcp.NewToolResultText("Object created: " + name), nil
+				}
+				return errorResult(fmt.Errorf(
+					"DDIC object creation (%s) is not available via ADT on this system — "+
+						"this endpoint is S4-only. Configure a BlackMagic fallback (SAP GUI automation) "+
+						"or create the object manually in SAP GUI (SE11)", objectType)), nil
+			}
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultText("Object created: " + name), nil
