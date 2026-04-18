@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -31,7 +32,7 @@ var customizingEntryItemsSchema = map[string]any{
 	"additionalProperties": false,
 }
 
-func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient) {
+func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("update_customizing",
 		mcp.WithTitleAnnotation("Update Customizing"),
 		mcp.WithDestructiveHintAnnotation(true),
@@ -72,6 +73,12 @@ func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient) {
 					"SAP does not expose SM30/SM34 functionality through REST endpoints. "+
 					"Configure a BlackMagic fallback (SAP GUI automation) or make the change "+
 					"manually in SAP GUI (SM30 → table %s)", table)), nil
+		}
+
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			fmt.Sprintf("Confirm update to customizing table %s (%d entries). Customizing changes are difficult to reverse without an explicit before-image.", table, len(entries)))
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "update_customizing aborted: " + reason}), nil
 		}
 
 		// The transport parameter is not part of the BlackMagic interface yet;
