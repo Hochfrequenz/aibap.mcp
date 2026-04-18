@@ -101,7 +101,7 @@ SAP ADT endpoints advertise their supported content types and API versions via t
 - S4 systems require HTTPS (secure cookie flag breaks HTTP — see #108).
 - ECC systems may not have all endpoints (e.g. `/sap/bc/adt/packages` is S4-only).
 - **Transport release** works via REST on S4 (`/newreleasejobs`). ADT has no release endpoint on ECC; release there depends on whether a BlackMagic fallback is available:
-  - **With** a `BlackMagicClient` wired in at server start (`tools/blackmagic.go`), `ReleaseTransportFallback` performs the release from this MCP transparently.
+  - **With** a `BlackMagicClient` compiled into the binary (package-level `var blackMagic` in `main.go` set from a build-tagged `init()` in a downstream fork; interface declared in `tools/blackmagic.go`), `ReleaseTransportFallback` performs the release from this MCP transparently.
   - **Without** one, this MCP cannot release on ECC — the caller has to do it from a GUI-driven MCP (`sap-desktop` / `sap-webgui`) via SE09 instead.
 - **Stateful sessions** (`X-sap-adt-sessiontype: stateful`) solve 423 lock errors when SAP checks locks in the wrong enqueue table. Proven for debugger and class includes. When hitting 423 on new endpoints, try stateful sessions first.
 
