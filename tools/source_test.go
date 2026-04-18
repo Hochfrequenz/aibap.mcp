@@ -21,28 +21,32 @@ const (
 	testLockHandle123 = "lock-handle-123"
 	testObjectURIOK   = "/sap/bc/adt/programs/programs/ZOK"
 	testObjectURIFail = "/sap/bc/adt/programs/programs/ZFAIL"
+	testTransportNum  = "DEVK900123"
 )
 
 // mockClient is a test double for adt.Client.
 type mockClient struct {
-	getSourceFn       func(ctx context.Context, uri string) (*adt.SourceResult, error)
-	setSourceFn       func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
-	activateObjectsFn func(ctx context.Context, uris []string) (*adt.ActivationResult, error)
-	searchFn          func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
-	whereUsedFn       func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
-	browsePackageFn   func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
-	getObjectFn       func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
-	syntaxCheckFn     func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
-	runTestsFn        func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
-	getTransportFn    func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
-	addTransportFn    func(ctx context.Context, uri, transport string) error
-	lockObjectFn      func(ctx context.Context, uri string) (string, error)
-	unlockObjectFn    func(ctx context.Context, uri, lockHandle string) error
-	prettyPrintFn     func(ctx context.Context, source string) (string, error)
-	createObjectFn    func(ctx context.Context, objectType, name, pkg, desc, transport string) error
-	deleteObjectFn    func(ctx context.Context, uri, lockHandle, transport string) error
-	getCompletionsFn  func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
-	createTransportFn func(ctx context.Context, category, target, description, devClass string) (string, error)
+	getSourceFn        func(ctx context.Context, uri string) (*adt.SourceResult, error)
+	setSourceFn        func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
+	activateObjectsFn  func(ctx context.Context, uris []string) (*adt.ActivationResult, error)
+	searchFn           func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
+	whereUsedFn        func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
+	browsePackageFn    func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
+	getObjectFn        func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
+	syntaxCheckFn      func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
+	runTestsFn         func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
+	getTransportFn     func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
+	addTransportFn     func(ctx context.Context, uri, transport string) error
+	lockObjectFn       func(ctx context.Context, uri string) (string, error)
+	unlockObjectFn     func(ctx context.Context, uri, lockHandle string) error
+	prettyPrintFn      func(ctx context.Context, source string) (string, error)
+	createObjectFn     func(ctx context.Context, objectType, name, pkg, desc, transport string) error
+	deleteObjectFn     func(ctx context.Context, uri, lockHandle, transport string) error
+	getCompletionsFn   func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
+	createTransportFn  func(ctx context.Context, category, target, description, devClass string) (string, error)
+	deleteTransportFn  func(ctx context.Context, transport string) error
+	releaseTransportFn func(ctx context.Context, transport string) error
+	renameFn           func(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error)
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -138,7 +142,10 @@ func (m *mockClient) CreateTransport(ctx context.Context, category, target, desc
 func (m *mockClient) CreateTransportTask(context.Context, string, string, string) (string, error) {
 	return "DEVK999998", nil
 }
-func (m *mockClient) DeleteTransport(context.Context, string) error {
+func (m *mockClient) DeleteTransport(ctx context.Context, transport string) error {
+	if m.deleteTransportFn != nil {
+		return m.deleteTransportFn(ctx, transport)
+	}
 	return nil
 }
 func (m *mockClient) GetTransportRequests(ctx context.Context, user, status string) ([]adt.TransportRequest, error) {
@@ -216,7 +223,10 @@ func (m *mockClient) RunATCCheck(_ context.Context, _ []string, _ string) (*adt.
 func (m *mockClient) RunQuery(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
 	return nil, nil
 }
-func (m *mockClient) ReleaseTransport(context.Context, string) error {
+func (m *mockClient) ReleaseTransport(ctx context.Context, transport string) error {
+	if m.releaseTransportFn != nil {
+		return m.releaseTransportFn(ctx, transport)
+	}
 	return nil
 }
 func (m *mockClient) ReleaseTransportWithTasks(context.Context, string) error {
@@ -237,7 +247,10 @@ func (m *mockClient) SearchMessages(context.Context, string, int) ([]adt.Message
 }
 func (m *mockClient) SetMessages(context.Context, string, string, []adt.Message) error { return nil }
 func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error)     { return "", nil }
-func (m *mockClient) Rename(context.Context, string, string, string) (*adt.RenameResult, error) {
+func (m *mockClient) Rename(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error) {
+	if m.renameFn != nil {
+		return m.renameFn(ctx, uri, newName, transport)
+	}
 	return &adt.RenameResult{}, nil
 }
 func (m *mockClient) GetVersionHistory(context.Context, string) ([]adt.VersionInfo, error) {
@@ -276,7 +289,7 @@ func newTestServer(client adt.Client) *server.MCPServer {
 
 func newTestServerWithSelector(client adt.Client, selector tools.SystemSelector, lockMap *adt.LockMap) *server.MCPServer {
 	s := server.NewMCPServer("test", "0.0.1")
-	tools.RegisterAllWithLockMap(s, client, selector, lockMap, tools.ParseToolGroups([]string{"all"}), nil)
+	tools.RegisterAllWithLockMap(s, client, selector, lockMap, tools.ParseToolGroups([]string{"all"}), nil, nil)
 	return s
 }
 
@@ -630,7 +643,7 @@ func TestGetTransportRequestsTool(t *testing.T) {
 			if status != "D" {
 				t.Errorf("unexpected status: %q", status)
 			}
-			return []adt.TransportRequest{{Number: "DEVK900123", Status: "D"}}, nil
+			return []adt.TransportRequest{{Number: testTransportNum, Status: "D"}}, nil
 		},
 	}
 	s := newTestServer(mock)
@@ -826,7 +839,7 @@ func TestAddToTransportTool(t *testing.T) {
 	s := newTestServer(mock)
 	result := callTool(t, s, "add_to_transport", map[string]interface{}{
 		"object_uri": testObjectURI,
-		"transport":  "DEVK900123",
+		"transport":  testTransportNum,
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error result")
@@ -834,7 +847,7 @@ func TestAddToTransportTool(t *testing.T) {
 	if gotURI != testObjectURI {
 		t.Errorf("object_uri: got %q", gotURI)
 	}
-	if gotTransport != "DEVK900123" {
+	if gotTransport != testTransportNum {
 		t.Errorf("transport: got %q", gotTransport)
 	}
 }

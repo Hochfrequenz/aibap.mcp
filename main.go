@@ -134,8 +134,9 @@ func run() error {
 
 	s := server.NewMCPServer("SAP ADT MCP Server", version,
 		server.WithInstructions(serverInstructions(systemNames, cfg.DefaultSystem)),
+		server.WithElicitation(),
 	)
-	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups, blackMagic)
+	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups, blackMagic, s)
 
 	stdioServer := server.NewStdioServer(s)
 	return stdioServer.Listen(ctx, os.Stdin, os.Stdout)
