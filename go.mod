@@ -3,7 +3,7 @@ module github.com/Hochfrequenz/mcp-server-abap
 go 1.26
 
 require (
-	github.com/Hochfrequenz/adtler v0.1.3
+	github.com/Hochfrequenz/adtler v0.1.4
 	github.com/Hochfrequenz/sap-mcp-config v0.1.0
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.45.0
@@ -29,5 +29,5 @@ require (
 	modernc.org/libc v1.70.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.48.1 // indirect
+	modernc.org/sqlite v1.48.2 // indirect
 )
