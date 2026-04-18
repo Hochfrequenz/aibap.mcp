@@ -217,6 +217,11 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		objName := req.GetString("object_name", "")
 		wbType := req.GetString("wb_type", "")
 		position := req.GetString("position", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			fmt.Sprintf("Confirm removing %s %s from transport task %s (parent %s). The object itself is not changed — only its link to the transport.", objType, objName, taskNr, parentTr))
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "remove_from_transport aborted: " + reason}), nil
+		}
 		if err := client.RemoveFromTransport(ctx, taskNr, parentTr, pgmid, objType, objName, wbType, position); err != nil {
 			return errorResult(err), nil
 		}
