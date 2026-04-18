@@ -21,6 +21,7 @@ const (
 	testLockHandle123 = "lock-handle-123"
 	testObjectURIOK   = "/sap/bc/adt/programs/programs/ZOK"
 	testObjectURIFail = "/sap/bc/adt/programs/programs/ZFAIL"
+	testTransportNum  = "DEVK900123"
 )
 
 // mockClient is a test double for adt.Client.
@@ -642,7 +643,7 @@ func TestGetTransportRequestsTool(t *testing.T) {
 			if status != "D" {
 				t.Errorf("unexpected status: %q", status)
 			}
-			return []adt.TransportRequest{{Number: "DEVK900123", Status: "D"}}, nil
+			return []adt.TransportRequest{{Number: testTransportNum, Status: "D"}}, nil
 		},
 	}
 	s := newTestServer(mock)
@@ -838,7 +839,7 @@ func TestAddToTransportTool(t *testing.T) {
 	s := newTestServer(mock)
 	result := callTool(t, s, "add_to_transport", map[string]interface{}{
 		"object_uri": testObjectURI,
-		"transport":  "DEVK900123",
+		"transport":  testTransportNum,
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error result")
@@ -846,7 +847,7 @@ func TestAddToTransportTool(t *testing.T) {
 	if gotURI != testObjectURI {
 		t.Errorf("object_uri: got %q", gotURI)
 	}
-	if gotTransport != "DEVK900123" {
+	if gotTransport != testTransportNum {
 		t.Errorf("transport: got %q", gotTransport)
 	}
 }
