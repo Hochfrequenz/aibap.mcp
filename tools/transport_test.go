@@ -219,3 +219,84 @@ func TestDeleteTransport_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
 		t.Fatal("expected deleteTransportFn to be called with nil elicitor (backwards compat)")
 	}
 }
+
+func TestReleaseTransport_ElicitationAccepted(t *testing.T) {
+	called := false
+	var gotTransport string
+	mock := &mockClient{
+		releaseTransportFn: func(_ context.Context, transport string) error {
+			called = true
+			gotTransport = transport
+			return nil
+		},
+	}
+	el := &stubElicitor{result: &mcp.ElicitationResult{
+		ElicitationResponse: mcp.ElicitationResponse{
+			Action:  mcp.ElicitationResponseActionAccept,
+			Content: map[string]any{"confirm": true},
+		},
+	}}
+	s := newTestServerWithFallbackElicitor(mock, nil, el)
+	result := callTool(t, s, "release_transport", map[string]interface{}{
+		"transport": "DEVK900123",
+	})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %v", result.Content)
+	}
+	if !called {
+		t.Fatal("expected releaseTransportFn to be called after accept")
+	}
+	if gotTransport != "DEVK900123" {
+		t.Errorf("transport: got %q, want DEVK900123", gotTransport)
+	}
+	if el.called != 1 {
+		t.Errorf("expected 1 elicitation call, got %d", el.called)
+	}
+}
+
+func TestReleaseTransport_ElicitationDeclined(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		releaseTransportFn: func(_ context.Context, _ string) error {
+			called = true
+			return nil
+		},
+	}
+	el := &stubElicitor{result: &mcp.ElicitationResult{
+		ElicitationResponse: mcp.ElicitationResponse{Action: mcp.ElicitationResponseActionDecline},
+	}}
+	s := newTestServerWithFallbackElicitor(mock, nil, el)
+	result := callTool(t, s, "release_transport", map[string]interface{}{
+		"transport": "DEVK900123",
+	})
+	if !result.IsError {
+		t.Fatal("expected error result when user declines")
+	}
+	if called {
+		t.Fatal("releaseTransportFn must NOT be called when user declines")
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "release_transport aborted") {
+		t.Errorf("expected abort message, got: %s", text)
+	}
+}
+
+func TestReleaseTransport_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		releaseTransportFn: func(_ context.Context, _ string) error {
+			called = true
+			return nil
+		},
+	}
+	s := newTestServerWithFallbackElicitor(mock, nil, nil)
+	result := callTool(t, s, "release_transport", map[string]interface{}{
+		"transport": "DEVK900123",
+	})
+	if result.IsError {
+		t.Fatalf("expected success with nil elicitor (backwards compat), got error: %v", result.Content)
+	}
+	if !called {
+		t.Fatal("expected releaseTransportFn to be called with nil elicitor (backwards compat)")
+	}
+}
