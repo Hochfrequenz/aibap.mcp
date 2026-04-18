@@ -101,7 +101,7 @@ func TestCreateTransport_CategoryW_Force_UsesADT(t *testing.T) {
 	client := &mockClient{
 		createTransportFn: func(_ context.Context, _, _, _, _ string) (string, error) {
 			adtCalled = true
-			return "DEVK900123", nil
+			return testTransportNum, nil
 		},
 	}
 	s := newTestServer(client)
@@ -139,6 +139,10 @@ func TestCreateTransport_CategoryK_UsesADT(t *testing.T) {
 	}
 }
 
+// Intentionally parallel to TestReleaseTransport_ElicitationAccepted — same
+// structure exercised against a different destructive tool.
+//
+//nolint:dupl
 func TestDeleteTransport_ElicitationAccepted(t *testing.T) {
 	called := false
 	var gotTransport string
@@ -157,7 +161,7 @@ func TestDeleteTransport_ElicitationAccepted(t *testing.T) {
 	}}
 	s := newTestServerWithFallbackElicitor(mock, nil, el)
 	result := callTool(t, s, "delete_transport", map[string]interface{}{
-		"transport": "DEVK900123",
+		"transport": testTransportNum,
 	})
 	if result.IsError {
 		t.Fatalf("expected success, got error: %v", result.Content)
@@ -165,8 +169,8 @@ func TestDeleteTransport_ElicitationAccepted(t *testing.T) {
 	if !called {
 		t.Fatal("expected deleteTransportFn to be called after accept")
 	}
-	if gotTransport != "DEVK900123" {
-		t.Errorf("transport: got %q, want DEVK900123", gotTransport)
+	if gotTransport != testTransportNum {
+		t.Errorf("transport: got %q, want %s", gotTransport, testTransportNum)
 	}
 	if el.called != 1 {
 		t.Errorf("expected 1 elicitation call, got %d", el.called)
@@ -186,7 +190,7 @@ func TestDeleteTransport_ElicitationDeclined(t *testing.T) {
 	}}
 	s := newTestServerWithFallbackElicitor(mock, nil, el)
 	result := callTool(t, s, "delete_transport", map[string]interface{}{
-		"transport": "DEVK900123",
+		"transport": testTransportNum,
 	})
 	if !result.IsError {
 		t.Fatal("expected error result when user declines")
@@ -210,7 +214,7 @@ func TestDeleteTransport_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
 	}
 	s := newTestServerWithFallbackElicitor(mock, nil, nil)
 	result := callTool(t, s, "delete_transport", map[string]interface{}{
-		"transport": "DEVK900123",
+		"transport": testTransportNum,
 	})
 	if result.IsError {
 		t.Fatalf("expected success with nil elicitor (backwards compat), got error: %v", result.Content)
@@ -220,6 +224,10 @@ func TestDeleteTransport_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
 	}
 }
 
+// Intentionally parallel to TestDeleteTransport_ElicitationAccepted — same
+// structure exercised against a different destructive tool.
+//
+//nolint:dupl
 func TestReleaseTransport_ElicitationAccepted(t *testing.T) {
 	called := false
 	var gotTransport string
@@ -238,7 +246,7 @@ func TestReleaseTransport_ElicitationAccepted(t *testing.T) {
 	}}
 	s := newTestServerWithFallbackElicitor(mock, nil, el)
 	result := callTool(t, s, "release_transport", map[string]interface{}{
-		"transport": "DEVK900123",
+		"transport": testTransportNum,
 	})
 	if result.IsError {
 		t.Fatalf("expected success, got error: %v", result.Content)
@@ -246,8 +254,8 @@ func TestReleaseTransport_ElicitationAccepted(t *testing.T) {
 	if !called {
 		t.Fatal("expected releaseTransportFn to be called after accept")
 	}
-	if gotTransport != "DEVK900123" {
-		t.Errorf("transport: got %q, want DEVK900123", gotTransport)
+	if gotTransport != testTransportNum {
+		t.Errorf("transport: got %q, want %s", gotTransport, testTransportNum)
 	}
 	if el.called != 1 {
 		t.Errorf("expected 1 elicitation call, got %d", el.called)
@@ -267,7 +275,7 @@ func TestReleaseTransport_ElicitationDeclined(t *testing.T) {
 	}}
 	s := newTestServerWithFallbackElicitor(mock, nil, el)
 	result := callTool(t, s, "release_transport", map[string]interface{}{
-		"transport": "DEVK900123",
+		"transport": testTransportNum,
 	})
 	if !result.IsError {
 		t.Fatal("expected error result when user declines")
@@ -291,7 +299,7 @@ func TestReleaseTransport_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
 	}
 	s := newTestServerWithFallbackElicitor(mock, nil, nil)
 	result := callTool(t, s, "release_transport", map[string]interface{}{
-		"transport": "DEVK900123",
+		"transport": testTransportNum,
 	})
 	if result.IsError {
 		t.Fatalf("expected success with nil elicitor (backwards compat), got error: %v", result.Content)
