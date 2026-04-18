@@ -11,7 +11,6 @@ import (
 )
 
 func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient, elicitor Elicitor) {
-	_ = elicitor // wired by Tasks 4 and 5 to confirm destructive operations
 	s.AddTool(mcp.NewTool("get_transport_requests",
 		mcp.WithTitleAnnotation("Get Transport Requests"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -176,6 +175,11 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to delete")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			"Confirm deletion of transport "+transport+". This is irreversible.")
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "delete_transport aborted: " + reason}), nil
+		}
 		if err := client.DeleteTransport(ctx, transport); err != nil {
 			return errorResult(err), nil
 		}
