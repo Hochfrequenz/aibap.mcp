@@ -85,11 +85,9 @@ SAP ADT endpoints advertise their supported content types and API versions via t
 **When adding or modifying ADT operations in adtler:**
 - **Always use `NegotiateContentType` or `acceptHeaderForURI`** instead of hardcoding content types. The hardcoded map is a fallback, not the primary source of truth.
 - **Source path varies by object type**: Programs use `{uri}/source/main`, class includes use `{uri}/includes/{type}` (no `/source/main`), DDIC objects (DTEL, DOMA, TABL) may not have a `/source/main` endpoint at all.
-- **ETag fetching must be object-type-aware**: `ResolveETag` currently calls `GetSource` (which hardcodes `/source/main`) — this fails for DDIC objects. For non-source objects, fetch ETag via GET on the object URI itself.
-- **Preserve full Content-Type in ETags**: SAP ETags may embed `text/plain; charset=utf-8` — never strip the charset suffix, or the `If-Match` will fail with 412.
+- **ETag fetching uses a two-step fallback**: `ResolveETag` first calls `GetSource` (fine for source-bearing objects), and if that fails (400 for CLAS on S/4, 404 for DDIC) falls back to `FetchETag` — a GET on the bare object URI with a type-appropriate `Accept` header, which works for all object types. Don't regress this fallback; see adtler#9, adtler#14.
+- **Preserve full Content-Type in ETags**: SAP ETags may embed `text/plain; charset=utf-8` — never strip the charset suffix, or the `If-Match` will fail with 412. See adtler#15 and the `source_etag_charset_integration_test.go` regression guard.
 - **Test against both systems** — the discovery response differs between S/4 and ECC. A content type that works on one may 406 on the other.
-
-See adtler#35 for the tracking issue to wire discovery into all source operations.
 
 ## Coding Pitfalls
 
@@ -102,7 +100,7 @@ See adtler#35 for the tracking issue to wire discovery into all source operation
 - Override config path via `SAP_CONFIG_FILE` env var.
 - S4 systems require HTTPS (secure cookie flag breaks HTTP — see #108).
 - ECC systems may not have all endpoints (e.g. `/sap/bc/adt/packages` is S4-only).
-- **Transport release** only works via REST on S4 (`/newreleasejobs`). On ECC, release must happen via SAP GUI (SE09).
+- **Transport release** works via REST on S4 (`/newreleasejobs`). ADT has no release endpoint on ECC, but `BlackMagicClient.ReleaseTransportFallback` (wired through the `sap-desktop` MCP, `tools/blackmagic.go`) automates SE09 release there. Without a `BlackMagicClient` at server start, ECC transport release returns an error.
 - **Stateful sessions** (`X-sap-adt-sessiontype: stateful`) solve 423 lock errors when SAP checks locks in the wrong enqueue table. Proven for debugger and class includes. When hitting 423 on new endpoints, try stateful sessions first.
 
 ## Related projects
