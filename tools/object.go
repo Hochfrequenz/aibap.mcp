@@ -18,7 +18,6 @@ var ddicTypes = map[string]bool{
 }
 
 func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMagicClient, elicitor Elicitor) {
-	_ = elicitor // wired by Task 3 to confirm destructive operations
 	s.AddTool(mcp.NewTool("create_object",
 		mcp.WithTitleAnnotation("Create ABAP Object"),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -92,6 +91,11 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		transport := req.GetString("transport", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			fmt.Sprintf("Confirm deletion of %s. This is irreversible.", uri))
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "delete_object aborted: " + reason}), nil
+		}
 		if err := client.DeleteObject(ctx, uri, "", transport); err != nil {
 			return errorResult(err), nil
 		}

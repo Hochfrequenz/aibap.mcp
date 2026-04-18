@@ -144,3 +144,90 @@ func newTestServerWithObjFallback(client *mockClient, fallback tools.BlackMagicC
 	tools.RegisterAllWithLockMap(s, client, &mockSelector{}, adt.NewLockMap(), tools.ParseToolGroups([]string{"all"}), fallback, nil)
 	return s
 }
+
+func newTestServerWithObjFallbackElicitor(client *mockClient, fallback tools.BlackMagicClient, elicitor tools.Elicitor) *server.MCPServer {
+	s := server.NewMCPServer("test", "0.0.1")
+	tools.RegisterAllWithLockMap(s, client, &mockSelector{}, adt.NewLockMap(), tools.ParseToolGroups([]string{"all"}), fallback, elicitor)
+	return s
+}
+
+func TestDeleteObject_ElicitationAccepted(t *testing.T) {
+	called := false
+	var gotURI string
+	mock := &mockClient{
+		deleteObjectFn: func(_ context.Context, uri, _, _ string) error {
+			called = true
+			gotURI = uri
+			return nil
+		},
+	}
+	el := &stubElicitor{result: &mcp.ElicitationResult{
+		ElicitationResponse: mcp.ElicitationResponse{
+			Action:  mcp.ElicitationResponseActionAccept,
+			Content: map[string]any{"confirm": true},
+		},
+	}}
+	s := newTestServerWithObjFallbackElicitor(mock, nil, el)
+	result := callTool(t, s, "delete_object", map[string]interface{}{
+		"object_uri": "/sap/bc/adt/programs/programs/ZDEAD",
+	})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %v", result.Content)
+	}
+	if !called {
+		t.Fatal("expected deleteObjectFn to be called after accept")
+	}
+	if gotURI != "/sap/bc/adt/programs/programs/ZDEAD" {
+		t.Errorf("object_uri: got %q", gotURI)
+	}
+	if el.called != 1 {
+		t.Errorf("expected 1 elicitation call, got %d", el.called)
+	}
+}
+
+func TestDeleteObject_ElicitationDeclined(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		deleteObjectFn: func(_ context.Context, _, _, _ string) error {
+			called = true
+			return nil
+		},
+	}
+	el := &stubElicitor{result: &mcp.ElicitationResult{
+		ElicitationResponse: mcp.ElicitationResponse{Action: mcp.ElicitationResponseActionDecline},
+	}}
+	s := newTestServerWithObjFallbackElicitor(mock, nil, el)
+	result := callTool(t, s, "delete_object", map[string]interface{}{
+		"object_uri": "/sap/bc/adt/programs/programs/ZDEAD",
+	})
+	if !result.IsError {
+		t.Fatal("expected error result when user declines")
+	}
+	if called {
+		t.Fatal("deleteObjectFn must NOT be called when user declines")
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "delete_object aborted") {
+		t.Errorf("expected abort message, got: %s", text)
+	}
+}
+
+func TestDeleteObject_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		deleteObjectFn: func(_ context.Context, _, _, _ string) error {
+			called = true
+			return nil
+		},
+	}
+	s := newTestServerWithObjFallbackElicitor(mock, nil, nil)
+	result := callTool(t, s, "delete_object", map[string]interface{}{
+		"object_uri": "/sap/bc/adt/programs/programs/ZDEAD",
+	})
+	if result.IsError {
+		t.Fatalf("expected success with nil elicitor (backwards compat), got error: %v", result.Content)
+	}
+	if !called {
+		t.Fatal("expected deleteObjectFn to be called with nil elicitor (backwards compat)")
+	}
+}
