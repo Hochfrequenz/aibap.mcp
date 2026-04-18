@@ -12,7 +12,7 @@ A community-built [MCP (Model Context Protocol)](https://modelcontextprotocol.io
 
 ## How it works
 
-The server connects to your SAP system via the **SAP ADT (ABAP Development Tools) REST API** — the same HTTP API that ABAP Development Tools for Eclipse uses under the hood. No SAP GUI, no RFC, no additional middleware required.
+The server connects to your SAP system via the **SAP ADT (ABAP Development Tools) REST API** — the same HTTP API that ABAP Development Tools for Eclipse uses under the hood. For the vast majority of operations, that's all you need: no SAP GUI, no RFC, no additional middleware.
 
 The SAP-touching code lives in [**adtler**](https://github.com/Hochfrequenz/adtler), a standalone Go client library for the ADT REST API. mcp-server-abap is the thin MCP layer that exposes adtler's operations as MCP tools.
 
@@ -21,7 +21,17 @@ graph TD
     A["Claude / AI assistant"] -->|"MCP (stdio)"| B["mcp-server-abap<br/>(tools/ wrappers)"]
     B -->|"Go API"| C["adtler<br/>(SAP ADT client library)"]
     C -->|"HTTP + Basic Auth or OAuth2 + CSRF"| D["SAP System<br/>/sap/bc/adt/..."]
+    B -.->|"BlackMagicClient interface<br/>(BYO hook — no default impl shipped)"| E["user-supplied fallback<br/>e.g. sapwebgui.mcp, sap-desktop"]
+    E -.->|"SAP GUI / RFC / etc."| D
+
+    style E fill:#fff,stroke:#888,stroke-dasharray: 5 5
 ```
+
+### The BlackMagic fallback (BYO)
+
+A handful of operations aren't exposed by the ADT REST API at all — customizing table writes (SM30/SM34), transport release on ECC (SE09), and similar SAP-GUI-only workflows. For these, mcp-server-abap defines a `BlackMagicClient` Go interface, but **ships no implementation**. The hook says *what* the tool needs done; it does not say *how* to do it.
+
+Wire in your own client — typically [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp), which drives SAP GUI / SAP Web GUI over the same `~/.config/sap-mcp/systems.json` — and the fallback-requiring tools will call through it transparently. Without one, those specific tools return an error at runtime; everything else keeps working.
 
 ## Available tools (66)
 
