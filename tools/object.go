@@ -17,7 +17,8 @@ var ddicTypes = map[string]bool{
 	"DOMA": true,
 }
 
-func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMagicClient) {
+func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMagicClient, elicitor Elicitor) {
+	_ = elicitor // wired by Task 3 to confirm destructive operations
 	s.AddTool(mcp.NewTool("create_object",
 		mcp.WithTitleAnnotation("Create ABAP Object"),
 		mcp.WithDestructiveHintAnnotation(false),

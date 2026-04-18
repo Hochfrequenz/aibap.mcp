@@ -276,7 +276,7 @@ func newTestServer(client adt.Client) *server.MCPServer {
 
 func newTestServerWithSelector(client adt.Client, selector tools.SystemSelector, lockMap *adt.LockMap) *server.MCPServer {
 	s := server.NewMCPServer("test", "0.0.1")
-	tools.RegisterAllWithLockMap(s, client, selector, lockMap, tools.ParseToolGroups([]string{"all"}), nil)
+	tools.RegisterAllWithLockMap(s, client, selector, lockMap, tools.ParseToolGroups([]string{"all"}), nil, nil)
 	return s
 }
 

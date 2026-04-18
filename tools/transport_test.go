@@ -40,7 +40,7 @@ func (m *mockBlackMagic) CreateTransportFallback(ctx context.Context, category, 
 
 func newTestServerWithFallback(client adt.Client, fallback tools.BlackMagicClient) *server.MCPServer {
 	s := server.NewMCPServer("test", "0.0.1")
-	tools.RegisterAllWithLockMap(s, client, &mockSelector{}, adt.NewLockMap(), tools.ParseToolGroups([]string{"all"}), fallback)
+	tools.RegisterAllWithLockMap(s, client, &mockSelector{}, adt.NewLockMap(), tools.ParseToolGroups([]string{"all"}), fallback, nil)
 	return s
 }
 
