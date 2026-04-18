@@ -31,7 +31,7 @@ graph TD
 
 A handful of operations aren't exposed by the ADT REST API at all — customizing table writes (SM30/SM34), transport release on ECC (SE09), and similar SAP-GUI-only workflows. For these, mcp-server-abap defines a `BlackMagicClient` Go interface, but **ships no implementation**. The hook says *what* the tool needs done; it does not say *how* to do it.
 
-Wire in your own client — typically [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp), which drives SAP GUI / SAP Web GUI over the same `~/.config/sap-mcp/systems.json` — and the fallback-requiring tools will call through it transparently. Without one, those specific tools return an error at runtime; everything else keeps working.
+Wire in your own client — if you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP Web GUI, RFC, or whatever else you've conjured bend to your will. [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp) is one ready-made incarnation (drives SAP GUI / SAP Web GUI, reads the same `~/.config/sap-mcp/systems.json`), but the hook is deliberately shape-agnostic — any implementation that satisfies the interface works. Once wired up, the fallback-requiring tools call through it transparently. Without one, those specific tools return an error at runtime; everything else keeps working.
 
 ## Available tools (66)
 
