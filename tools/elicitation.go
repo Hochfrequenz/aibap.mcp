@@ -50,6 +50,12 @@ func ConfirmDestructive(ctx context.Context, el Elicitor, message string) (bool,
 		}
 		return false, fmt.Sprintf("elicitation failed: %v", err)
 	}
+	// Guard against upstream returning (nil, nil) — observed occasionally with
+	// some transports. Treat as "do not proceed" rather than panicking on
+	// result.Action below.
+	if result == nil {
+		return false, "elicitation returned nil result"
+	}
 	switch result.Action {
 	case mcp.ElicitationResponseActionDecline:
 		return false, "user declined the confirmation"

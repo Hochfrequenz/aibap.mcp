@@ -106,3 +106,15 @@ func TestConfirmDestructive_TransportError(t *testing.T) {
 		t.Error("expected a non-empty reason on transport error")
 	}
 }
+
+func TestConfirmDestructive_NilResult(t *testing.T) {
+	// Some transports return (nil, nil) occasionally. Don't panic; treat as "do not proceed".
+	el := &stubElicitor{result: nil, err: nil}
+	proceed, reason := tools.ConfirmDestructive(context.Background(), el, "delete X?")
+	if proceed {
+		t.Fatal("expected proceed=false when elicitation returns nil result without error")
+	}
+	if reason == "" {
+		t.Error("expected a non-empty reason on nil result")
+	}
+}
