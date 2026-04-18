@@ -101,3 +101,13 @@ See adtler#35 for the tracking issue to wire discovery into all source operation
 - ECC systems may not have all endpoints (e.g. `/sap/bc/adt/packages` is S4-only).
 - **Transport release** only works via REST on S4 (`/newreleasejobs`). On ECC, release must happen via SAP GUI (SE09).
 - **Stateful sessions** (`X-sap-adt-sessiontype: stateful`) solve 423 lock errors when SAP checks locks in the wrong enqueue table. Proven for debugger and class includes. When hitting 423 on new endpoints, try stateful sessions first.
+
+## Related projects
+
+This server does not live alone. Keep these in mind when making changes that might affect users, docs, or downstream consumers:
+
+- **[`adtler`](https://github.com/Hochfrequenz/adtler)** — the SAP ADT client library this server wraps. Most bug fixes for the SAP-touching code belong here, not in `mcp-server-abap`. Already referenced above under Testing, Project Structure, and SAP ADT.
+- **[`sap-mcp-config`](https://github.com/Hochfrequenz/sap-mcp-config)** — shared config schema for `systems.json`, consumed by both `mcp-server-abap` (Go) and [`sapwebgui.mcp`](https://github.com/Hochfrequenz/sapwebgui.mcp) (Python). If you touch config loading, coordinate changes across both consumers.
+- **[`sapwebgui.mcp`](https://github.com/Hochfrequenz/sapwebgui.mcp)** — complementary Python MCP server that drives SAP GUI and SAP Web GUI. Users often run it alongside `mcp-server-abap` for operations ADT cannot handle: abapGit pull (via [`Z_ABAPGIT_PULL_MCP_SHORTCUT`](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT)), customizing table maintenance screens, and ECC-only workflows such as transport release via `SE09` (see the SAP ADT note above). The two MCPs share `~/.config/sap-mcp/systems.json`. When a user asks this server to do something that is fundamentally a GUI-only workflow, the honest answer is usually "use `sapwebgui.mcp` for that step" — do not try to fake it via BlackMagic unless there is already a proven fallback path.
+- **[`AIBAP_TEMPLATE_REPOSITORY`](https://github.com/Hochfrequenz/AIBAP_TEMPLATE_REPOSITORY)** — the GitHub template users start from when they set up an AI-driven ABAP vibe coding project. Its README presents the ADT workflow (powered by `mcp-server-abap`) and the abapGit workflow (powered by `sapwebgui.mcp`) as two peer options with a comparison table. If you rename tools, change the `--tools` flag semantics, change supported `create_object` types, or break tool contracts, grep the template repo for stale references and fix them in the same change.
+- **[`Z_ADT_MCP_TEST`](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST)** — SAP-side test package for adtler integration tests (already referenced under Testing).

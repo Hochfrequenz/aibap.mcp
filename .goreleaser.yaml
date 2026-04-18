@@ -9,6 +9,12 @@ builds:
     binary: mcp-server-abap-{{ .Version }}
     ldflags:
       - -X main.version={{.Version}}
+      # Bake the short commit SHA into release binaries so the canonical log
+      # event always carries it, even when the CI build does not have a `.git`
+      # directory available to runtime/debug.ReadBuildInfo. Source builds
+      # leave defaultCommit empty and BuildInfo() falls back to the runtime
+      # vcs.revision build setting.
+      - "-X github.com/Hochfrequenz/mcp-server-abap/logging.defaultCommit={{.ShortCommit}}"
       # Bake a default Papertrail destination into release binaries so the
       # pre-built downloads from GitHub Releases ship with remote logging
       # enabled. Source builds (`go build`, `make build`, `go install`) keep
