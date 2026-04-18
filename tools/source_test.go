@@ -413,7 +413,8 @@ func TestGetSourceBatch(t *testing.T) {
 	mock := &mockClient{
 		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
 			callCount++
-			return &adt.SourceResult{Source: "REPORT " + uri + ".", ETag: `"etag-` + uri + `"`}, nil
+			// Two-line body: one newline per successful result.
+			return &adt.SourceResult{Source: "REPORT " + uri + ".\n", ETag: `"etag-` + uri + `"`}, nil
 		},
 	}
 	s := newTestServer(mock)
@@ -452,6 +453,45 @@ func TestGetSourceBatch(t *testing.T) {
 	if resp["failed"] != float64(0) {
 		t.Errorf("failed: got %v", resp["failed"])
 	}
+	// 2 successful results × 1 newline each = 2.
+	if resp["total_lines"] != float64(2) {
+		t.Errorf("total_lines: got %v, want 2", resp["total_lines"])
+	}
+}
+
+func TestGetSourceBatchEmpty(t *testing.T) {
+	mock := &mockClient{
+		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
+			t.Fatalf("mock should not be called for empty batch, got %q", uri)
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+
+	result := callTool(t, s, "get_source", map[string]interface{}{
+		"object_uri": []any{},
+	})
+
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+
+	var text string
+	for _, c := range result.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			text = tc.Text
+			break
+		}
+	}
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		t.Fatalf("parsing response: %v", err)
+	}
+	for _, field := range []string{"total", "succeeded", "failed", "total_lines"} {
+		if resp[field] != float64(0) {
+			t.Errorf("%s: got %v, want 0", field, resp[field])
+		}
+	}
 }
 
 func TestGetSourceBatchSummaryCounters(t *testing.T) {
@@ -461,7 +501,11 @@ func TestGetSourceBatchSummaryCounters(t *testing.T) {
 			if uri == missingURI {
 				return nil, &adt.ADTError{StatusCode: 404, Message: "not found"}
 			}
-			return &adt.SourceResult{Source: "REPORT " + uri + ".", ETag: `"etag"`}, nil
+			// Three-line body: two newlines per successful result.
+			return &adt.SourceResult{
+				Source: "REPORT " + uri + ".\nWRITE 'hi'.\n",
+				ETag:   `"etag"`,
+			}, nil
 		},
 	}
 	s := newTestServer(mock)
@@ -497,6 +541,10 @@ func TestGetSourceBatchSummaryCounters(t *testing.T) {
 	}
 	if resp["failed"] != float64(1) {
 		t.Errorf("failed: got %v, want 1", resp["failed"])
+	}
+	// 2 successful results × 2 newlines each = 4. Failed result contributes 0.
+	if resp["total_lines"] != float64(4) {
+		t.Errorf("total_lines: got %v, want 4", resp["total_lines"])
 	}
 }
 

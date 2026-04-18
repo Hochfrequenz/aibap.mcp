@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -66,20 +67,22 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		}
 		wg.Wait()
 
-		succeeded, failed := 0, 0
+		succeeded, failed, totalLines := 0, 0, 0
 		for _, r := range results {
 			if r.Error != "" {
 				failed++
-			} else {
-				succeeded++
+				continue
 			}
+			succeeded++
+			totalLines += strings.Count(r.Source, "\n")
 		}
 
 		out, _ := json.Marshal(map[string]any{
-			"total":     len(multi),
-			"succeeded": succeeded,
-			"failed":    failed,
-			"results":   results,
+			"total":       len(multi),
+			"succeeded":   succeeded,
+			"failed":      failed,
+			"total_lines": totalLines,
+			"results":     results,
 		})
 		return mcp.NewToolResultText(string(out)), nil
 	})
