@@ -21,7 +21,7 @@ graph TD
     A["Claude / AI assistant"] -->|"MCP (stdio)"| B["mcp-server-abap<br/>(tools/ wrappers)"]
     B -->|"Go API"| C["adtler<br/>(SAP ADT client library)"]
     C -->|"HTTP + Basic Auth or OAuth2 + CSRF"| D["SAP System<br/>/sap/bc/adt/..."]
-    B -.->|"BlackMagicClient interface<br/>(BYO Go hook — no default impl shipped)"| E["your BlackMagicClient impl<br/>(you write this)"]
+    B -.->|"BlackMagicClient interface<br/>(BYO Go hook, compile-time —<br/>no default impl shipped)"| E["your BlackMagicClient impl<br/>(you write this,<br/>baked into a custom build)"]
     E -.->|"SAP GUI / RFC / whatever you can conjure"| D
 
     style E fill:#fff,stroke:#888,stroke-dasharray: 5 5
@@ -31,9 +31,9 @@ graph TD
 
 A handful of operations aren't exposed by the ADT REST API at all — customizing table writes (SM30/SM34), transport release on ECC (SE09), and similar SAP-GUI-only workflows. For these, mcp-server-abap defines a `BlackMagicClient` Go interface, but **ships no implementation**. The hook says *what* the tool needs done; it does not say *how* to do it.
 
-If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP Web GUI, RFC, or whatever else you've conjured bend to your will, you can write a Go implementation of `BlackMagicClient` and wire it in at server start — mcp-server-abap will then call through it transparently for the fallback-requiring tools. The hook is deliberately shape-agnostic: any Go struct that satisfies the interface works. No public implementation is shipped; producing one is the implementer's own problem (and, arguably, part of the craft).
+If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP Web GUI, RFC, or whatever else you've conjured bend to your will, you can write a Go implementation of `BlackMagicClient` and compile it into a **custom build** — the hook is a package-level `var blackMagic tools.BlackMagicClient` in `main.go`, set from a build-tagged `init()` in a file you maintain in your own fork. There is no runtime flag or config entry for this; the choice is baked into the binary at compile time. Your build then calls through your implementation transparently for the fallback-requiring tools. The interface is deliberately shape-agnostic: any Go struct that satisfies it works. No public implementation is shipped — producing one, and maintaining a custom build, is the implementer's own problem (and, arguably, part of the craft).
 
-Without a hook wired in, the fallback-requiring tools return an error at runtime; everything else keeps working. If writing Go isn't your path, a GUI-driven peer MCP (for example [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
+Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
 
 ## Available tools (66)
 
