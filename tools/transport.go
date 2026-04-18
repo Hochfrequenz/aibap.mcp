@@ -149,6 +149,11 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			"Confirm release of transport "+transport+". Once released it cannot be edited.")
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "release_transport aborted: " + reason}), nil
+		}
 		includeTasks := req.GetBool("include_tasks", false)
 		var err error
 		if includeTasks {
