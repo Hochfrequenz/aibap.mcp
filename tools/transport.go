@@ -10,7 +10,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient) {
+func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient, elicitor Elicitor) {
+	_ = elicitor // wired by Tasks 4 and 5 to confirm destructive operations
 	s.AddTool(mcp.NewTool("get_transport_requests",
 		mcp.WithTitleAnnotation("Get Transport Requests"),
 		mcp.WithReadOnlyHintAnnotation(true),

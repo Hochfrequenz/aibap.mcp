@@ -8,7 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerRefactoringTools(s toolAdder, client adt.RefactoringClient) {
+func registerRefactoringTools(s toolAdder, client adt.RefactoringClient, elicitor Elicitor) {
+	_ = elicitor // wired by Task 6 to confirm destructive operations
 	s.AddTool(mcp.NewTool("rename",
 		mcp.WithTitleAnnotation("Rename Symbol"),
 		mcp.WithDestructiveHintAnnotation(false),

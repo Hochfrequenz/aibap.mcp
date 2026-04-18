@@ -141,6 +141,6 @@ func (m *mockBlackMagicObj) CreateObjectFallback(ctx context.Context, objectType
 
 func newTestServerWithObjFallback(client *mockClient, fallback tools.BlackMagicClient) *server.MCPServer {
 	s := server.NewMCPServer("test", "0.0.1")
-	tools.RegisterAllWithLockMap(s, client, &mockSelector{}, adt.NewLockMap(), tools.ParseToolGroups([]string{"all"}), fallback)
+	tools.RegisterAllWithLockMap(s, client, &mockSelector{}, adt.NewLockMap(), tools.ParseToolGroups([]string{"all"}), fallback, nil)
 	return s
 }
