@@ -3,13 +3,13 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
 func registerRefactoringTools(s toolAdder, client adt.RefactoringClient, elicitor Elicitor) {
-	_ = elicitor // wired by Task 6 to confirm destructive operations
 	s.AddTool(mcp.NewTool("rename",
 		mcp.WithTitleAnnotation("Rename Symbol"),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -28,6 +28,11 @@ func registerRefactoringTools(s toolAdder, client adt.RefactoringClient, elicito
 		transport := req.GetString("transport", "")
 		if uri == "" || newName == "" {
 			return errorResult(&adt.ADTError{StatusCode: 400, Message: "source_uri and new_name are required"}), nil
+		}
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			fmt.Sprintf("Confirm renaming the symbol at %s to %q. This updates all references across the object.", uri, newName))
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "rename aborted: " + reason}), nil
 		}
 		result, err := client.Rename(ctx, uri, newName, transport)
 		if err != nil {
