@@ -446,6 +446,58 @@ func TestGetSourceBatch(t *testing.T) {
 	if resp["total"] != float64(2) {
 		t.Errorf("total: got %v", resp["total"])
 	}
+	if resp["succeeded"] != float64(2) {
+		t.Errorf("succeeded: got %v", resp["succeeded"])
+	}
+	if resp["failed"] != float64(0) {
+		t.Errorf("failed: got %v", resp["failed"])
+	}
+}
+
+func TestGetSourceBatchSummaryCounters(t *testing.T) {
+	const missingURI = "/sap/bc/adt/programs/programs/ZMISSING"
+	mock := &mockClient{
+		getSourceFn: func(ctx context.Context, uri string) (*adt.SourceResult, error) {
+			if uri == missingURI {
+				return nil, &adt.ADTError{StatusCode: 404, Message: "not found"}
+			}
+			return &adt.SourceResult{Source: "REPORT " + uri + ".", ETag: `"etag"`}, nil
+		},
+	}
+	s := newTestServer(mock)
+
+	result := callTool(t, s, "get_source", map[string]interface{}{
+		"object_uri": []any{
+			"/sap/bc/adt/programs/programs/ZA",
+			missingURI,
+			"/sap/bc/adt/programs/programs/ZB",
+		},
+	})
+
+	if result.IsError {
+		t.Fatalf("unexpected error result")
+	}
+
+	var text string
+	for _, c := range result.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			text = tc.Text
+			break
+		}
+	}
+	var resp map[string]any
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		t.Fatalf("parsing response: %v", err)
+	}
+	if resp["total"] != float64(3) {
+		t.Errorf("total: got %v, want 3", resp["total"])
+	}
+	if resp["succeeded"] != float64(2) {
+		t.Errorf("succeeded: got %v, want 2", resp["succeeded"])
+	}
+	if resp["failed"] != float64(1) {
+		t.Errorf("failed: got %v, want 1", resp["failed"])
+	}
 }
 
 func TestActivateObjectTool(t *testing.T) {
