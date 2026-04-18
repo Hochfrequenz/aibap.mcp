@@ -16,6 +16,7 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 - **Test-driven**: Write unit tests before or alongside implementation, not after.
 - **Unit tests**: `go test ./...` — must always pass before committing.
 - **Integration tests**: live in [adtler](https://github.com/Hochfrequenz/adtler) (the SAP ADT client library). Clone that repo to run them. mcp-server-abap itself only has unit tests covering the MCP tool layer.
+- **Reproducer verification** (bump-time): adtler bump PRs run the reproducer snippet from each linked `blocked-by-adtler` issue against the live target system(s). This is narrower than adtler's integration suite — one MCP tool call per fix claim — and is the only live test we run at the mcp-server-abap boundary. Format and flow: see "Cross-Repo Issue Tracking (adtler)".
 - **Fix before creating:** When a SAP object (transport, program, etc.) has a problem, fix the existing one first. Don't keep creating new objects to work around issues.
 - **Coverage thresholds** (enforced in CI per package): `config` 75%. `tools`/`logging`/`cmd` are covered by unit tests but no minimum is enforced — these packages are thin wrappers around adtler. The adt/auth packages have their own thresholds in adtler's CI.
 - **Test package dependency** (for adtler integration tests): SAP package `Z_ADT_MCP_TEST` on the target system. Install from [Hochfrequenz/Z_ADT_MCP_TEST](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST).
@@ -33,10 +34,12 @@ Since most fixes now live in [adtler](https://github.com/Hochfrequenz/adtler), i
 
 1. **Label proactively**: Whenever you (or an agent) conclude that an mcp-server-abap issue can't be resolved without an adtler change, immediately add the `blocked-by-adtler` label and append it to the tracking issue — don't wait to be asked. Same rule when you spot a new adtler commit/release that resolves an existing open issue here: label it, add a checklist bullet, link the adtler commit or PR. Query open blockers with `gh issue list --label blocked-by-adtler`.
 2. **Tracking issue**: A single open issue titled `Next adtler release: bump to vX.Y.Z` collects all blocked issues as a checklist, each bullet `- [ ] #<n> — short description (adtler: <commit-or-PR>)`. There should only ever be one such tracking issue open at a time.
-3. **When bumping adtler**:
-   - Open a branch `chore/bump-adtler-vX.Y.Z`, run `go get github.com/Hochfrequenz/adtler@vX.Y.Z && go mod tidy`, verify `go test ./...` passes.
-   - In the PR body, list `Closes #<tracking-issue>` **and** `Closes #<each blocked issue>` so GitHub auto-closes them on merge. Walk the tracking issue's checklist — every checked item needs its own `Closes #` line.
-   - After merge, open a fresh tracking issue for the next release.
+3. **Reproducer snippet on every `blocked-by-adtler` issue**: each such issue must include a copy-pastable MCP tool call (tool name + arguments JSON) or equivalent Go snippet, the target system (`hfq` R/3 / `s4u` S/4), any session preconditions (e.g. "fresh MCP session, no preceding `get_atc_customizing` — see adtler#44"), the "fixed" expected output, and the "broken" current output. This snippet is what the bump PR's reproducer-verify step runs. Without it, false negatives like mcp-server-abap#306 are easy to ship. Example: mcp-server-abap#288.
+4. **When bumping adtler**:
+   - **Automated path (preferred)**: dependabot opens the bump PR automatically on a new adtler release. `.github/workflows/adtler-bump-template.yml` rewrites the PR body with the tracking issue's checklist + pre-populated `Closes #` lines, and adds the `needs-reproducer-verify` label. Walk each linked issue, run its reproducer against the relevant system(s), prune `Closes` lines for anything still failing, and remove the label before merging.
+   - **Manual path**: open a branch `chore/bump-adtler-vX.Y.Z`, run `go get github.com/Hochfrequenz/adtler@vX.Y.Z && go mod tidy`, verify `go test ./...` passes, and replicate the same PR-body checklist and reproducer verification by hand.
+   - Either path: every checked item on the tracking issue's checklist needs its own `Closes #` line in the merged PR body.
+5. **After merge**: open a fresh `Next adtler release: bump to vX.Y.Z` tracking issue, and move any blockers whose reproducer still failed onto its checklist.
 
 ## Adding a New Tool
 

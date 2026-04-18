@@ -1,0 +1,80 @@
+name: Adtler bump PR template
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  template:
+    # Only fire for dependabot-opened adtler bumps. Manual
+    # `chore/bump-adtler-v*` branches follow the CLAUDE.md workflow by hand
+    # and don't need auto-injection.
+    if: >
+      github.actor == 'dependabot[bot]' &&
+      startsWith(github.head_ref, 'dependabot/go_modules/') &&
+      contains(github.head_ref, 'adtler')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Inject workflow template into PR body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # Ensure the verification label exists (idempotent).
+          gh label create needs-reproducer-verify \
+            --description "Adtler bump PR — reproducers not yet verified" \
+            --color E4E669 --force
+
+          tracking=$(gh issue list --repo "$REPO" --state open \
+            --search 'in:title "Next adtler release: bump to"' \
+            --json number,body --jq '.[0] // empty')
+          if [ -z "$tracking" ]; then
+            echo "::warning::no open 'Next adtler release: bump to v*' tracking issue — leaving PR body untouched"
+            # Still label the PR so it can't be merged blind.
+            gh pr edit "$PR" --repo "$REPO" --add-label "needs-reproducer-verify"
+            exit 0
+          fi
+
+          track_num=$(jq -r '.number' <<<"$tracking")
+          track_body=$(jq -r '.body' <<<"$tracking")
+
+          # Match `- [ ] #N` and `- [x] #N` bullets. Surface all of them as
+          # Closes candidates — the reviewer prunes based on reproducer results.
+          blocked_closes=$(grep -oE '^- \[.\] #[0-9]+' <<<"$track_body" \
+            | grep -oE '#[0-9]+' | sort -u | sed 's/^/Closes /' || true)
+
+          body_file=$(mktemp)
+          cat > "$body_file" <<'STATIC'
+          ## Automated bump — follow the CLAUDE.md cross-repo workflow before merging
+
+          Dependabot opened this bump. It is **not** ready to merge as-is.
+
+          ### Required before merge
+          1. Run each linked issue's reproducer against the relevant system(s) (`hfq` R/3, `s4u` S/4).
+          2. Keep a `Closes #n` line only for issues whose reproducer now passes.
+          3. Delete the `Closes` lines for any issue still failing — they stay on the next tracking issue.
+          4. Remove the `needs-reproducer-verify` label once every linked reproducer has been run.
+
+          STATIC
+          {
+            echo "### Tracking issue checklist (copied from #$track_num)"
+            echo
+            echo "$track_body"
+            echo
+            echo "### Auto-close candidates — prune after verification"
+            echo
+            echo "Closes #$track_num"
+            [ -n "$blocked_closes" ] && echo "$blocked_closes"
+            echo
+            echo '---'
+            echo '> Template injected by `.github/workflows/adtler-bump-template.yml`. Edit freely.'
+          } >> "$body_file"
+
+          gh pr edit "$PR" --repo "$REPO" --body-file "$body_file" \
+            --add-label "needs-reproducer-verify"
