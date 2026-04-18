@@ -90,7 +90,7 @@ func ParseToolGroups(names []string) map[string]bool {
 
 // RegisterAll registers all SAP ADT MCP tools on the given server.
 func RegisterAll(s *server.MCPServer, client adt.Client, selector SystemSelector) {
-	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), DefaultGroups(), nil)
+	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), DefaultGroups(), nil, nil)
 }
 
 // toolAdder is the subset of server.MCPServer used by register functions.
@@ -154,7 +154,9 @@ func getStringOrSlice(args map[string]any, key string) (string, []string) {
 // RegisterAllWithLockMap registers SAP ADT MCP tools using a provided lock map
 // and an enabledGroups map controlling which tool groups are active.
 // The fallback parameter is optional (nil = no fallback for unsupported operations).
-func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient) {
+// The elicitor parameter is optional (nil = destructive tools proceed without
+// confirmation, matching pre-elicitation behaviour).
+func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient, elicitor Elicitor) {
 	ls := &loggingServer{inner: s, selector: selector}
 
 	type group struct {
@@ -177,8 +179,8 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		{"objects", func() {
 			registerSearchTools(ls, client)
 			registerRepositoryTools(ls, client)
-			registerObjectTools(ls, client, fallback)
-			registerRefactoringTools(ls, client)
+			registerObjectTools(ls, client, fallback, elicitor)
+			registerRefactoringTools(ls, client, elicitor)
 			registerDDICTools(ls, client)
 		}},
 		{"version", func() { registerVersionTools(ls, client) }},
@@ -197,15 +199,15 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		}},
 		{"shortdumps", func() { registerShortDumpTools(ls, client) }},
 		{"transport", func() {
-			registerTransportTools(ls, client, fallback)
-			registerRollbackTools(ls, client)
+			registerTransportTools(ls, client, fallback, elicitor)
+			registerRollbackTools(ls, client, elicitor)
 		}},
 		{"enhancements", func() { registerEnhancementTools(ls, client) }},
 		{"debug", func() { registerDebuggerTools(ls, client, selector) }},
 		{"export", func() {
 			registerExportTools(ls, client)
 			registerCustomizingTools(ls, client)
-			registerCustomizingWriteTools(ls, fallback)
+			registerCustomizingWriteTools(ls, fallback, elicitor)
 		}},
 		{"system", func() {
 			registerSystemTools(ls, selector)

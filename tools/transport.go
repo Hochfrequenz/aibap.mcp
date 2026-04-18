@@ -10,7 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient) {
+func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("get_transport_requests",
 		mcp.WithTitleAnnotation("Get Transport Requests"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -149,6 +149,11 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			"Confirm release of transport "+transport+". Once released it cannot be edited.")
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "release_transport aborted: " + reason}), nil
+		}
 		includeTasks := req.GetBool("include_tasks", false)
 		var err error
 		if includeTasks {
@@ -175,6 +180,11 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to delete")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			"Confirm deletion of transport "+transport+". This is irreversible.")
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "delete_transport aborted: " + reason}), nil
+		}
 		if err := client.DeleteTransport(ctx, transport); err != nil {
 			return errorResult(err), nil
 		}
@@ -207,6 +217,11 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		objName := req.GetString("object_name", "")
 		wbType := req.GetString("wb_type", "")
 		position := req.GetString("position", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			fmt.Sprintf("Confirm removing %s %s from transport task %s (parent %s). The object itself is not changed — only its link to the transport.", objType, objName, taskNr, parentTr))
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "remove_from_transport aborted: " + reason}), nil
+		}
 		if err := client.RemoveFromTransport(ctx, taskNr, parentTr, pgmid, objType, objName, wbType, position); err != nil {
 			return errorResult(err), nil
 		}
