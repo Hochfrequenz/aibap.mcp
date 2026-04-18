@@ -43,6 +43,7 @@ type mockClient struct {
 	deleteObjectFn    func(ctx context.Context, uri, lockHandle, transport string) error
 	getCompletionsFn  func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
 	createTransportFn func(ctx context.Context, category, target, description, devClass string) (string, error)
+	deleteTransportFn func(ctx context.Context, transport string) error
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -138,7 +139,10 @@ func (m *mockClient) CreateTransport(ctx context.Context, category, target, desc
 func (m *mockClient) CreateTransportTask(context.Context, string, string, string) (string, error) {
 	return "DEVK999998", nil
 }
-func (m *mockClient) DeleteTransport(context.Context, string) error {
+func (m *mockClient) DeleteTransport(ctx context.Context, transport string) error {
+	if m.deleteTransportFn != nil {
+		return m.deleteTransportFn(ctx, transport)
+	}
 	return nil
 }
 func (m *mockClient) GetTransportRequests(ctx context.Context, user, status string) ([]adt.TransportRequest, error) {
