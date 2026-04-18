@@ -26,27 +26,29 @@ const (
 
 // mockClient is a test double for adt.Client.
 type mockClient struct {
-	getSourceFn        func(ctx context.Context, uri string) (*adt.SourceResult, error)
-	setSourceFn        func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
-	activateObjectsFn  func(ctx context.Context, uris []string) (*adt.ActivationResult, error)
-	searchFn           func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
-	whereUsedFn        func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
-	browsePackageFn    func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
-	getObjectFn        func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
-	syntaxCheckFn      func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
-	runTestsFn         func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
-	getTransportFn     func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
-	addTransportFn     func(ctx context.Context, uri, transport string) error
-	lockObjectFn       func(ctx context.Context, uri string) (string, error)
-	unlockObjectFn     func(ctx context.Context, uri, lockHandle string) error
-	prettyPrintFn      func(ctx context.Context, source string) (string, error)
-	createObjectFn     func(ctx context.Context, objectType, name, pkg, desc, transport string) error
-	deleteObjectFn     func(ctx context.Context, uri, lockHandle, transport string) error
-	getCompletionsFn   func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
-	createTransportFn  func(ctx context.Context, category, target, description, devClass string) (string, error)
-	deleteTransportFn  func(ctx context.Context, transport string) error
-	releaseTransportFn func(ctx context.Context, transport string) error
-	renameFn           func(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error)
+	getSourceFn           func(ctx context.Context, uri string) (*adt.SourceResult, error)
+	setSourceFn           func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
+	activateObjectsFn     func(ctx context.Context, uris []string) (*adt.ActivationResult, error)
+	searchFn              func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
+	whereUsedFn           func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
+	browsePackageFn       func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
+	getObjectFn           func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
+	syntaxCheckFn         func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
+	runTestsFn            func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
+	getTransportFn        func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
+	addTransportFn        func(ctx context.Context, uri, transport string) error
+	lockObjectFn          func(ctx context.Context, uri string) (string, error)
+	unlockObjectFn        func(ctx context.Context, uri, lockHandle string) error
+	prettyPrintFn         func(ctx context.Context, source string) (string, error)
+	createObjectFn        func(ctx context.Context, objectType, name, pkg, desc, transport string) error
+	deleteObjectFn        func(ctx context.Context, uri, lockHandle, transport string) error
+	getCompletionsFn      func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
+	createTransportFn     func(ctx context.Context, category, target, description, devClass string) (string, error)
+	deleteTransportFn     func(ctx context.Context, transport string) error
+	releaseTransportFn    func(ctx context.Context, transport string) error
+	renameFn              func(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error)
+	removeFromTransportFn func(ctx context.Context, taskNr, parentTr, pgmid, objType, objName, wbType, position string) error
+	getTransportObjectsFn func(ctx context.Context, transport string) ([]adt.TransportObject, error)
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -160,13 +162,19 @@ func (m *mockClient) AddToTransport(ctx context.Context, uri, transport string) 
 	}
 	return nil
 }
-func (m *mockClient) RemoveFromTransport(context.Context, string, string, string, string, string, string, string) error {
+func (m *mockClient) RemoveFromTransport(ctx context.Context, taskNr, parentTr, pgmid, objType, objName, wbType, position string) error {
+	if m.removeFromTransportFn != nil {
+		return m.removeFromTransportFn(ctx, taskNr, parentTr, pgmid, objType, objName, wbType, position)
+	}
 	return nil
 }
 func (m *mockClient) GetTransportInfo(context.Context, string) (*adt.TransportRequest, error) {
 	return nil, nil
 }
-func (m *mockClient) GetTransportObjects(context.Context, string) ([]adt.TransportObject, error) {
+func (m *mockClient) GetTransportObjects(ctx context.Context, transport string) ([]adt.TransportObject, error) {
+	if m.getTransportObjectsFn != nil {
+		return m.getTransportObjectsFn(ctx, transport)
+	}
 	return nil, nil
 }
 func (m *mockClient) LockObject(ctx context.Context, uri string) (string, error) {

@@ -29,7 +29,7 @@ var sourceTypeToEndpoint = map[string]string{
 	"FUGR": "/sap/bc/adt/functions/groups/",
 }
 
-func registerRollbackTools(s toolAdder, client adt.Client) {
+func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("rollback_transport",
 		mcp.WithTitleAnnotation("Rollback Transport"),
 		mcp.WithDestructiveHintAnnotation(true),
@@ -44,6 +44,11 @@ func registerRollbackTools(s toolAdder, client adt.Client) {
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number to roll back")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			fmt.Sprintf("Confirm rollback of transport %s. All source objects in it will be restored to their pre-transport version.", transport))
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "rollback_transport aborted: " + reason}), nil
+		}
 		result, err := doRollback(ctx, client, transport)
 		if err != nil {
 			return errorResult(err), nil

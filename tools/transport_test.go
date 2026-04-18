@@ -308,3 +308,86 @@ func TestReleaseTransport_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
 		t.Fatal("expected releaseTransportFn to be called with nil elicitor (backwards compat)")
 	}
 }
+
+func removeFromTransportArgs() map[string]interface{} {
+	return map[string]interface{}{
+		"task_number":      "S4UK902001",
+		"parent_transport": testTransportNum,
+		"pgmid":            "R3TR",
+		"object_type":      "PROG",
+		"object_name":      "ZFOO",
+		"wb_type":          "PROG/P",
+		"position":         "000001",
+	}
+}
+
+//nolint:dupl // Intentionally parallel to TestDeleteTransport_ElicitationAccepted.
+func TestRemoveFromTransport_ElicitationAccepted(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		removeFromTransportFn: func(_ context.Context, _, _, _, _, _, _, _ string) error {
+			called = true
+			return nil
+		},
+	}
+	el := &stubElicitor{result: &mcp.ElicitationResult{
+		ElicitationResponse: mcp.ElicitationResponse{
+			Action:  mcp.ElicitationResponseActionAccept,
+			Content: map[string]any{"confirm": true},
+		},
+	}}
+	s := newTestServerWithFallbackElicitor(mock, nil, el)
+	result := callTool(t, s, "remove_from_transport", removeFromTransportArgs())
+	if result.IsError {
+		t.Fatalf("expected success, got error: %v", result.Content)
+	}
+	if !called {
+		t.Fatal("expected removeFromTransportFn to be called after accept")
+	}
+	if el.called != 1 {
+		t.Errorf("expected 1 elicitation call, got %d", el.called)
+	}
+}
+
+func TestRemoveFromTransport_ElicitationDeclined(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		removeFromTransportFn: func(_ context.Context, _, _, _, _, _, _, _ string) error {
+			called = true
+			return nil
+		},
+	}
+	el := &stubElicitor{result: &mcp.ElicitationResult{
+		ElicitationResponse: mcp.ElicitationResponse{Action: mcp.ElicitationResponseActionDecline},
+	}}
+	s := newTestServerWithFallbackElicitor(mock, nil, el)
+	result := callTool(t, s, "remove_from_transport", removeFromTransportArgs())
+	if !result.IsError {
+		t.Fatal("expected error result on decline")
+	}
+	if called {
+		t.Fatal("removeFromTransportFn should NOT have been called on decline")
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, "remove_from_transport aborted") {
+		t.Errorf("expected abort message, got: %s", text)
+	}
+}
+
+func TestRemoveFromTransport_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		removeFromTransportFn: func(_ context.Context, _, _, _, _, _, _, _ string) error {
+			called = true
+			return nil
+		},
+	}
+	s := newTestServerWithFallbackElicitor(mock, nil, nil)
+	result := callTool(t, s, "remove_from_transport", removeFromTransportArgs())
+	if result.IsError {
+		t.Fatalf("expected success with nil elicitor, got error: %v", result.Content)
+	}
+	if !called {
+		t.Fatal("expected removeFromTransportFn to be called with nil elicitor (backwards compat)")
+	}
+}
