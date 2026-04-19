@@ -287,7 +287,10 @@ func TestIntegration_SelectSystem(t *testing.T) {
 				t.Errorf("select_system response %q does not mention %q", msg, sys)
 			}
 
-			// Follow-up: ActiveName on the registry should now equal sys.
+			// Asserting on the shared registry's active name. Safe here only
+			// because these subtests run sequentially (no t.Parallel()). If
+			// parallelism is ever added, this assertion races with the next
+			// subtest's select_system call and must be rethought.
 			if got := registry.ActiveName(); got != sys {
 				t.Errorf("registry.ActiveName() = %q; want %q", got, sys)
 			}
