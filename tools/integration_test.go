@@ -4,6 +4,7 @@ package tools_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/Hochfrequenz/mcp-server-abap/config"
 	"github.com/Hochfrequenz/mcp-server-abap/tools"
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -217,4 +219,54 @@ func printReachabilitySummary(systems []string) {
 		parts = append(parts, fmt.Sprintf("%s=%s", sys, status))
 	}
 	fmt.Fprintf(os.Stderr, "integration targets: %s\n", strings.Join(parts, " "))
+}
+
+// mustSelectSystem calls the select_system tool and fails the test on error.
+// Should be called at the top of every per-system subtest so the shared
+// server points at the right system for the subsequent tool call.
+func mustSelectSystem(t *testing.T, s *server.MCPServer, sys string) {
+	t.Helper()
+	res := callTool(t, s, "select_system", map[string]interface{}{
+		"system": sys,
+	})
+	if res.IsError {
+		t.Fatalf("select_system(%q) unexpectedly returned IsError=true: %s", sys, textOf(res))
+	}
+}
+
+// requireFixture skips the subtest if the named ABAP object is missing on
+// the currently-selected system. Uses object_exists (read-only).
+// Caller must have already called mustSelectSystem for `sys`.
+func requireFixture(t *testing.T, s *server.MCPServer, sys, objectURI string) {
+	t.Helper()
+	res := callTool(t, s, "object_exists", map[string]interface{}{
+		"object_uri": objectURI,
+	})
+	if res.IsError {
+		t.Logf("SKIP system=%s fixture=%s reason=object_exists-errored text=%s", sys, objectURI, textOf(res))
+		t.Skipf("fixture %q missing or unreachable on %s — install Hochfrequenz/Z_ADT_MCP_TEST", objectURI, sys)
+	}
+
+	// object_exists returns JSON like {"exists": true/false, ...}.
+	var payload struct {
+		Exists bool `json:"exists"`
+	}
+	if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
+		t.Fatalf("requireFixture: could not parse object_exists result %q: %v", textOf(res), err)
+	}
+	if !payload.Exists {
+		t.Logf("SKIP system=%s fixture=%s reason=not-installed", sys, objectURI)
+		t.Skipf("fixture %q not installed on %s — install Hochfrequenz/Z_ADT_MCP_TEST", objectURI, sys)
+	}
+}
+
+// textOf extracts the Text content from a CallToolResult, or "" if empty.
+func textOf(res *mcp.CallToolResult) string {
+	if res == nil || len(res.Content) == 0 {
+		return ""
+	}
+	if tc, ok := res.Content[0].(mcp.TextContent); ok {
+		return tc.Text
+	}
+	return ""
 }
