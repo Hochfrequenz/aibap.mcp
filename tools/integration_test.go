@@ -69,7 +69,6 @@ func TestParseTargetSystems(t *testing.T) {
 // and the tests it runs.
 var (
 	integrationSystems []string            // parsed MCP_INTEGRATION_SYSTEMS
-	appConfig          *config.AppConfig   // loaded from SAP_CONFIG_FILE / default path
 	registry           *adt.ClientRegistry // shared across all tests
 	sharedServer       *server.MCPServer   // one MCP server with all reachable systems
 	reachable          = map[string]bool{} // systemKey -> reachable
@@ -93,7 +92,6 @@ func TestMain(m *testing.M) {
 		printReachabilitySummary(integrationSystems)
 		os.Exit(m.Run())
 	}
-	appConfig = cfg
 
 	clients, err := adt.NewClientsFromConfig(&cfg.Config, "mcp-server-abap")
 	if err != nil {
@@ -242,12 +240,11 @@ func requireFixture(t *testing.T, s *server.MCPServer, sys, objectURI string) {
 	res := callTool(t, s, "object_exists", map[string]interface{}{
 		"object_uri": objectURI,
 	})
-	if res.IsError {
-		t.Logf("SKIP system=%s fixture=%s reason=object_exists-errored text=%s", sys, objectURI, textOf(res))
-		t.Skipf("fixture %q missing or unreachable on %s — install Hochfrequenz/Z_ADT_MCP_TEST", objectURI, sys)
-	}
 
-	// object_exists returns JSON like {"exists": true/false, ...}.
+	// object_exists never returns IsError=true in single-URI mode — on
+	// ADT errors it swallows the error and returns {"exists": false,
+	// "object_uri": ...} with IsError=false. See tools/repository.go.
+	// So we only need to check the parsed `exists` field.
 	var payload struct {
 		Exists bool `json:"exists"`
 	}
@@ -287,12 +284,18 @@ func TestIntegration_SelectSystem(t *testing.T) {
 				t.Errorf("select_system response %q does not mention %q", msg, sys)
 			}
 
-			// Asserting on the shared registry's active name. Safe here only
-			// because these subtests run sequentially (no t.Parallel()). If
-			// parallelism is ever added, this assertion races with the next
-			// subtest's select_system call and must be rethought.
-			if got := registry.ActiveName(); got != sys {
-				t.Errorf("registry.ActiveName() = %q; want %q", got, sys)
+			// Verify subsequent tool calls actually hit the newly-selected
+			// system's client: call search_objects and assert it returns
+			// without error. Going through the MCP wrapper (not registry
+			// state) is the spec-compliant check — it catches a regression
+			// where select_system updates display state but fails to swap
+			// the active client.
+			follow := callTool(t, sharedServer, "search_objects", map[string]interface{}{
+				"query":       "ZZZZZ_PING_DO_NOT_EXIST_*",
+				"max_results": 1,
+			})
+			if follow.IsError {
+				t.Errorf("search_objects after select_system(%q) returned IsError=true: %s", sys, textOf(follow))
 			}
 		})
 	}
@@ -396,6 +399,11 @@ func TestIntegration_GetTextElements(t *testing.T) {
 				// docs/superpowers/specs/2026-04-06-set-text-elements-design.md,
 				// "Fix discovery bug"). Until that's fixed, this test skips
 				// rather than fails. Any other IsError still fails loudly.
+				//
+				// NOTE: the substring below is a fragment of
+				// adt.ErrTextElementsNotSupported's message. If adtler renames
+				// or rephrases that error, update this match — otherwise the
+				// skip silently flips to a t.Fatalf.
 				if strings.Contains(textOf(res), "not available on this system") {
 					t.Skipf("SKIP system=%s reason=text-elements-endpoint-not-in-discovery (adtler discovery bug): %s", sys, textOf(res))
 				}
