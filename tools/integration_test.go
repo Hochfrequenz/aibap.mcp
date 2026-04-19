@@ -459,3 +459,26 @@ func TestIntegration_SyntaxCheck(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegration_GetSource_NonExistent(t *testing.T) {
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+
+			// A URI that should never exist. Using a prefix that has no
+			// realistic chance of collision.
+			uri := "/sap/bc/adt/programs/programs/zzzz_not_a_real_object_" + sys
+
+			res := callTool(t, sharedServer, "get_source", map[string]interface{}{
+				"object_uri": uri,
+			})
+			if !res.IsError {
+				t.Errorf("expected IsError=true for non-existent object; got body: %s", textOf(res))
+			}
+			if textOf(res) == "" {
+				t.Errorf("expected non-empty error text for non-existent object")
+			}
+		})
+	}
+}
