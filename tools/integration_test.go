@@ -370,3 +370,50 @@ func TestIntegration_GetSource(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegration_GetTextElements(t *testing.T) {
+	const uri = "/sap/bc/adt/programs/programs/z_adt_mcp_test_report"
+
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+			requireFixture(t, sharedServer, sys, uri)
+
+			res := callTool(t, sharedServer, "get_text_elements", map[string]interface{}{
+				"object_uri": uri,
+			})
+			if res.IsError {
+				// adtler gates GetTextElements on ADT discovery. Neither hfq nor
+				// s4u currently advertise /sap/bc/adt/textelements/programs in
+				// their discovery document, so the pre-check returns "not
+				// available on this system" before any HTTP call is made.
+				// On S/4 the endpoint does in fact work — the discovery check
+				// is a known adtler bug (see spec
+				// docs/superpowers/specs/2026-04-06-set-text-elements-design.md,
+				// "Fix discovery bug"). Until that's fixed, this test skips
+				// rather than fails. Any other IsError still fails loudly.
+				if strings.Contains(textOf(res), "not available on this system") {
+					t.Skipf("SKIP system=%s reason=text-elements-endpoint-not-in-discovery (adtler discovery bug): %s", sys, textOf(res))
+				}
+				t.Fatalf("get_text_elements returned IsError=true: %s", textOf(res))
+			}
+
+			// TextElements fields are `symbols`/`selections` with omitempty.
+			// The fixture has neither, so we only assert that the body parses
+			// as a JSON object. This catches wrapper-layer regressions like
+			// "tool returned empty content" or "returned invalid JSON".
+			// Stronger assertions require extending the fixture (see spec).
+			var payload map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
+				t.Fatalf("get_text_elements did not return a JSON object: %v\nraw: %s", err, textOf(res))
+			}
+			// Permitted shapes: {}, {"symbols":...}, {"selections":...}, or both.
+			for k := range payload {
+				if k != "symbols" && k != "selections" {
+					t.Errorf("unexpected key %q in get_text_elements result; full body: %s", k, textOf(res))
+				}
+			}
+		})
+	}
+}
