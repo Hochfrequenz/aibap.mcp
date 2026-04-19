@@ -15,7 +15,8 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 
 - **Test-driven**: Write unit tests before or alongside implementation, not after.
 - **Unit tests**: `go test ./...` — must always pass before committing.
-- **Integration tests**: live in [adtler](https://github.com/Hochfrequenz/adtler) (the SAP ADT client library). Clone that repo to run them. mcp-server-abap itself only has unit tests covering the MCP tool layer.
+- **Integration tests** (this repo): `go test -tags integration -v -count=1 ./tools/...` — local-only, behind `//go:build integration`. Real SAP via `~/.config/sap-mcp/systems.json`, requires VPN + `Z_ADT_MCP_TEST` package installed on target system(s). Covers the MCP wrapper layer only (adtler owns the ADT HTTP/XML/auth layer). Target systems via `MCP_INTEGRATION_SYSTEMS` env var (default `hfq,s4u`).
+- **Integration tests** (adtler): live in [adtler](https://github.com/Hochfrequenz/adtler) and cover the ADT HTTP client, XML marshalling, customizing export, and OAuth2. Clone adtler to run them.
 - **Reproducer verification** (bump-time): adtler bump PRs run the reproducer snippet from each linked `blocked-by-adtler` issue against the live target system(s). This is narrower than adtler's integration suite — one MCP tool call per fix claim — and is the only live test we run at the mcp-server-abap boundary. Format and flow: see "Cross-Repo Issue Tracking (adtler)".
 - **Fix before creating:** When a SAP object (transport, program, etc.) has a problem, fix the existing one first. Don't keep creating new objects to work around issues.
 - **Coverage thresholds** (enforced in CI per package): `config` 75%. `tools`/`logging`/`cmd` are covered by unit tests but no minimum is enforced — these packages are thin wrappers around adtler. The adt/auth packages have their own thresholds in adtler's CI.

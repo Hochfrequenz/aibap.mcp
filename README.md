@@ -494,9 +494,35 @@ go test ./...
 
 ### Integration tests
 
-The ADT client integration tests live in [adtler](https://github.com/Hochfrequenz/adtler). To run them against a real SAP system, clone that repo and follow its README.
+#### MCP-layer integration tests (this repo)
 
-mcp-server-abap itself only has unit tests covering the MCP tool layer; the SAP-touching tests stayed with the client library.
+MCP-layer integration tests live in `tools/integration_test.go` behind `//go:build integration`. They are never run by default `go test ./...`.
+
+**Prerequisites:**
+
+- VPN connectivity to the target SAP system(s)
+- `~/.config/sap-mcp/systems.json` configured (see Setup above)
+- `Z_ADT_MCP_TEST` package installed on each target system — see [Hochfrequenz/Z_ADT_MCP_TEST](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST)
+
+**Run:**
+
+```bash
+go test -tags integration -v -count=1 ./tools/...
+```
+
+**Target specific systems:**
+
+```bash
+MCP_INTEGRATION_SYSTEMS=hfq go test -tags integration -v -count=1 ./tools/...
+```
+
+The default target set is `hfq,s4u`.
+
+**Coverage visibility:** TestMain prints a grep-friendly summary at the top, e.g. `integration targets: hfq=OK s4u=UNREACHABLE`. Always check this — subtests skip loudly when a system or fixture is unreachable rather than failing, so it is possible to get a green `go test` without actually covering everything.
+
+#### ADT client integration tests (adtler)
+
+The ADT HTTP client integration tests live in [adtler](https://github.com/Hochfrequenz/adtler) and cover the ADT HTTP client, XML marshalling, customizing export, and OAuth2. To run them against a real SAP system, clone that repo and follow its README.
 
 ## Contributing
 
