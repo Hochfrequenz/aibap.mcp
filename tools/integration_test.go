@@ -417,3 +417,45 @@ func TestIntegration_GetTextElements(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegration_SyntaxCheck(t *testing.T) {
+	const uri = "/sap/bc/adt/programs/programs/z_adt_mcp_test_synwarn"
+
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+			requireFixture(t, sharedServer, sys, uri)
+
+			res := callTool(t, sharedServer, "syntax_check", map[string]interface{}{
+				"object_uri": uri,
+			})
+			if res.IsError {
+				t.Fatalf("syntax_check returned IsError=true: %s", textOf(res))
+			}
+
+			// Single-URI call returns a top-level JSON array of SyntaxMessage
+			// (or `null` when the checker emits no messages — Go unmarshals
+			// that to nil slice, which is still valid). SyntaxMessage has no
+			// JSON tags → fields are capitalized.
+			var msgs []struct {
+				Type   string
+				Text   string
+				Line   int
+				Column int
+			}
+			if err := json.Unmarshal([]byte(textOf(res)), &msgs); err != nil {
+				t.Fatalf("unmarshal syntax_check result: %v\nraw: %s", err, textOf(res))
+			}
+
+			// Fixture gap: Z_ADT_MCP_TEST_SYNWARN uses
+			//   DATA lv_unused TYPE string.
+			// which the S/4 kernel does NOT flag as a warning. Until the
+			// fixture is replaced with ABAP that reliably emits a W on
+			// both ECC and S/4, we assert only the wrapper shape. Log the
+			// actual messages for visibility so regressions on systems
+			// that DO warn are still surfaced in test output.
+			t.Logf("syntax_check on %s returned %d message(s): %+v", sys, len(msgs), msgs)
+		})
+	}
+}
