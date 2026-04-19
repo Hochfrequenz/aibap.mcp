@@ -336,3 +336,37 @@ func TestIntegration_SearchObjects(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegration_GetSource(t *testing.T) {
+	const uri = "/sap/bc/adt/programs/programs/z_adt_mcp_test_report"
+
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+			requireFixture(t, sharedServer, sys, uri)
+
+			res := callTool(t, sharedServer, "get_source", map[string]interface{}{
+				"object_uri": uri,
+			})
+			if res.IsError {
+				t.Fatalf("get_source returned IsError=true: %s", textOf(res))
+			}
+
+			var payload struct {
+				Source string `json:"source"`
+				ETag   string `json:"etag"`
+			}
+			if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
+				t.Fatalf("unmarshal get_source result: %v\nraw: %s", err, textOf(res))
+			}
+			if payload.Source == "" {
+				t.Errorf("get_source returned empty source; raw: %s", textOf(res))
+			}
+			if !strings.Contains(strings.ToUpper(payload.Source), "REPORT") {
+				t.Errorf("get_source body lacks REPORT keyword; got: %q", payload.Source)
+			}
+			// ETag is optional on some systems/objects — don't assert on it.
+		})
+	}
+}
