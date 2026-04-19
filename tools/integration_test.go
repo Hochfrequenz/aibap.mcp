@@ -270,3 +270,27 @@ func textOf(res *mcp.CallToolResult) string {
 	}
 	return ""
 }
+
+func TestIntegration_SelectSystem(t *testing.T) {
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+
+			res := callTool(t, sharedServer, "select_system", map[string]interface{}{
+				"system": sys,
+			})
+			if res.IsError {
+				t.Fatalf("select_system(%q) returned IsError=true: %s", sys, textOf(res))
+			}
+			msg := textOf(res)
+			if !strings.Contains(msg, sys) {
+				t.Errorf("select_system response %q does not mention %q", msg, sys)
+			}
+
+			// Follow-up: ActiveName on the registry should now equal sys.
+			if got := registry.ActiveName(); got != sys {
+				t.Errorf("registry.ActiveName() = %q; want %q", got, sys)
+			}
+		})
+	}
+}
