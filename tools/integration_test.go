@@ -294,3 +294,45 @@ func TestIntegration_SelectSystem(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegration_SearchObjects(t *testing.T) {
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+
+			res := callTool(t, sharedServer, "search_objects", map[string]interface{}{
+				"query":       "Z_ADT_MCP_TEST*",
+				"max_results": 50,
+			})
+			if res.IsError {
+				t.Fatalf("search_objects returned IsError=true: %s", textOf(res))
+			}
+
+			// ObjectInfo has no JSON tags → fields are capitalized.
+			var results []struct {
+				Name string
+				Type string
+				URI  string
+			}
+			if err := json.Unmarshal([]byte(textOf(res)), &results); err != nil {
+				t.Fatalf("unmarshal search_objects result: %v\nraw: %s", err, textOf(res))
+			}
+
+			if len(results) == 0 {
+				t.Skipf("Z_ADT_MCP_TEST* returned no results on %s — install Hochfrequenz/Z_ADT_MCP_TEST", sys)
+			}
+
+			found := false
+			for _, r := range results {
+				if strings.HasPrefix(strings.ToUpper(r.Name), "Z_ADT_MCP_TEST") {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("no result matched Z_ADT_MCP_TEST* prefix; got %d results, first: %+v", len(results), results[0])
+			}
+		})
+	}
+}
