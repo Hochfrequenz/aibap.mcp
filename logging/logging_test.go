@@ -328,6 +328,91 @@ func TestCommitFromBuildSettings(t *testing.T) {
 	})
 }
 
+// TestRemoteLoggingBakedIn covers both sides of the telemetry-variant signal
+// that feeds --version and the root slog attribute. Release binaries built
+// by GoReleaser's `-with-remote-logging` flavour get host+port via -ldflags;
+// every other build path leaves the pair empty.
+func TestRemoteLoggingBakedIn(t *testing.T) {
+	t.Run("both defaults empty reports off", func(t *testing.T) {
+		withPapertrailDefaults(t, "", "")
+		if RemoteLoggingBakedIn() {
+			t.Error("expected off with both defaults empty")
+		}
+	})
+	t.Run("both defaults set reports on", func(t *testing.T) {
+		withPapertrailDefaults(t, testPTHost, testPTPort)
+		if !RemoteLoggingBakedIn() {
+			t.Error("expected on with both defaults set")
+		}
+	})
+	t.Run("only host set reports off", func(t *testing.T) {
+		// Guards against a half-configured ldflags release accidentally
+		// reporting on in --version while resolvePapertrail wisely refuses
+		// to emit anything.
+		withPapertrailDefaults(t, testPTHost, "")
+		if RemoteLoggingBakedIn() {
+			t.Error("expected off with only host set")
+		}
+	})
+}
+
+// TestSetup_AttachesRemoteLoggingAttr confirms every log line carries the
+// build-variant identity, so bug reports from external users unambiguously
+// report which archive they downloaded.
+//
+// The on-side variant also pins a non-obvious invariant: the attr is derived
+// from the *compile-time* defaults, not the runtime Papertrail resolution.
+// A telemetry-build user who opts out at runtime with PAPERTRAIL_HOST= must
+// still be identifiable as a telemetry-build user in their bug report.
+// Using the explicit-empty env override here also avoids actually attempting
+// a TLS dial to the baked-in Papertrail host during the test.
+func TestSetup_AttachesRemoteLoggingAttr(t *testing.T) {
+	t.Run("silent build emits remote_logging=off", func(t *testing.T) {
+		withPapertrailDefaults(t, "", "")
+		t.Setenv("LOG_FORMAT", "json")
+		out := captureStderr(t, func() {
+			Setup("test")
+			slog.Info("hello")
+		})
+		if !strings.Contains(out, `"remote_logging":"off"`) {
+			t.Errorf("silent build must emit remote_logging=off, got %q", out)
+		}
+	})
+	t.Run("telemetry build emits remote_logging=on even with runtime opt-out", func(t *testing.T) {
+		withPapertrailDefaults(t, testPTHost, testPTPort)
+		// Runtime opt-out: user downloaded the with-remote-logging archive
+		// but set PAPERTRAIL_HOST= to disable. The attr must still report on
+		// so the bug-report channel can still tell which variant emitted the
+		// line. Explicit empty host also short-circuits resolvePapertrail,
+		// so Setup skips the Papertrail handler — no TLS dial, no flaky test.
+		t.Setenv("PAPERTRAIL_HOST", "")
+		unsetEnv(t, "PAPERTRAIL_PORT")
+		t.Setenv("LOG_FORMAT", "json")
+		out := captureStderr(t, func() {
+			Setup("test")
+			slog.Info("hello")
+		})
+		if !strings.Contains(out, `"remote_logging":"on"`) {
+			t.Errorf("telemetry build must emit remote_logging=on (compile-time identity, not runtime state), got %q", out)
+		}
+	})
+}
+
+// TestSilentBuild_RespectsEnvOverride guards the promise that a user of the
+// default (silent) release binary can still opt into their own Papertrail
+// account by setting PAPERTRAIL_HOST + PAPERTRAIL_PORT at runtime. The env
+// vars take precedence over empty compile-time defaults in resolvePapertrail.
+func TestSilentBuild_RespectsEnvOverride(t *testing.T) {
+	withPapertrailDefaults(t, "", "")
+	t.Setenv("PAPERTRAIL_HOST", "user.example.com")
+	t.Setenv("PAPERTRAIL_PORT", "54321")
+
+	host, port := resolvePapertrail()
+	if host != "user.example.com" || port != "54321" {
+		t.Errorf("silent build must honour runtime env override, got %q/%q", host, port)
+	}
+}
+
 // withDefaultCommit overrides the link-time defaultCommit for one test
 // and restores the prior value via t.Cleanup. Tests using this helper
 // must not call t.Parallel — defaultCommit is a package-level var.

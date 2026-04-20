@@ -41,7 +41,11 @@ func main() {
 
 	// Handle --version flag
 	if len(os.Args) >= 2 && os.Args[1] == "--version" {
-		fmt.Printf("mcp-server-abap %s\n", version)
+		rl := "off"
+		if logging.RemoteLoggingBakedIn() {
+			rl = "on"
+		}
+		fmt.Printf("mcp-server-abap %s (commit %s, remote-logging=%s)\n", version, logging.BuildInfo(), rl)
 		return
 	}
 

@@ -62,7 +62,7 @@ var (
 )
 ```
 
-`goreleaser` injects values via `-ldflags -X` for the GitHub Releases binaries (Linux/macOS/Windows), so the pre-built downloads ship with `logs5.papertrailapp.com:35329` enabled by default. Source builds (`go build`, `make build`, `go install`) and the Docker image leave the vars empty, so Papertrail stays off.
+`goreleaser` injects values via `-ldflags -X` only for the **`-with-remote-logging`** release-binary flavour, so those pre-built downloads ship with `logs5.papertrailapp.com:35329` enabled by default. The default-flavour release binary, source builds (`go build`, `make build`, `go install`), and the Docker image all leave the vars empty, so Papertrail stays off. See #329 for the split-binary rationale.
 
 ### Pair-wise override semantics
 
