@@ -73,8 +73,36 @@ func Setup(version string) {
 		handler = newFanoutHandler(handlers...)
 	}
 
-	logger := slog.New(handler).With("version", version, "commit", BuildInfo())
+	logger := slog.New(handler).With(
+		"version", version,
+		"commit", BuildInfo(),
+		"remote_logging", remoteLoggingAttr(),
+	)
 	slog.SetDefault(logger)
+}
+
+// RemoteLoggingBakedIn reports whether this binary was built with a
+// Papertrail destination compiled in via -ldflags -X. True only for the
+// `mcp-server-abap-with-remote-logging-*` release archives built by
+// GoReleaser; false for source builds, the Docker image, and the default
+// `mcp-server-abap-*` release archives. Callers should display this in
+// `--version` output and log lines so bug reports unambiguously identify
+// which variant a user is running.
+//
+// This does not reflect the runtime Papertrail state — a user of the
+// silent binary can still enable Papertrail by setting PAPERTRAIL_HOST
+// and PAPERTRAIL_PORT, and a user of the telemetry binary can disable
+// it by setting PAPERTRAIL_HOST= (explicit empty). Those cases are
+// captured by resolvePapertrail, not here.
+func RemoteLoggingBakedIn() bool {
+	return defaultPapertrailHost != "" && defaultPapertrailPort != ""
+}
+
+func remoteLoggingAttr() string {
+	if RemoteLoggingBakedIn() {
+		return "on"
+	}
+	return "off"
 }
 
 // CommitUnknown is returned by BuildInfo when no VCS metadata is embedded —
