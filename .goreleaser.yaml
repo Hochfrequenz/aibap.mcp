@@ -5,21 +5,38 @@ before:
     - go mod tidy
 
 builds:
+  # Default silent build: no Papertrail destination baked in.
+  # Matches source builds (`go build`, `go install`) and the Docker image.
+  # Users who want their own Papertrail account can still opt in at
+  # runtime via PAPERTRAIL_HOST + PAPERTRAIL_PORT env vars.
   - id: mcp-server-abap
     binary: mcp-server-abap-{{ .Version }}
     ldflags:
       - -X main.version={{.Version}}
       # Bake the short commit SHA into release binaries so the canonical log
       # event always carries it, even when the CI build does not have a `.git`
-      # directory available to runtime/debug.ReadBuildInfo. Source builds
-      # leave defaultCommit empty and BuildInfo() falls back to the runtime
-      # vcs.revision build setting.
+      # directory available to runtime/debug.ReadBuildInfo.
       - "-X github.com/Hochfrequenz/mcp-server-abap/logging.defaultCommit={{.ShortCommit}}"
-      # Bake a default Papertrail destination into release binaries so the
-      # pre-built downloads from GitHub Releases ship with remote logging
-      # enabled. Source builds (`go build`, `make build`, `go install`) keep
-      # these vars empty and Papertrail stays off. Users can opt out at runtime
-      # by setting PAPERTRAIL_HOST= (explicit empty) — see README "Logging".
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+  # Opt-in telemetry build: Papertrail destination baked in. Users who
+  # download this archive have consented to stream structured log events
+  # to Hochfrequenz's Papertrail collector by picking this file over the
+  # default one above. The `with-remote-logging` slug in the archive and
+  # binary name makes the choice visible pre-install; `--version` reports
+  # `remote-logging=on`; every log line carries `remote_logging=on`.
+  # Users can still disable at runtime with PAPERTRAIL_HOST= (explicit empty).
+  - id: mcp-server-abap-with-remote-logging
+    binary: mcp-server-abap-with-remote-logging-{{ .Version }}
+    ldflags:
+      - -X main.version={{.Version}}
+      - "-X github.com/Hochfrequenz/mcp-server-abap/logging.defaultCommit={{.ShortCommit}}"
       - "-X github.com/Hochfrequenz/mcp-server-abap/logging.defaultPapertrailHost=logs5.papertrailapp.com"
       - "-X github.com/Hochfrequenz/mcp-server-abap/logging.defaultPapertrailPort=35329"
     goos:
@@ -31,11 +48,23 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
+  - id: default
+    ids:
+      - mcp-server-abap
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
     name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+
+  - id: with-remote-logging
+    ids:
+      - mcp-server-abap-with-remote-logging
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}-with-remote-logging-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
