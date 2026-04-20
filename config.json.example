@@ -1,0 +1,17 @@
+{
+  "default_system": "dev",
+  "systems": {
+    "dev": {
+      "host": "https://your-dev-system:8000",
+      "user": "YOUR_USER",
+      "password": "YOUR_PASSWORD",
+      "client": "100",
+      "tls_skip_verify": false
+    },
+    "prod": {
+      "host": "https://your-prod-system:8000",
+      "oauth2_client_id": "mcp-server-abap"
+    }
+  },
+  "tools": ["source", "objects", "testing", "transport"]
+}
