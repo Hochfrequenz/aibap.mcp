@@ -359,6 +359,13 @@ func TestRemoteLoggingBakedIn(t *testing.T) {
 // TestSetup_AttachesRemoteLoggingAttr confirms every log line carries the
 // build-variant identity, so bug reports from external users unambiguously
 // report which archive they downloaded.
+//
+// The on-side variant also pins a non-obvious invariant: the attr is derived
+// from the *compile-time* defaults, not the runtime Papertrail resolution.
+// A telemetry-build user who opts out at runtime with PAPERTRAIL_HOST= must
+// still be identifiable as a telemetry-build user in their bug report.
+// Using the explicit-empty env override here also avoids actually attempting
+// a TLS dial to the baked-in Papertrail host during the test.
 func TestSetup_AttachesRemoteLoggingAttr(t *testing.T) {
 	t.Run("silent build emits remote_logging=off", func(t *testing.T) {
 		withPapertrailDefaults(t, "", "")
@@ -371,13 +378,22 @@ func TestSetup_AttachesRemoteLoggingAttr(t *testing.T) {
 			t.Errorf("silent build must emit remote_logging=off, got %q", out)
 		}
 	})
-	t.Run("telemetry build emits remote_logging=on", func(t *testing.T) {
+	t.Run("telemetry build emits remote_logging=on even with runtime opt-out", func(t *testing.T) {
 		withPapertrailDefaults(t, testPTHost, testPTPort)
-		// The presence of the baked-in pair is enough to set the attr on
-		// via RemoteLoggingBakedIn, independent of whether Setup actually
-		// succeeds at connecting to Papertrail.
-		if !RemoteLoggingBakedIn() {
-			t.Fatalf("setup: defaults should be reported as baked in")
+		// Runtime opt-out: user downloaded the with-remote-logging archive
+		// but set PAPERTRAIL_HOST= to disable. The attr must still report on
+		// so the bug-report channel can still tell which variant emitted the
+		// line. Explicit empty host also short-circuits resolvePapertrail,
+		// so Setup skips the Papertrail handler — no TLS dial, no flaky test.
+		t.Setenv("PAPERTRAIL_HOST", "")
+		unsetEnv(t, "PAPERTRAIL_PORT")
+		t.Setenv("LOG_FORMAT", "json")
+		out := captureStderr(t, func() {
+			Setup("test")
+			slog.Info("hello")
+		})
+		if !strings.Contains(out, `"remote_logging":"on"`) {
+			t.Errorf("telemetry build must emit remote_logging=on (compile-time identity, not runtime state), got %q", out)
 		}
 	})
 }
