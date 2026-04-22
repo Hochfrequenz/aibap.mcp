@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -96,6 +98,62 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 			"total":            len(multi),
 			"total_references": totalRefs,
 			"results":          results,
+		})
+		return mcp.NewToolResultText(string(out)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_object_dependencies",
+		mcp.WithTitleAnnotation("Get Object Dependencies"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"Find all ABAP objects that a given object references (forward direction). "+
+				"Counterpart to where_used, which answers the reverse question. "+
+				"Queries the SAP workbench cross-reference table WBCROSSGT. "+
+				"Useful for transport completeness checks: given an object in a transport, "+
+				"find what it depends on.",
+		),
+		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type, e.g. CLAS, PROG, TABL, INTF")),
+		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. /HFQ/MY_CLASS")),
+		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		objType := req.GetString("object_type", "")
+		objName := req.GetString("object_name", "")
+		maxResults := int(req.GetFloat("max_results", 200))
+
+		safeType := strings.ReplaceAll(objType, "'", "''")
+		safeName := strings.ReplaceAll(objName, "'", "''")
+
+		sql := fmt.Sprintf(
+			"SELECT REFOBJNM, REFUSETYP FROM WBCROSSGT WHERE OBJECT = '%s' AND OBJ_NAME = '%s' ORDER BY REFOBJNM",
+			safeType, safeName,
+		)
+
+		queryResult, err := client.RunQuery(ctx, sql, maxResults)
+		if err != nil {
+			return errorResult(err), nil
+		}
+
+		type dependency struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		}
+
+		deps := make([]dependency, 0, len(queryResult.Rows))
+		for _, row := range queryResult.Rows {
+			if len(row) < 2 {
+				continue
+			}
+			deps = append(deps, dependency{Name: row[0], UseType: row[1]})
+		}
+
+		out, _ := json.Marshal(map[string]any{
+			"object_type":  objType,
+			"object_name":  objName,
+			"count":        len(deps),
+			"dependencies": deps,
 		})
 		return mcp.NewToolResultText(string(out)), nil
 	})

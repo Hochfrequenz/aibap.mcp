@@ -35,7 +35,7 @@ If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP W
 
 Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
 
-## Available tools (66)
+## Available tools (67)
 
 Tools are organized into groups. By default, all groups except `debug` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
@@ -67,7 +67,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> — <code>objects</code> (9 tools)</summary>
+<summary><strong>Objects and packages</strong> — <code>objects</code> (10 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -76,6 +76,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 | `get_object_info` | Get object metadata: type, package, description (supports batch) |
 | `object_exists` | Check if an ABAP object exists (true/false + metadata, supports batch) |
 | `where_used` | Find all objects that reference a given object (supports batch) |
+| `get_object_dependencies` | Find all objects that a given object references — forward direction counterpart to where_used (queries WBCROSSGT) |
 | `get_table_fields` | Get DDIC table/structure field definitions (DD03L) |
 | `create_object` | Create a new ABAP object (PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA) |
 | `delete_object` | Delete an ABAP object (uses optimistic locking) |
