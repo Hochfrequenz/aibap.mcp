@@ -93,6 +93,18 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		})
 	})
 
+	// get_object_dependencies is intentionally NOT recursive:
+	//
+	// For DDIC references, recursion is unnecessary. D010TAB is populated by the ABAP
+	// activator at activation time and already stores the complete, flat set of DDIC
+	// objects (tables, structures, type pools) used by a program — including all objects
+	// pulled in transitively via INCLUDE statements. A single query with MASTER = '<prog>'
+	// therefore returns the full dependency set with no need for client-side recursion.
+	//
+	// The scenario where recursion *would* be needed is transitive program-level dependencies
+	// (e.g. CALL PROGRAM / SUBMIT). D010TAB does not model those relationships at all; that
+	// is a different, significantly more complex question and is deliberately out of scope for
+	// this tool. If that information is ever needed, a separate tool should be implemented.
 	s.AddTool(mcp.NewTool("get_object_dependencies",
 		mcp.WithTitleAnnotation("Get Object Dependencies"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -104,7 +116,12 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 				"Counterpart to where_used, which answers the reverse question. "+
 				"Queries D010TAB, the ABAP program-to-DDIC dependency table. "+
 				"Useful for transport completeness checks: given a PROG in a transport, "+
-				"find which DDIC objects it depends on.",
+				"find which DDIC objects it depends on. "+
+				"The result is already complete and flat: D010TAB is populated by the ABAP activator and "+
+				"includes all objects pulled in via INCLUDE statements, so no further recursion is needed "+
+				"for DDIC references. "+
+				"Note: transitive program-level dependencies (CALL PROGRAM, SUBMIT) are NOT covered "+
+				"by this tool — D010TAB does not model those relationships.",
 		),
 		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type — currently only PROG is supported (D010TAB)")),
 		mcp.WithString("object_name", mcp.Required(), mcp.Description("Program name, e.g. Z_MY_REPORT or SAPL_MY_FUGR")),
