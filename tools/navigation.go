@@ -2,11 +2,14 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+type NavigationResult struct {
+	DefinitionURI string `json:"definition_uri"`
+}
 
 func registerNavigationTools(s toolAdder, client adt.NavigationClient) {
 	s.AddTool(mcp.NewTool("navigate_to_definition",
@@ -21,6 +24,7 @@ func registerNavigationTools(s toolAdder, client adt.NavigationClient) {
 				"Returns the ADT URI of the definition.",
 		),
 		mcp.WithString("source_uri", mcp.Required(), mcp.Description("Source URI with position fragment (e.g. .../source/main#start=15,4)")),
+		mcp.WithOutputSchema[NavigationResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString("source_uri", "")
 		if uri == "" {
@@ -30,7 +34,6 @@ func registerNavigationTools(s toolAdder, client adt.NavigationClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(map[string]string{"definition_uri": targetURI})
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(NavigationResult{DefinitionURI: targetURI})
 	})
 }

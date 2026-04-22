@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -37,8 +36,8 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(results)
-		return mcp.NewToolResultText(string(out)), nil
+		// Top-level slice — no WithOutputSchema.
+		return mcp.NewToolResultJSON(results)
 	})
 
 	s.AddTool(mcp.NewTool("where_used",
@@ -53,6 +52,7 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 				"Batch mode returns {total, total_references, results:[{object_uri, references, error}]}.",
 		),
 		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
+		// No WithOutputSchema: single/array paths differ in return shape.
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		single, multi := getStringOrSlice(req.GetArguments(), paramObjectURI)
 		if multi == nil {
@@ -60,17 +60,10 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 			if err != nil {
 				return errorResult(err), nil
 			}
-			out, _ := json.Marshal(results)
-			return mcp.NewToolResultText(string(out)), nil
+			return mcp.NewToolResultJSON(results)
 		}
 
-		type whereUsedResult struct {
-			ObjectURI  string           `json:"object_uri"`
-			References []adt.ObjectInfo `json:"references"`
-			Error      string           `json:"error,omitempty"`
-		}
-
-		results := make([]whereUsedResult, len(multi))
+		results := make([]WhereUsedBatchEntry, len(multi))
 		var wg sync.WaitGroup
 		sem := make(chan struct{}, 10)
 		wg.Add(len(multi))
@@ -80,7 +73,7 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 				sem <- struct{}{}
 				defer func() { <-sem }()
 				refs, err := client.WhereUsed(ctx, uri)
-				results[i] = whereUsedResult{ObjectURI: uri, References: refs}
+				results[i] = WhereUsedBatchEntry{ObjectURI: uri, References: refs}
 				if err != nil {
 					results[i].Error = err.Error()
 				}
@@ -93,12 +86,11 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 			totalRefs += len(r.References)
 		}
 
-		out, _ := json.Marshal(map[string]any{
-			"total":            len(multi),
-			"total_references": totalRefs,
-			"results":          results,
+		return mcp.NewToolResultJSON(WhereUsedBatchResult{
+			Total:           len(multi),
+			TotalReferences: totalRefs,
+			Results:         results,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 
 	s.AddTool(mcp.NewTool("get_object_dependencies",
@@ -117,6 +109,7 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type — currently only PROG is supported (D010TAB)")),
 		mcp.WithString("object_name", mcp.Required(), mcp.Description("Program name, e.g. Z_MY_REPORT or SAPL_MY_FUGR")),
 		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
+		mcp.WithOutputSchema[ObjectDependenciesResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		objType := req.GetString("object_type", "")
 		objName := req.GetString("object_name", "")
@@ -135,25 +128,19 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 			queryResult = &adt.QueryResult{}
 		}
 
-		type dependency struct {
-			Name    string `json:"name"`
-			UseType string `json:"use_type"`
-		}
-
-		deps := make([]dependency, 0, len(queryResult.Rows))
+		deps := make([]ObjectDependency, 0, len(queryResult.Rows))
 		for _, row := range queryResult.Rows {
 			if len(row) < 1 || row[0] == "" {
 				continue
 			}
-			deps = append(deps, dependency{Name: row[0], UseType: "TABLE"})
+			deps = append(deps, ObjectDependency{Name: row[0], UseType: "TABLE"})
 		}
 
-		out, _ := json.Marshal(map[string]any{
-			"object_type":  objType,
-			"object_name":  objName,
-			"count":        len(deps),
-			"dependencies": deps,
+		return mcp.NewToolResultJSON(ObjectDependenciesResult{
+			ObjectType:   objType,
+			ObjectName:   objName,
+			Count:        len(deps),
+			Dependencies: deps,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 }

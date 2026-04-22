@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -23,6 +22,8 @@ func registerUnitTestTools(s toolAdder, client adt.QualityClient) {
 		),
 		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 		mcp.WithNumber("timeout_seconds", mcp.Description("Test execution timeout in seconds (default: 30)")),
+		// No WithOutputSchema: this tool's return shape depends on whether a
+		// single URI or an array was passed (adt.TestResult vs UnitTestBatchResult).
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		timeout := req.GetInt("timeout_seconds", 30)
 		single, multi := getStringOrSlice(req.GetArguments(), paramObjectURI)
@@ -31,17 +32,10 @@ func registerUnitTestTools(s toolAdder, client adt.QualityClient) {
 			if err != nil {
 				return errorResult(err), nil
 			}
-			out, _ := json.Marshal(result)
-			return mcp.NewToolResultText(string(out)), nil
+			return mcp.NewToolResultJSON(result)
 		}
 
-		type unitTestResult struct {
-			ObjectURI  string          `json:"object_uri"`
-			TestResult *adt.TestResult `json:"test_result,omitempty"`
-			Error      string          `json:"error,omitempty"`
-		}
-
-		results := make([]unitTestResult, len(multi))
+		results := make([]UnitTestBatchEntry, len(multi))
 		var wg sync.WaitGroup
 		sem := make(chan struct{}, 10)
 		wg.Add(len(multi))
@@ -51,7 +45,7 @@ func registerUnitTestTools(s toolAdder, client adt.QualityClient) {
 				sem <- struct{}{}
 				defer func() { <-sem }()
 				tr, err := client.RunUnitTests(ctx, uri, timeout)
-				results[i] = unitTestResult{ObjectURI: uri, TestResult: tr}
+				results[i] = UnitTestBatchEntry{ObjectURI: uri, TestResult: tr}
 				if err != nil {
 					results[i].Error = err.Error()
 				}
@@ -67,12 +61,11 @@ func registerUnitTestTools(s toolAdder, client adt.QualityClient) {
 			}
 		}
 
-		out, _ := json.Marshal(map[string]any{
-			"total_objects": len(multi),
-			"total_passed":  totalPassed,
-			"total_failed":  totalFailed,
-			"results":       results,
+		return mcp.NewToolResultJSON(UnitTestBatchResult{
+			TotalObjects: len(multi),
+			TotalPassed:  totalPassed,
+			TotalFailed:  totalFailed,
+			Results:      results,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 }

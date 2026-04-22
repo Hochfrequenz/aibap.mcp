@@ -51,6 +51,7 @@ func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient, elici
 			mcp.Items(customizingEntryItemsSchema),
 		),
 		mcp.WithString("transport", mcp.Description("Transport request number for recording the change")),
+		mcp.WithOutputSchema[UpdateCustomizingResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		table := req.GetString("table", "")
 		transport := req.GetString("transport", "")
@@ -89,10 +90,6 @@ func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient, elici
 			return errorResult(err), nil
 		}
 
-		out, _ := json.Marshal(map[string]string{
-			"status": "updated",
-			"table":  table,
-		})
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(UpdateCustomizingResult{Status: "updated", Table: table})
 	})
 }

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -35,6 +34,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		mcp.WithString("lock_handle",
 			mcp.Description("Explicit lock handle (optional, looked up from lock map)"),
 		),
+		mcp.WithOutputSchema[SetSourceFromFileResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		filePath := req.GetString("file_path", "")
@@ -69,13 +69,12 @@ func registerFileSourceTools(s toolAdder, client interface {
 		lockMap.UpdateETag(key, newETag)
 
 		lineCount := len(strings.Split(source, "\n"))
-		out, _ := json.Marshal(map[string]interface{}{
-			"success":     true,
-			"lines":       lineCount,
-			"locked":      true,
-			"lock_handle": lockHandle,
-			"etag":        newETag,
+		return mcp.NewToolResultJSON(SetSourceFromFileResult{
+			Success:    true,
+			Lines:      lineCount,
+			Locked:     true,
+			LockHandle: lockHandle,
+			ETag:       newETag,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 }
