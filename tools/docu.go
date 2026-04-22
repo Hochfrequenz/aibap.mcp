@@ -16,6 +16,7 @@ func registerDocuTools(s toolAdder, client adt.DocuClient) {
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Look up ABAP keyword documentation from SAP's built-in help. Returns plain text documentation for the given keyword (e.g. SELECT, LOOP, DATA, CLASS)."),
 		mcp.WithString("keyword", mcp.Required(), mcp.Description("ABAP keyword to look up (e.g. SELECT, LOOP, DATA)")),
+		mcp.WithOutputSchema[DocumentationResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		keyword := req.GetString("keyword", "")
 		if keyword == "" {
@@ -25,6 +26,6 @@ func registerDocuTools(s toolAdder, client adt.DocuClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(doc), nil
+		return mcp.NewToolResultJSON(DocumentationResult{Documentation: doc})
 	})
 }

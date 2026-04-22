@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -32,6 +31,7 @@ func registerExportTools(s toolAdder, client interface {
 		mcp.WithBoolean("extract", mcp.Required(),
 			mcp.Description("true = extract as folder with abapGit directory structure (.abapgit.xml, src/package.devc.xml, src/*.clas.abap, etc.). "+
 				"false = save as a single .zip file.")),
+		mcp.WithOutputSchema[ExportPackageResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		pkg := req.GetString("package_name", "")
 		outputDir := req.GetString("output_dir", "")
@@ -55,13 +55,12 @@ func registerExportTools(s toolAdder, client interface {
 			return errorResult(err), nil
 		}
 
-		out, _ := json.Marshal(map[string]any{
-			"package":        pkg,
-			"path":           path,
-			"zip_size_bytes": size,
-			"format":         formatLabel(extract),
+		return mcp.NewToolResultJSON(ExportPackageResult{
+			Package:      pkg,
+			Path:         path,
+			ZipSizeBytes: size,
+			Format:       formatLabel(extract),
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 
 	s.AddTool(mcp.NewTool("export_packages",
@@ -94,6 +93,7 @@ func registerExportTools(s toolAdder, client interface {
 		mcp.WithString("include_patterns",
 			mcp.Description("Comma-separated wildcard patterns for local filtering. If set, ONLY packages matching at least one pattern are exported. "+
 				"Applied AFTER the SAP search, BEFORE exclude_patterns. Example: Z_MY_*,Z_OTHER_*")),
+		mcp.WithOutputSchema[ExportPackagesResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		pattern := req.GetString("pattern", "")
 		outputDir := req.GetString("output_dir", "")
@@ -122,12 +122,11 @@ func registerExportTools(s toolAdder, client interface {
 			return errorResult(fmt.Errorf("searching packages: %w", err)), nil
 		}
 		if len(packages) == 0 {
-			out, _ := json.Marshal(map[string]any{
-				"pattern":  pattern,
-				"exported": 0,
-				"message":  "no packages found matching pattern",
+			return mcp.NewToolResultJSON(ExportPackagesResult{
+				Pattern:  pattern,
+				Exported: 0,
+				Message:  "no packages found matching pattern",
 			})
-			return mcp.NewToolResultText(string(out)), nil
 		}
 
 		// Apply local include/exclude filters.
@@ -147,24 +146,15 @@ func registerExportTools(s toolAdder, client interface {
 		}
 
 		if len(packages) == 0 {
-			out, _ := json.Marshal(map[string]any{
-				"pattern":             pattern,
-				"found_before_filter": foundTotal,
-				"exported":            0,
-				"message":             "all packages excluded by include/exclude filters",
+			return mcp.NewToolResultJSON(ExportPackagesResult{
+				Pattern:           pattern,
+				FoundBeforeFilter: foundTotal,
+				Exported:          0,
+				Message:           "all packages excluded by include/exclude filters",
 			})
-			return mcp.NewToolResultText(string(out)), nil
 		}
 
-		type exportResult struct {
-			Package  string `json:"package"`
-			Path     string `json:"path,omitempty"`
-			Size     int    `json:"zip_size_bytes,omitempty"`
-			Error    string `json:"error,omitempty"`
-			Exported bool   `json:"exported"`
-		}
-
-		results := make([]exportResult, 0, len(packages))
+		results := make([]ExportPackagesEntry, 0, len(packages))
 		exported := 0
 		for _, pkg := range packages {
 			if ctx.Err() != nil {
@@ -173,33 +163,32 @@ func registerExportTools(s toolAdder, client interface {
 			name := strings.ToUpper(pkg.Name)
 			data, err := client.ExportPackage(ctx, name)
 			if err != nil {
-				results = append(results, exportResult{
+				results = append(results, ExportPackagesEntry{
 					Package: name, Error: err.Error(),
 				})
 				continue
 			}
 			path, size, err := adt.WriteExport(data, outputDir, name, extract)
 			if err != nil {
-				results = append(results, exportResult{
+				results = append(results, ExportPackagesEntry{
 					Package: name, Error: err.Error(),
 				})
 				continue
 			}
 			exported++
-			results = append(results, exportResult{
-				Package: name, Path: path, Size: size, Exported: true,
+			results = append(results, ExportPackagesEntry{
+				Package: name, Path: path, ZipSizeBytes: size, Exported: true,
 			})
 		}
 
-		out, _ := json.Marshal(map[string]any{
-			"pattern":             pattern,
-			"found_before_filter": foundTotal,
-			"found_after_filter":  len(packages),
-			"exported":            exported,
-			"format":              formatLabel(extract),
-			"results":             results,
+		return mcp.NewToolResultJSON(ExportPackagesResult{
+			Pattern:           pattern,
+			FoundBeforeFilter: foundTotal,
+			FoundAfterFilter:  len(packages),
+			Exported:          exported,
+			Format:            formatLabel(extract),
+			Results:           results,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 }
 

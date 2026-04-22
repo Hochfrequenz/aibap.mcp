@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -41,7 +40,7 @@ func registerCompletionTools(s toolAdder, client adt.SourceClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(items)
-		return mcp.NewToolResultText(string(out)), nil
+		// Top-level slice — no WithOutputSchema.
+		return mcp.NewToolResultJSON(items)
 	})
 }

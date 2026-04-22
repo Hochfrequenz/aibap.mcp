@@ -22,6 +22,7 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 				"Use this to look up existing messages before writing MESSAGE statements.",
 		),
 		mcp.WithString("message_class", mcp.Required(), mcp.Description("Message class name, e.g. '00', 'ZFOO'")),
+		mcp.WithOutputSchema[adt.MessageClassInfo](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("message_class", "")
 		if name == "" {
@@ -31,8 +32,7 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 
 	s.AddTool(mcp.NewTool("search_messages",
@@ -64,8 +64,8 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(results)
-		return mcp.NewToolResultText(string(out)), nil
+		// Top-level slice — no WithOutputSchema.
+		return mcp.NewToolResultJSON(results)
 	})
 
 	s.AddTool(mcp.NewTool("set_messages",
@@ -82,6 +82,7 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 		mcp.WithString("messages", mcp.Required(), mcp.Description(
 			`JSON array of messages, e.g. [{"number":"001","text":"Hello &1","self_explanatory":true}]`,
 		)),
+		mcp.WithOutputSchema[SetMessagesResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("message_class", "")
 		if name == "" {
@@ -106,11 +107,10 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 			return errorResult(err), nil
 		}
 
-		out, _ := json.Marshal(map[string]any{
-			"success":        true,
-			"message_class":  name,
-			"messages_count": len(messages),
+		return mcp.NewToolResultJSON(SetMessagesResult{
+			Success:       true,
+			MessageClass:  name,
+			MessagesCount: len(messages),
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 }

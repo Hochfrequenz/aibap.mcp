@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -22,6 +21,7 @@ func registerRefactoringTools(s toolAdder, client adt.RefactoringClient, elicito
 		mcp.WithString("source_uri", mcp.Required(), mcp.Description("Source URI with position of the symbol (#start=line,col)")),
 		mcp.WithString("new_name", mcp.Required(), mcp.Description("New name for the symbol")),
 		mcp.WithString("transport", mcp.Description("Transport request number (required for non-local objects)")),
+		mcp.WithOutputSchema[adt.RenameResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString("source_uri", "")
 		newName := req.GetString("new_name", "")
@@ -38,7 +38,6 @@ func registerRefactoringTools(s toolAdder, client adt.RefactoringClient, elicito
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 }

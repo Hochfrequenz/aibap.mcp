@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -37,6 +36,7 @@ func registerActivateTools(s toolAdder, client interface {
 			mcp.Description("List of ADT object URIs to activate"),
 			mcp.WithStringItems(),
 		),
+		mcp.WithOutputSchema[adt.ActivationResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uris := req.GetStringSlice("object_uris", nil)
 		unlockBeforeActivate(ctx, uris)
@@ -44,8 +44,7 @@ func registerActivateTools(s toolAdder, client interface {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 
 	s.AddTool(mcp.NewTool("get_inactive_objects",
@@ -63,8 +62,9 @@ func registerActivateTools(s toolAdder, client interface {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(objects)
-		return mcp.NewToolResultText(string(out)), nil
+		// Top-level slice — no WithOutputSchema because the MCP spec
+		// requires output schemas to be type=object.
+		return mcp.NewToolResultJSON(objects)
 	})
 
 	// Backward-compatible alias: activate a single object by URI string.
@@ -78,6 +78,7 @@ func registerActivateTools(s toolAdder, client interface {
 			mcp.Required(),
 			mcp.Description(descADTObjectURI),
 		),
+		mcp.WithOutputSchema[adt.ActivationResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		unlockBeforeActivate(ctx, []string{uri})
@@ -85,7 +86,6 @@ func registerActivateTools(s toolAdder, client interface {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 }
