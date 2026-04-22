@@ -1,6 +1,6 @@
 # get_object_dependencies Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add a `get_object_dependencies` MCP tool that returns all objects a given ABAP object references, by querying the `WBCROSSGT` cross-reference table — the forward-direction counterpart to `where_used`.
 
@@ -30,7 +30,7 @@
 
 ### search.go changes
 
-- [ ] **Step 1: Add combined interface and update function signature**
+- [x] **Step 1: Add combined interface and update function signature**
 
 In `tools/search.go`, add the following type definition before `registerSearchTools`, and update the function signature:
 
@@ -63,7 +63,7 @@ import (
 )
 ```
 
-- [ ] **Step 2: Confirm it compiles**
+- [x] **Step 2: Confirm it compiles**
 
 ```
 cd C:\Users\JonatanMeiske\Documents\50_KI_Agenten\mcp-server-abap
@@ -74,7 +74,7 @@ Expected: no errors.
 
 ### source_test.go changes
 
-- [ ] **Step 3: Add `runQueryFn` field to `mockClient`**
+- [x] **Step 3: Add `runQueryFn` field to `mockClient`**
 
 In `tools/source_test.go`, find the `mockClient` struct definition. Add one field in the same style as the other `xxxFn` fields:
 
@@ -82,7 +82,7 @@ In `tools/source_test.go`, find the `mockClient` struct definition. Add one fiel
 runQueryFn func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
 ```
 
-- [ ] **Step 4: Update the `RunQuery` stub to call the function**
+- [x] **Step 4: Update the `RunQuery` stub to call the function**
 
 Find this existing stub:
 
@@ -103,7 +103,7 @@ func (m *mockClient) RunQuery(ctx context.Context, sql string, maxRows int) (*ad
 }
 ```
 
-- [ ] **Step 5: Run existing tests to confirm nothing broke**
+- [x] **Step 5: Run existing tests to confirm nothing broke**
 
 ```
 go test ./tools/... -run TestWhereUsed -v
@@ -111,7 +111,7 @@ go test ./tools/... -run TestWhereUsed -v
 
 Expected: all `TestWhereUsed*` tests PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tools/search.go tools/source_test.go
@@ -127,7 +127,7 @@ git commit -m "refactor: widen registerSearchTools to accept QueryClient for dep
 
 Add four tests at the end of `tools/tools_extra_test.go`. All should fail with "unknown tool" until Task 3 is done. Make sure `"strings"` is in the import block of `tools_extra_test.go` (it is already used there — confirm with a quick look).
 
-- [ ] **Step 1: Add the happy-path test**
+- [x] **Step 1: Add the happy-path test**
 
 Append to `tools/tools_extra_test.go`:
 
@@ -209,7 +209,7 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Add test for custom `max_results`**
+- [x] **Step 2: Add test for custom `max_results`**
 
 ```go
 func TestGetObjectDependenciesToolCustomMaxResults(t *testing.T) {
@@ -235,7 +235,7 @@ func TestGetObjectDependenciesToolCustomMaxResults(t *testing.T) {
 }
 ```
 
-- [ ] **Step 3: Add the empty-result test**
+- [x] **Step 3: Add the empty-result test**
 
 ```go
 func TestGetObjectDependenciesToolEmpty(t *testing.T) {
@@ -275,7 +275,7 @@ func TestGetObjectDependenciesToolEmpty(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: Add the error-path test**
+- [x] **Step 4: Add the error-path test**
 
 ```go
 func TestGetObjectDependenciesToolError(t *testing.T) {
@@ -295,7 +295,7 @@ func TestGetObjectDependenciesToolError(t *testing.T) {
 }
 ```
 
-- [ ] **Step 5: Add the SQL-injection escaping test**
+- [x] **Step 5: Add the SQL-injection escaping test**
 
 ```go
 func TestGetObjectDependenciesToolSQLEscaping(t *testing.T) {
@@ -320,7 +320,7 @@ func TestGetObjectDependenciesToolSQLEscaping(t *testing.T) {
 }
 ```
 
-- [ ] **Step 6: Run tests to confirm they fail with "unknown tool"**
+- [x] **Step 6: Run tests to confirm they fail with "unknown tool"**
 
 ```
 go test ./tools/... -run TestGetObjectDependencies -v
@@ -335,7 +335,7 @@ Expected: FAIL — JSON-RPC error "unknown tool: get_object_dependencies".
 **Files:**
 - Modify: `tools/search.go`
 
-- [ ] **Step 1: Add the tool registration**
+- [x] **Step 1: Add the tool registration**
 
 In `tools/search.go`, append the following block inside `registerSearchTools`, after the closing `})` of the `where_used` tool:
 
@@ -397,7 +397,7 @@ In `tools/search.go`, append the following block inside `registerSearchTools`, a
 	})
 ```
 
-- [ ] **Step 2: Run the tests**
+- [x] **Step 2: Run the tests**
 
 ```
 go test ./tools/... -run TestGetObjectDependencies -v
@@ -405,7 +405,7 @@ go test ./tools/... -run TestGetObjectDependencies -v
 
 Expected: all five `TestGetObjectDependencies*` tests PASS.
 
-- [ ] **Step 3: Run the full test suite**
+- [x] **Step 3: Run the full test suite**
 
 ```
 go test ./tools/... 2>&1 | tail -20
@@ -413,7 +413,7 @@ go test ./tools/... 2>&1 | tail -20
 
 Expected: no regressions, all tests PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tools/search.go tools/tools_extra_test.go
