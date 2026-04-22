@@ -9,7 +9,15 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerSearchTools(s toolAdder, client adt.SearchClient) {
+// searchQueryClient is the combined interface required by registerSearchTools.
+// It extends adt.SearchClient with adt.QueryClient so get_object_dependencies
+// can call RunQuery without changing the register.go call site.
+type searchQueryClient interface {
+	adt.SearchClient
+	adt.QueryClient
+}
+
+func registerSearchTools(s toolAdder, client searchQueryClient) {
 	s.AddTool(mcp.NewTool("search_objects",
 		mcp.WithTitleAnnotation("Search ABAP Objects"),
 		mcp.WithReadOnlyHintAnnotation(true),

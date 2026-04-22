@@ -48,6 +48,7 @@ type mockClient struct {
 	renameFn              func(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error)
 	removeFromTransportFn func(ctx context.Context, taskNr, parentTr, pgmid, objType, objName, wbType, position string) error
 	getTransportObjectsFn func(ctx context.Context, transport string) ([]adt.TransportObject, error)
+	runQueryFn            func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -227,7 +228,10 @@ func (m *mockClient) GetATCCustomizing(_ context.Context) (*adt.ATCCustomizingRe
 func (m *mockClient) RunATCCheck(_ context.Context, _ []string, _ string) (*adt.ATCResult, error) {
 	return &adt.ATCResult{}, nil
 }
-func (m *mockClient) RunQuery(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+func (m *mockClient) RunQuery(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error) {
+	if m.runQueryFn != nil {
+		return m.runQueryFn(ctx, sql, maxRows)
+	}
 	return nil, nil
 }
 func (m *mockClient) ReleaseTransport(ctx context.Context, transport string) error {
