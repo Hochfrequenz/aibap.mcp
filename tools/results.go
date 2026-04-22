@@ -7,6 +7,12 @@ import "github.com/Hochfrequenz/adtler/adt"
 // StructuredContent) and mcp.WithOutputSchema (to advertise the output shape
 // on the tool definition).
 //
+// Types that are tightly coupled to a single handler (e.g. RollbackResult,
+// NavigationResult, VerifyResult, BAdIImplementationWithXML) continue to
+// live next to their registration; this file collects the types used by
+// more than one handler or whose registration file would otherwise grow
+// its own results block.
+//
 // Tools that return an adtler struct directly do not need a type here.
 
 // SourceResult preserves the {source, etag} shape that source.go has used
