@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -123,17 +122,17 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		objName := req.GetString("object_name", "")
 		maxResults := int(req.GetFloat("max_results", 200))
 
-		safeType := strings.ReplaceAll(objType, "'", "''")
-		safeName := strings.ReplaceAll(objName, "'", "''")
-
 		sql := fmt.Sprintf(
 			"SELECT REFOBJNM, REFUSETYP FROM WBCROSSGT WHERE OBJECT = '%s' AND OBJ_NAME = '%s' ORDER BY REFOBJNM",
-			safeType, safeName,
+			adt.EscapeValue(objType), adt.EscapeValue(objName),
 		)
 
 		queryResult, err := client.RunQuery(ctx, sql, maxResults)
 		if err != nil {
 			return errorResult(err), nil
+		}
+		if queryResult == nil {
+			queryResult = &adt.QueryResult{}
 		}
 
 		type dependency struct {

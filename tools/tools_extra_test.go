@@ -1348,10 +1348,13 @@ func TestGetObjectDependenciesToolSQLEscaping(t *testing.T) {
 	}
 	s := newTestServer(mock)
 	callTool(t, s, "get_object_dependencies", map[string]interface{}{
-		"object_type": "PROG",
+		"object_type": "PR'OG",
 		"object_name": "O'REILLY_PROG",
 	})
 	if !strings.Contains(gotSQL, "O''REILLY_PROG") {
-		t.Errorf("single quote not escaped in SQL, got: %s", gotSQL)
+		t.Errorf("single quote not escaped in object_name, got: %s", gotSQL)
+	}
+	if !strings.Contains(gotSQL, "PR''OG") {
+		t.Errorf("single quote not escaped in object_type, got: %s", gotSQL)
 	}
 }

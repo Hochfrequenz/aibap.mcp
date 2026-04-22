@@ -232,7 +232,7 @@ func (m *mockClient) RunQuery(ctx context.Context, sql string, maxRows int) (*ad
 	if m.runQueryFn != nil {
 		return m.runQueryFn(ctx, sql, maxRows)
 	}
-	return nil, nil
+	return &adt.QueryResult{}, nil
 }
 func (m *mockClient) ReleaseTransport(ctx context.Context, transport string) error {
 	if m.releaseTransportFn != nil {
