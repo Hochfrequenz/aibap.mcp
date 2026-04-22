@@ -1196,32 +1196,28 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 			gotMaxRows = maxRows
 			return &adt.QueryResult{
 				Columns: []adt.QueryColumn{
-					{Name: "REFOBJNM"},
-					{Name: "REFUSETYP"},
+					{Name: "TABNAME"},
 				},
 				Rows: [][]string{
-					{"/HFQ/OTHER_IFACE", "USE"},
-					{"/HFQ/SOME_TABL", "USE"},
+					{"SCREEN"},
+					{"SYST"},
 				},
 			}, nil
 		},
 	}
 	s := newTestServer(mock)
 	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
-		"object_type": "CLAS",
-		"object_name": "/HFQ/MY_CLASS",
+		"object_type": "PROG",
+		"object_name": "Z_MY_REPORT",
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", firstText(result))
 	}
 
-	if !strings.Contains(gotSQL, "OBJECT = 'CLAS'") {
-		t.Errorf("SQL missing object type filter, got: %s", gotSQL)
+	if !strings.Contains(gotSQL, "MASTER = 'Z_MY_REPORT'") {
+		t.Errorf("SQL missing program name filter, got: %s", gotSQL)
 	}
-	if !strings.Contains(gotSQL, "OBJ_NAME = '/HFQ/MY_CLASS'") {
-		t.Errorf("SQL missing object name filter, got: %s", gotSQL)
-	}
-	if !strings.Contains(gotSQL, "WBCROSSGT") {
+	if !strings.Contains(gotSQL, "D010TAB") {
 		t.Errorf("SQL missing table name, got: %s", gotSQL)
 	}
 	if gotMaxRows != 200 {
@@ -1241,11 +1237,11 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 	if err := json.Unmarshal([]byte(text), &out); err != nil {
 		t.Fatalf("unmarshal result: %v\ntext: %q", err, text)
 	}
-	if out.ObjectType != "CLAS" {
-		t.Errorf("object_type: got %q, want %q", out.ObjectType, "CLAS")
+	if out.ObjectType != "PROG" {
+		t.Errorf("object_type: got %q, want %q", out.ObjectType, "PROG")
 	}
-	if out.ObjectName != "/HFQ/MY_CLASS" {
-		t.Errorf("object_name: got %q, want %q", out.ObjectName, "/HFQ/MY_CLASS")
+	if out.ObjectName != "Z_MY_REPORT" {
+		t.Errorf("object_name: got %q, want %q", out.ObjectName, "Z_MY_REPORT")
 	}
 	if out.Count != 2 {
 		t.Errorf("count: got %d, want 2", out.Count)
@@ -1253,11 +1249,11 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 	if len(out.Dependencies) != 2 {
 		t.Fatalf("dependencies length: got %d, want 2", len(out.Dependencies))
 	}
-	if out.Dependencies[0].Name != "/HFQ/OTHER_IFACE" {
-		t.Errorf("dep[0].name: got %q", out.Dependencies[0].Name)
+	if out.Dependencies[0].Name != "SCREEN" {
+		t.Errorf("dep[0].name: got %q, want SCREEN", out.Dependencies[0].Name)
 	}
-	if out.Dependencies[0].UseType != "USE" {
-		t.Errorf("dep[0].use_type: got %q", out.Dependencies[0].UseType)
+	if out.Dependencies[0].UseType != "TABLE" {
+		t.Errorf("dep[0].use_type: got %q, want TABLE", out.Dependencies[0].UseType)
 	}
 }
 
@@ -1267,7 +1263,7 @@ func TestGetObjectDependenciesToolCustomMaxResults(t *testing.T) {
 		runQueryFn: func(_ context.Context, _ string, maxRows int) (*adt.QueryResult, error) {
 			gotMaxRows = maxRows
 			return &adt.QueryResult{
-				Columns: []adt.QueryColumn{{Name: "REFOBJNM"}, {Name: "REFUSETYP"}},
+				Columns: []adt.QueryColumn{{Name: "TABNAME"}},
 				Rows:    [][]string{},
 			}, nil
 		},
@@ -1287,7 +1283,7 @@ func TestGetObjectDependenciesToolEmpty(t *testing.T) {
 	mock := &mockClient{
 		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
 			return &adt.QueryResult{
-				Columns: []adt.QueryColumn{{Name: "REFOBJNM"}, {Name: "REFUSETYP"}},
+				Columns: []adt.QueryColumn{{Name: "TABNAME"}},
 				Rows:    [][]string{},
 			}, nil
 		},
@@ -1341,20 +1337,17 @@ func TestGetObjectDependenciesToolSQLEscaping(t *testing.T) {
 		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
 			gotSQL = sql
 			return &adt.QueryResult{
-				Columns: []adt.QueryColumn{{Name: "REFOBJNM"}, {Name: "REFUSETYP"}},
+				Columns: []adt.QueryColumn{{Name: "TABNAME"}},
 				Rows:    [][]string{},
 			}, nil
 		},
 	}
 	s := newTestServer(mock)
 	callTool(t, s, "get_object_dependencies", map[string]interface{}{
-		"object_type": "PR'OG",
+		"object_type": "PROG",
 		"object_name": "O'REILLY_PROG",
 	})
 	if !strings.Contains(gotSQL, "O''REILLY_PROG") {
 		t.Errorf("single quote not escaped in object_name, got: %s", gotSQL)
-	}
-	if !strings.Contains(gotSQL, "PR''OG") {
-		t.Errorf("single quote not escaped in object_type, got: %s", gotSQL)
 	}
 }

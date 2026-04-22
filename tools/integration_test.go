@@ -493,3 +493,70 @@ func TestIntegration_GetSource_NonExistent(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegration_GetObjectDependencies(t *testing.T) {
+	// D010TAB maps program names (MASTER) to the DDIC objects (tables/structures/types)
+	// they use at runtime. Z_ADT_MCP_TEST_REPORT is known to reference at least SYST
+	// (system field structure) which every ABAP program implicitly uses.
+	const objType = "PROG"
+	const objName = "Z_ADT_MCP_TEST_REPORT"
+	const uri = "/sap/bc/adt/programs/programs/z_adt_mcp_test_report"
+
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+			requireFixture(t, sharedServer, sys, uri)
+
+			res := callTool(t, sharedServer, "get_object_dependencies", map[string]interface{}{
+				"object_type": objType,
+				"object_name": objName,
+			})
+			if res.IsError {
+				t.Fatalf("get_object_dependencies returned IsError=true: %s", textOf(res))
+			}
+
+			var payload struct {
+				ObjectType   string `json:"object_type"`
+				ObjectName   string `json:"object_name"`
+				Count        int    `json:"count"`
+				Dependencies []struct {
+					Name    string `json:"name"`
+					UseType string `json:"use_type"`
+				} `json:"dependencies"`
+			}
+			if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
+				t.Fatalf("unmarshal get_object_dependencies result: %v\nraw: %s", err, textOf(res))
+			}
+			if payload.ObjectType != objType {
+				t.Errorf("object_type: got %q, want %q", payload.ObjectType, objType)
+			}
+			if payload.ObjectName != objName {
+				t.Errorf("object_name: got %q, want %q", payload.ObjectName, objName)
+			}
+			if payload.Count != len(payload.Dependencies) {
+				t.Errorf("count=%d does not match len(dependencies)=%d", payload.Count, len(payload.Dependencies))
+			}
+			// D010TAB always has entries for any activated ABAP program (at minimum SYST).
+			if payload.Count == 0 {
+				t.Errorf("expected at least one D010TAB dependency for %s, got 0 — is the program activated?", objName)
+			}
+			foundSYST := false
+			for i, dep := range payload.Dependencies {
+				if dep.Name == "" {
+					t.Errorf("dependency[%d].name is empty", i)
+				}
+				if dep.UseType != "TABLE" {
+					t.Errorf("dependency[%d].use_type: got %q, want %q", i, dep.UseType, "TABLE")
+				}
+				if dep.Name == "SYST" {
+					foundSYST = true
+				}
+			}
+			if !foundSYST {
+				t.Errorf("expected SYST in D010TAB dependencies of %s — got: %+v", objName, payload.Dependencies)
+			}
+			t.Logf("get_object_dependencies on %s/%s returned %d D010TAB dependency(ies)", sys, objName, payload.Count)
+		})
+	}
+}

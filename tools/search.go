@@ -108,14 +108,14 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
-			"Find all ABAP objects that a given object references (forward direction). "+
+			"Find all DDIC objects (tables, structures, types) that a given ABAP program references at runtime. "+
 				"Counterpart to where_used, which answers the reverse question. "+
-				"Queries the SAP workbench cross-reference table WBCROSSGT. "+
-				"Useful for transport completeness checks: given an object in a transport, "+
-				"find what it depends on.",
+				"Queries D010TAB, the ABAP program-to-DDIC dependency table. "+
+				"Useful for transport completeness checks: given a PROG in a transport, "+
+				"find which DDIC objects it depends on.",
 		),
-		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type, e.g. CLAS, PROG, TABL, INTF")),
-		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. /HFQ/MY_CLASS")),
+		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type — currently only PROG is supported (D010TAB)")),
+		mcp.WithString("object_name", mcp.Required(), mcp.Description("Program name, e.g. Z_MY_REPORT or SAPL_MY_FUGR")),
 		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		objType := req.GetString("object_type", "")
@@ -123,8 +123,8 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		maxResults := int(req.GetFloat("max_results", 200))
 
 		sql := fmt.Sprintf(
-			"SELECT REFOBJNM, REFUSETYP FROM WBCROSSGT WHERE OBJECT = '%s' AND OBJ_NAME = '%s' ORDER BY REFOBJNM",
-			adt.EscapeValue(objType), adt.EscapeValue(objName),
+			"SELECT TABNAME FROM D010TAB WHERE MASTER = '%s' ORDER BY TABNAME",
+			adt.EscapeValue(objName),
 		)
 
 		queryResult, err := client.RunQuery(ctx, sql, maxResults)
@@ -142,10 +142,10 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 
 		deps := make([]dependency, 0, len(queryResult.Rows))
 		for _, row := range queryResult.Rows {
-			if len(row) < 2 {
+			if len(row) < 1 || row[0] == "" {
 				continue
 			}
-			deps = append(deps, dependency{Name: row[0], UseType: row[1]})
+			deps = append(deps, dependency{Name: row[0], UseType: "TABLE"})
 		}
 
 		out, _ := json.Marshal(map[string]any{
