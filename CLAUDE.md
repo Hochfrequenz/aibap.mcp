@@ -44,6 +44,8 @@ Since most fixes now live in [adtler](https://github.com/Hochfrequenz/adtler), i
 
 ## Adding a New Tool
 
+**Before you start:** skim the public API of the MCP framework (`mcp-go`) rather than reinventing. The [`mcp-go` README](https://github.com/mark3labs/mcp-go) and the source in `mcp/utils.go` + `mcp/tools.go` (vendored under `~/go/pkg/mod/github.com/mark3labs/mcp-go@vX.Y.Z/` after `go mod download`) are the authoritative reference. A lot of "we need a helper for …" problems turn out to already have a dedicated `NewToolResult*`, `With*`, or option helper upstream. The [MCP specification](https://modelcontextprotocol.io/specification) is the protocol-level ground truth — check it when designing a schema or a capability (e.g. `outputSchema` must be `type: object` at the top level).
+
 1. Create `tools/myfeature.go`.
 2. Implement `registerMyFeatureTools(s toolAdder, client adt.SomeClient)`.
 3. Inside, call `s.AddTool(mcp.NewTool(...), handlerFunc)`.
