@@ -11,10 +11,15 @@ import (
 // ToolError is the structured error payload attached to the
 // StructuredContent field of every error-channel CallToolResult built by
 // errorResult. Clients reading the 2025-06-18 MCP wire format can access
-// the SAP status code and message directly instead of parsing the
-// `"Error: "` prefix out of the text fallback.
+// the SAP status code directly instead of parsing the `"Error: "` prefix
+// out of the text fallback.
 //
-// Status code is populated when the underlying error is (or wraps) an
+// Message always mirrors err.Error() — identical modulo the "Error: "
+// prefix to the text content. This preserves any wrap context
+// (e.g. "auto-lock failed: SAP ADT error 423: ...") that would otherwise
+// be lost by surfacing only the inner adt.ADTError.Message.
+//
+// StatusCode is populated when the underlying error is (or wraps) an
 // adt.ADTError; otherwise it is zero and omitted from the JSON.
 type ToolError struct {
 	StatusCode int    `json:"status_code,omitempty"`
@@ -25,14 +30,12 @@ type ToolError struct {
 //
 // The text content keeps the legacy `"Error: <full error string>"` form
 // for clients that only consume text. StructuredContent carries a typed
-// ToolError — for adt.ADTError, the SAP status code is split out from
-// the message so clients don't have to string-parse it.
+// ToolError — see the type doc for the semantics.
 func errorResult(err error) *mcp.CallToolResult {
 	toolErr := ToolError{Message: err.Error()}
 	var adtErr *adt.ADTError
 	if errors.As(err, &adtErr) {
 		toolErr.StatusCode = adtErr.StatusCode
-		toolErr.Message = adtErr.Message
 	}
 	return &mcp.CallToolResult{
 		IsError: true,
