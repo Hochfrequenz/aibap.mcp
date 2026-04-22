@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -22,6 +21,7 @@ func registerTextElementTools(s toolAdder, client adt.DocuClient) {
 				"Not available on all systems — depends on the SAP Basis version.",
 		),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
+		mcp.WithOutputSchema[adt.TextElements](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		if uri == "" {
@@ -31,7 +31,6 @@ func registerTextElementTools(s toolAdder, client adt.DocuClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 }

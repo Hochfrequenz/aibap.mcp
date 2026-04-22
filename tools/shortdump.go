@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -31,8 +30,8 @@ func registerShortDumpTools(s toolAdder, client adt.DumpClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(dumps)
-		return mcp.NewToolResultText(string(out)), nil
+		// Top-level slice — no WithOutputSchema.
+		return mcp.NewToolResultJSON(dumps)
 	})
 
 	s.AddTool(mcp.NewTool("get_short_dump_details",
@@ -57,7 +56,7 @@ func registerShortDumpTools(s toolAdder, client adt.DumpClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(dumps)
-		return mcp.NewToolResultText(string(out)), nil
+		// Top-level slice — no WithOutputSchema.
+		return mcp.NewToolResultJSON(dumps)
 	})
 }

@@ -94,6 +94,7 @@ func registerPatchTools(s toolAdder, client interface {
 		mcp.WithString("lock_handle",
 			mcp.Description("Lock handle (optional; looked up from lock map, or auto-acquired)"),
 		),
+		mcp.WithOutputSchema[PatchSourceResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		transport := req.GetString("transport", "")
@@ -153,13 +154,12 @@ func registerPatchTools(s toolAdder, client interface {
 
 		delta := adt.LineDelta(oldSource, newSource)
 
-		out, _ := json.Marshal(map[string]interface{}{
-			"success":     true,
-			"line_delta":  delta,
-			"locked":      autoLocked,
-			"lock_handle": lockHandle,
-			"etag":        newETag,
+		return mcp.NewToolResultJSON(PatchSourceResult{
+			Success:    true,
+			LineDelta:  delta,
+			Locked:     autoLocked,
+			LockHandle: lockHandle,
+			ETag:       newETag,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 }

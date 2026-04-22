@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -16,13 +15,13 @@ func registerATCTools(s toolAdder, client adt.QualityClient) {
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Get ATC (ABAP Test Cockpit) configuration including check variant and exemption reasons."),
+		mcp.WithOutputSchema[adt.ATCCustomizingResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		result, err := client.GetATCCustomizing(ctx)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 
 	s.AddTool(mcp.NewTool("run_atc_check",
@@ -38,6 +37,7 @@ func registerATCTools(s toolAdder, client adt.QualityClient) {
 			mcp.WithStringItems(),
 		),
 		mcp.WithString("check_variant", mcp.Description("ATC check variant name (e.g. 'DEFAULT' or 'ZCB_CLEAN_ABAP_1'). If empty, uses the system default. On ECC systems this may be required to avoid a server error.")),
+		mcp.WithOutputSchema[adt.ATCResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uris := req.GetStringSlice("object_uris", nil)
 		if len(uris) == 0 {
@@ -49,7 +49,6 @@ func registerATCTools(s toolAdder, client adt.QualityClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 }

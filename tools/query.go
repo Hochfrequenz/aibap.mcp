@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -22,6 +21,7 @@ func registerQueryTools(s toolAdder, client adt.QueryClient) {
 		),
 		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL SELECT statement, e.g. 'SELECT BUKRS, BUTXT FROM T001'")),
 		mcp.WithNumber("max_rows", mcp.Description("Maximum number of rows to return (default: 100)")),
+		mcp.WithOutputSchema[adt.QueryResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		sql := req.GetString("sql", "")
 		maxRows := int(req.GetFloat("max_rows", 100))
@@ -29,7 +29,6 @@ func registerQueryTools(s toolAdder, client adt.QueryClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 }

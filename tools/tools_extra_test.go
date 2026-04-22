@@ -31,10 +31,15 @@ func TestLockObjectTool(t *testing.T) {
 	if gotURI != testObjectURI {
 		t.Errorf("uri: got %q, want %q", gotURI, testObjectURI)
 	}
-	// Result text should be the lock handle.
-	text := firstText(result)
-	if text != testLockHandle123 {
-		t.Errorf("result text = %q, want %q", text, testLockHandle123)
+	// Result is a structured LockResult with the handle.
+	var got struct {
+		Handle string `json:"handle"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &got); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if got.Handle != testLockHandle123 {
+		t.Errorf("handle = %q, want %q", got.Handle, testLockHandle123)
 	}
 	// Lock map should be populated.
 	state, ok := lockMap.Get("dev:" + testObjectURI)
@@ -168,8 +173,14 @@ func TestPrettyPrintTool(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error result")
 	}
-	if text := firstText(result); text != formatted {
-		t.Errorf("result text = %q, want %q", text, formatted)
+	var got struct {
+		Formatted string `json:"formatted"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &got); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if got.Formatted != formatted {
+		t.Errorf("formatted = %q, want %q", got.Formatted, formatted)
 	}
 }
 

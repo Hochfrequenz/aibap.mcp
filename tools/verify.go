@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/rand"
 
@@ -28,6 +27,7 @@ func registerVerifyTools(s toolAdder, client adt.Client) {
 				"Returns {valid: true/false, messages: [...]}.",
 		),
 		mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code to check")),
+		mcp.WithOutputSchema[VerifyResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		source := req.GetString("source", "")
 		if source == "" {
@@ -38,8 +38,7 @@ func registerVerifyTools(s toolAdder, client adt.Client) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 }
 
