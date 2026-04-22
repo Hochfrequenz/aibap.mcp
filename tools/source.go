@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -160,14 +159,4 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 			Include: include,
 		})
 	})
-}
-
-// errorResult converts an error to an MCP error result with the SAP error message.
-func errorResult(err error) *mcp.CallToolResult {
-	return &mcp.CallToolResult{
-		IsError: true,
-		Content: []mcp.Content{
-			mcp.NewTextContent(fmt.Sprintf("Error: %s", err.Error())),
-		},
-	}
 }
