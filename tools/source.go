@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -23,6 +22,8 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 			mcp.Required(),
 			mcp.Description("ADT object URI, e.g. /sap/bc/adt/programs/programs/ZREPORT"),
 		),
+		// No WithOutputSchema: single/array paths differ in return shape
+		// (SourceResult vs SourceMultiResult).
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		single, multi := getStringOrSlice(req.GetArguments(), paramObjectURI)
 		if multi == nil {
@@ -31,21 +32,10 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 				return errorResult(err), nil
 			}
 			lockMap.UpdateETag(adt.LockKey(selector.ActiveName(), single), result.ETag)
-			out, _ := json.Marshal(map[string]string{
-				"source": result.Source,
-				"etag":   result.ETag,
-			})
-			return mcp.NewToolResultText(string(out)), nil
+			return mcp.NewToolResultJSON(SourceResult{Source: result.Source, ETag: result.ETag})
 		}
 
-		type sourceResult struct {
-			ObjectURI string `json:"object_uri"`
-			Source    string `json:"source,omitempty"`
-			ETag      string `json:"etag,omitempty"`
-			Error     string `json:"error,omitempty"`
-		}
-
-		results := make([]sourceResult, len(multi))
+		results := make([]SourceMultiEntry, len(multi))
 		var wg sync.WaitGroup
 		sem := make(chan struct{}, 10)
 		wg.Add(len(multi))
@@ -55,7 +45,7 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 				sem <- struct{}{}
 				defer func() { <-sem }()
 				res, err := client.GetSource(ctx, uri)
-				results[i] = sourceResult{ObjectURI: uri}
+				results[i] = SourceMultiEntry{ObjectURI: uri}
 				if err != nil {
 					results[i].Error = err.Error()
 				} else {
@@ -77,14 +67,13 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 			totalLines += strings.Count(r.Source, "\n")
 		}
 
-		out, _ := json.Marshal(map[string]any{
-			"total":       len(multi),
-			"succeeded":   succeeded,
-			"failed":      failed,
-			"total_lines": totalLines,
-			"results":     results,
+		return mcp.NewToolResultJSON(SourceMultiResult{
+			Total:      len(multi),
+			Succeeded:  succeeded,
+			Failed:     failed,
+			TotalLines: totalLines,
+			Results:    results,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 
 	s.AddTool(mcp.NewTool("get_class_definition",
@@ -100,17 +89,14 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 				"Saves ~95% tokens on large classes.",
 		),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description("Class URI, e.g. /sap/bc/adt/oo/classes/ZCL_MY_CLASS")),
+		mcp.WithOutputSchema[SourceResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		result, err := client.GetClassDefinition(ctx, uri)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(map[string]string{
-			"source": result.Source,
-			"etag":   result.ETag,
-		})
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(SourceResult{Source: result.Source, ETag: result.ETag})
 	})
 
 	s.AddTool(mcp.NewTool("get_include_source",
@@ -126,6 +112,7 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description("Class URI, e.g. /sap/bc/adt/oo/classes/ZCL_MY_CLASS")),
 		mcp.WithString("include", mcp.Required(), mcp.Description("Include name: testclasses, definitions, implementations, or macros")),
+		mcp.WithOutputSchema[IncludeSourceResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		include := req.GetString("include", "")
@@ -133,12 +120,11 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(map[string]string{
-			"source":  result.Source,
-			"etag":    result.ETag,
-			"include": include,
+		return mcp.NewToolResultJSON(IncludeSourceResult{
+			Source:  result.Source,
+			ETag:    result.ETag,
+			Include: include,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 
 	s.AddTool(mcp.NewTool("set_include_source",
@@ -157,6 +143,7 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		mcp.WithString("lock_handle", mcp.Description("Lock handle from lock_object (optional, looked up from lock map)")),
 		mcp.WithString("transport", mcp.Description("Transport request number (required for non-local packages)")),
 		mcp.WithString("etag", mcp.Required(), mcp.Description("ETag from get_include_source for optimistic locking")),
+		mcp.WithOutputSchema[SetIncludeSourceResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		include := req.GetString("include", "")
@@ -168,11 +155,10 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(map[string]string{
-			"etag":    newETag,
-			"include": include,
+		return mcp.NewToolResultJSON(SetIncludeSourceResult{
+			ETag:    newETag,
+			Include: include,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 }
 

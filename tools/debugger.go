@@ -9,6 +9,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// debugRawJSON wraps a JSON byte payload from the adtler debugger API so it
+// round-trips through NewToolResultJSON without being base64-encoded.
+// The adtler debugger helpers return pre-marshalled JSON; these endpoints do
+// not expose typed Go structs yet, so we forward the raw JSON as-is. No
+// WithOutputSchema is declared for the corresponding tools — their shape is
+// determined by the SAP debugger and not yet captured in a Go type.
+
 func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector) {
 	// Shared debug session — created lazily on first use.
 	var dbg *adt.DebugSession
@@ -56,8 +63,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(bp)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(bp)
 	})
 
 	s.AddTool(mcp.NewTool("debug_remove_breakpoint",
@@ -69,10 +75,14 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 			mcp.Required(),
 			mcp.Description("Breakpoint ID returned by debug_set_breakpoint"),
 		),
+		mcp.WithOutputSchema[BreakpointRemoveResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		_ = req.GetString("breakpoint_id", "")
 		// TODO: implement RemoveBreakpoint in DebugSession
-		return mcp.NewToolResultText("Breakpoint removal not yet implemented — breakpoints are cleared on debug_stop"), nil
+		return mcp.NewToolResultJSON(BreakpointRemoveResult{
+			Removed: false,
+			Message: "Breakpoint removal not yet implemented — breakpoints are cleared on debug_stop",
+		})
 	})
 
 	s.AddTool(mcp.NewTool("debug_start",
@@ -103,6 +113,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		mcp.WithNumber("timeout_seconds",
 			mcp.Description("Listener timeout in seconds (default: 60)"),
 		),
+		mcp.WithOutputSchema[DebugStartResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		line := req.GetInt("line", 0)
@@ -125,12 +136,11 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(map[string]string{
-			"breakpoint_id": bp.ID,
-			"status":        result.Status,
-			"debuggee_id":   result.DebuggeeID,
+		return mcp.NewToolResultJSON(DebugStartResult{
+			BreakpointID: bp.ID,
+			Status:       result.Status,
+			DebuggeeID:   result.DebuggeeID,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 
 	s.AddTool(mcp.NewTool("debug_stop",
@@ -143,12 +153,13 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 			mcp.Required(),
 			mcp.Description("SAP username for the debug session"),
 		),
+		mcp.WithOutputSchema[DebugListenerStopResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
 		if err := getSession(user).StopListener(ctx); err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText("Debug listener stopped and breakpoints cleared"), nil
+		return mcp.NewToolResultJSON(DebugListenerStopResult{Stopped: true})
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_sessions",
@@ -168,7 +179,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(string(data)), nil
+		return mcp.NewToolResultJSON(json.RawMessage(data))
 	})
 
 	s.AddTool(mcp.NewTool("debug_attach",
@@ -184,13 +195,14 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 			mcp.Required(),
 			mcp.Description("SAP username for the debug session"),
 		),
+		mcp.WithOutputSchema[DebugAttachResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		debuggeeID := req.GetString("debuggee_id", "")
 		user := req.GetString("user", "")
 		if err := getSession(user).Attach(ctx, debuggeeID); err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(fmt.Sprintf("Attached to debuggee %s", debuggeeID)), nil
+		return mcp.NewToolResultJSON(DebugAttachResult{DebuggeeID: debuggeeID, Attached: true})
 	})
 
 	s.AddTool(mcp.NewTool("debug_step",
@@ -214,7 +226,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(string(data)), nil
+		return mcp.NewToolResultJSON(json.RawMessage(data))
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_variable",
@@ -239,7 +251,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(string(data)), nil
+		return mcp.NewToolResultJSON(json.RawMessage(data))
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_stack",
@@ -259,7 +271,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(string(data)), nil
+		return mcp.NewToolResultJSON(json.RawMessage(data))
 	})
 
 	s.AddTool(mcp.NewTool("debug_set_watchpoint",
@@ -286,6 +298,6 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(string(data)), nil
+		return mcp.NewToolResultJSON(json.RawMessage(data))
 	})
 }

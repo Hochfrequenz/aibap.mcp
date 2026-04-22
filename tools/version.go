@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -31,8 +30,8 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(versions)
-		return mcp.NewToolResultText(string(out)), nil
+		// Top-level slice — no WithOutputSchema.
+		return mcp.NewToolResultJSON(versions)
 	})
 
 	s.AddTool(mcp.NewTool("get_version_source",
@@ -48,6 +47,7 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 				"review what a transport changed, or recover previous code.",
 		),
 		mcp.WithString("content_uri", mcp.Required(), mcp.Description("Version content URI from get_version_history (e.g. .../versions/20220120132913/00002/content)")),
+		mcp.WithOutputSchema[VersionSourceResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString("content_uri", "")
 		if uri == "" {
@@ -57,7 +57,7 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(source), nil
+		return mcp.NewToolResultJSON(VersionSourceResult{Source: source})
 	})
 
 	s.AddTool(mcp.NewTool("diff_active_inactive",
@@ -71,6 +71,7 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 				"Shows pending changes that haven't been activated yet — like 'git diff' for staged changes.",
 		),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
+		mcp.WithOutputSchema[adt.DiffResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		if uri == "" {
@@ -80,7 +81,6 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 }

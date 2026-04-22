@@ -17,12 +17,13 @@ func registerSystemTools(s toolAdder, selector SystemSelector) {
 			mcp.Required(),
 			mcp.Description("Name of the system to activate, as defined in config.json (e.g. \"dev\", \"prod\")"),
 		),
+		mcp.WithOutputSchema[SelectSystemResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("system", "")
 		msg, err := selector.Select(name)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(msg), nil
+		return mcp.NewToolResultJSON(SelectSystemResult{System: name, Message: msg})
 	})
 }

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -46,6 +45,7 @@ func registerCustomizingTools(s toolAdder, client adt.Client) {
 		mcp.WithNumber("workers",
 			mcp.Description("Number of parallel export workers (default: 20, max: 40). "+
 				"20 is the benchmarked sweet spot. Reduce if SAP is under heavy load.")),
+		mcp.WithOutputSchema[custexport.ExportSummary](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		outputDir := req.GetString("output_dir", "")
 		customerOnly := req.GetBool("customer_only", false)
@@ -83,7 +83,6 @@ func registerCustomizingTools(s toolAdder, client adt.Client) {
 			return errorResult(err), nil
 		}
 
-		out, _ := json.Marshal(summary)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(summary)
 	})
 }
