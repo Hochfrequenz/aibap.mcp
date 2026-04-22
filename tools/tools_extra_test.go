@@ -3,6 +3,7 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -1181,5 +1182,172 @@ func TestBatchGetSourceEmptyURIs(t *testing.T) {
 	}
 	if out.Total != 0 {
 		t.Errorf("total: got %d, want 0", out.Total)
+	}
+}
+
+// --- get_object_dependencies ---
+
+func TestGetObjectDependenciesTool(t *testing.T) {
+	var gotSQL string
+	var gotMaxRows int
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, maxRows int) (*adt.QueryResult, error) {
+			gotSQL = sql
+			gotMaxRows = maxRows
+			return &adt.QueryResult{
+				Columns: []adt.QueryColumn{
+					{Name: "TABNAME"},
+				},
+				Rows: [][]string{
+					{"SCREEN"},
+					{"SYST"},
+				},
+			}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "PROG",
+		"object_name": "Z_MY_REPORT",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+
+	if !strings.Contains(gotSQL, "MASTER = 'Z_MY_REPORT'") {
+		t.Errorf("SQL missing program name filter, got: %s", gotSQL)
+	}
+	if !strings.Contains(gotSQL, "D010TAB") {
+		t.Errorf("SQL missing table name, got: %s", gotSQL)
+	}
+	if gotMaxRows != 200 {
+		t.Errorf("maxRows: got %d, want 200 (default)", gotMaxRows)
+	}
+
+	text := firstText(result)
+	var out struct {
+		ObjectType   string `json:"object_type"`
+		ObjectName   string `json:"object_name"`
+		Count        int    `json:"count"`
+		Dependencies []struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal result: %v\ntext: %q", err, text)
+	}
+	if out.ObjectType != "PROG" {
+		t.Errorf("object_type: got %q, want %q", out.ObjectType, "PROG")
+	}
+	if out.ObjectName != "Z_MY_REPORT" {
+		t.Errorf("object_name: got %q, want %q", out.ObjectName, "Z_MY_REPORT")
+	}
+	if out.Count != 2 {
+		t.Errorf("count: got %d, want 2", out.Count)
+	}
+	if len(out.Dependencies) != 2 {
+		t.Fatalf("dependencies length: got %d, want 2", len(out.Dependencies))
+	}
+	if out.Dependencies[0].Name != "SCREEN" {
+		t.Errorf("dep[0].name: got %q, want SCREEN", out.Dependencies[0].Name)
+	}
+	if out.Dependencies[0].UseType != "TABLE" {
+		t.Errorf("dep[0].use_type: got %q, want TABLE", out.Dependencies[0].UseType)
+	}
+}
+
+func TestGetObjectDependenciesToolCustomMaxResults(t *testing.T) {
+	var gotMaxRows int
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, _ string, maxRows int) (*adt.QueryResult, error) {
+			gotMaxRows = maxRows
+			return &adt.QueryResult{
+				Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+				Rows:    [][]string{},
+			}, nil
+		},
+	}
+	s := newTestServer(mock)
+	callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "PROG",
+		"object_name": "ZTEST",
+		"max_results": float64(50),
+	})
+	if gotMaxRows != 50 {
+		t.Errorf("maxRows: got %d, want 50", gotMaxRows)
+	}
+}
+
+func TestGetObjectDependenciesToolEmpty(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+			return &adt.QueryResult{
+				Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+				Rows:    [][]string{},
+			}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "PROG",
+		"object_name": "Z_STANDALONE",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	text := firstText(result)
+	var out struct {
+		Count        int `json:"count"`
+		Dependencies []struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Count != 0 {
+		t.Errorf("count: got %d, want 0", out.Count)
+	}
+	if len(out.Dependencies) != 0 {
+		t.Errorf("dependencies: got %d, want 0", len(out.Dependencies))
+	}
+}
+
+func TestGetObjectDependenciesToolError(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+			return nil, &adt.ADTError{StatusCode: 500, Message: "query failed"}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "CLAS",
+		"object_name": "/HFQ/MY_CLASS",
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true")
+	}
+}
+
+func TestGetObjectDependenciesToolSQLEscaping(t *testing.T) {
+	var gotSQL string
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			gotSQL = sql
+			return &adt.QueryResult{
+				Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+				Rows:    [][]string{},
+			}, nil
+		},
+	}
+	s := newTestServer(mock)
+	callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "PROG",
+		"object_name": "O'REILLY_PROG",
+	})
+	if !strings.Contains(gotSQL, "O''REILLY_PROG") {
+		t.Errorf("single quote not escaped in object_name, got: %s", gotSQL)
 	}
 }
