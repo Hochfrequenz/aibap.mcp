@@ -3,13 +3,22 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerSearchTools(s toolAdder, client adt.SearchClient) {
+// searchQueryClient is the combined interface required by registerSearchTools.
+// It extends adt.SearchClient with adt.QueryClient so get_object_dependencies
+// can call RunQuery without changing the register.go call site.
+type searchQueryClient interface {
+	adt.SearchClient
+	adt.QueryClient
+}
+
+func registerSearchTools(s toolAdder, client searchQueryClient) {
 	s.AddTool(mcp.NewTool("search_objects",
 		mcp.WithTitleAnnotation("Search ABAP Objects"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -88,6 +97,62 @@ func registerSearchTools(s toolAdder, client adt.SearchClient) {
 			"total":            len(multi),
 			"total_references": totalRefs,
 			"results":          results,
+		})
+		return mcp.NewToolResultText(string(out)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_object_dependencies",
+		mcp.WithTitleAnnotation("Get Object Dependencies"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"Find all DDIC objects (tables, structures, types) that a given ABAP program references at runtime. "+
+				"Counterpart to where_used, which answers the reverse question. "+
+				"Queries D010TAB, the ABAP program-to-DDIC dependency table. "+
+				"Useful for transport completeness checks: given a PROG in a transport, "+
+				"find which DDIC objects it depends on.",
+		),
+		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type — currently only PROG is supported (D010TAB)")),
+		mcp.WithString("object_name", mcp.Required(), mcp.Description("Program name, e.g. Z_MY_REPORT or SAPL_MY_FUGR")),
+		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		objType := req.GetString("object_type", "")
+		objName := req.GetString("object_name", "")
+		maxResults := int(req.GetFloat("max_results", 200))
+
+		sql := fmt.Sprintf(
+			"SELECT TABNAME FROM D010TAB WHERE MASTER = '%s' ORDER BY TABNAME",
+			adt.EscapeValue(objName),
+		)
+
+		queryResult, err := client.RunQuery(ctx, sql, maxResults)
+		if err != nil {
+			return errorResult(err), nil
+		}
+		if queryResult == nil {
+			queryResult = &adt.QueryResult{}
+		}
+
+		type dependency struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		}
+
+		deps := make([]dependency, 0, len(queryResult.Rows))
+		for _, row := range queryResult.Rows {
+			if len(row) < 1 || row[0] == "" {
+				continue
+			}
+			deps = append(deps, dependency{Name: row[0], UseType: "TABLE"})
+		}
+
+		out, _ := json.Marshal(map[string]any{
+			"object_type":  objType,
+			"object_name":  objName,
+			"count":        len(deps),
+			"dependencies": deps,
 		})
 		return mcp.NewToolResultText(string(out)), nil
 	})
