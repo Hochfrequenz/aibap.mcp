@@ -49,6 +49,34 @@ Since most fixes now live in [adtler](https://github.com/Hochfrequenz/adtler), i
 3. Inside, call `s.AddTool(mcp.NewTool(...), handlerFunc)`.
 4. Call `registerMyFeatureTools()` from `RegisterAllWithLockMap()` in `tools/register.go`.
 5. Errors: return `errorResult(err), nil` (MCP-level), not `nil, err` (reserved for critical failures).
+6. **Structured results (mandatory).** Return values are typed, not stringly. See the rules below — any new handler that serialises through text-only `NewToolResultText` will be rejected in review.
+
+### Structured tool results (rules)
+
+The 2025-06-18 MCP spec has first-class support for typed output via `structuredContent` + `outputSchema`. `mcp-go` exposes this; every handler in this repo uses it. Don't re-invent stringly-typed returns.
+
+**Do:**
+
+- Return successes via `return mcp.NewToolResultJSON(result)` — populates both text fallback (for older clients) and `StructuredContent` (for 2025-06-18 clients) from a single Go value. The helper's `(*CallToolResult, error)` signature matches the handler signature; on marshal failure the error propagates.
+- Declare the output schema on every tool that returns an object shape: `mcp.WithOutputSchema[T]()` as a `ToolOption` alongside `mcp.WithDescription(...)` etc. `T` is usually an adtler struct (e.g. `adt.ATCCustomizingResult`) or a local result type in `tools/results.go`.
+- Prefer the adtler struct as the wire type when the handler already just marshals one. No parallel DTO layer.
+- If there is no adtler type, define a named struct in `tools/results.go` with explicit `json:"..."` tags. One type per tool is fine. Don't inline `struct{...}` literals or `map[string]any{...}`.
+- Single-handler types (tightly coupled to one registration) can live next to the registration instead of `tools/results.go` — see `RollbackResult`, `NavigationResult`, `VerifyResult`, `BAdIImplementationWithXML`.
+
+**Do not:**
+
+- `out, _ := json.Marshal(x); return mcp.NewToolResultText(string(out)), nil` — stringly-typed, drops marshal errors. Dead pattern.
+- Return bare strings for "success" (`"Transport X released"`, `"Object unlocked"`). Return a typed struct with a boolean flag and relevant IDs.
+- Inline anonymous struct types inside handlers just to give `json.Marshal` something shaped. Pull them up to a named type.
+- Return `map[string]any{...}` as the success payload. Define a struct.
+
+**When `WithOutputSchema` does NOT apply (and you leave it off):**
+
+- The tool returns a top-level JSON array (e.g. `[]adt.ObjectInfo`). The MCP spec requires output schemas to be `type: object`; `mcp-go` forcibly sets the type, producing an invalid schema. Leave a comment: `// Top-level slice — no WithOutputSchema.`
+- The tool's return shape is polymorphic across branches of the same handler (e.g. single-URI path returns one struct, array-URI path returns a batch-result struct). A schema that describes only one branch is actively misleading. Leave a comment noting why.
+- The tool forwards pre-marshaled JSON bytes from adtler (see `tools/debugger.go` — wrap in `json.RawMessage` so it round-trips through `NewToolResultJSON` without base64-encoding). No typed Go struct exists to generate a schema from.
+
+If you're tempted to reach for any of those escape hatches, first check whether the upstream adtler call can return a typed struct instead — and if it already does, use it.
 
 ## Project Structure
 
