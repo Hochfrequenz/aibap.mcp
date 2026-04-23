@@ -10,6 +10,19 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// useType constants for ObjectDependency.UseType.
+// Defined here because goconst requires repeated string literals to be extracted;
+// they are also exported-style names to serve as documentation for callers.
+const (
+	useTypeTable       = "TABLE"
+	useTypeStructure   = "STRUCTURE"
+	useTypeDataElement = "DATA_ELEMENT"
+	useTypeDomain      = "DOMAIN"
+	useTypeView        = "VIEW"
+	useTypeTableType   = "TABLE_TYPE"
+	useTypeUnknown     = "UNKNOWN"
+)
+
 // searchQueryClient is the combined interface required by registerSearchTools.
 // It extends adt.SearchClient with adt.QueryClient so get_object_dependencies
 // can call RunQuery without changing the register.go call site.
@@ -195,7 +208,7 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 func classifyDDICObjects(ctx context.Context, client adt.QueryClient, names []string) map[string]string {
 	result := make(map[string]string, len(names))
 	for _, n := range names {
-		result[n] = "UNKNOWN"
+		result[n] = useTypeUnknown
 	}
 
 	// Step 1 — DD02L: classify all names that are tables or structures.
@@ -213,7 +226,7 @@ func classifyDDICObjects(ctx context.Context, client adt.QueryClient, names []st
 	// These are typically data elements, domains, and table types.
 	var unknownNames []string
 	for _, n := range names {
-		if result[n] == "UNKNOWN" {
+		if result[n] == useTypeUnknown {
 			unknownNames = append(unknownNames, n)
 		}
 	}
@@ -228,16 +241,16 @@ func classifyDDICObjects(ctx context.Context, client adt.QueryClient, names []st
 				objType, objName := row[0], row[1]
 				switch objType {
 				case "DTEL":
-					result[objName] = "DATA_ELEMENT"
+					result[objName] = useTypeDataElement
 				case "DOMA":
-					result[objName] = "DOMAIN"
+					result[objName] = useTypeDomain
 				case "TTYP":
-					result[objName] = "TABLE_TYPE"
+					result[objName] = useTypeTableType
 				case "VIEW":
-					result[objName] = "VIEW"
-				// Other TADIR types (PROG, FUGR, CLAS, …) are not expected in
-				// D010TAB (which tracks only DDIC dependencies). Leave them UNKNOWN
-				// so callers see an honest signal rather than a wrong classification.
+					result[objName] = useTypeView
+					// Other TADIR types (PROG, FUGR, CLAS, …) are not expected in
+					// D010TAB (which tracks only DDIC dependencies). Leave them UNKNOWN
+					// so callers see an honest signal rather than a wrong classification.
 				}
 			}
 		}
@@ -264,14 +277,14 @@ func buildSQLInList(names []string) string {
 func tabclassToUseType(tabclass string) string {
 	switch tabclass {
 	case "TRANSP":
-		return "TABLE"
+		return useTypeTable
 	case "INTTAB":
-		return "STRUCTURE"
+		return useTypeStructure
 	case "CLUSTER", "POOL":
-		return "TABLE"
+		return useTypeTable
 	case "VIEW":
-		return "VIEW"
+		return useTypeView
 	default:
-		return "UNKNOWN"
+		return useTypeUnknown
 	}
 }
