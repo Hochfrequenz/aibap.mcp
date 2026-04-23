@@ -546,8 +546,12 @@ func TestIntegration_GetObjectDependencies(t *testing.T) {
 				if dep.Name == "" {
 					t.Errorf("dependency[%d].name is empty", i)
 				}
-				if dep.UseType != "TABLE" {
-					t.Errorf("dependency[%d].use_type: got %q, want %q", i, dep.UseType, "TABLE")
+				validUseTypes := map[string]bool{
+					"TABLE": true, "STRUCTURE": true, "DATA_ELEMENT": true,
+					"DOMAIN": true, "VIEW": true, "UNKNOWN": true,
+				}
+				if !validUseTypes[dep.UseType] {
+					t.Errorf("dependency[%d].use_type: got %q, want one of TABLE/STRUCTURE/DATA_ELEMENT/DOMAIN/VIEW/UNKNOWN", i, dep.UseType)
 				}
 				if dep.Name == "SYST" {
 					foundSYST = true

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -146,12 +147,21 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 			queryResult = &adt.QueryResult{}
 		}
 
+		var names []string
 		deps := make([]ObjectDependency, 0, len(queryResult.Rows))
 		for _, row := range queryResult.Rows {
 			if len(row) < 1 || row[0] == "" {
 				continue
 			}
-			deps = append(deps, ObjectDependency{Name: row[0], UseType: "TABLE"})
+			names = append(names, row[0])
+			deps = append(deps, ObjectDependency{Name: row[0]})
+		}
+
+		if len(names) > 0 {
+			classification := classifyDDICObjects(ctx, client, names)
+			for i := range deps {
+				deps[i].UseType = classification[deps[i].Name]
+			}
 		}
 
 		return mcp.NewToolResultJSON(ObjectDependenciesResult{
@@ -161,4 +171,70 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 			Dependencies: deps,
 		})
 	})
+}
+
+// classifyDDICObjects resolves the DDIC kind for each name by querying catalog tables.
+// Priority: DD02L (tables/structures) → DD04L (data elements) → DD01L (domains) → "UNKNOWN".
+func classifyDDICObjects(ctx context.Context, client adt.QueryClient, names []string) map[string]string {
+	result := make(map[string]string, len(names))
+	for _, n := range names {
+		result[n] = "UNKNOWN"
+	}
+
+	inList := buildSQLInList(names)
+
+	if qr, err := client.RunQuery(ctx,
+		fmt.Sprintf("SELECT TABNAME, TABCLASS FROM DD02L WHERE TABNAME IN (%s)", inList),
+		len(names)); err == nil && qr != nil {
+		for _, row := range qr.Rows {
+			if len(row) >= 2 {
+				result[row[0]] = tabclassToUseType(row[1])
+			}
+		}
+	}
+
+	if qr, err := client.RunQuery(ctx,
+		fmt.Sprintf("SELECT ROLLNAME FROM DD04L WHERE ROLLNAME IN (%s)", inList),
+		len(names)); err == nil && qr != nil {
+		for _, row := range qr.Rows {
+			if len(row) >= 1 && result[row[0]] == "UNKNOWN" {
+				result[row[0]] = "DATA_ELEMENT"
+			}
+		}
+	}
+
+	if qr, err := client.RunQuery(ctx,
+		fmt.Sprintf("SELECT DOMNAME FROM DD01L WHERE DOMNAME IN (%s)", inList),
+		len(names)); err == nil && qr != nil {
+		for _, row := range qr.Rows {
+			if len(row) >= 1 && result[row[0]] == "UNKNOWN" {
+				result[row[0]] = "DOMAIN"
+			}
+		}
+	}
+
+	return result
+}
+
+func buildSQLInList(names []string) string {
+	quoted := make([]string, len(names))
+	for i, n := range names {
+		quoted[i] = "'" + adt.EscapeValue(n) + "'"
+	}
+	return strings.Join(quoted, ",")
+}
+
+func tabclassToUseType(tabclass string) string {
+	switch tabclass {
+	case "TRANSP":
+		return "TABLE"
+	case "INTTAB":
+		return "STRUCTURE"
+	case "CLUSTER", "POOL":
+		return "TABLE"
+	case "VIEW":
+		return "VIEW"
+	default:
+		return "TABLE"
+	}
 }
