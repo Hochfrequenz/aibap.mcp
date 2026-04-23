@@ -20,6 +20,7 @@ func registerDDICTools(s toolAdder, client adt.DDICClient) {
 				"Queries DD03L on the SAP system.",
 		),
 		mcp.WithString("table_name", mcp.Required(), mcp.Description("DDIC table or structure name, e.g. T001, MARA, BKPF")),
+		mcp.WithOutputSchema[TableFieldsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("table_name", "")
 		if name == "" {
@@ -29,7 +30,6 @@ func registerDDICTools(s toolAdder, client adt.DDICClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		// Top-level slice — no WithOutputSchema.
-		return mcp.NewToolResultJSON(fields)
+		return mcp.NewToolResultJSON(TableFieldsResult{TableName: name, Count: len(fields), Fields: fields})
 	})
 }

@@ -21,8 +21,10 @@ func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 				"To check code without saving to an object, use verify_source instead.",
 		),
 		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
-		// No WithOutputSchema: single-URI path returns []adt.SyntaxMessage
-		// whereas the array path returns SyntaxCheckBatchResult.
+		// No WithOutputSchema: single-URI path returns SyntaxCheckSingleResult
+		// (object wrapping []adt.SyntaxMessage), array path returns
+		// SyntaxCheckBatchResult. Both are objects so structuredContent stays
+		// spec-legal (#351).
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		single, multi := getStringOrSlice(req.GetArguments(), paramObjectURI)
 		if multi == nil {
@@ -30,7 +32,7 @@ func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 			if err != nil {
 				return errorResult(err), nil
 			}
-			return mcp.NewToolResultJSON(msgs)
+			return mcp.NewToolResultJSON(SyntaxCheckSingleResult{Count: len(msgs), Messages: msgs})
 		}
 
 		results := client.BatchSyntaxCheck(ctx, multi)
