@@ -235,6 +235,6 @@ func tabclassToUseType(tabclass string) string {
 	case "VIEW":
 		return "VIEW"
 	default:
-		return "TABLE"
+		return "UNKNOWN"
 	}
 }

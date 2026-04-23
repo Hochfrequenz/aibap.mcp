@@ -1345,6 +1345,55 @@ func TestGetObjectDependenciesClassifiesTypes(t *testing.T) {
 	}
 }
 
+func TestGetObjectDependenciesUnknownTabclass(t *testing.T) {
+	// An object present in DD02L with an unrecognised TABCLASS must not be classified
+	// as TABLE — it should fall through to UNKNOWN rather than silently misclassify.
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{"ZFUTURE"}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{"ZFUTURE", "NEWTYPE"}},
+				}, nil
+			case strings.Contains(sql, "DD04L"), strings.Contains(sql, "DD01L"):
+				return &adt.QueryResult{Columns: []adt.QueryColumn{{Name: "ROLLNAME"}}, Rows: nil}, nil
+			default:
+				t.Errorf("unexpected SQL: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "PROG",
+		"object_name": "Z_TEST",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		Dependencies []struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Dependencies) != 1 {
+		t.Fatalf("dependencies length: got %d, want 1", len(out.Dependencies))
+	}
+	if out.Dependencies[0].UseType != "UNKNOWN" {
+		t.Errorf("ZFUTURE with unrecognised TABCLASS=NEWTYPE: got %q, want UNKNOWN", out.Dependencies[0].UseType)
+	}
+}
+
 func TestGetObjectDependenciesToolCustomMaxResults(t *testing.T) {
 	var gotMaxRows int
 	mock := &mockClient{
