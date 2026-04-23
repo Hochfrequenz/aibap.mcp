@@ -17,14 +17,14 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("List all ABAP objects in a package (flat, one level deep)."),
 		mcp.WithString("package_name", mcp.Required(), mcp.Description("Package name, e.g. ZPACKAGE")),
+		mcp.WithOutputSchema[BrowsePackageResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		pkg := req.GetString("package_name", "")
 		results, err := client.BrowsePackage(ctx, pkg)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		// Top-level slice — no WithOutputSchema.
-		return mcp.NewToolResultJSON(results)
+		return mcp.NewToolResultJSON(BrowsePackageResult{Count: len(results), Objects: results})
 	})
 
 	s.AddTool(mcp.NewTool("get_object_info",

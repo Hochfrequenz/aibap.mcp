@@ -273,3 +273,79 @@ type ObjectDependenciesResult struct {
 	Count        int                `json:"count"`
 	Dependencies []ObjectDependency `json:"dependencies"`
 }
+
+// Wrapper result types for tools that previously returned top-level JSON
+// arrays. MCP 2025-06-18 requires CallToolResult.structuredContent to be a
+// JSON object; nesting the slice in a named struct satisfies the spec and
+// lets WithOutputSchema advertise the shape. See issue #351.
+
+type SearchObjectsResult struct {
+	Count   int              `json:"count"`
+	Results []adt.ObjectInfo `json:"results"`
+}
+
+// WhereUsedSingleResult is the single-URI branch of where_used. The
+// array-URI branch returns WhereUsedBatchResult (different shape).
+type WhereUsedSingleResult struct {
+	Count      int              `json:"count"`
+	References []adt.ObjectInfo `json:"references"`
+}
+
+// SyntaxCheckSingleResult is the single-URI branch of syntax_check. The
+// array-URI branch returns SyntaxCheckBatchResult.
+type SyntaxCheckSingleResult struct {
+	Count    int                 `json:"count"`
+	Messages []adt.SyntaxMessage `json:"messages"`
+}
+
+type ListShortDumpsResult struct {
+	Count int                   `json:"count"`
+	Dumps []adt.ShortDumpHeader `json:"dumps"`
+}
+
+type ShortDumpDetailsResult struct {
+	Count int             `json:"count"`
+	Dumps []adt.ShortDump `json:"dumps"`
+}
+
+type CompletionsResult struct {
+	Count int                  `json:"count"`
+	Items []adt.CompletionItem `json:"items"`
+}
+
+type BrowsePackageResult struct {
+	Count   int              `json:"count"`
+	Objects []adt.ObjectInfo `json:"objects"`
+}
+
+type TableFieldsResult struct {
+	TableName string          `json:"table_name"`
+	Count     int             `json:"count"`
+	Fields    []adt.FieldInfo `json:"fields"`
+}
+
+type SearchMessagesResult struct {
+	Count   int                       `json:"count"`
+	Results []adt.MessageSearchResult `json:"results"`
+}
+
+type InactiveObjectsResult struct {
+	Count   int              `json:"count"`
+	Objects []adt.ObjectInfo `json:"objects"`
+}
+
+type VersionHistoryResult struct {
+	Count    int               `json:"count"`
+	Versions []adt.VersionInfo `json:"versions"`
+}
+
+type TransportRequestsResult struct {
+	Count      int                    `json:"count"`
+	Transports []adt.TransportRequest `json:"transports"`
+}
+
+type TransportObjectsResult struct {
+	Transport string                `json:"transport"`
+	Count     int                   `json:"count"`
+	Objects   []adt.TransportObject `json:"objects"`
+}

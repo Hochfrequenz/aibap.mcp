@@ -69,11 +69,11 @@ The 2025-06-18 MCP spec has first-class support for typed output via `structured
 - Return bare strings for "success" (`"Transport X released"`, `"Object unlocked"`). Return a typed struct with a boolean flag and relevant IDs.
 - Inline anonymous struct types inside handlers just to give `json.Marshal` something shaped. Pull them up to a named type.
 - Return `map[string]any{...}` as the success payload. Define a struct.
+- **Pass a slice (or any non-object value) to `NewToolResultJSON`**. MCP 2025-06-18 requires `CallToolResult.structuredContent` to be a JSON object (`{ [key: string]: unknown }`); Claude's client enforces this with a Zod `record(...)` check and rejects arrays/nulls/scalars. `mcp-go` does not validate, so the leak is on you. Wrap the slice in a named struct (convention: `{count, <domain-plural>}` — see `SearchObjectsResult`, `BrowsePackageResult`, `VersionHistoryResult`). See issue #351 and `tools/structured_content_shape_test.go` — that test is the guardrail.
 
 **When `WithOutputSchema` does NOT apply (and you leave it off):**
 
-- The tool returns a top-level JSON array (e.g. `[]adt.ObjectInfo`). The MCP spec requires output schemas to be `type: object`; `mcp-go` forcibly sets the type, producing an invalid schema. Leave a comment: `// Top-level slice — no WithOutputSchema.`
-- The tool's return shape is polymorphic across branches of the same handler (e.g. single-URI path returns one struct, array-URI path returns a batch-result struct). A schema that describes only one branch is actively misleading. Leave a comment noting why.
+- The tool's return shape is polymorphic across branches of the same handler (e.g. single-URI path returns one object, array-URI path returns a batch-result object). A schema that describes only one branch is actively misleading. Leave a comment noting why. Both branches must still return an object — the spec rule above is absolute and independent of whether a schema is advertised.
 - The tool forwards pre-marshaled JSON bytes from adtler (see `tools/debugger.go` — wrap in `json.RawMessage` so it round-trips through `NewToolResultJSON` without base64-encoding). No typed Go struct exists to generate a schema from.
 
 If you're tempted to reach for any of those escape hatches, first check whether the upstream adtler call can return a typed struct instead — and if it already does, use it.

@@ -28,6 +28,7 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		mcp.WithString("query", mcp.Required(), mcp.Description("Search query, e.g. ZREPORT*")),
 		mcp.WithString("object_type", mcp.Description("Filter by type, e.g. PROG/P for programs")),
 		mcp.WithNumber("max_results", mcp.Description("Maximum number of results (default: 50)")),
+		mcp.WithOutputSchema[SearchObjectsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		query := req.GetString("query", "")
 		objType := req.GetString("object_type", "")
@@ -36,8 +37,7 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		// Top-level slice — no WithOutputSchema.
-		return mcp.NewToolResultJSON(results)
+		return mcp.NewToolResultJSON(SearchObjectsResult{Count: len(results), Results: results})
 	})
 
 	s.AddTool(mcp.NewTool("where_used",
@@ -53,6 +53,7 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		),
 		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 		// No WithOutputSchema: single/array paths differ in return shape.
+		// Both branches return an object so structuredContent stays spec-legal (#351).
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		single, multi := getStringOrSlice(req.GetArguments(), paramObjectURI)
 		if multi == nil {
@@ -60,7 +61,7 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 			if err != nil {
 				return errorResult(err), nil
 			}
-			return mcp.NewToolResultJSON(results)
+			return mcp.NewToolResultJSON(WhereUsedSingleResult{Count: len(results), References: results})
 		}
 
 		results := make([]WhereUsedBatchEntry, len(multi))

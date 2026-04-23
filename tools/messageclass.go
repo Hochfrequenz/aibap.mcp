@@ -49,6 +49,7 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 		),
 		mcp.WithString("query", mcp.Required(), mcp.Description("Message class ID pattern for type-ahead search, e.g. '00', 'ZFOO'")),
 		mcp.WithString("max_results", mcp.Description("Maximum results (default 50)")),
+		mcp.WithOutputSchema[SearchMessagesResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		query := req.GetString("query", "")
 		if query == "" {
@@ -64,8 +65,7 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		// Top-level slice — no WithOutputSchema.
-		return mcp.NewToolResultJSON(results)
+		return mcp.NewToolResultJSON(SearchMessagesResult{Count: len(results), Results: results})
 	})
 
 	s.AddTool(mcp.NewTool("set_messages",

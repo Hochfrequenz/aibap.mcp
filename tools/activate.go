@@ -57,14 +57,13 @@ func registerActivateTools(s toolAdder, client interface {
 			"List all inactive (not yet activated) ABAP objects for the current user. "+
 				"Use this to check what needs activation before releasing a transport.",
 		),
+		mcp.WithOutputSchema[InactiveObjectsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		objects, err := client.GetInactiveObjects(ctx)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		// Top-level slice — no WithOutputSchema because the MCP spec
-		// requires output schemas to be type=object.
-		return mcp.NewToolResultJSON(objects)
+		return mcp.NewToolResultJSON(InactiveObjectsResult{Count: len(objects), Objects: objects})
 	})
 
 	// Backward-compatible alias: activate a single object by URI string.
