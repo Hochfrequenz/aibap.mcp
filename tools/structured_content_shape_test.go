@@ -1,6 +1,7 @@
 package tools_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // TestStructuredContentIsObject pins the MCP 2025-06-18 contract that
@@ -71,8 +73,9 @@ func TestStructuredContentIsObject(t *testing.T) {
 	var listEnvelope struct {
 		Result struct {
 			Tools []struct {
-				Name        string         `json:"name"`
-				InputSchema map[string]any `json:"inputSchema"`
+				Name         string         `json:"name"`
+				InputSchema  map[string]any `json:"inputSchema"`
+				OutputSchema map[string]any `json:"outputSchema,omitempty"`
 			} `json:"tools"`
 		} `json:"result"`
 	}
@@ -108,7 +111,66 @@ func TestStructuredContentIsObject(t *testing.T) {
 			args := synthesizeArgs(tool.InputSchema)
 			rawSC, present := wireStructuredContent(t, s, tool.Name, args)
 			assertWireStructuredContentIsObject(t, tool.Name, rawSC, present)
+			// Stronger check: if the tool declared an outputSchema AND the
+			// wire response included structuredContent, the payload MUST
+			// conform to the declared schema. MCP 2025-06-18 /server/tools
+			// states this normatively and makes no exemption for isError
+			// results — so `errorResult` paths can't leak a different
+			// shape into structuredContent either. See issue #354.
+			if present && tool.OutputSchema != nil {
+				assertWireMatchesOutputSchema(t, tool.Name, rawSC, tool.OutputSchema)
+			}
 		})
+	}
+}
+
+// assertWireMatchesOutputSchema compiles the tool's declared outputSchema
+// with santhosh-tekuri/jsonschema/v6 and validates the wire
+// structuredContent against it. Compiler settings match
+// compileToolSchemas in schema_client_validation_test.go so both tests see
+// the same view of each schema.
+func assertWireMatchesOutputSchema(t *testing.T, toolName string, raw json.RawMessage, schemaMap map[string]any) {
+	t.Helper()
+
+	// Round-trip schemaMap through JSON to get a stable decoder view for
+	// the compiler.
+	schemaBytes, err := json.Marshal(schemaMap)
+	if err != nil {
+		t.Fatalf("%s: marshal outputSchema: %v", toolName, err)
+	}
+	var schemaDoc any
+	dec := json.NewDecoder(bytes.NewReader(schemaBytes))
+	dec.UseNumber()
+	if err := dec.Decode(&schemaDoc); err != nil {
+		t.Fatalf("%s: decode outputSchema: %v", toolName, err)
+	}
+
+	c := jsonschema.NewCompiler()
+	c.DefaultDraft(jsonschema.Draft2020)
+	c.AssertVocabs()
+	const schemaURL = "mem://output-schema.json"
+	if err := c.AddResource(schemaURL, schemaDoc); err != nil {
+		t.Fatalf("%s: add outputSchema resource: %v", toolName, err)
+	}
+	schema, err := c.Compile(schemaURL)
+	if err != nil {
+		t.Fatalf("%s: compile outputSchema: %v", toolName, err)
+	}
+
+	var instance any
+	dec = json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	if err := dec.Decode(&instance); err != nil {
+		t.Fatalf("%s: decode structuredContent: %v", toolName, err)
+	}
+
+	if err := schema.Validate(instance); err != nil {
+		t.Fatalf(
+			"%s: wire structuredContent does not conform to declared outputSchema "+
+				"(MCP 2025-06-18 /server/tools MUST). This is the bug class from #354.\n"+
+				"wire: %s\nvalidator: %v",
+			toolName, string(raw), err,
+		)
 	}
 }
 
