@@ -548,13 +548,18 @@ func TestIntegration_GetObjectDependencies(t *testing.T) {
 				}
 				validUseTypes := map[string]bool{
 					"TABLE": true, "STRUCTURE": true, "DATA_ELEMENT": true,
-					"DOMAIN": true, "VIEW": true, "UNKNOWN": true,
+					"DOMAIN": true, "VIEW": true, "TABLE_TYPE": true, "UNKNOWN": true,
 				}
 				if !validUseTypes[dep.UseType] {
-					t.Errorf("dependency[%d].use_type: got %q, want one of TABLE/STRUCTURE/DATA_ELEMENT/DOMAIN/VIEW/UNKNOWN", i, dep.UseType)
+					t.Errorf("dependency[%d].use_type: got %q, want one of TABLE/STRUCTURE/DATA_ELEMENT/DOMAIN/VIEW/TABLE_TYPE/UNKNOWN", i, dep.UseType)
 				}
 				if dep.Name == "SYST" {
 					foundSYST = true
+					// SYST is the ABAP system fields structure. DD02L.TABCLASS = INTTAB on
+					// every SAP system, so use_type must be STRUCTURE, never TABLE.
+					if dep.UseType != "STRUCTURE" {
+						t.Errorf("SYST.use_type: got %q, want STRUCTURE (DD02L.TABCLASS=INTTAB on all systems)", dep.UseType)
+					}
 				}
 			}
 			if !foundSYST {
