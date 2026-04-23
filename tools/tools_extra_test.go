@@ -1199,21 +1199,31 @@ func TestBatchGetSourceEmptyURIs(t *testing.T) {
 // --- get_object_dependencies ---
 
 func TestGetObjectDependenciesTool(t *testing.T) {
-	var gotSQL string
-	var gotMaxRows int
+	var d010tabSQL string
+	var d010tabMaxRows int
 	mock := &mockClient{
 		runQueryFn: func(_ context.Context, sql string, maxRows int) (*adt.QueryResult, error) {
-			gotSQL = sql
-			gotMaxRows = maxRows
-			return &adt.QueryResult{
-				Columns: []adt.QueryColumn{
-					{Name: "TABNAME"},
-				},
-				Rows: [][]string{
-					{"SCREEN"},
-					{"SYST"},
-				},
-			}, nil
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				d010tabSQL = sql
+				d010tabMaxRows = maxRows
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{"SCREEN"}, {"SYST"}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				// DD02L is queried first for all names. SCREEN=INTTAB (structure),
+				// SYST=TRANSP (transparent table). Both are classified here, so no
+				// TADIR query follows.
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{"SCREEN", "INTTAB"}, {"SYST", "TRANSP"}},
+				}, nil
+			default:
+				// TADIR must not be queried when DD02L already classified all names.
+				t.Errorf("unexpected SQL query: %s", sql)
+				return nil, nil
+			}
 		},
 	}
 	s := newTestServer(mock)
@@ -1225,14 +1235,11 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 		t.Fatalf("unexpected error: %s", firstText(result))
 	}
 
-	if !strings.Contains(gotSQL, "MASTER = 'Z_MY_REPORT'") {
-		t.Errorf("SQL missing program name filter, got: %s", gotSQL)
+	if !strings.Contains(d010tabSQL, "MASTER = 'Z_MY_REPORT'") {
+		t.Errorf("D010TAB SQL missing program name filter, got: %s", d010tabSQL)
 	}
-	if !strings.Contains(gotSQL, "D010TAB") {
-		t.Errorf("SQL missing table name, got: %s", gotSQL)
-	}
-	if gotMaxRows != 200 {
-		t.Errorf("maxRows: got %d, want 200 (default)", gotMaxRows)
+	if d010tabMaxRows != 200 {
+		t.Errorf("D010TAB maxRows: got %d, want 200 (default)", d010tabMaxRows)
 	}
 
 	text := firstText(result)
@@ -1263,8 +1270,146 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 	if out.Dependencies[0].Name != "SCREEN" {
 		t.Errorf("dep[0].name: got %q, want SCREEN", out.Dependencies[0].Name)
 	}
-	if out.Dependencies[0].UseType != "TABLE" {
-		t.Errorf("dep[0].use_type: got %q, want TABLE", out.Dependencies[0].UseType)
+	if out.Dependencies[0].UseType != "STRUCTURE" {
+		t.Errorf("dep[0].use_type: got %q, want STRUCTURE (SCREEN is INTTAB in DD02L)", out.Dependencies[0].UseType)
+	}
+	if out.Dependencies[1].Name != "SYST" {
+		t.Errorf("dep[1].name: got %q, want SYST", out.Dependencies[1].Name)
+	}
+	if out.Dependencies[1].UseType != "TABLE" {
+		t.Errorf("dep[1].use_type: got %q, want TABLE (SYST is TRANSP in DD02L)", out.Dependencies[1].UseType)
+	}
+}
+
+func TestGetObjectDependenciesClassifiesTypes(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					// INT1=data element, MANDT=domain, ZVIEW=view, ZTTYP=table type,
+					// ZUNKNOWN=not in any catalog.
+					Rows: [][]string{{"INT1"}, {"MANDT"}, {"ZVIEW"}, {"ZTTYP"}, {"ZUNKNOWN"}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				// DD02L is always queried first. None of these names are tables or
+				// structures, so no rows are returned.
+				return &adt.QueryResult{Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}}, Rows: nil}, nil
+			case strings.Contains(sql, "TADIR"):
+				// After DD02L returns nothing, all names are still UNKNOWN and are
+				// passed to TADIR. ZUNKNOWN has no TADIR entry and stays UNKNOWN.
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "OBJECT"}, {Name: "OBJ_NAME"}},
+					Rows: [][]string{
+						{"DTEL", "INT1"},
+						{"DOMA", "MANDT"},
+						{"VIEW", "ZVIEW"},
+						{"TTYP", "ZTTYP"},
+					},
+				}, nil
+			default:
+				t.Errorf("unexpected SQL query: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "PROG",
+		"object_name": "Z_TEST",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+
+	var out struct {
+		Dependencies []struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Dependencies) != 5 {
+		t.Fatalf("dependencies length: got %d, want 5", len(out.Dependencies))
+	}
+
+	byName := map[string]string{}
+	for _, d := range out.Dependencies {
+		byName[d.Name] = d.UseType
+	}
+	if byName["INT1"] != "DATA_ELEMENT" {
+		t.Errorf("INT1 use_type: got %q, want DATA_ELEMENT", byName["INT1"])
+	}
+	if byName["MANDT"] != "DOMAIN" {
+		t.Errorf("MANDT use_type: got %q, want DOMAIN", byName["MANDT"])
+	}
+	if byName["ZVIEW"] != "VIEW" {
+		t.Errorf("ZVIEW use_type: got %q, want VIEW", byName["ZVIEW"])
+	}
+	if byName["ZTTYP"] != "TABLE_TYPE" {
+		t.Errorf("ZTTYP use_type: got %q, want TABLE_TYPE", byName["ZTTYP"])
+	}
+	if byName["ZUNKNOWN"] != "UNKNOWN" {
+		t.Errorf("ZUNKNOWN use_type: got %q, want UNKNOWN", byName["ZUNKNOWN"])
+	}
+}
+
+func TestGetObjectDependenciesUnknownTabclass(t *testing.T) {
+	// An object present in DD02L with an unrecognised TABCLASS must not be classified
+	// as TABLE — it should fall through to UNKNOWN rather than silently misclassify.
+	// This guards against future SAP TABCLASS values we don't know about yet.
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{"ZFUTURE"}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				// DD02L is queried first. It returns an unrecognised TABCLASS value,
+				// which tabclassToUseType maps to UNKNOWN. Because the name is still
+				// UNKNOWN after DD02L, TADIR is queried next.
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{"ZFUTURE", "NEWTYPE"}},
+				}, nil
+			case strings.Contains(sql, "TADIR"):
+				// TADIR is queried for the still-UNKNOWN name. Returning empty means
+				// ZFUTURE stays UNKNOWN — the correct outcome when classification is
+				// genuinely ambiguous.
+				return &adt.QueryResult{Columns: []adt.QueryColumn{{Name: "OBJECT"}, {Name: "OBJ_NAME"}}, Rows: nil}, nil
+			default:
+				t.Errorf("unexpected SQL: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "PROG",
+		"object_name": "Z_TEST",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		Dependencies []struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Dependencies) != 1 {
+		t.Fatalf("dependencies length: got %d, want 1", len(out.Dependencies))
+	}
+	if out.Dependencies[0].UseType != "UNKNOWN" {
+		t.Errorf("ZFUTURE with unrecognised TABCLASS=NEWTYPE: got %q, want UNKNOWN", out.Dependencies[0].UseType)
 	}
 }
 

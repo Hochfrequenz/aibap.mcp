@@ -3,10 +3,24 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
+)
+
+// useType constants for ObjectDependency.UseType.
+// Defined here because goconst requires repeated string literals to be extracted;
+// they are also exported-style names to serve as documentation for callers.
+const (
+	useTypeTable       = "TABLE"
+	useTypeStructure   = "STRUCTURE"
+	useTypeDataElement = "DATA_ELEMENT"
+	useTypeDomain      = "DOMAIN"
+	useTypeView        = "VIEW"
+	useTypeTableType   = "TABLE_TYPE"
+	useTypeUnknown     = "UNKNOWN"
 )
 
 // searchQueryClient is the combined interface required by registerSearchTools.
@@ -146,12 +160,21 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 			queryResult = &adt.QueryResult{}
 		}
 
+		var names []string
 		deps := make([]ObjectDependency, 0, len(queryResult.Rows))
 		for _, row := range queryResult.Rows {
 			if len(row) < 1 || row[0] == "" {
 				continue
 			}
-			deps = append(deps, ObjectDependency{Name: row[0], UseType: "TABLE"})
+			names = append(names, row[0])
+			deps = append(deps, ObjectDependency{Name: row[0]})
+		}
+
+		if len(names) > 0 {
+			classification := classifyDDICObjects(ctx, client, names)
+			for i := range deps {
+				deps[i].UseType = classification[deps[i].Name]
+			}
 		}
 
 		return mcp.NewToolResultJSON(ObjectDependenciesResult{
@@ -161,4 +184,107 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 			Dependencies: deps,
 		})
 	})
+}
+
+// classifyDDICObjects resolves the actual DDIC kind for each name using two
+// sequential queries, chosen to handle the full range of objects that D010TAB
+// can reference.
+//
+// Step 1 — DD02L: the DDIC table/structure catalog. This covers transparent
+// tables, structures, cluster tables, pool tables, and views. Crucially it also
+// covers SAP system objects like SYST and SCREEN that do not appear in TADIR
+// under PGMID='R3TR', so DD02L must be the first source, not a fallback.
+//
+// Step 2 — TADIR: the global ABAP repository directory. This covers data
+// elements (DTEL), domains (DOMA), and table types (TTYP) that are not stored
+// in DD02L at all. Only names that are still UNKNOWN after step 1 are sent to
+// TADIR, keeping the query count to one for programs whose dependencies are
+// exclusively tables/structures. PGMID='R3TR' limits the result to repository
+// objects (excludes transport request entries under PGMID='CORR').
+//
+// Errors from either query are silently swallowed so that a transient network
+// hiccup degrades gracefully; affected names stay UNKNOWN rather than failing
+// the whole tool call.
+func classifyDDICObjects(ctx context.Context, client adt.QueryClient, names []string) map[string]string {
+	result := make(map[string]string, len(names))
+	for _, n := range names {
+		result[n] = useTypeUnknown
+	}
+
+	// Step 1 — DD02L: classify all names that are tables or structures.
+	if qr, err := client.RunQuery(ctx,
+		fmt.Sprintf("SELECT TABNAME, TABCLASS FROM DD02L WHERE TABNAME IN (%s)", buildSQLInList(names)),
+		len(names)); err == nil && qr != nil {
+		for _, row := range qr.Rows {
+			if len(row) >= 2 {
+				result[row[0]] = tabclassToUseType(row[1])
+			}
+		}
+	}
+
+	// Step 2 — TADIR: classify remaining names that DD02L did not cover.
+	// These are typically data elements, domains, and table types.
+	var unknownNames []string
+	for _, n := range names {
+		if result[n] == useTypeUnknown {
+			unknownNames = append(unknownNames, n)
+		}
+	}
+	if len(unknownNames) > 0 {
+		if qr, err := client.RunQuery(ctx,
+			fmt.Sprintf("SELECT OBJECT, OBJ_NAME FROM TADIR WHERE PGMID = 'R3TR' AND OBJ_NAME IN (%s)", buildSQLInList(unknownNames)),
+			len(unknownNames)); err == nil && qr != nil {
+			for _, row := range qr.Rows {
+				if len(row) < 2 {
+					continue
+				}
+				objType, objName := row[0], row[1]
+				switch objType {
+				case "DTEL":
+					result[objName] = useTypeDataElement
+				case "DOMA":
+					result[objName] = useTypeDomain
+				case "TTYP":
+					result[objName] = useTypeTableType
+				case "VIEW":
+					result[objName] = useTypeView
+					// Other TADIR types (PROG, FUGR, CLAS, …) are not expected in
+					// D010TAB (which tracks only DDIC dependencies). Leave them UNKNOWN
+					// so callers see an honest signal rather than a wrong classification.
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+func buildSQLInList(names []string) string {
+	quoted := make([]string, len(names))
+	for i, n := range names {
+		quoted[i] = "'" + adt.EscapeValue(n) + "'"
+	}
+	return strings.Join(quoted, ",")
+}
+
+// tabclassToUseType maps DD02L.TABCLASS to a use_type string.
+// TRANSP = regular transparent table (1:1 DB mapping, the common case).
+// INTTAB = structure/internal table type (no own DB table).
+// CLUSTER / POOL = physical storage optimisations; logically still tables.
+// VIEW = database or maintenance view stored in DD02L (rare in D010TAB).
+// Unknown TABCLASS values get UNKNOWN rather than TABLE so future SAP object
+// kinds don't silently masquerade as tables.
+func tabclassToUseType(tabclass string) string {
+	switch tabclass {
+	case "TRANSP":
+		return useTypeTable
+	case "INTTAB":
+		return useTypeStructure
+	case "CLUSTER", "POOL":
+		return useTypeTable
+	case "VIEW":
+		return useTypeView
+	default:
+		return useTypeUnknown
+	}
 }
