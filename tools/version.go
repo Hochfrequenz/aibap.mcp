@@ -21,6 +21,7 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 				"Each version entry includes a content_uri that can be passed to get_version_source to retrieve the actual code.",
 		),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
+		mcp.WithOutputSchema[VersionHistoryResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		if uri == "" {
@@ -30,8 +31,7 @@ func registerVersionTools(s toolAdder, client adt.VersionClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		// Top-level slice — no WithOutputSchema.
-		return mcp.NewToolResultJSON(versions)
+		return mcp.NewToolResultJSON(VersionHistoryResult{Count: len(versions), Versions: versions})
 	})
 
 	s.AddTool(mcp.NewTool("get_version_source",

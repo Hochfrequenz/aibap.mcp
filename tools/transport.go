@@ -19,6 +19,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithDescription("List CTS transport requests on the configured SAP system. Status: D=modifiable, L=released."),
 		mcp.WithString("user", mcp.Description("Filter by owner username")),
 		mcp.WithString("status", mcp.Description("Filter by status: D (modifiable) or L (released)")),
+		mcp.WithOutputSchema[TransportRequestsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
 		status := req.GetString("status", "")
@@ -26,8 +27,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		if err != nil {
 			return errorResult(err), nil
 		}
-		// Top-level slice — no WithOutputSchema.
-		return mcp.NewToolResultJSON(transports)
+		return mcp.NewToolResultJSON(TransportRequestsResult{Count: len(transports), Transports: transports})
 	})
 
 	s.AddTool(mcp.NewTool("add_to_transport",
@@ -241,13 +241,17 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"Use this to see what a transport contains before releasing or rolling back.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number")),
+		mcp.WithOutputSchema[TransportObjectsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
 		objects, err := client.GetTransportObjects(ctx, transport)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		// Top-level slice — no WithOutputSchema.
-		return mcp.NewToolResultJSON(objects)
+		return mcp.NewToolResultJSON(TransportObjectsResult{
+			Transport: transport,
+			Count:     len(objects),
+			Objects:   objects,
+		})
 	})
 }
