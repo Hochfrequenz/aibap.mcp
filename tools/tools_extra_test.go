@@ -10,6 +10,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// SAP object names and use_type strings that appear in multiple test assertions.
+// Extracted to satisfy the goconst linter (threshold: 3 occurrences).
+const (
+	testSYST      = "SYST"
+	testStructure = "STRUCTURE"
+)
+
 // --- lock_object ---
 
 func TestLockObjectTool(t *testing.T) {
@@ -1209,7 +1216,7 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 				d010tabMaxRows = maxRows
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
-					Rows:    [][]string{{"SCREEN"}, {"SYST"}},
+					Rows:    [][]string{{"SCREEN"}, {testSYST}},
 				}, nil
 			case strings.Contains(sql, "DD02L"):
 				// DD02L is queried first for all names. SCREEN=INTTAB (structure),
@@ -1217,7 +1224,7 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 				// TADIR query follows.
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
-					Rows:    [][]string{{"SCREEN", "INTTAB"}, {"SYST", "TRANSP"}},
+					Rows:    [][]string{{"SCREEN", "INTTAB"}, {testSYST, "TRANSP"}},
 				}, nil
 			default:
 				// TADIR must not be queried when DD02L already classified all names.
@@ -1270,10 +1277,10 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 	if out.Dependencies[0].Name != "SCREEN" {
 		t.Errorf("dep[0].name: got %q, want SCREEN", out.Dependencies[0].Name)
 	}
-	if out.Dependencies[0].UseType != "STRUCTURE" {
+	if out.Dependencies[0].UseType != testStructure {
 		t.Errorf("dep[0].use_type: got %q, want STRUCTURE (SCREEN is INTTAB in DD02L)", out.Dependencies[0].UseType)
 	}
-	if out.Dependencies[1].Name != "SYST" {
+	if out.Dependencies[1].Name != testSYST {
 		t.Errorf("dep[1].name: got %q, want SYST", out.Dependencies[1].Name)
 	}
 	if out.Dependencies[1].UseType != "TABLE" {
@@ -1540,12 +1547,12 @@ func TestGetObjectDependenciesFUGR(t *testing.T) {
 				}
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
-					Rows:    [][]string{{"SYST"}},
+					Rows:    [][]string{{testSYST}},
 				}, nil
 			case strings.Contains(sql, "DD02L"):
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
-					Rows:    [][]string{{"SYST", "INTTAB"}},
+					Rows:    [][]string{{testSYST, "INTTAB"}},
 				}, nil
 			default:
 				t.Errorf("unexpected SQL: %s", sql)
@@ -1598,12 +1605,12 @@ func TestGetObjectDependenciesFUNC(t *testing.T) {
 				}
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
-					Rows:    [][]string{{"SYST"}},
+					Rows:    [][]string{{testSYST}},
 				}, nil
 			case strings.Contains(sql, "DD02L"):
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
-					Rows:    [][]string{{"SYST", "INTTAB"}},
+					Rows:    [][]string{{testSYST, "INTTAB"}},
 				}, nil
 			default:
 				t.Errorf("unexpected SQL: %s", sql)
@@ -1685,12 +1692,12 @@ func TestGetObjectDependenciesCLAS(t *testing.T) {
 				}
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
-					Rows:    [][]string{{"SYST"}},
+					Rows:    [][]string{{testSYST}},
 				}, nil
 			case strings.Contains(sql, "DD02L"):
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
-					Rows:    [][]string{{"SYST", "INTTAB"}},
+					Rows:    [][]string{{testSYST, "INTTAB"}},
 				}, nil
 			case strings.Contains(sql, "SEOMETAREL"):
 				if !strings.Contains(sql, "CLSNAME = '"+className+"'") {
@@ -1735,7 +1742,7 @@ func TestGetObjectDependenciesCLAS(t *testing.T) {
 	if out.Count != 3 {
 		t.Errorf("count: got %d, want 3 (1 DDIC + 2 OO)", out.Count)
 	}
-	if out.Dependencies[0].Name != "SYST" || out.Dependencies[0].UseType != "STRUCTURE" {
+	if out.Dependencies[0].Name != testSYST || out.Dependencies[0].UseType != testStructure {
 		t.Errorf("dep[0]: got {%q,%q}, want {SYST,STRUCTURE}", out.Dependencies[0].Name, out.Dependencies[0].UseType)
 	}
 	if out.Dependencies[1].Name != "ZIF_MY_INTF" || out.Dependencies[1].UseType != "INTERFACE" {
@@ -1760,12 +1767,12 @@ func TestGetObjectDependenciesINTF(t *testing.T) {
 				}
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
-					Rows:    [][]string{{"SYST"}},
+					Rows:    [][]string{{testSYST}},
 				}, nil
 			case strings.Contains(sql, "DD02L"):
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
-					Rows:    [][]string{{"SYST", "INTTAB"}},
+					Rows:    [][]string{{testSYST, "INTTAB"}},
 				}, nil
 			case strings.Contains(sql, "SEOMETAREL"):
 				if !strings.Contains(sql, "CLSNAME = '"+intfName+"'") {
@@ -1806,7 +1813,7 @@ func TestGetObjectDependenciesINTF(t *testing.T) {
 	if out.Count != 2 {
 		t.Errorf("count: got %d, want 2 (1 DDIC + 1 OO)", out.Count)
 	}
-	if out.Dependencies[0].Name != "SYST" || out.Dependencies[0].UseType != "STRUCTURE" {
+	if out.Dependencies[0].Name != testSYST || out.Dependencies[0].UseType != testStructure {
 		t.Errorf("dep[0]: got {%q,%q}, want {SYST,STRUCTURE}", out.Dependencies[0].Name, out.Dependencies[0].UseType)
 	}
 	if out.Dependencies[1].Name != "ZIF_EXTENDED" || out.Dependencies[1].UseType != "INTERFACE" {
