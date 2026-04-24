@@ -129,16 +129,17 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
-			"Find all DDIC objects (tables, structures, types) that a given ABAP program references at runtime. "+
+			"Find all DDIC objects (tables, structures, types) and OO relationships "+
+				"(implemented interfaces, superclass) that a given ABAP object references. "+
 				"Counterpart to where_used, which answers the reverse question. "+
-				"Queries D010TAB, the ABAP program-to-DDIC dependency table. "+
-				"Useful for transport completeness checks: given a PROG in a transport, "+
-				"find which DDIC objects it depends on. "+
-				"The result is already complete and flat: D010TAB is populated by the ABAP activator and "+
-				"includes all objects pulled in via INCLUDE statements, so no further recursion is needed "+
-				"for DDIC references. "+
-				"Note: transitive program-level dependencies (CALL PROGRAM, SUBMIT) are NOT covered "+
-				"by this tool — D010TAB does not model those relationships.",
+				"Supported object types:\n"+
+				"  PROG — program: queries D010TAB (MASTER = program name)\n"+
+				"  FUGR — function group: queries D010TAB (MASTER = SAPL<name>)\n"+
+				"  FUNC — function module: resolves FUGR via TFDIR, then queries D010TAB\n"+
+				"  CLAS — class: queries D010TAB (class pool program) + SEOMETAREL (interfaces, superclass)\n"+
+				"  INTF — interface: queries D010TAB (interface pool program) + SEOMETAREL (extended interfaces)\n"+
+				"For DDIC results, D010TAB is populated flat by the ABAP activator — no client-side recursion needed. "+
+				"Useful for transport completeness checks.",
 		),
 		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, FUGR, FUNC, CLAS, INTF")),
 		mcp.WithString("object_name", mcp.Required(), mcp.Description("Program name, e.g. Z_MY_REPORT or SAPL_MY_FUGR")),
