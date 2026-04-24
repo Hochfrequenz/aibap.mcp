@@ -20,6 +20,8 @@ const (
 	useTypeDomain      = "DOMAIN"
 	useTypeView        = "VIEW"
 	useTypeTableType   = "TABLE_TYPE"
+	useTypeInterface   = "INTERFACE"
+	useTypeSuperclass  = "SUPERCLASS"
 	useTypeUnknown     = "UNKNOWN"
 )
 
@@ -265,6 +267,42 @@ func buildSQLInList(names []string) string {
 		quoted[i] = "'" + adt.EscapeValue(n) + "'"
 	}
 	return strings.Join(quoted, ",")
+}
+
+// FugrPoolProgramName constructs the D010TAB MASTER key for a function group.
+// SAP generates a function pool program: SAPL<name> for non-namespaced groups,
+// <namespace>SAPL<local> for namespaced groups (e.g. /NS/FUGR -> /NS/SAPLFUGR).
+func FugrPoolProgramName(fugrName string) string {
+	if len(fugrName) > 0 && fugrName[0] == '/' {
+		if idx := strings.Index(fugrName[1:], "/"); idx >= 0 {
+			ns := fugrName[:idx+2]    // "/NS/"
+			local := fugrName[idx+2:] // "LOCALNAME"
+			return ns + "SAPL" + local
+		}
+	}
+	return "SAPL" + fugrName
+}
+
+// ClassPoolProgramName constructs the D010TAB MASTER key for a class.
+// SAP generates a class pool program: <CLASSNAME> padded with '=' to 30 chars + "CP".
+// Verified on S/4 live system (see issue #343).
+func ClassPoolProgramName(className string) string {
+	const padLen = 30
+	if len(className) >= padLen {
+		return className + "CP"
+	}
+	return className + strings.Repeat("=", padLen-len(className)) + "CP"
+}
+
+// IntfPoolProgramName constructs the D010TAB MASTER key for an interface.
+// SAP generates an interface pool program: <INTFNAME> padded with '=' to 30 chars + "IP".
+// Verified on S/4 live system (see issue #343).
+func IntfPoolProgramName(intfName string) string {
+	const padLen = 30
+	if len(intfName) >= padLen {
+		return intfName + "IP"
+	}
+	return intfName + strings.Repeat("=", padLen-len(intfName)) + "IP"
 }
 
 // tabclassToUseType maps DD02L.TABCLASS to a use_type string.
