@@ -1487,6 +1487,28 @@ func TestGetObjectDependenciesToolError(t *testing.T) {
 	}
 }
 
+func TestGetObjectDependenciesLowercaseType(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			if strings.Contains(sql, "D010TAB") {
+				return &adt.QueryResult{Columns: []adt.QueryColumn{{Name: "TABNAME"}}, Rows: nil}, nil
+			}
+			if strings.Contains(sql, "DD02L") {
+				return &adt.QueryResult{Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}}, Rows: nil}, nil
+			}
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "prog", // lowercase — must still work
+		"object_name": "Z_MY_REPORT",
+	})
+	if result.IsError {
+		t.Errorf("lowercase 'prog' should be accepted, got error: %s", firstText(result))
+	}
+}
+
 func TestGetObjectDependenciesToolSQLEscaping(t *testing.T) {
 	var gotSQL string
 	mock := &mockClient{

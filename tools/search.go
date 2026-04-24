@@ -140,51 +140,30 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 				"Note: transitive program-level dependencies (CALL PROGRAM, SUBMIT) are NOT covered "+
 				"by this tool — D010TAB does not model those relationships.",
 		),
-		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type — currently only PROG is supported (D010TAB)")),
+		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, FUGR, FUNC, CLAS, INTF")),
 		mcp.WithString("object_name", mcp.Required(), mcp.Description("Program name, e.g. Z_MY_REPORT or SAPL_MY_FUGR")),
 		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
 		mcp.WithOutputSchema[ObjectDependenciesResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		objType := req.GetString("object_type", "")
+		objType := strings.ToUpper(req.GetString("object_type", ""))
 		objName := req.GetString("object_name", "")
 		maxResults := int(req.GetFloat("max_results", 200))
 
-		sql := fmt.Sprintf(
-			"SELECT TABNAME FROM D010TAB WHERE MASTER = '%s' ORDER BY TABNAME",
-			adt.EscapeValue(objName),
-		)
-
-		queryResult, err := client.RunQuery(ctx, sql, maxResults)
-		if err != nil {
-			return errorResult(err), nil
-		}
-		if queryResult == nil {
-			queryResult = &adt.QueryResult{}
-		}
-
-		var names []string
-		deps := make([]ObjectDependency, 0, len(queryResult.Rows))
-		for _, row := range queryResult.Rows {
-			if len(row) < 1 || row[0] == "" {
-				continue
+		switch objType {
+		case "PROG":
+			deps, err := d010tabDeps(ctx, client, objName, maxResults)
+			if err != nil {
+				return errorResult(err), nil
 			}
-			names = append(names, row[0])
-			deps = append(deps, ObjectDependency{Name: row[0]})
+			return mcp.NewToolResultJSON(ObjectDependenciesResult{
+				ObjectType:   objType,
+				ObjectName:   objName,
+				Count:        len(deps),
+				Dependencies: deps,
+			})
+		default:
+			return errorResult(fmt.Errorf("unsupported object_type %q: supported are PROG, FUGR, FUNC, CLAS, INTF", objType)), nil
 		}
-
-		if len(names) > 0 {
-			classification := classifyDDICObjects(ctx, client, names)
-			for i := range deps {
-				deps[i].UseType = classification[deps[i].Name]
-			}
-		}
-
-		return mcp.NewToolResultJSON(ObjectDependenciesResult{
-			ObjectType:   objType,
-			ObjectName:   objName,
-			Count:        len(deps),
-			Dependencies: deps,
-		})
 	})
 }
 
@@ -259,6 +238,71 @@ func classifyDDICObjects(ctx context.Context, client adt.QueryClient, names []st
 	}
 
 	return result
+}
+
+// d010tabDeps queries D010TAB for all DDIC objects referenced by the given MASTER
+// program name and returns them as classified ObjectDependency entries.
+// Uses adt.QueryClient (the narrow interface) — consistent with classifyDDICObjects.
+func d010tabDeps(ctx context.Context, client adt.QueryClient, master string, maxResults int) ([]ObjectDependency, error) {
+	qr, err := client.RunQuery(ctx,
+		fmt.Sprintf("SELECT TABNAME FROM D010TAB WHERE MASTER = '%s' ORDER BY TABNAME", adt.EscapeValue(master)),
+		maxResults)
+	if err != nil {
+		return nil, err
+	}
+	if qr == nil {
+		return nil, nil
+	}
+	var names []string
+	deps := make([]ObjectDependency, 0, len(qr.Rows))
+	for _, row := range qr.Rows {
+		if len(row) < 1 || row[0] == "" {
+			continue
+		}
+		names = append(names, row[0])
+		deps = append(deps, ObjectDependency{Name: row[0]})
+	}
+	if len(names) > 0 {
+		classification := classifyDDICObjects(ctx, client, names)
+		for i := range deps {
+			deps[i].UseType = classification[deps[i].Name]
+		}
+	}
+	return deps, nil
+}
+
+// ooDeps queries SEOMETAREL for OO meta-relationships of a class or interface.
+// relTypes filters by RELTYPE: "1"=interface implementation, "2"=superclass, "0"=interface extension.
+func ooDeps(ctx context.Context, client adt.QueryClient, clsName string, relTypes []string) ([]ObjectDependency, error) {
+	qr, err := client.RunQuery(ctx,
+		fmt.Sprintf("SELECT REFCLSNAME, RELTYPE FROM SEOMETAREL WHERE CLSNAME = '%s' AND RELTYPE IN (%s)",
+			adt.EscapeValue(clsName), buildSQLInList(relTypes)),
+		100)
+	if err != nil {
+		return nil, err
+	}
+	if qr == nil {
+		return nil, nil
+	}
+	deps := make([]ObjectDependency, 0, len(qr.Rows))
+	for _, row := range qr.Rows {
+		if len(row) < 2 || row[0] == "" {
+			continue
+		}
+		deps = append(deps, ObjectDependency{Name: row[0], UseType: ooRelTypeToUseType(row[1])})
+	}
+	return deps, nil
+}
+
+// ooRelTypeToUseType maps SEOMETAREL.RELTYPE to a use_type string.
+// 1 = interface implementation, 2 = superclass inheritance, 0 = interface extension.
+func ooRelTypeToUseType(relType string) string {
+	switch relType {
+	case "2":
+		return useTypeSuperclass
+	default: // "0" and "1" both represent interface relationships
+		return useTypeInterface
+	}
 }
 
 func buildSQLInList(names []string) string {
