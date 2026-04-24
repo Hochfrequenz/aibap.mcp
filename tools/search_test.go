@@ -20,6 +20,10 @@ func TestPoolProgramNames(t *testing.T) {
 		// INTF: padding to 30 chars + IP
 		{intfPoolProgramName, "ZIF_FOO", "ZIF_FOO=======================IP"},           // 7 + 23 + 2 = 32
 		{intfPoolProgramName, "ZIF_ABAPGIT_AJSON", "ZIF_ABAPGIT_AJSON=============IP"}, // 17 + 13 + 2 = 32
+		// CLAS: name >= 30 chars — no padding, just "CP" appended
+		{classPoolProgramName, "ZCL_30CHARS_XXXXXXXXXXXXXXXXXXX", "ZCL_30CHARS_XXXXXXXXXXXXXXXXXXXCP"},
+		// INTF: name >= 30 chars — no padding, just "IP" appended
+		{intfPoolProgramName, "ZIF_30CHARS_XXXXXXXXXXXXXXXXXXX", "ZIF_30CHARS_XXXXXXXXXXXXXXXXXXXIP"},
 	}
 	for _, tc := range tests {
 		got := tc.fn(tc.in)
