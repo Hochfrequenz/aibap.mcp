@@ -142,7 +142,7 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 				"Useful for transport completeness checks.",
 		),
 		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, FUGR, FUNC, CLAS, INTF")),
-		mcp.WithString("object_name", mcp.Required(), mcp.Description("Program name, e.g. Z_MY_REPORT or SAPL_MY_FUGR")),
+		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_REPORT (PROG), Z_MY_FGRP (FUGR), Z_MY_FM (FUNC), ZCL_MY_CLASS (CLAS), ZIF_MY_INTF (INTF)")),
 		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
 		mcp.WithOutputSchema[ObjectDependenciesResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
