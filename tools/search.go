@@ -399,8 +399,7 @@ func buildSQLInList(names []string) string {
 // fugrPoolProgramName constructs the D010TAB MASTER key for a function group.
 // SAP generates a function pool program: SAPL<name> for non-namespaced groups,
 // <namespace>SAPL<local> for namespaced groups (e.g. /NS/FUGR -> /NS/SAPLFUGR).
-// The namespaced path is unit-tested but not verified against a live SAP system —
-// no namespaced FUGR fixture exists in Z_ADT_MCP_TEST.
+// Verified against live S/4 system via TFDIR.PNAME lookup (e.g. /1BCDWB/SF00000001 -> /1BCDWB/SAPLSF00000001).
 func fugrPoolProgramName(fugrName string) string {
 	if len(fugrName) > 0 && fugrName[0] == '/' {
 		if idx := strings.Index(fugrName[1:], "/"); idx >= 0 {
