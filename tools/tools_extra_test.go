@@ -1670,3 +1670,78 @@ func TestGetObjectDependenciesUnsupportedType(t *testing.T) {
 		t.Errorf("expected IsError=true for unsupported type TABL, got false")
 	}
 }
+
+func TestGetObjectDependenciesCLAS(t *testing.T) {
+	// ZCL_ADT_MCP_TEST_UNITS = 22 chars → pad to 30 with 8 '=' signs → + "CP" = 32 total
+	const className = "ZCL_ADT_MCP_TEST_UNITS"
+	const wantMaster = "ZCL_ADT_MCP_TEST_UNITS========CP"
+
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				if !strings.Contains(sql, "MASTER = '"+wantMaster+"'") {
+					t.Errorf("CLAS D010TAB: unexpected MASTER in SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{"SYST"}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{"SYST", "INTTAB"}},
+				}, nil
+			case strings.Contains(sql, "SEOMETAREL"):
+				if !strings.Contains(sql, "CLSNAME = '"+className+"'") {
+					t.Errorf("SEOMETAREL: unexpected CLSNAME in SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "REFCLSNAME"}, {Name: "RELTYPE"}},
+					Rows: [][]string{
+						{"ZIF_MY_INTF", "1"},
+						{"ZCL_PARENT", "2"},
+					},
+				}, nil
+			default:
+				t.Errorf("unexpected SQL: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "CLAS",
+		"object_name": className,
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType   string `json:"object_type"`
+		ObjectName   string `json:"object_name"`
+		Count        int    `json:"count"`
+		Dependencies []struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "CLAS" {
+		t.Errorf("object_type: got %q, want CLAS", out.ObjectType)
+	}
+	if out.Count != 3 {
+		t.Errorf("count: got %d, want 3 (1 DDIC + 2 OO)", out.Count)
+	}
+	if out.Dependencies[0].Name != "SYST" || out.Dependencies[0].UseType != "STRUCTURE" {
+		t.Errorf("dep[0]: got {%q,%q}, want {SYST,STRUCTURE}", out.Dependencies[0].Name, out.Dependencies[0].UseType)
+	}
+	if out.Dependencies[1].Name != "ZIF_MY_INTF" || out.Dependencies[1].UseType != "INTERFACE" {
+		t.Errorf("dep[1]: got {%q,%q}, want {ZIF_MY_INTF,INTERFACE}", out.Dependencies[1].Name, out.Dependencies[1].UseType)
+	}
+	if out.Dependencies[2].Name != "ZCL_PARENT" || out.Dependencies[2].UseType != "SUPERCLASS" {
+		t.Errorf("dep[2]: got {%q,%q}, want {ZCL_PARENT,SUPERCLASS}", out.Dependencies[2].Name, out.Dependencies[2].UseType)
+	}
+}

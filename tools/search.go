@@ -190,6 +190,26 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 				Dependencies: deps,
 			})
 
+		case "CLAS":
+			master := classPoolProgramName(objName)
+			ddic, err := d010tabDeps(ctx, client, master, maxResults)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			oo, err := ooDeps(ctx, client, objName, []string{"1", "2"})
+			if err != nil {
+				return errorResult(err), nil
+			}
+			all := make([]ObjectDependency, 0, len(ddic)+len(oo))
+			all = append(all, ddic...)
+			all = append(all, oo...)
+			return mcp.NewToolResultJSON(ObjectDependenciesResult{
+				ObjectType:   objType,
+				ObjectName:   objName,
+				Count:        len(all),
+				Dependencies: all,
+			})
+
 		default:
 			return errorResult(fmt.Errorf("unsupported object_type %q: supported are PROG, FUGR, FUNC, CLAS, INTF", objType)), nil
 		}
