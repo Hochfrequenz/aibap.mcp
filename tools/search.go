@@ -310,9 +310,10 @@ func classifyDDICObjects(ctx context.Context, client adt.QueryClient, names []st
 	return result
 }
 
-// d010tabDeps queries D010TAB for all DDIC objects referenced by the given MASTER
-// program name and returns them as classified ObjectDependency entries.
-// Uses adt.QueryClient (the narrow interface) — consistent with classifyDDICObjects.
+// d010tabDeps uses the narrow adt.QueryClient interface (not searchQueryClient) so it
+// can be called directly from object-type-specific switch cases without coupling them
+// to the search client. D010TAB is the right source here: it is populated flat by the
+// ABAP activator at activation time, so one query returns the complete dependency set.
 func d010tabDeps(ctx context.Context, client adt.QueryClient, master string, maxResults int) ([]ObjectDependency, error) {
 	qr, err := client.RunQuery(ctx,
 		fmt.Sprintf("SELECT TABNAME FROM D010TAB WHERE MASTER = '%s' ORDER BY TABNAME", adt.EscapeValue(master)),
@@ -346,8 +347,10 @@ func d010tabDeps(ctx context.Context, client adt.QueryClient, master string, max
 // or implemented types; 100 is well above any realistic class hierarchy depth.
 const seometarelMaxRows = 100
 
-// ooDeps queries SEOMETAREL for OO meta-relationships of a class or interface.
-// relTypes filters by RELTYPE: "1"=interface implementation, "2"=superclass, "0"=interface extension.
+// ooDeps complements d010tabDeps for OO types: D010TAB covers DDIC references but does
+// not model class hierarchy or interface implementation. SEOMETAREL is SAP's OO
+// meta-relationship table; callers pass relTypes to select the relevant relationship
+// kinds (CLAS: ["1","2"], INTF: ["0"]) without duplicating the query logic.
 func ooDeps(ctx context.Context, client adt.QueryClient, clsName string, relTypes []string) ([]ObjectDependency, error) {
 	qr, err := client.RunQuery(ctx,
 		fmt.Sprintf("SELECT REFCLSNAME, RELTYPE FROM SEOMETAREL WHERE CLSNAME = '%s' AND RELTYPE IN (%s) ORDER BY RELTYPE, REFCLSNAME",
@@ -369,8 +372,11 @@ func ooDeps(ctx context.Context, client adt.QueryClient, clsName string, relType
 	return deps, nil
 }
 
-// ooRelTypeToUseType maps SEOMETAREL.RELTYPE to a use_type string.
-// 1 = interface implementation, 2 = superclass inheritance, 0 = interface extension.
+// ooRelTypeToUseType collapses RELTYPE "0" (interface extension) and "1" (interface
+// implementation) into a single INTERFACE use_type — the distinction matters for SAP
+// internally but is not meaningful for transport completeness checks, which is this
+// tool's primary use case. RELTYPE "2" (superclass) is kept separate because it names
+// a class, not an interface, and callers may need to treat it differently.
 func ooRelTypeToUseType(relType string) string {
 	switch relType {
 	case "0", "1":
