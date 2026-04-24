@@ -341,13 +341,18 @@ func d010tabDeps(ctx context.Context, client adt.QueryClient, master string, max
 	return deps, nil
 }
 
+// seometarelMaxRows caps OO relationship lookups. SAP class/interface metadata
+// is populated during activation and is bounded by the number of directly inherited
+// or implemented types; 100 is well above any realistic class hierarchy depth.
+const seometarelMaxRows = 100
+
 // ooDeps queries SEOMETAREL for OO meta-relationships of a class or interface.
 // relTypes filters by RELTYPE: "1"=interface implementation, "2"=superclass, "0"=interface extension.
 func ooDeps(ctx context.Context, client adt.QueryClient, clsName string, relTypes []string) ([]ObjectDependency, error) {
 	qr, err := client.RunQuery(ctx,
-		fmt.Sprintf("SELECT REFCLSNAME, RELTYPE FROM SEOMETAREL WHERE CLSNAME = '%s' AND RELTYPE IN (%s)",
+		fmt.Sprintf("SELECT REFCLSNAME, RELTYPE FROM SEOMETAREL WHERE CLSNAME = '%s' AND RELTYPE IN (%s) ORDER BY RELTYPE, REFCLSNAME",
 			adt.EscapeValue(clsName), buildSQLInList(relTypes)),
-		100)
+		seometarelMaxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -368,10 +373,12 @@ func ooDeps(ctx context.Context, client adt.QueryClient, clsName string, relType
 // 1 = interface implementation, 2 = superclass inheritance, 0 = interface extension.
 func ooRelTypeToUseType(relType string) string {
 	switch relType {
+	case "0", "1":
+		return useTypeInterface
 	case "2":
 		return useTypeSuperclass
-	default: // "0" and "1" both represent interface relationships
-		return useTypeInterface
+	default:
+		return useTypeUnknown
 	}
 }
 
@@ -386,6 +393,8 @@ func buildSQLInList(names []string) string {
 // fugrPoolProgramName constructs the D010TAB MASTER key for a function group.
 // SAP generates a function pool program: SAPL<name> for non-namespaced groups,
 // <namespace>SAPL<local> for namespaced groups (e.g. /NS/FUGR -> /NS/SAPLFUGR).
+// The namespaced path is unit-tested but not verified against a live SAP system —
+// no namespaced FUGR fixture exists in Z_ADT_MCP_TEST.
 func fugrPoolProgramName(fugrName string) string {
 	if len(fugrName) > 0 && fugrName[0] == '/' {
 		if idx := strings.Index(fugrName[1:], "/"); idx >= 0 {
