@@ -269,10 +269,10 @@ func buildSQLInList(names []string) string {
 	return strings.Join(quoted, ",")
 }
 
-// FugrPoolProgramName constructs the D010TAB MASTER key for a function group.
+// fugrPoolProgramName constructs the D010TAB MASTER key for a function group.
 // SAP generates a function pool program: SAPL<name> for non-namespaced groups,
 // <namespace>SAPL<local> for namespaced groups (e.g. /NS/FUGR -> /NS/SAPLFUGR).
-func FugrPoolProgramName(fugrName string) string {
+func fugrPoolProgramName(fugrName string) string {
 	if len(fugrName) > 0 && fugrName[0] == '/' {
 		if idx := strings.Index(fugrName[1:], "/"); idx >= 0 {
 			ns := fugrName[:idx+2]    // "/NS/"
@@ -283,10 +283,10 @@ func FugrPoolProgramName(fugrName string) string {
 	return "SAPL" + fugrName
 }
 
-// ClassPoolProgramName constructs the D010TAB MASTER key for a class.
+// classPoolProgramName constructs the D010TAB MASTER key for a class.
 // SAP generates a class pool program: <CLASSNAME> padded with '=' to 30 chars + "CP".
 // Verified on S/4 live system (see issue #343).
-func ClassPoolProgramName(className string) string {
+func classPoolProgramName(className string) string {
 	const padLen = 30
 	if len(className) >= padLen {
 		return className + "CP"
@@ -294,10 +294,10 @@ func ClassPoolProgramName(className string) string {
 	return className + strings.Repeat("=", padLen-len(className)) + "CP"
 }
 
-// IntfPoolProgramName constructs the D010TAB MASTER key for an interface.
+// intfPoolProgramName constructs the D010TAB MASTER key for an interface.
 // SAP generates an interface pool program: <INTFNAME> padded with '=' to 30 chars + "IP".
 // Verified on S/4 live system (see issue #343).
-func IntfPoolProgramName(intfName string) string {
+func intfPoolProgramName(intfName string) string {
 	const padLen = 30
 	if len(intfName) >= padLen {
 		return intfName + "IP"
