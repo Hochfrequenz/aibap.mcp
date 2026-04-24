@@ -161,6 +161,35 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 				Count:        len(deps),
 				Dependencies: deps,
 			})
+		case "FUGR":
+			master := fugrPoolProgramName(objName)
+			deps, err := d010tabDeps(ctx, client, master, maxResults)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			return mcp.NewToolResultJSON(ObjectDependenciesResult{
+				ObjectType:   objType,
+				ObjectName:   objName,
+				Count:        len(deps),
+				Dependencies: deps,
+			})
+
+		case "FUNC":
+			master, err := funcPoolProgramName(ctx, client, objName)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			deps, err := d010tabDeps(ctx, client, master, maxResults)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			return mcp.NewToolResultJSON(ObjectDependenciesResult{
+				ObjectType:   objType,
+				ObjectName:   objName,
+				Count:        len(deps),
+				Dependencies: deps,
+			})
+
 		default:
 			return errorResult(fmt.Errorf("unsupported object_type %q: supported are PROG, FUGR, FUNC, CLAS, INTF", objType)), nil
 		}
@@ -347,6 +376,21 @@ func intfPoolProgramName(intfName string) string {
 		return intfName + "IP"
 	}
 	return intfName + strings.Repeat("=", padLen-len(intfName)) + "IP"
+}
+
+// funcPoolProgramName resolves the D010TAB MASTER key for a FUNC object by looking up
+// TFDIR.PNAME — the function pool program SAP generated for the function module's group.
+func funcPoolProgramName(ctx context.Context, client adt.QueryClient, funcName string) (string, error) {
+	qr, err := client.RunQuery(ctx,
+		fmt.Sprintf("SELECT PNAME FROM TFDIR WHERE FUNCNAME = '%s'", adt.EscapeValue(funcName)),
+		1)
+	if err != nil {
+		return "", fmt.Errorf("looking up function module %q in TFDIR: %w", funcName, err)
+	}
+	if qr == nil || len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 || qr.Rows[0][0] == "" {
+		return "", fmt.Errorf("function module %q not found in TFDIR", funcName)
+	}
+	return qr.Rows[0][0], nil
 }
 
 // tabclassToUseType maps DD02L.TABCLASS to a use_type string.

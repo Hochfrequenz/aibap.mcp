@@ -1529,3 +1529,144 @@ func TestGetObjectDependenciesToolSQLEscaping(t *testing.T) {
 		t.Errorf("single quote not escaped in object_name, got: %s", gotSQL)
 	}
 }
+
+func TestGetObjectDependenciesFUGR(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				if !strings.Contains(sql, "MASTER = 'SAPLZ_ADT_MCP_TEST_FGRP'") {
+					t.Errorf("FUGR: unexpected MASTER, got SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{"SYST"}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{"SYST", "INTTAB"}},
+				}, nil
+			default:
+				t.Errorf("unexpected SQL: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "FUGR",
+		"object_name": "Z_ADT_MCP_TEST_FGRP",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType string `json:"object_type"`
+		ObjectName string `json:"object_name"`
+		Count      int    `json:"count"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "FUGR" {
+		t.Errorf("object_type: got %q, want FUGR", out.ObjectType)
+	}
+	if out.ObjectName != "Z_ADT_MCP_TEST_FGRP" {
+		t.Errorf("object_name: got %q, want Z_ADT_MCP_TEST_FGRP", out.ObjectName)
+	}
+	if out.Count != 1 {
+		t.Errorf("count: got %d, want 1", out.Count)
+	}
+}
+
+func TestGetObjectDependenciesFUNC(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "TFDIR"):
+				if !strings.Contains(sql, "FUNCNAME = 'Z_ADT_MCP_TEST_FM'") {
+					t.Errorf("TFDIR: unexpected filter, got SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "PNAME"}},
+					Rows:    [][]string{{"SAPLZ_ADT_MCP_TEST_FGRP"}},
+				}, nil
+			case strings.Contains(sql, "D010TAB"):
+				if !strings.Contains(sql, "MASTER = 'SAPLZ_ADT_MCP_TEST_FGRP'") {
+					t.Errorf("FUNC D010TAB: unexpected MASTER, got SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{"SYST"}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{"SYST", "INTTAB"}},
+				}, nil
+			default:
+				t.Errorf("unexpected SQL: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "FUNC",
+		"object_name": "Z_ADT_MCP_TEST_FM",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType string `json:"object_type"`
+		ObjectName string `json:"object_name"`
+		Count      int    `json:"count"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "FUNC" {
+		t.Errorf("object_type: got %q, want FUNC", out.ObjectType)
+	}
+	if out.ObjectName != "Z_ADT_MCP_TEST_FM" {
+		t.Errorf("object_name: got %q, want Z_ADT_MCP_TEST_FM", out.ObjectName)
+	}
+}
+
+func TestGetObjectDependenciesFUNCNotFound(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			if strings.Contains(sql, "TFDIR") {
+				return &adt.QueryResult{Columns: []adt.QueryColumn{{Name: "PNAME"}}, Rows: nil}, nil
+			}
+			t.Errorf("unexpected SQL after empty TFDIR: %s", sql)
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "FUNC",
+		"object_name": "Z_NONEXISTENT_FM",
+	})
+	if !result.IsError {
+		t.Errorf("expected IsError=true for unknown FUNC, got false")
+	}
+}
+
+func TestGetObjectDependenciesUnsupportedType(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "TABL",
+		"object_name": "ZSOME_TABLE",
+	})
+	if !result.IsError {
+		t.Errorf("expected IsError=true for unsupported type TABL, got false")
+	}
+}
