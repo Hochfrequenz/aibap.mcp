@@ -1745,3 +1745,71 @@ func TestGetObjectDependenciesCLAS(t *testing.T) {
 		t.Errorf("dep[2]: got {%q,%q}, want {ZCL_PARENT,SUPERCLASS}", out.Dependencies[2].Name, out.Dependencies[2].UseType)
 	}
 }
+
+func TestGetObjectDependenciesINTF(t *testing.T) {
+	const intfName = "ZIF_ABAPGIT_AJSON"
+	// 17 chars → pad to 30 with 13 '=' signs → + "IP" = 32 total
+	const wantMaster = "ZIF_ABAPGIT_AJSON=============IP"
+
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				if !strings.Contains(sql, "MASTER = '"+wantMaster+"'") {
+					t.Errorf("INTF D010TAB: unexpected MASTER in SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{"SYST"}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{"SYST", "INTTAB"}},
+				}, nil
+			case strings.Contains(sql, "SEOMETAREL"):
+				if !strings.Contains(sql, "CLSNAME = '"+intfName+"'") {
+					t.Errorf("SEOMETAREL: unexpected CLSNAME in SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "REFCLSNAME"}, {Name: "RELTYPE"}},
+					Rows:    [][]string{{"ZIF_EXTENDED", "0"}},
+				}, nil
+			default:
+				t.Errorf("unexpected SQL: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "INTF",
+		"object_name": intfName,
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType   string `json:"object_type"`
+		Count        int    `json:"count"`
+		Dependencies []struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "INTF" {
+		t.Errorf("object_type: got %q, want INTF", out.ObjectType)
+	}
+	if out.Count != 2 {
+		t.Errorf("count: got %d, want 2 (1 DDIC + 1 OO)", out.Count)
+	}
+	if out.Dependencies[0].Name != "SYST" || out.Dependencies[0].UseType != "STRUCTURE" {
+		t.Errorf("dep[0]: got {%q,%q}, want {SYST,STRUCTURE}", out.Dependencies[0].Name, out.Dependencies[0].UseType)
+	}
+	if out.Dependencies[1].Name != "ZIF_EXTENDED" || out.Dependencies[1].UseType != "INTERFACE" {
+		t.Errorf("dep[1]: got {%q,%q}, want {ZIF_EXTENDED,INTERFACE}", out.Dependencies[1].Name, out.Dependencies[1].UseType)
+	}
+}
