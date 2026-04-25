@@ -23,7 +23,7 @@ func (m *mockBlackMagic) ReleaseTransportFallback(context.Context, string) error
 	return nil
 }
 
-func (m *mockBlackMagic) UpdateCustomizing(context.Context, string, []tools.CustomizingEntry) error {
+func (m *mockBlackMagic) UpdateCustomizing(context.Context, string, []tools.CustomizingEntry, string) error {
 	return nil
 }
 
