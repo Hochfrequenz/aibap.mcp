@@ -92,8 +92,9 @@ type CreateTransportTaskResult struct {
 }
 
 type ReleaseTransportResult struct {
-	Transport string `json:"transport"`
-	Released  bool   `json:"released"`
+	Transport   string `json:"transport"`
+	Released    bool   `json:"released"`
+	ViaFallback bool   `json:"via_fallback,omitempty"`
 }
 
 type DeleteTransportResult struct {
