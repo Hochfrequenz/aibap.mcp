@@ -3,11 +3,79 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/adtler/adt"
 )
+
+func TestChunkNames(t *testing.T) {
+	// 10-char names: each entry = 13 bytes ('name',). maxBytes=30 → 2 per chunk.
+	names := []string{"AAAAAAAAAA", "BBBBBBBBBB", "CCCCCCCCCC", "DDDDDDDDDD"}
+	chunks := chunkNames(names, 30)
+	if len(chunks) != 2 {
+		t.Fatalf("got %d chunks, want 2", len(chunks))
+	}
+	if len(chunks[0]) != 2 || len(chunks[1]) != 2 {
+		t.Errorf("chunk sizes: got %d/%d, want 2/2", len(chunks[0]), len(chunks[1]))
+	}
+
+	// Single name that already fills the budget — must not produce an empty first chunk.
+	single := chunkNames([]string{"/HFQ/DXP_E_EXT_CUSTOMER_ID"}, 10)
+	if len(single) != 1 || len(single[0]) != 1 {
+		t.Errorf("single oversized name: got %v, want [[name]]", single)
+	}
+
+	// Empty input.
+	if got := chunkNames(nil, 100); len(got) != 0 {
+		t.Errorf("empty input: got %v, want []", got)
+	}
+}
+
+func TestDdicChainDeps_ChunkingDD04L(t *testing.T) {
+	// Provide enough long-named DTELs to force multiple DD04L batches.
+	// With ddicInListMaxBytes=150 and 30-char names (33 bytes each), chunks are ~4 names.
+	// We supply 10 DTELs, so the mock must be called more than once.
+	longName := func(i int) string { return fmt.Sprintf("/HFQ/DXP_E_%022d", i) } // 30 chars
+	dtels := make([]string, 10)
+	for i := range dtels {
+		dtels[i] = longName(i)
+	}
+
+	var dd04lCalls int
+	mock := &mockQueryClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "DD03L"):
+				// Return one DTEL row per TABL name queried; actual TABL name doesn't matter.
+				rows := make([][]string, len(dtels))
+				for i, d := range dtels {
+					rows[i] = []string{d, ""}
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "ROLLNAME"}, {Name: "CHECKTABLE"}},
+					Rows:    rows,
+				}, nil
+			case strings.Contains(sql, "DD04L"):
+				dd04lCalls++
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "DOMNAME"}},
+					Rows:    nil,
+				}, nil
+			default:
+				return nil, nil
+			}
+		},
+	}
+	_, warns := ddicChainDeps(context.Background(), mock, "ZSCARR", "TABL", 2)
+	if len(warns) != 0 {
+		t.Errorf("unexpected warnings: %v", warns)
+	}
+	if dd04lCalls < 2 {
+		t.Errorf("expected >1 DD04L batch calls (chunking), got %d", dd04lCalls)
+	}
+}
 
 func TestD010tabDeps(t *testing.T) {
 	mock := &mockQueryClient{

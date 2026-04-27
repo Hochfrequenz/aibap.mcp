@@ -508,6 +508,38 @@ func tabclassToUseType(tabclass string) string {
 // pathological; realistic SAP tables top out well below this.
 const ddicMaxFieldRows = 2000
 
+// ddicInListMaxBytes is the maximum byte length of a buildSQLInList result per
+// query batch. SAP's data-preview ABAP endpoint appends an internal INTO TABLE
+// clause; if the total SQL grows large, the parser misreads long IN-lists as
+// an unclosed string literal and raises a 400 "text literal longer than 255
+// characters" error. 150 bytes allows ~4-5 namespaced (30-char) names per
+// batch while permitting ~14 short standard names — keeping all batches well
+// inside the safe zone.
+const ddicInListMaxBytes = 150
+
+// chunkNames splits names into batches where buildSQLInList output for each
+// batch stays within maxBytes. This avoids SAP data-preview parser errors when
+// IN-lists become very long (see ddicInListMaxBytes).
+func chunkNames(names []string, maxBytes int) [][]string {
+	var chunks [][]string
+	var cur []string
+	curLen := 0
+	for _, n := range names {
+		entryLen := len(n) + 3 // 'name', = name + 2 quotes + 1 comma
+		if len(cur) > 0 && curLen+entryLen > maxBytes {
+			chunks = append(chunks, cur)
+			cur = nil
+			curLen = 0
+		}
+		cur = append(cur, n)
+		curLen += entryLen
+	}
+	if len(cur) > 0 {
+		chunks = append(chunks, cur)
+	}
+	return chunks
+}
+
 // ddicChainDeps traverses the DDIC type chain starting from a single object
 // (TABL, DTEL, DOMA, or TTYP) using iterative BFS. It returns a flat, deduplicated
 // list of all transitive dependencies with correct use_type classification, along
@@ -555,12 +587,17 @@ func ddicChainDeps(ctx context.Context, client adt.QueryClient, name, objType st
 
 		// TABL: DD03L.ROLLNAME → DTEL (data element), DD03L.CHECKTABLE → TABL (check table)
 		if tabls := typeGroups["TABL"]; len(tabls) > 0 {
-			qr, err := client.RunQuery(ctx,
-				fmt.Sprintf("SELECT ROLLNAME, CHECKTABLE FROM DD03L WHERE TABNAME IN (%s)", buildSQLInList(tabls)),
-				ddicMaxFieldRows)
-			if err != nil {
-				warnings = append(warnings, "DD03L query failed: "+err.Error())
-			} else if qr != nil {
+			for _, chunk := range chunkNames(tabls, ddicInListMaxBytes) {
+				qr, err := client.RunQuery(ctx,
+					fmt.Sprintf("SELECT ROLLNAME, CHECKTABLE FROM DD03L WHERE TABNAME IN (%s)", buildSQLInList(chunk)),
+					ddicMaxFieldRows)
+				if err != nil {
+					warnings = append(warnings, "DD03L query failed: "+err.Error())
+					continue
+				}
+				if qr == nil {
+					continue
+				}
 				for _, row := range qr.Rows {
 					if len(row) < 2 {
 						continue
@@ -576,14 +613,19 @@ func ddicChainDeps(ctx context.Context, client adt.QueryClient, name, objType st
 		}
 
 		// DTEL: DD04L.DOMNAME → DOMA (domain)
-		// DD04L has ROLLNAME as PK, so the mapping is 1:1 — maxRows = len(dtels) is exact.
+		// DD04L has ROLLNAME as PK, so the mapping is 1:1 — maxRows = chunk size is exact.
 		if dtels := typeGroups["DTEL"]; len(dtels) > 0 {
-			qr, err := client.RunQuery(ctx,
-				fmt.Sprintf("SELECT DOMNAME FROM DD04L WHERE ROLLNAME IN (%s)", buildSQLInList(dtels)),
-				len(dtels))
-			if err != nil {
-				warnings = append(warnings, "DD04L query failed: "+err.Error())
-			} else if qr != nil {
+			for _, chunk := range chunkNames(dtels, ddicInListMaxBytes) {
+				qr, err := client.RunQuery(ctx,
+					fmt.Sprintf("SELECT DOMNAME FROM DD04L WHERE ROLLNAME IN (%s)", buildSQLInList(chunk)),
+					len(chunk))
+				if err != nil {
+					warnings = append(warnings, "DD04L query failed: "+err.Error())
+					continue
+				}
+				if qr == nil {
+					continue
+				}
 				for _, row := range qr.Rows {
 					if len(row) < 1 {
 						continue
@@ -594,14 +636,19 @@ func ddicChainDeps(ctx context.Context, client adt.QueryClient, name, objType st
 		}
 
 		// DOMA: DD01L.ENTITYTAB → TABL (entity/value table)
-		// DD01L has DOMNAME as PK, so the mapping is 1:1 — maxRows = len(domas) is exact.
+		// DD01L has DOMNAME as PK, so the mapping is 1:1 — maxRows = chunk size is exact.
 		if domas := typeGroups["DOMA"]; len(domas) > 0 {
-			qr, err := client.RunQuery(ctx,
-				fmt.Sprintf("SELECT ENTITYTAB FROM DD01L WHERE DOMNAME IN (%s)", buildSQLInList(domas)),
-				len(domas))
-			if err != nil {
-				warnings = append(warnings, "DD01L query failed: "+err.Error())
-			} else if qr != nil {
+			for _, chunk := range chunkNames(domas, ddicInListMaxBytes) {
+				qr, err := client.RunQuery(ctx,
+					fmt.Sprintf("SELECT ENTITYTAB FROM DD01L WHERE DOMNAME IN (%s)", buildSQLInList(chunk)),
+					len(chunk))
+				if err != nil {
+					warnings = append(warnings, "DD01L query failed: "+err.Error())
+					continue
+				}
+				if qr == nil {
+					continue
+				}
 				for _, row := range qr.Rows {
 					if len(row) < 1 {
 						continue
@@ -615,13 +662,18 @@ func ddicChainDeps(ctx context.Context, client adt.QueryClient, name, objType st
 		// ROWKIND='' means built-in scalar, no further traversal needed.
 		// DD40L has TYPENAME as PK, so 1:1 in theory; ddicMaxFieldRows used as safety cap.
 		if ttyps := typeGroups["TTYP"]; len(ttyps) > 0 {
-			qr, err := client.RunQuery(ctx,
-				fmt.Sprintf("SELECT ROWTYPE, ROWKIND FROM DD40L WHERE TYPENAME IN (%s)", buildSQLInList(ttyps)),
-				ddicMaxFieldRows)
-			if err != nil {
-				warnings = append(warnings, "DD40L query failed: "+err.Error())
-			} else if qr != nil {
-				var rowKindS []string
+			var rowKindS []string
+			for _, chunk := range chunkNames(ttyps, ddicInListMaxBytes) {
+				qr, err := client.RunQuery(ctx,
+					fmt.Sprintf("SELECT ROWTYPE, ROWKIND FROM DD40L WHERE TYPENAME IN (%s)", buildSQLInList(chunk)),
+					ddicMaxFieldRows)
+				if err != nil {
+					warnings = append(warnings, "DD40L query failed: "+err.Error())
+					continue
+				}
+				if qr == nil {
+					continue
+				}
 				for _, row := range qr.Rows {
 					if len(row) < 2 || row[0] == "" {
 						continue
@@ -635,12 +687,12 @@ func ddicChainDeps(ctx context.Context, client adt.QueryClient, name, objType st
 						// empty rowKind = built-in type, no dependency to follow
 					}
 				}
-				// Classify ROWKIND='S' entries: TABLE vs STRUCTURE requires a DD02L lookup.
-				if len(rowKindS) > 0 {
-					cls := classifyDDICObjects(ctx, client, rowKindS)
-					for _, n := range rowKindS {
-						addDep(n, "TABL", cls[n])
-					}
+			}
+			// Classify all ROWKIND='S' entries across chunks: TABLE vs STRUCTURE requires a DD02L lookup.
+			if len(rowKindS) > 0 {
+				cls := classifyDDICObjects(ctx, client, rowKindS)
+				for _, n := range rowKindS {
+					addDep(n, "TABL", cls[n])
 				}
 			}
 		}
