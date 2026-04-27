@@ -258,6 +258,29 @@ func TestDdicChainDeps_TTYP_S(t *testing.T) {
 	}
 }
 
+func TestDdicChainDeps_TTYP_BuiltinRowKind(t *testing.T) {
+	// TTYP with ROWKIND='' (built-in scalar) must produce zero deps without panicking.
+	mock := &mockQueryClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			if !strings.Contains(sql, "DD40L") {
+				t.Errorf("expected DD40L query, got: %s", sql)
+				return nil, nil
+			}
+			return &adt.QueryResult{
+				Columns: []adt.QueryColumn{{Name: "ROWTYPE"}, {Name: "ROWKIND"}},
+				Rows:    [][]string{{"CHAR10", ""}},
+			}, nil
+		},
+	}
+	deps, warns := ddicChainDeps(context.Background(), mock, "TT_CHAR10", "TTYP", 1)
+	if len(warns) != 0 {
+		t.Errorf("unexpected warnings: %v", warns)
+	}
+	if len(deps) != 0 {
+		t.Errorf("built-in ROWKIND='' should produce 0 deps, got %d: %v", len(deps), deps)
+	}
+}
+
 func TestDdicChainDeps_CycleDetection(t *testing.T) {
 	// Classic DDIC cycle: DOMA MANDT → ENTITYTAB T000 → field ROLLNAME S_MANDT (DTEL) → DOMNAME MANDT
 	// The cycle closes at MANDT which is already visited.
