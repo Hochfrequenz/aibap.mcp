@@ -210,6 +210,7 @@ func TestDdicChainDeps_TABL(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestDdicChainDeps_DTEL(t *testing.T) {
 	// Depth=1: DTEL queries DD04L → discovers DOMA.
 	mock := &mockQueryClient{
@@ -239,7 +240,6 @@ func TestDdicChainDeps_DTEL(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestDdicChainDeps_DOMA(t *testing.T) {
 	// Depth=1: DOMA queries DD01L → discovers ENTITYTAB.
 	mock := &mockQueryClient{
