@@ -1981,22 +1981,24 @@ func TestGetObjectDependenciesTTYP(t *testing.T) {
 }
 
 func TestGetObjectDependenciesMaxDepthClamping(t *testing.T) {
-	// max_depth=11 must be clamped to 10 silently. The test verifies the tool
-	// returns a result rather than an error — actual depth-limting is covered
-	// by TestDdicChainDeps_MaxDepth.
+	// max_depth outside [1,10] must be silently clamped. The test verifies the
+	// tool returns a result rather than an error — actual depth-limiting is
+	// covered by TestDdicChainDeps_MaxDepth.
 	mock := &mockClient{
 		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
 			return nil, nil
 		},
 	}
 	s := newTestServer(mock)
-	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
-		"object_type": "TABL",
-		"object_name": "SCARR",
-		"max_depth":   float64(11),
-	})
-	if result.IsError {
-		t.Errorf("max_depth=11 should be accepted (clamped to 10), got error: %s", firstText(result))
+	for _, depth := range []float64{11, 0, -1} {
+		result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+			"object_type": "TABL",
+			"object_name": "SCARR",
+			"max_depth":   depth,
+		})
+		if result.IsError {
+			t.Errorf("max_depth=%v should be accepted (clamped), got error: %s", depth, firstText(result))
+		}
 	}
 }
 
@@ -2049,5 +2051,48 @@ func TestGetObjectDependenciesTABLWarningsInOutput(t *testing.T) {
 	}
 	if !strings.Contains(out.Warnings[0], "DD03L") {
 		t.Errorf("warning should mention DD03L, got: %q", out.Warnings[0])
+	}
+}
+
+func TestGetObjectDependenciesNoWarningsForNonDDIC(t *testing.T) {
+	// Warnings field must be omitted (omitempty) for non-DDIC types like CLAS
+	// that use a different code path and never populate the warnings slice.
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    nil,
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    nil,
+				}, nil
+			case strings.Contains(sql, "SEOMETAREL"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "REFCLSNAME"}, {Name: "RELTYPE"}},
+					Rows:    nil,
+				}, nil
+			}
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "CLAS",
+		"object_name": "ZCL_FOO",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	// Unmarshal into a raw map so we can check key presence.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(firstText(result)), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := raw["warnings"]; ok {
+		t.Error("'warnings' key must be absent (omitempty) for CLAS responses with no warnings")
 	}
 }

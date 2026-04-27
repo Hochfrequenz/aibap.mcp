@@ -254,6 +254,7 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 			}
 			deps, warns := ddicChainDeps(ctx, client, objName, objType, maxDepth)
 			if maxResults > 0 && len(deps) > maxResults {
+				warns = append(warns, fmt.Sprintf("output truncated to %d entries (%d total)", maxResults, len(deps)))
 				deps = deps[:maxResults]
 			}
 			return mcp.NewToolResultJSON(ObjectDependenciesResult{
@@ -575,6 +576,7 @@ func ddicChainDeps(ctx context.Context, client adt.QueryClient, name, objType st
 		}
 
 		// DTEL: DD04L.DOMNAME → DOMA (domain)
+		// DD04L has ROLLNAME as PK, so the mapping is 1:1 — maxRows = len(dtels) is exact.
 		if dtels := typeGroups["DTEL"]; len(dtels) > 0 {
 			qr, err := client.RunQuery(ctx,
 				fmt.Sprintf("SELECT DOMNAME FROM DD04L WHERE ROLLNAME IN (%s)", buildSQLInList(dtels)),
@@ -592,6 +594,7 @@ func ddicChainDeps(ctx context.Context, client adt.QueryClient, name, objType st
 		}
 
 		// DOMA: DD01L.ENTITYTAB → TABL (entity/value table)
+		// DD01L has DOMNAME as PK, so the mapping is 1:1 — maxRows = len(domas) is exact.
 		if domas := typeGroups["DOMA"]; len(domas) > 0 {
 			qr, err := client.RunQuery(ctx,
 				fmt.Sprintf("SELECT ENTITYTAB FROM DD01L WHERE DOMNAME IN (%s)", buildSQLInList(domas)),
@@ -610,10 +613,11 @@ func ddicChainDeps(ctx context.Context, client adt.QueryClient, name, objType st
 
 		// TTYP: DD40L.ROWTYPE → DTEL (ROWKIND='E') or TABLE/STRUCTURE (ROWKIND='S')
 		// ROWKIND='' means built-in scalar, no further traversal needed.
+		// DD40L has TYPENAME as PK, so 1:1 in theory; ddicMaxFieldRows used as safety cap.
 		if ttyps := typeGroups["TTYP"]; len(ttyps) > 0 {
 			qr, err := client.RunQuery(ctx,
 				fmt.Sprintf("SELECT ROWTYPE, ROWKIND FROM DD40L WHERE TYPENAME IN (%s)", buildSQLInList(ttyps)),
-				len(ttyps))
+				ddicMaxFieldRows)
 			if err != nil {
 				warnings = append(warnings, "DD40L query failed: "+err.Error())
 			} else if qr != nil {
