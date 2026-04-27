@@ -725,3 +725,84 @@ func TestIntegration_GetObjectDependencies_CLAS(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegration_GetObjectDependencies_TABL_SCARR(t *testing.T) {
+	// SCARR is the SAP flight carrier table. It exists on all standard SAP systems,
+	// has multiple fields with data elements, and at least S_MANDT and S_CARR_ID
+	// are present on S/4. The test verifies DDIC chain traversal at depth=1.
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+
+			res := callTool(t, sharedServer, "get_object_dependencies", map[string]interface{}{
+				"object_type": "TABL",
+				"object_name": "SCARR",
+				"max_depth":   float64(1),
+			})
+			if res.IsError {
+				t.Fatalf("get_object_dependencies TABL=SCARR returned IsError=true: %s", textOf(res))
+			}
+
+			var payload struct {
+				ObjectType   string   `json:"object_type"`
+				ObjectName   string   `json:"object_name"`
+				Count        int      `json:"count"`
+				Warnings     []string `json:"warnings,omitempty"`
+				Dependencies []struct {
+					Name    string `json:"name"`
+					UseType string `json:"use_type"`
+				} `json:"dependencies"`
+			}
+			if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
+				t.Fatalf("unmarshal: %v\nraw: %s", err, textOf(res))
+			}
+			if payload.ObjectType != "TABL" {
+				t.Errorf("object_type: got %q, want TABL", payload.ObjectType)
+			}
+			if payload.ObjectName != "SCARR" {
+				t.Errorf("object_name: got %q, want SCARR", payload.ObjectName)
+			}
+			if payload.Count == 0 {
+				t.Error("expected count > 0 for SCARR: table has fields with data elements")
+			}
+			if len(payload.Warnings) > 0 {
+				t.Errorf("expected no warnings, got: %v", payload.Warnings)
+			}
+
+			// At depth=1 we get DTELs from DD03L.ROLLNAME.
+			foundDataElement := false
+			for _, dep := range payload.Dependencies {
+				if dep.UseType == "DATA_ELEMENT" {
+					foundDataElement = true
+					break
+				}
+			}
+			if !foundDataElement {
+				t.Errorf("expected at least one DATA_ELEMENT dependency in SCARR at depth=1")
+			}
+
+			// S/4-specific assertions: known DTELs and check tables in SCARR.
+			if sys == "s4u" {
+				byName := map[string]string{}
+				for _, dep := range payload.Dependencies {
+					byName[dep.Name] = dep.UseType
+				}
+				if byName["S_MANDT"] != "DATA_ELEMENT" {
+					t.Errorf("S_MANDT: got %q, want DATA_ELEMENT", byName["S_MANDT"])
+				}
+				if byName["S_CARR_ID"] != "DATA_ELEMENT" {
+					t.Errorf("S_CARR_ID: got %q, want DATA_ELEMENT", byName["S_CARR_ID"])
+				}
+				if byName["T000"] != "TABLE" {
+					t.Errorf("T000 (check table for MANDT): got %q, want TABLE", byName["T000"])
+				}
+				if byName["SCURX"] != "TABLE" {
+					t.Errorf("SCURX (check table for currency): got %q, want TABLE", byName["SCURX"])
+				}
+			}
+
+			t.Logf("get_object_dependencies TABL=SCARR on %s: count=%d warnings=%v", sys, payload.Count, payload.Warnings)
+		})
+	}
+}

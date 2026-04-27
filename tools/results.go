@@ -272,6 +272,7 @@ type ObjectDependenciesResult struct {
 	ObjectName   string             `json:"object_name"`
 	Count        int                `json:"count"`
 	Dependencies []ObjectDependency `json:"dependencies"`
+	Warnings     []string           `json:"warnings,omitempty"`
 }
 
 // Wrapper result types for tools that previously returned top-level JSON
