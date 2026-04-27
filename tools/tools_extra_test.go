@@ -10,6 +10,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// SAP object names and use_type strings that appear in multiple test assertions.
+// Extracted to satisfy the goconst linter (threshold: 3 occurrences).
+const (
+	testSYST      = "SYST"
+	testStructure = "STRUCTURE"
+)
+
 // --- lock_object ---
 
 func TestLockObjectTool(t *testing.T) {
@@ -1209,7 +1216,7 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 				d010tabMaxRows = maxRows
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
-					Rows:    [][]string{{"SCREEN"}, {"SYST"}},
+					Rows:    [][]string{{"SCREEN"}, {testSYST}},
 				}, nil
 			case strings.Contains(sql, "DD02L"):
 				// DD02L is queried first for all names. SCREEN=INTTAB (structure),
@@ -1217,7 +1224,7 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 				// TADIR query follows.
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
-					Rows:    [][]string{{"SCREEN", "INTTAB"}, {"SYST", "TRANSP"}},
+					Rows:    [][]string{{"SCREEN", "INTTAB"}, {testSYST, "TRANSP"}},
 				}, nil
 			default:
 				// TADIR must not be queried when DD02L already classified all names.
@@ -1270,10 +1277,10 @@ func TestGetObjectDependenciesTool(t *testing.T) {
 	if out.Dependencies[0].Name != "SCREEN" {
 		t.Errorf("dep[0].name: got %q, want SCREEN", out.Dependencies[0].Name)
 	}
-	if out.Dependencies[0].UseType != "STRUCTURE" {
+	if out.Dependencies[0].UseType != testStructure {
 		t.Errorf("dep[0].use_type: got %q, want STRUCTURE (SCREEN is INTTAB in DD02L)", out.Dependencies[0].UseType)
 	}
-	if out.Dependencies[1].Name != "SYST" {
+	if out.Dependencies[1].Name != testSYST {
 		t.Errorf("dep[1].name: got %q, want SYST", out.Dependencies[1].Name)
 	}
 	if out.Dependencies[1].UseType != "TABLE" {
@@ -1487,6 +1494,28 @@ func TestGetObjectDependenciesToolError(t *testing.T) {
 	}
 }
 
+func TestGetObjectDependenciesLowercaseType(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			if strings.Contains(sql, "D010TAB") {
+				return &adt.QueryResult{Columns: []adt.QueryColumn{{Name: "TABNAME"}}, Rows: nil}, nil
+			}
+			if strings.Contains(sql, "DD02L") {
+				return &adt.QueryResult{Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}}, Rows: nil}, nil
+			}
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "prog", // lowercase — must still work
+		"object_name": "Z_MY_REPORT",
+	})
+	if result.IsError {
+		t.Errorf("lowercase 'prog' should be accepted, got error: %s", firstText(result))
+	}
+}
+
 func TestGetObjectDependenciesToolSQLEscaping(t *testing.T) {
 	var gotSQL string
 	mock := &mockClient{
@@ -1505,5 +1534,289 @@ func TestGetObjectDependenciesToolSQLEscaping(t *testing.T) {
 	})
 	if !strings.Contains(gotSQL, "O''REILLY_PROG") {
 		t.Errorf("single quote not escaped in object_name, got: %s", gotSQL)
+	}
+}
+
+func TestGetObjectDependenciesFUGR(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				if !strings.Contains(sql, "MASTER = 'SAPLZ_ADT_MCP_TEST_FGRP'") {
+					t.Errorf("FUGR: unexpected MASTER, got SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{testSYST}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{testSYST, "INTTAB"}},
+				}, nil
+			default:
+				t.Errorf("unexpected SQL: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "FUGR",
+		"object_name": "Z_ADT_MCP_TEST_FGRP",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType string `json:"object_type"`
+		ObjectName string `json:"object_name"`
+		Count      int    `json:"count"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "FUGR" {
+		t.Errorf("object_type: got %q, want FUGR", out.ObjectType)
+	}
+	if out.ObjectName != "Z_ADT_MCP_TEST_FGRP" {
+		t.Errorf("object_name: got %q, want Z_ADT_MCP_TEST_FGRP", out.ObjectName)
+	}
+	if out.Count != 1 {
+		t.Errorf("count: got %d, want 1", out.Count)
+	}
+}
+
+func TestGetObjectDependenciesFUNC(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "TFDIR"):
+				if !strings.Contains(sql, "FUNCNAME = 'Z_ADT_MCP_TEST_FM'") {
+					t.Errorf("TFDIR: unexpected filter, got SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "PNAME"}},
+					Rows:    [][]string{{"SAPLZ_ADT_MCP_TEST_FGRP"}},
+				}, nil
+			case strings.Contains(sql, "D010TAB"):
+				if !strings.Contains(sql, "MASTER = 'SAPLZ_ADT_MCP_TEST_FGRP'") {
+					t.Errorf("FUNC D010TAB: unexpected MASTER, got SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{testSYST}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{testSYST, "INTTAB"}},
+				}, nil
+			default:
+				t.Errorf("unexpected SQL: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "FUNC",
+		"object_name": "Z_ADT_MCP_TEST_FM",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType string `json:"object_type"`
+		ObjectName string `json:"object_name"`
+		Count      int    `json:"count"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "FUNC" {
+		t.Errorf("object_type: got %q, want FUNC", out.ObjectType)
+	}
+	if out.ObjectName != "Z_ADT_MCP_TEST_FM" {
+		t.Errorf("object_name: got %q, want Z_ADT_MCP_TEST_FM", out.ObjectName)
+	}
+}
+
+func TestGetObjectDependenciesFUNCNotFound(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			if strings.Contains(sql, "TFDIR") {
+				return &adt.QueryResult{Columns: []adt.QueryColumn{{Name: "PNAME"}}, Rows: nil}, nil
+			}
+			t.Errorf("unexpected SQL after empty TFDIR: %s", sql)
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "FUNC",
+		"object_name": "Z_NONEXISTENT_FM",
+	})
+	if !result.IsError {
+		t.Errorf("expected IsError=true for unknown FUNC, got false")
+	}
+}
+
+func TestGetObjectDependenciesUnsupportedType(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "TABL",
+		"object_name": "ZSOME_TABLE",
+	})
+	if !result.IsError {
+		t.Errorf("expected IsError=true for unsupported type TABL, got false")
+	}
+}
+
+func TestGetObjectDependenciesCLAS(t *testing.T) {
+	// ZCL_ADT_MCP_TEST_UNITS = 22 chars → pad to 30 with 8 '=' signs → + "CP" = 32 total
+	const className = "ZCL_ADT_MCP_TEST_UNITS"
+	const wantMaster = "ZCL_ADT_MCP_TEST_UNITS========CP"
+
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				if !strings.Contains(sql, "MASTER = '"+wantMaster+"'") {
+					t.Errorf("CLAS D010TAB: unexpected MASTER in SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{testSYST}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{testSYST, "INTTAB"}},
+				}, nil
+			case strings.Contains(sql, "SEOMETAREL"):
+				if !strings.Contains(sql, "CLSNAME = '"+className+"'") {
+					t.Errorf("SEOMETAREL: unexpected CLSNAME in SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "REFCLSNAME"}, {Name: "RELTYPE"}},
+					Rows: [][]string{
+						{"ZIF_MY_INTF", "1"},
+						{"ZCL_PARENT", "2"},
+					},
+				}, nil
+			default:
+				t.Errorf("unexpected SQL: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "CLAS",
+		"object_name": className,
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType   string `json:"object_type"`
+		ObjectName   string `json:"object_name"`
+		Count        int    `json:"count"`
+		Dependencies []struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "CLAS" {
+		t.Errorf("object_type: got %q, want CLAS", out.ObjectType)
+	}
+	if out.Count != 3 {
+		t.Errorf("count: got %d, want 3 (1 DDIC + 2 OO)", out.Count)
+	}
+	if out.Dependencies[0].Name != testSYST || out.Dependencies[0].UseType != testStructure {
+		t.Errorf("dep[0]: got {%q,%q}, want {SYST,STRUCTURE}", out.Dependencies[0].Name, out.Dependencies[0].UseType)
+	}
+	if out.Dependencies[1].Name != "ZIF_MY_INTF" || out.Dependencies[1].UseType != "INTERFACE" {
+		t.Errorf("dep[1]: got {%q,%q}, want {ZIF_MY_INTF,INTERFACE}", out.Dependencies[1].Name, out.Dependencies[1].UseType)
+	}
+	if out.Dependencies[2].Name != "ZCL_PARENT" || out.Dependencies[2].UseType != "SUPERCLASS" {
+		t.Errorf("dep[2]: got {%q,%q}, want {ZCL_PARENT,SUPERCLASS}", out.Dependencies[2].Name, out.Dependencies[2].UseType)
+	}
+}
+
+func TestGetObjectDependenciesINTF(t *testing.T) {
+	const intfName = "ZIF_ABAPGIT_AJSON"
+	// 17 chars → pad to 30 with 13 '=' signs → + "IP" = 32 total
+	const wantMaster = "ZIF_ABAPGIT_AJSON=============IP"
+
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				if !strings.Contains(sql, "MASTER = '"+wantMaster+"'") {
+					t.Errorf("INTF D010TAB: unexpected MASTER in SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    [][]string{{testSYST}},
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    [][]string{{testSYST, "INTTAB"}},
+				}, nil
+			case strings.Contains(sql, "SEOMETAREL"):
+				if !strings.Contains(sql, "CLSNAME = '"+intfName+"'") {
+					t.Errorf("SEOMETAREL: unexpected CLSNAME in SQL: %s", sql)
+				}
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "REFCLSNAME"}, {Name: "RELTYPE"}},
+					Rows:    [][]string{{"ZIF_EXTENDED", "0"}},
+				}, nil
+			default:
+				t.Errorf("unexpected SQL: %s", sql)
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "INTF",
+		"object_name": intfName,
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType   string `json:"object_type"`
+		Count        int    `json:"count"`
+		Dependencies []struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "INTF" {
+		t.Errorf("object_type: got %q, want INTF", out.ObjectType)
+	}
+	if out.Count != 2 {
+		t.Errorf("count: got %d, want 2 (1 DDIC + 1 OO)", out.Count)
+	}
+	if out.Dependencies[0].Name != testSYST || out.Dependencies[0].UseType != testStructure {
+		t.Errorf("dep[0]: got {%q,%q}, want {SYST,STRUCTURE}", out.Dependencies[0].Name, out.Dependencies[0].UseType)
+	}
+	if out.Dependencies[1].Name != "ZIF_EXTENDED" || out.Dependencies[1].UseType != "INTERFACE" {
+		t.Errorf("dep[1]: got {%q,%q}, want {ZIF_EXTENDED,INTERFACE}", out.Dependencies[1].Name, out.Dependencies[1].UseType)
 	}
 }
