@@ -569,3 +569,159 @@ func TestIntegration_GetObjectDependencies(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegration_GetObjectDependencies_FUGR(t *testing.T) {
+	const objType = "FUGR"
+	const objName = "Z_ADT_MCP_TEST_FGRP"
+	const uri = "/sap/bc/adt/functions/groups/z_adt_mcp_test_fgrp"
+
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+			requireFixture(t, sharedServer, sys, uri)
+
+			res := callTool(t, sharedServer, "get_object_dependencies", map[string]interface{}{
+				"object_type": objType,
+				"object_name": objName,
+			})
+			if res.IsError {
+				t.Fatalf("IsError=true: %s", textOf(res))
+			}
+			var payload struct {
+				ObjectType   string `json:"object_type"`
+				ObjectName   string `json:"object_name"`
+				Count        int    `json:"count"`
+				Dependencies []struct {
+					Name    string `json:"name"`
+					UseType string `json:"use_type"`
+				} `json:"dependencies"`
+			}
+			if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
+				t.Fatalf("unmarshal: %v\nraw: %s", err, textOf(res))
+			}
+			if payload.ObjectType != objType {
+				t.Errorf("object_type: got %q, want %q", payload.ObjectType, objType)
+			}
+			if payload.Count != len(payload.Dependencies) {
+				t.Errorf("count %d != len(dependencies) %d", payload.Count, len(payload.Dependencies))
+			}
+			if payload.Count == 0 {
+				t.Errorf("expected at least one D010TAB dependency for FUGR %s, got 0", objName)
+			}
+			validUseTypes := map[string]bool{
+				"TABLE": true, "STRUCTURE": true, "DATA_ELEMENT": true,
+				"DOMAIN": true, "VIEW": true, "TABLE_TYPE": true, "UNKNOWN": true,
+			}
+			for i, dep := range payload.Dependencies {
+				if dep.Name == "" {
+					t.Errorf("dependency[%d].name is empty", i)
+				}
+				if !validUseTypes[dep.UseType] {
+					t.Errorf("dependency[%d].use_type %q is not a valid DDIC use_type", i, dep.UseType)
+				}
+			}
+			t.Logf("FUGR %s/%s returned %d D010TAB dependency(ies)", sys, objName, payload.Count)
+		})
+	}
+}
+
+func TestIntegration_GetObjectDependencies_FUNC(t *testing.T) {
+	const objType = "FUNC"
+	const objName = "Z_ADT_MCP_TEST_FM"
+	// Z_ADT_MCP_TEST_FM lives in function group Z_ADT_MCP_TEST_FGRP; use the FUGR URI
+	// to guard against the fixture being absent on a target system.
+	const uri = "/sap/bc/adt/functions/groups/z_adt_mcp_test_fgrp"
+
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+			requireFixture(t, sharedServer, sys, uri)
+
+			res := callTool(t, sharedServer, "get_object_dependencies", map[string]interface{}{
+				"object_type": objType,
+				"object_name": objName,
+			})
+			if res.IsError {
+				t.Fatalf("IsError=true: %s", textOf(res))
+			}
+			var payload struct {
+				ObjectType string `json:"object_type"`
+				ObjectName string `json:"object_name"`
+				Count      int    `json:"count"`
+			}
+			if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if payload.ObjectType != objType {
+				t.Errorf("object_type: got %q, want %q", payload.ObjectType, objType)
+			}
+			if payload.ObjectName != objName {
+				t.Errorf("object_name: got %q, want %q", payload.ObjectName, objName)
+			}
+			if payload.Count == 0 {
+				t.Errorf("expected at least one dependency for FUNC %s", objName)
+			}
+			t.Logf("FUNC %s/%s returned %d dependency(ies)", sys, objName, payload.Count)
+		})
+	}
+}
+
+func TestIntegration_GetObjectDependencies_CLAS(t *testing.T) {
+	// ZCL_ADT_MCP_TEST_UNITS exists in $TMP on s4 — available for s4 only.
+	const objType = "CLAS"
+	const objName = "ZCL_ADT_MCP_TEST_UNITS"
+	const uri = "/sap/bc/adt/oo/classes/zcl_adt_mcp_test_units"
+
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+			requireFixture(t, sharedServer, sys, uri)
+
+			res := callTool(t, sharedServer, "get_object_dependencies", map[string]interface{}{
+				"object_type": objType,
+				"object_name": objName,
+			})
+			if res.IsError {
+				t.Fatalf("IsError=true: %s", textOf(res))
+			}
+			var payload struct {
+				ObjectType   string `json:"object_type"`
+				ObjectName   string `json:"object_name"`
+				Count        int    `json:"count"`
+				Dependencies []struct {
+					Name    string `json:"name"`
+					UseType string `json:"use_type"`
+				} `json:"dependencies"`
+			}
+			if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if payload.ObjectType != objType {
+				t.Errorf("object_type: got %q, want %q", payload.ObjectType, objType)
+			}
+			if payload.Count != len(payload.Dependencies) {
+				t.Errorf("count %d != len(dependencies) %d", payload.Count, len(payload.Dependencies))
+			}
+			if payload.Count == 0 {
+				t.Errorf("expected at least one dependency for CLAS %s", objName)
+			}
+			validUseTypes := map[string]bool{
+				"TABLE": true, "STRUCTURE": true, "DATA_ELEMENT": true,
+				"DOMAIN": true, "VIEW": true, "TABLE_TYPE": true,
+				"UNKNOWN": true, "INTERFACE": true, "SUPERCLASS": true,
+			}
+			for i, dep := range payload.Dependencies {
+				if dep.Name == "" {
+					t.Errorf("dependency[%d].name is empty", i)
+				}
+				if !validUseTypes[dep.UseType] {
+					t.Errorf("dependency[%d].use_type %q is not valid", i, dep.UseType)
+				}
+			}
+			t.Logf("CLAS %s/%s returned %d dependency(ies)", sys, objName, payload.Count)
+		})
+	}
+}

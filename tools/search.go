@@ -20,6 +20,8 @@ const (
 	useTypeDomain      = "DOMAIN"
 	useTypeView        = "VIEW"
 	useTypeTableType   = "TABLE_TYPE"
+	useTypeInterface   = "INTERFACE"
+	useTypeSuperclass  = "SUPERCLASS"
 	useTypeUnknown     = "UNKNOWN"
 )
 
@@ -127,62 +129,111 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
-			"Find all DDIC objects (tables, structures, types) that a given ABAP program references at runtime. "+
+			"Find all DDIC objects (tables, structures, types) and OO relationships "+
+				"(implemented interfaces, superclass) that a given ABAP object references. "+
 				"Counterpart to where_used, which answers the reverse question. "+
-				"Queries D010TAB, the ABAP program-to-DDIC dependency table. "+
-				"Useful for transport completeness checks: given a PROG in a transport, "+
-				"find which DDIC objects it depends on. "+
-				"The result is already complete and flat: D010TAB is populated by the ABAP activator and "+
-				"includes all objects pulled in via INCLUDE statements, so no further recursion is needed "+
-				"for DDIC references. "+
-				"Note: transitive program-level dependencies (CALL PROGRAM, SUBMIT) are NOT covered "+
-				"by this tool — D010TAB does not model those relationships.",
+				"Supported object types:\n"+
+				"  PROG — program: queries D010TAB (MASTER = program name)\n"+
+				"  FUGR — function group: queries D010TAB (MASTER = SAPL<name>)\n"+
+				"  FUNC — function module: resolves FUGR via TFDIR, then queries D010TAB\n"+
+				"  CLAS — class: queries D010TAB (class pool program) + SEOMETAREL (interfaces, superclass)\n"+
+				"  INTF — interface: queries D010TAB (interface pool program) + SEOMETAREL (extended interfaces)\n"+
+				"For DDIC results, D010TAB is populated flat by the ABAP activator — no client-side recursion needed. "+
+				"Useful for transport completeness checks.",
 		),
-		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type — currently only PROG is supported (D010TAB)")),
-		mcp.WithString("object_name", mcp.Required(), mcp.Description("Program name, e.g. Z_MY_REPORT or SAPL_MY_FUGR")),
+		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, FUGR, FUNC, CLAS, INTF")),
+		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_REPORT (PROG), Z_MY_FGRP (FUGR), Z_MY_FM (FUNC), ZCL_MY_CLASS (CLAS), ZIF_MY_INTF (INTF)")),
 		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
 		mcp.WithOutputSchema[ObjectDependenciesResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		objType := req.GetString("object_type", "")
+		objType := strings.ToUpper(req.GetString("object_type", ""))
 		objName := req.GetString("object_name", "")
 		maxResults := int(req.GetFloat("max_results", 200))
 
-		sql := fmt.Sprintf(
-			"SELECT TABNAME FROM D010TAB WHERE MASTER = '%s' ORDER BY TABNAME",
-			adt.EscapeValue(objName),
-		)
-
-		queryResult, err := client.RunQuery(ctx, sql, maxResults)
-		if err != nil {
-			return errorResult(err), nil
-		}
-		if queryResult == nil {
-			queryResult = &adt.QueryResult{}
-		}
-
-		var names []string
-		deps := make([]ObjectDependency, 0, len(queryResult.Rows))
-		for _, row := range queryResult.Rows {
-			if len(row) < 1 || row[0] == "" {
-				continue
+		switch objType {
+		case "PROG":
+			deps, err := d010tabDeps(ctx, client, objName, maxResults)
+			if err != nil {
+				return errorResult(err), nil
 			}
-			names = append(names, row[0])
-			deps = append(deps, ObjectDependency{Name: row[0]})
-		}
-
-		if len(names) > 0 {
-			classification := classifyDDICObjects(ctx, client, names)
-			for i := range deps {
-				deps[i].UseType = classification[deps[i].Name]
+			return mcp.NewToolResultJSON(ObjectDependenciesResult{
+				ObjectType:   objType,
+				ObjectName:   objName,
+				Count:        len(deps),
+				Dependencies: deps,
+			})
+		case "FUGR":
+			master := fugrPoolProgramName(objName)
+			deps, err := d010tabDeps(ctx, client, master, maxResults)
+			if err != nil {
+				return errorResult(err), nil
 			}
-		}
+			return mcp.NewToolResultJSON(ObjectDependenciesResult{
+				ObjectType:   objType,
+				ObjectName:   objName,
+				Count:        len(deps),
+				Dependencies: deps,
+			})
 
-		return mcp.NewToolResultJSON(ObjectDependenciesResult{
-			ObjectType:   objType,
-			ObjectName:   objName,
-			Count:        len(deps),
-			Dependencies: deps,
-		})
+		case "FUNC":
+			master, err := funcPoolProgramName(ctx, client, objName)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			deps, err := d010tabDeps(ctx, client, master, maxResults)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			return mcp.NewToolResultJSON(ObjectDependenciesResult{
+				ObjectType:   objType,
+				ObjectName:   objName,
+				Count:        len(deps),
+				Dependencies: deps,
+			})
+
+		case "CLAS":
+			master := classPoolProgramName(objName)
+			ddic, err := d010tabDeps(ctx, client, master, maxResults)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			oo, err := ooDeps(ctx, client, objName, []string{"1", "2"})
+			if err != nil {
+				return errorResult(err), nil
+			}
+			all := make([]ObjectDependency, 0, len(ddic)+len(oo))
+			all = append(all, ddic...)
+			all = append(all, oo...)
+			return mcp.NewToolResultJSON(ObjectDependenciesResult{
+				ObjectType:   objType,
+				ObjectName:   objName,
+				Count:        len(all),
+				Dependencies: all,
+			})
+
+		case "INTF":
+			master := intfPoolProgramName(objName)
+			ddic, err := d010tabDeps(ctx, client, master, maxResults)
+			if err != nil {
+				return errorResult(err), nil
+			}
+			oo, err := ooDeps(ctx, client, objName, []string{"0"})
+			if err != nil {
+				return errorResult(err), nil
+			}
+			all := make([]ObjectDependency, 0, len(ddic)+len(oo))
+			all = append(all, ddic...)
+			all = append(all, oo...)
+			return mcp.NewToolResultJSON(ObjectDependenciesResult{
+				ObjectType:   objType,
+				ObjectName:   objName,
+				Count:        len(all),
+				Dependencies: all,
+			})
+
+		default:
+			return errorResult(fmt.Errorf("unsupported object_type %q: supported are PROG, FUGR, FUNC, CLAS, INTF", objType)), nil
+		}
 	})
 }
 
@@ -259,12 +310,142 @@ func classifyDDICObjects(ctx context.Context, client adt.QueryClient, names []st
 	return result
 }
 
+// d010tabDeps uses the narrow adt.QueryClient interface (not searchQueryClient) so it
+// can be called directly from object-type-specific switch cases without coupling them
+// to the search client. D010TAB is the right source here: it is populated flat by the
+// ABAP activator at activation time, so one query returns the complete dependency set.
+func d010tabDeps(ctx context.Context, client adt.QueryClient, master string, maxResults int) ([]ObjectDependency, error) {
+	qr, err := client.RunQuery(ctx,
+		fmt.Sprintf("SELECT TABNAME FROM D010TAB WHERE MASTER = '%s' ORDER BY TABNAME", adt.EscapeValue(master)),
+		maxResults)
+	if err != nil {
+		return nil, err
+	}
+	if qr == nil {
+		return nil, nil
+	}
+	var names []string
+	deps := make([]ObjectDependency, 0, len(qr.Rows))
+	for _, row := range qr.Rows {
+		if len(row) < 1 || row[0] == "" {
+			continue
+		}
+		names = append(names, row[0])
+		deps = append(deps, ObjectDependency{Name: row[0]})
+	}
+	if len(names) > 0 {
+		classification := classifyDDICObjects(ctx, client, names)
+		for i := range deps {
+			deps[i].UseType = classification[deps[i].Name]
+		}
+	}
+	return deps, nil
+}
+
+// seometarelMaxRows caps OO relationship lookups. SAP class/interface metadata
+// is populated during activation and is bounded by the number of directly inherited
+// or implemented types; 100 is well above any realistic class hierarchy depth.
+const seometarelMaxRows = 100
+
+// ooDeps complements d010tabDeps for OO types: D010TAB covers DDIC references but does
+// not model class hierarchy or interface implementation. SEOMETAREL is SAP's OO
+// meta-relationship table; callers pass relTypes to select the relevant relationship
+// kinds (CLAS: ["1","2"], INTF: ["0"]) without duplicating the query logic.
+func ooDeps(ctx context.Context, client adt.QueryClient, clsName string, relTypes []string) ([]ObjectDependency, error) {
+	qr, err := client.RunQuery(ctx,
+		fmt.Sprintf("SELECT REFCLSNAME, RELTYPE FROM SEOMETAREL WHERE CLSNAME = '%s' AND RELTYPE IN (%s) ORDER BY RELTYPE, REFCLSNAME",
+			adt.EscapeValue(clsName), buildSQLInList(relTypes)),
+		seometarelMaxRows)
+	if err != nil {
+		return nil, err
+	}
+	if qr == nil {
+		return nil, nil
+	}
+	deps := make([]ObjectDependency, 0, len(qr.Rows))
+	for _, row := range qr.Rows {
+		if len(row) < 2 || row[0] == "" {
+			continue
+		}
+		deps = append(deps, ObjectDependency{Name: row[0], UseType: ooRelTypeToUseType(row[1])})
+	}
+	return deps, nil
+}
+
+// ooRelTypeToUseType collapses RELTYPE "0" (interface extension) and "1" (interface
+// implementation) into a single INTERFACE use_type — the distinction matters for SAP
+// internally but is not meaningful for transport completeness checks, which is this
+// tool's primary use case. RELTYPE "2" (superclass) is kept separate because it names
+// a class, not an interface, and callers may need to treat it differently.
+func ooRelTypeToUseType(relType string) string {
+	switch relType {
+	case "0", "1":
+		return useTypeInterface
+	case "2":
+		return useTypeSuperclass
+	default:
+		return useTypeUnknown
+	}
+}
+
 func buildSQLInList(names []string) string {
 	quoted := make([]string, len(names))
 	for i, n := range names {
 		quoted[i] = "'" + adt.EscapeValue(n) + "'"
 	}
 	return strings.Join(quoted, ",")
+}
+
+// fugrPoolProgramName constructs the D010TAB MASTER key for a function group.
+// SAP generates a function pool program: SAPL<name> for non-namespaced groups,
+// <namespace>SAPL<local> for namespaced groups (e.g. /NS/FUGR -> /NS/SAPLFUGR).
+// Verified against live S/4 system via TFDIR.PNAME lookup (e.g. /1BCDWB/SF00000001 -> /1BCDWB/SAPLSF00000001).
+func fugrPoolProgramName(fugrName string) string {
+	if len(fugrName) > 0 && fugrName[0] == '/' {
+		if idx := strings.Index(fugrName[1:], "/"); idx >= 0 {
+			ns := fugrName[:idx+2]    // "/NS/"
+			local := fugrName[idx+2:] // "LOCALNAME"
+			return ns + "SAPL" + local
+		}
+	}
+	return "SAPL" + fugrName
+}
+
+// classPoolProgramName constructs the D010TAB MASTER key for a class.
+// SAP generates a class pool program: <CLASSNAME> padded with '=' to 30 chars + "CP".
+// Verified on S/4 live system (see issue #343).
+func classPoolProgramName(className string) string {
+	const padLen = 30
+	if len(className) >= padLen {
+		return className + "CP"
+	}
+	return className + strings.Repeat("=", padLen-len(className)) + "CP"
+}
+
+// intfPoolProgramName constructs the D010TAB MASTER key for an interface.
+// SAP generates an interface pool program: <INTFNAME> padded with '=' to 30 chars + "IP".
+// Verified on S/4 live system (see issue #343).
+func intfPoolProgramName(intfName string) string {
+	const padLen = 30
+	if len(intfName) >= padLen {
+		return intfName + "IP"
+	}
+	return intfName + strings.Repeat("=", padLen-len(intfName)) + "IP"
+}
+
+// funcPoolProgramName resolves the D010TAB MASTER key for a FUNC object by looking up
+// TFDIR.PNAME — the function pool program SAP generated for the function module's group.
+func funcPoolProgramName(ctx context.Context, client adt.QueryClient, funcName string) (string, error) {
+	qr, err := client.RunQuery(ctx,
+		fmt.Sprintf("SELECT PNAME FROM TFDIR WHERE FUNCNAME = '%s'", adt.EscapeValue(funcName)),
+		1)
+	if err != nil {
+		return "", fmt.Errorf("looking up function module %q in TFDIR: %w", funcName, err)
+	}
+	if qr == nil || len(qr.Rows) == 0 || len(qr.Rows[0]) == 0 || qr.Rows[0][0] == "" {
+		return "", fmt.Errorf("function module %q not found in TFDIR", funcName)
+	}
+	return qr.Rows[0][0], nil
 }
 
 // tabclassToUseType maps DD02L.TABCLASS to a use_type string.
