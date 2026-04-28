@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const jsonTypeObject = "object"
+
 // listToolInputSchemas drives the MCP server through a `tools/list` call and
 // returns each tool's input schema as the raw map[string]any wire form. The
 // schema validation tests in schema_client_validation_test.go feed these
@@ -116,8 +118,8 @@ func stringSet(raw []any) map[string]bool {
 // schema. label is used in error messages.
 func assertClosedObjectShape(t *testing.T, label string, schema map[string]any, wantFields []string) {
 	t.Helper()
-	if schema["type"] != "object" {
-		t.Errorf("%s: type=%v want \"object\"", label, schema["type"])
+	if schema["type"] != jsonTypeObject {
+		t.Errorf("%s: type=%v want %q", label, schema["type"], jsonTypeObject)
 	}
 	if schema["additionalProperties"] != false {
 		t.Errorf("%s: additionalProperties=%v want false", label, schema["additionalProperties"])
@@ -149,8 +151,8 @@ func assertClosedObjectShape(t *testing.T, label string, schema map[string]any, 
 // with enum ["upsert", "delete"]. additionalProperties is closed.
 func assertCustomizingEntriesItems(t *testing.T, items map[string]any) {
 	t.Helper()
-	if items["type"] != "object" {
-		t.Errorf("items: type=%v want \"object\"", items["type"])
+	if items["type"] != jsonTypeObject {
+		t.Errorf("items: type=%v want %q", items["type"], jsonTypeObject)
 	}
 	if items["additionalProperties"] != false {
 		t.Errorf("items: additionalProperties=%v want false", items["additionalProperties"])
