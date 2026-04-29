@@ -1670,11 +1670,11 @@ func TestGetObjectDependenciesUnsupportedType(t *testing.T) {
 	}
 	s := newTestServer(mock)
 	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
-		"object_type": "TABL",
-		"object_name": "ZSOME_TABLE",
+		"object_type": "MSAG",
+		"object_name": "ZSOME_MSG",
 	})
 	if !result.IsError {
-		t.Errorf("expected IsError=true for unsupported type TABL, got false")
+		t.Errorf("expected IsError=true for unsupported type MSAG, got false")
 	}
 }
 
@@ -1818,5 +1818,283 @@ func TestGetObjectDependenciesINTF(t *testing.T) {
 	}
 	if out.Dependencies[1].Name != "ZIF_EXTENDED" || out.Dependencies[1].UseType != "INTERFACE" {
 		t.Errorf("dep[1]: got {%q,%q}, want {ZIF_EXTENDED,INTERFACE}", out.Dependencies[1].Name, out.Dependencies[1].UseType)
+	}
+}
+
+// --- get_object_dependencies: DDIC types (TABL/DTEL/DOMA/TTYP) ---
+
+func TestGetObjectDependenciesTABL(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "DD03L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "ROLLNAME"}, {Name: "CHECKTABLE"}},
+					Rows:    [][]string{{"S_CARR_ID", ""}},
+				}, nil
+			default:
+				return nil, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "TABL",
+		"object_name": "SCARR",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType   string   `json:"object_type"`
+		ObjectName   string   `json:"object_name"`
+		Count        int      `json:"count"`
+		Warnings     []string `json:"warnings,omitempty"`
+		Dependencies []struct {
+			Name    string `json:"name"`
+			UseType string `json:"use_type"`
+		} `json:"dependencies"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "TABL" {
+		t.Errorf("object_type: got %q, want TABL", out.ObjectType)
+	}
+	if out.ObjectName != "SCARR" {
+		t.Errorf("object_name: got %q, want SCARR", out.ObjectName)
+	}
+	if out.Count != 1 {
+		t.Errorf("count: got %d, want 1", out.Count)
+	}
+	if out.Warnings != nil {
+		t.Errorf("expected no warnings, got: %v", out.Warnings)
+	}
+	if len(out.Dependencies) != 1 || out.Dependencies[0].Name != "S_CARR_ID" || out.Dependencies[0].UseType != "DATA_ELEMENT" {
+		t.Errorf("dependency: got %+v", out.Dependencies)
+	}
+}
+
+//nolint:dupl
+func TestGetObjectDependenciesDTEL(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			if strings.Contains(sql, "DD04L") {
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "DOMNAME"}},
+					Rows:    [][]string{{"S_CARR_ID"}},
+				}, nil
+			}
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "DTEL",
+		"object_name": "S_CARR_ID",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType string `json:"object_type"`
+		Count      int    `json:"count"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "DTEL" {
+		t.Errorf("object_type: got %q, want DTEL", out.ObjectType)
+	}
+	if out.Count != 1 {
+		t.Errorf("count: got %d, want 1", out.Count)
+	}
+}
+
+//nolint:dupl
+func TestGetObjectDependenciesDOMA(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			if strings.Contains(sql, "DD01L") {
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "ENTITYTAB"}},
+					Rows:    [][]string{{"T000"}},
+				}, nil
+			}
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "DOMA",
+		"object_name": "MANDT",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType string `json:"object_type"`
+		Count      int    `json:"count"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "DOMA" {
+		t.Errorf("object_type: got %q, want DOMA", out.ObjectType)
+	}
+	if out.Count != 1 {
+		t.Errorf("count: got %d, want 1", out.Count)
+	}
+}
+
+func TestGetObjectDependenciesTTYP(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			if strings.Contains(sql, "DD40L") {
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "ROWTYPE"}, {Name: "ROWKIND"}},
+					Rows:    [][]string{{"S_CARR_ID", "E"}},
+				}, nil
+			}
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "TTYP",
+		"object_name": "TT_CARR_IDS",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		ObjectType string `json:"object_type"`
+		Count      int    `json:"count"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.ObjectType != "TTYP" {
+		t.Errorf("object_type: got %q, want TTYP", out.ObjectType)
+	}
+	if out.Count != 1 {
+		t.Errorf("count: got %d, want 1", out.Count)
+	}
+}
+
+func TestGetObjectDependenciesMaxDepthClamping(t *testing.T) {
+	// max_depth outside [1,10] must be silently clamped. The test verifies the
+	// tool returns a result rather than an error — actual depth-limiting is
+	// covered by TestDdicChainDeps_MaxDepth.
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	for _, depth := range []float64{11, 0, -1} {
+		result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+			"object_type": "TABL",
+			"object_name": "SCARR",
+			"max_depth":   depth,
+		})
+		if result.IsError {
+			t.Errorf("max_depth=%v should be accepted (clamped), got error: %s", depth, firstText(result))
+		}
+	}
+}
+
+func TestGetObjectDependenciesLowercaseDDICType(t *testing.T) {
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "tabl",
+		"object_name": "SCARR",
+	})
+	if result.IsError {
+		t.Errorf("lowercase 'tabl' should be accepted, got error: %s", firstText(result))
+	}
+}
+
+func TestGetObjectDependenciesTABLWarningsInOutput(t *testing.T) {
+	// A query failure should produce a warning in the output, not an error result.
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			if strings.Contains(sql, "DD03L") {
+				return nil, &adt.ADTError{StatusCode: 500, Message: "connection refused"}
+			}
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "TABL",
+		"object_name": "SCARR",
+	})
+	if result.IsError {
+		t.Fatalf("expected IsError=false (query error is a warning, not a tool error), got: %s", firstText(result))
+	}
+	var out struct {
+		Count    int      `json:"count"`
+		Warnings []string `json:"warnings,omitempty"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Count != 0 {
+		t.Errorf("count: got %d, want 0", out.Count)
+	}
+	if len(out.Warnings) == 0 {
+		t.Error("expected at least one warning for query failure")
+	}
+	if !strings.Contains(out.Warnings[0], "DD03L") {
+		t.Errorf("warning should mention DD03L, got: %q", out.Warnings[0])
+	}
+}
+
+func TestGetObjectDependenciesNoWarningsForNonDDIC(t *testing.T) {
+	// Warnings field must be omitted (omitempty) for non-DDIC types like CLAS
+	// that use a different code path and never populate the warnings slice.
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
+			switch {
+			case strings.Contains(sql, "D010TAB"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}},
+					Rows:    nil,
+				}, nil
+			case strings.Contains(sql, "DD02L"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
+					Rows:    nil,
+				}, nil
+			case strings.Contains(sql, "SEOMETAREL"):
+				return &adt.QueryResult{
+					Columns: []adt.QueryColumn{{Name: "REFCLSNAME"}, {Name: "RELTYPE"}},
+					Rows:    nil,
+				}, nil
+			}
+			return nil, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_object_dependencies", map[string]interface{}{
+		"object_type": "CLAS",
+		"object_name": "ZCL_FOO",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	// Unmarshal into a raw map so we can check key presence.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(firstText(result)), &raw); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := raw["warnings"]; ok {
+		t.Error("'warnings' key must be absent (omitempty) for CLAS responses with no warnings")
 	}
 }
