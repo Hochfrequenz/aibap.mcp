@@ -142,7 +142,9 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"All tasks must be released before the parent request — if include_tasks is true, "+
 				"tasks are released automatically first. "+
 				"NOTE: On ECC systems, release via ADT may silently fail (returns 200 but status stays modifiable). "+
-				"If release fails on ECC, use the sap-desktop MCP server to release via SE09 instead.",
+				"This tool detects the silent fail via a follow-up status check; when a fallback is "+
+				"configured it routes the release through that path automatically. Without a fallback, "+
+				"use the sap-desktop MCP server to release via SE09 instead.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to release")),
 		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),
@@ -155,14 +157,38 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 			return errorResult(&adt.ADTError{StatusCode: 400, Message: "release_transport aborted: " + reason}), nil
 		}
 		includeTasks := req.GetBool("include_tasks", false)
-		var err error
+
+		var releaseErr error
 		if includeTasks {
-			err = client.ReleaseTransportWithTasks(ctx, transport)
+			releaseErr = client.ReleaseTransportWithTasks(ctx, transport)
 		} else {
-			err = client.ReleaseTransport(ctx, transport)
+			releaseErr = client.ReleaseTransport(ctx, transport)
 		}
-		if err != nil {
-			return errorResult(err), nil
+
+		// ECC silent-fail detection: ADT can return 200 while leaving the
+		// transport modifiable. Verify via a status read.
+		silentFail := false
+		if releaseErr == nil {
+			if info, infoErr := client.GetTransportInfo(ctx, transport); infoErr == nil && info != nil && info.Status == "D" {
+				silentFail = true
+			}
+		}
+
+		if (releaseErr != nil || silentFail) && fallback != nil {
+			if fbErr := fallback.ReleaseTransportFallback(ctx, transport); fbErr != nil {
+				if releaseErr != nil {
+					return errorResult(fmt.Errorf("ADT release failed and fallback also failed: %w (ADT: %v)", fbErr, releaseErr)), nil
+				}
+				return errorResult(fmt.Errorf("ADT returned 200 but transport %s stayed modifiable; fallback also failed: %w", transport, fbErr)), nil
+			}
+			return mcp.NewToolResultJSON(ReleaseTransportResult{Transport: transport, Released: true, ViaFallback: true})
+		}
+
+		if releaseErr != nil {
+			return errorResult(releaseErr), nil
+		}
+		if silentFail {
+			return errorResult(fmt.Errorf("transport %s released via ADT (returned 200) but status remained modifiable; configure a fallback or release via SE09 in the sap-desktop MCP", transport)), nil
 		}
 		return mcp.NewToolResultJSON(ReleaseTransportResult{Transport: transport, Released: true})
 	})
