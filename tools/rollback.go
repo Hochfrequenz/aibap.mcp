@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,13 +9,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-type rollbackResult struct {
-	Restored []rollbackEntry `json:"restored"`
-	Skipped  []rollbackEntry `json:"skipped"`
-	Failed   []rollbackEntry `json:"failed"`
+type RollbackResult struct {
+	Restored []RollbackEntry `json:"restored"`
+	Skipped  []RollbackEntry `json:"skipped"`
+	Failed   []RollbackEntry `json:"failed"`
 }
 
-type rollbackEntry struct {
+type RollbackEntry struct {
 	Type   string `json:"type"`
 	Name   string `json:"name"`
 	Reason string `json:"reason,omitempty"`
@@ -29,7 +28,7 @@ var sourceTypeToEndpoint = map[string]string{
 	"FUGR": "/sap/bc/adt/functions/groups/",
 }
 
-func registerRollbackTools(s toolAdder, client adt.Client) {
+func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("rollback_transport",
 		mcp.WithTitleAnnotation("Rollback Transport"),
 		mcp.WithDestructiveHintAnnotation(true),
@@ -42,27 +41,32 @@ func registerRollbackTools(s toolAdder, client adt.Client) {
 				"This is destructive — it overwrites current source with historical versions.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number to roll back")),
+		mcp.WithOutputSchema[RollbackResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			fmt.Sprintf("Confirm rollback of transport %s. All source objects in it will be restored to their pre-transport version.", transport))
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "rollback_transport aborted: " + reason}), nil
+		}
 		result, err := doRollback(ctx, client, transport)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 }
 
-func doRollback(ctx context.Context, client adt.Client, transport string) (*rollbackResult, error) {
+func doRollback(ctx context.Context, client adt.Client, transport string) (*RollbackResult, error) {
 	objects, err := client.GetTransportObjects(ctx, transport)
 	if err != nil {
 		return nil, fmt.Errorf("reading transport objects: %w", err)
 	}
 
-	result := &rollbackResult{}
+	result := &RollbackResult{}
 	for _, obj := range objects {
 		if obj.PgmID != "R3TR" {
-			result.Skipped = append(result.Skipped, rollbackEntry{
+			result.Skipped = append(result.Skipped, RollbackEntry{
 				Type: obj.Type, Name: obj.Name, Reason: "not R3TR",
 			})
 			continue
@@ -70,7 +74,7 @@ func doRollback(ctx context.Context, client adt.Client, transport string) (*roll
 
 		endpoint, ok := sourceTypeToEndpoint[obj.Type]
 		if !ok {
-			result.Skipped = append(result.Skipped, rollbackEntry{
+			result.Skipped = append(result.Skipped, RollbackEntry{
 				Type: obj.Type, Name: obj.Name, Reason: "non-source object type",
 			})
 			continue
@@ -78,11 +82,11 @@ func doRollback(ctx context.Context, client adt.Client, transport string) (*roll
 
 		objectURI := endpoint + strings.ToLower(obj.Name)
 		if err := rollbackObject(ctx, client, objectURI, transport); err != nil {
-			result.Failed = append(result.Failed, rollbackEntry{
+			result.Failed = append(result.Failed, RollbackEntry{
 				Type: obj.Type, Name: obj.Name, Reason: err.Error(),
 			})
 		} else {
-			result.Restored = append(result.Restored, rollbackEntry{
+			result.Restored = append(result.Restored, RollbackEntry{
 				Type: obj.Type, Name: obj.Name,
 			})
 		}

@@ -19,12 +19,13 @@ func registerPrettyPrinterTools(s toolAdder, client adt.SourceClient) {
 			mcp.Required(),
 			mcp.Description("ABAP source code to format"),
 		),
+		mcp.WithOutputSchema[PrettyPrintResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		source := req.GetString("source", "")
 		formatted, err := client.PrettyPrint(ctx, source)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText(formatted), nil
+		return mcp.NewToolResultJSON(PrettyPrintResult{Formatted: formatted})
 	})
 }

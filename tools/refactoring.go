@@ -2,13 +2,13 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerRefactoringTools(s toolAdder, client adt.RefactoringClient) {
+func registerRefactoringTools(s toolAdder, client adt.RefactoringClient, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("rename",
 		mcp.WithTitleAnnotation("Rename Symbol"),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -21,6 +21,7 @@ func registerRefactoringTools(s toolAdder, client adt.RefactoringClient) {
 		mcp.WithString("source_uri", mcp.Required(), mcp.Description("Source URI with position of the symbol (#start=line,col)")),
 		mcp.WithString("new_name", mcp.Required(), mcp.Description("New name for the symbol")),
 		mcp.WithString("transport", mcp.Description("Transport request number (required for non-local objects)")),
+		mcp.WithOutputSchema[adt.RenameResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString("source_uri", "")
 		newName := req.GetString("new_name", "")
@@ -28,11 +29,15 @@ func registerRefactoringTools(s toolAdder, client adt.RefactoringClient) {
 		if uri == "" || newName == "" {
 			return errorResult(&adt.ADTError{StatusCode: 400, Message: "source_uri and new_name are required"}), nil
 		}
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			fmt.Sprintf("Confirm renaming the symbol at %s to %q. This updates all references across the object.", uri, newName))
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "rename aborted: " + reason}), nil
+		}
 		result, err := client.Rename(ctx, uri, newName, transport)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 }

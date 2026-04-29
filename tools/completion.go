@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -32,6 +31,7 @@ func registerCompletionTools(s toolAdder, client adt.SourceClient) {
 			mcp.Required(),
 			mcp.Description("Cursor column number (1-based)"),
 		),
+		mcp.WithOutputSchema[CompletionsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		source := req.GetString("source", "")
@@ -41,7 +41,6 @@ func registerCompletionTools(s toolAdder, client adt.SourceClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(items)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(CompletionsResult{Count: len(items), Items: items})
 	})
 }

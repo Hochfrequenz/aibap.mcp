@@ -19,6 +19,7 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 			mcp.Required(),
 			mcp.Description(descADTObjectURI),
 		),
+		mcp.WithOutputSchema[LockResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		handle, err := client.LockObject(ctx, uri)
@@ -26,7 +27,7 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 			return errorResult(err), nil
 		}
 		lockMap.Set(adt.LockKey(selector.ActiveName(), uri), handle, "")
-		return mcp.NewToolResultText(handle), nil
+		return mcp.NewToolResultJSON(LockResult{Handle: handle})
 	})
 
 	s.AddTool(mcp.NewTool("unlock_object",
@@ -42,6 +43,7 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 		mcp.WithString("lock_handle",
 			mcp.Description("Lock handle returned by lock_object (optional, looked up automatically)"),
 		),
+		mcp.WithOutputSchema[UnlockResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		lockHandle := req.GetString("lock_handle", "")
@@ -58,6 +60,6 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 			return errorResult(err), nil
 		}
 		lockMap.Delete(key)
-		return mcp.NewToolResultText("Object unlocked"), nil
+		return mcp.NewToolResultJSON(UnlockResult{URI: uri, Unlocked: true})
 	})
 }

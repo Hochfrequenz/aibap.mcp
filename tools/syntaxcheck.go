@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -22,6 +21,10 @@ func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 				"To check code without saving to an object, use verify_source instead.",
 		),
 		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
+		// No WithOutputSchema: single-URI path returns SyntaxCheckSingleResult
+		// (object wrapping []adt.SyntaxMessage), array path returns
+		// SyntaxCheckBatchResult. Both are objects so structuredContent stays
+		// spec-legal (#351).
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		single, multi := getStringOrSlice(req.GetArguments(), paramObjectURI)
 		if multi == nil {
@@ -29,8 +32,7 @@ func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 			if err != nil {
 				return errorResult(err), nil
 			}
-			out, _ := json.Marshal(msgs)
-			return mcp.NewToolResultText(string(out)), nil
+			return mcp.NewToolResultJSON(SyntaxCheckSingleResult{Count: len(msgs), Messages: msgs})
 		}
 
 		results := client.BatchSyntaxCheck(ctx, multi)
@@ -53,13 +55,12 @@ func registerSyntaxCheckTools(s toolAdder, client adt.QualityClient) {
 			}
 		}
 
-		out, _ := json.Marshal(map[string]any{
-			"total":          len(multi),
-			"clean":          clean,
-			"total_errors":   totalErrors,
-			"total_warnings": totalWarnings,
-			"results":        results,
+		return mcp.NewToolResultJSON(SyntaxCheckBatchResult{
+			Total:         len(multi),
+			Clean:         clean,
+			TotalErrors:   totalErrors,
+			TotalWarnings: totalWarnings,
+			Results:       results,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 }

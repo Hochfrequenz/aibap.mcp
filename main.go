@@ -41,7 +41,11 @@ func main() {
 
 	// Handle --version flag
 	if len(os.Args) >= 2 && os.Args[1] == "--version" {
-		fmt.Printf("mcp-server-abap %s\n", version)
+		rl := "off"
+		if logging.RemoteLoggingBakedIn() {
+			rl = "on"
+		}
+		fmt.Printf("mcp-server-abap %s (commit %s, remote-logging=%s)\n", version, logging.BuildInfo(), rl)
 		return
 	}
 
@@ -69,10 +73,10 @@ func main() {
 }
 
 func run() error {
-	logging.Setup()
+	logging.Setup(version)
 
 	var toolsFlag string
-	flag.StringVar(&toolsFlag, "tools", "", "Comma-separated tool groups to enable (default: all except debug,export; 'all' for everything)")
+	flag.StringVar(&toolsFlag, "tools", "", "Comma-separated tool groups to enable (default: all except debug; 'all' for everything)")
 	flag.Parse()
 
 	configPath := os.Getenv("SAP_CONFIG_FILE")
@@ -117,7 +121,6 @@ func run() error {
 		}
 	}
 	slog.Info("server started",
-		"version", version,
 		"systems", systemNames,
 		"default_system", cfg.DefaultSystem,
 		"tool_groups", activeGroups,
@@ -135,8 +138,9 @@ func run() error {
 
 	s := server.NewMCPServer("SAP ADT MCP Server", version,
 		server.WithInstructions(serverInstructions(systemNames, cfg.DefaultSystem)),
+		server.WithElicitation(),
 	)
-	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups, blackMagic)
+	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups, blackMagic, s)
 
 	stdioServer := server.NewStdioServer(s)
 	return stdioServer.Listen(ctx, os.Stdin, os.Stdout)

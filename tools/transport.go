@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,7 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient) {
+func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("get_transport_requests",
 		mcp.WithTitleAnnotation("Get Transport Requests"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -20,6 +19,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithDescription("List CTS transport requests on the configured SAP system. Status: D=modifiable, L=released."),
 		mcp.WithString("user", mcp.Description("Filter by owner username")),
 		mcp.WithString("status", mcp.Description("Filter by status: D (modifiable) or L (released)")),
+		mcp.WithOutputSchema[TransportRequestsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
 		status := req.GetString("status", "")
@@ -27,8 +27,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(transports)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(TransportRequestsResult{Count: len(transports), Transports: transports})
 	})
 
 	s.AddTool(mcp.NewTool("add_to_transport",
@@ -39,13 +38,14 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithDescription("Record an ABAP object into a CTS transport task. The transport parameter should be a task number (not the parent transport). Use get_transport_requests to find available transports."),
 		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number, e.g. DEVK900123")),
+		mcp.WithOutputSchema[AddToTransportResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		transport := req.GetString("transport", "")
 		if err := client.AddToTransport(ctx, uri, transport); err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText("Object added to transport successfully"), nil
+		return mcp.NewToolResultJSON(AddToTransportResult{ObjectURI: uri, Transport: transport, Added: true})
 	})
 
 	s.AddTool(mcp.NewTool("create_transport_task",
@@ -62,6 +62,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. S4UK902339")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("Short description for the task")),
 		mcp.WithString("owner", mcp.Description("SAP username for the task owner. Defaults to the authenticated user if omitted. Use this to create tasks for other team members.")),
+		mcp.WithOutputSchema[CreateTransportTaskResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		parent := req.GetString("parent_transport", "")
 		desc := req.GetString("description", "")
@@ -70,12 +71,11 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(map[string]string{
-			"task_number":      taskNumber,
-			"parent_transport": parent,
-			"description":      desc,
+		return mcp.NewToolResultJSON(CreateTransportTaskResult{
+			TaskNumber:      taskNumber,
+			ParentTransport: parent,
+			Description:     desc,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 
 	s.AddTool(mcp.NewTool("create_transport",
@@ -96,6 +96,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithString("target", mcp.Description("Target system (e.g. DUM, PRD). Query TCESYST to find available targets.")),
 		mcp.WithString("package", mcp.Description("Development class / package name. Optional — omit for unassigned requests.")),
 		mcp.WithBoolean("force", mcp.Description("Force ADT request even for unsupported categories. By default, category W (customizing) is intercepted because ADT cannot create customizing transports.")),
+		mcp.WithOutputSchema[CreateTransportResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		cat := req.GetString("category", "")
 		desc := req.GetString("description", "")
@@ -109,11 +110,10 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				if err != nil {
 					return errorResult(err), nil
 				}
-				out, _ := json.Marshal(map[string]string{
-					"transport_number": number,
-					"description":      desc,
+				return mcp.NewToolResultJSON(CreateTransportResult{
+					TransportNumber: number,
+					Description:     desc,
 				})
-				return mcp.NewToolResultText(string(out)), nil
 			}
 			return errorResult(fmt.Errorf(
 				"customizing transports (category W) cannot be created via the ADT REST API — " +
@@ -125,11 +125,10 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(map[string]string{
-			"transport_number": number,
-			"description":      desc,
+		return mcp.NewToolResultJSON(CreateTransportResult{
+			TransportNumber: number,
+			Description:     desc,
 		})
-		return mcp.NewToolResultText(string(out)), nil
 	})
 
 	s.AddTool(mcp.NewTool("release_transport",
@@ -143,23 +142,55 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"All tasks must be released before the parent request — if include_tasks is true, "+
 				"tasks are released automatically first. "+
 				"NOTE: On ECC systems, release via ADT may silently fail (returns 200 but status stays modifiable). "+
-				"If release fails on ECC, use the sap-desktop MCP server to release via SE09 instead.",
+				"This tool detects the silent fail via a follow-up status check; when a fallback is "+
+				"configured it routes the release through that path automatically. Without a fallback, "+
+				"use the sap-desktop MCP server to release via SE09 instead.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to release")),
 		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),
+		mcp.WithOutputSchema[ReleaseTransportResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			"Confirm release of transport "+transport+". Once released it cannot be edited.")
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "release_transport aborted: " + reason}), nil
+		}
 		includeTasks := req.GetBool("include_tasks", false)
-		var err error
+
+		var releaseErr error
 		if includeTasks {
-			err = client.ReleaseTransportWithTasks(ctx, transport)
+			releaseErr = client.ReleaseTransportWithTasks(ctx, transport)
 		} else {
-			err = client.ReleaseTransport(ctx, transport)
+			releaseErr = client.ReleaseTransport(ctx, transport)
 		}
-		if err != nil {
-			return errorResult(err), nil
+
+		// ECC silent-fail detection: ADT can return 200 while leaving the
+		// transport modifiable. Verify via a status read.
+		silentFail := false
+		if releaseErr == nil {
+			if info, infoErr := client.GetTransportInfo(ctx, transport); infoErr == nil && info != nil && info.Status == "D" {
+				silentFail = true
+			}
 		}
-		return mcp.NewToolResultText("Transport " + transport + " released"), nil
+
+		if (releaseErr != nil || silentFail) && fallback != nil {
+			if fbErr := fallback.ReleaseTransportFallback(ctx, transport); fbErr != nil {
+				if releaseErr != nil {
+					return errorResult(fmt.Errorf("ADT release failed and fallback also failed: %w (ADT: %v)", fbErr, releaseErr)), nil
+				}
+				return errorResult(fmt.Errorf("ADT returned 200 but transport %s stayed modifiable; fallback also failed: %w", transport, fbErr)), nil
+			}
+			return mcp.NewToolResultJSON(ReleaseTransportResult{Transport: transport, Released: true, ViaFallback: true})
+		}
+
+		if releaseErr != nil {
+			return errorResult(releaseErr), nil
+		}
+		if silentFail {
+			return errorResult(fmt.Errorf("transport %s released via ADT (returned 200) but status remained modifiable; configure a fallback or release via SE09 in the sap-desktop MCP", transport)), nil
+		}
+		return mcp.NewToolResultJSON(ReleaseTransportResult{Transport: transport, Released: true})
 	})
 
 	s.AddTool(mcp.NewTool("delete_transport",
@@ -173,12 +204,18 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"Deleting a request with tasks deletes all tasks too.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to delete")),
+		mcp.WithOutputSchema[DeleteTransportResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			"Confirm deletion of transport "+transport+". This is irreversible.")
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "delete_transport aborted: " + reason}), nil
+		}
 		if err := client.DeleteTransport(ctx, transport); err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText("Transport " + transport + " deleted"), nil
+		return mcp.NewToolResultJSON(DeleteTransportResult{Transport: transport, Deleted: true})
 	})
 
 	s.AddTool(mcp.NewTool("remove_from_transport",
@@ -199,6 +236,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_PROGRAM")),
 		mcp.WithString("wb_type", mcp.Required(), mcp.Description("Workbench type, e.g. PROG/P, CLAS/OC")),
 		mcp.WithString("position", mcp.Required(), mcp.Description("Object position in transport (from get_transport_objects), e.g. 000001")),
+		mcp.WithOutputSchema[RemoveFromTransportResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		taskNr := req.GetString("task_number", "")
 		parentTr := req.GetString("parent_transport", "")
@@ -207,10 +245,15 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		objName := req.GetString("object_name", "")
 		wbType := req.GetString("wb_type", "")
 		position := req.GetString("position", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			fmt.Sprintf("Confirm removing %s %s from transport task %s (parent %s). The object itself is not changed — only its link to the transport.", objType, objName, taskNr, parentTr))
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "remove_from_transport aborted: " + reason}), nil
+		}
 		if err := client.RemoveFromTransport(ctx, taskNr, parentTr, pgmid, objType, objName, wbType, position); err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText("Object removed from transport successfully"), nil
+		return mcp.NewToolResultJSON(RemoveFromTransportResult{TaskNumber: taskNr, ObjectName: objName, Removed: true})
 	})
 
 	s.AddTool(mcp.NewTool("get_transport_objects",
@@ -224,13 +267,17 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"Use this to see what a transport contains before releasing or rolling back.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number")),
+		mcp.WithOutputSchema[TransportObjectsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
 		objects, err := client.GetTransportObjects(ctx, transport)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(objects)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(TransportObjectsResult{
+			Transport: transport,
+			Count:     len(objects),
+			Objects:   objects,
+		})
 	})
 }

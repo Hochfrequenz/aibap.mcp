@@ -17,7 +17,7 @@ var ddicTypes = map[string]bool{
 	"DOMA": true,
 }
 
-func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMagicClient) {
+func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMagicClient, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("create_object",
 		mcp.WithTitleAnnotation("Create ABAP Object"),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -42,6 +42,7 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 		mcp.WithString("transport",
 			mcp.Description("Transport request number (required for non-local packages)"),
 		),
+		mcp.WithOutputSchema[ObjectCreateResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		objectType := strings.ToUpper(req.GetString("object_type", ""))
 		name := req.GetString("name", "")
@@ -58,7 +59,7 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 					if fbErr := fallback.CreateObjectFallback(ctx, objectType, name, pkg, desc, transport); fbErr != nil {
 						return errorResult(fbErr), nil
 					}
-					return mcp.NewToolResultText("Object created: " + name), nil
+					return mcp.NewToolResultJSON(ObjectCreateResult{Name: name, Created: true})
 				}
 				return errorResult(fmt.Errorf(
 					"DDIC object creation (%s) is not available via ADT on this system — "+
@@ -67,7 +68,7 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 			}
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText("Object created: " + name), nil
+		return mcp.NewToolResultJSON(ObjectCreateResult{Name: name, Created: true})
 	})
 
 	s.AddTool(mcp.NewTool("delete_object",
@@ -88,12 +89,18 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 		mcp.WithString("transport",
 			mcp.Description("Transport request number (required for non-local packages)"),
 		),
+		mcp.WithOutputSchema[ObjectDeleteResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		transport := req.GetString("transport", "")
+		proceed, reason := ConfirmDestructive(ctx, elicitor,
+			fmt.Sprintf("Confirm deletion of %s. This is irreversible.", uri))
+		if !proceed {
+			return errorResult(&adt.ADTError{StatusCode: 400, Message: "delete_object aborted: " + reason}), nil
+		}
 		if err := client.DeleteObject(ctx, uri, "", transport); err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultText("Object deleted"), nil
+		return mcp.NewToolResultJSON(ObjectDeleteResult{URI: uri, Deleted: true})
 	})
 }

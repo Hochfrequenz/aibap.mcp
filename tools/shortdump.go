@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -23,6 +22,7 @@ func registerShortDumpTools(s toolAdder, client adt.DumpClient) {
 		mcp.WithString("from", mcp.Description("Start timestamp in YYYYMMDDHHmmss format, e.g. 20260401000000")),
 		mcp.WithString("to", mcp.Description("End timestamp in YYYYMMDDHHmmss format")),
 		mcp.WithString("user", mcp.Description("Filter by SAP username")),
+		mcp.WithOutputSchema[ListShortDumpsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		from := req.GetString("from", "")
 		to := req.GetString("to", "")
@@ -31,8 +31,7 @@ func registerShortDumpTools(s toolAdder, client adt.DumpClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(dumps)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(ListShortDumpsResult{Count: len(dumps), Dumps: dumps})
 	})
 
 	s.AddTool(mcp.NewTool("get_short_dump_details",
@@ -49,6 +48,7 @@ func registerShortDumpTools(s toolAdder, client adt.DumpClient) {
 		mcp.WithString("from", mcp.Required(), mcp.Description("Start timestamp in YYYYMMDDHHmmss format, e.g. 20260401000000")),
 		mcp.WithString("to", mcp.Description("End timestamp in YYYYMMDDHHmmss format")),
 		mcp.WithString("user", mcp.Description("Filter by SAP username")),
+		mcp.WithOutputSchema[ShortDumpDetailsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		from := req.GetString("from", "")
 		to := req.GetString("to", "")
@@ -57,7 +57,6 @@ func registerShortDumpTools(s toolAdder, client adt.DumpClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(dumps)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(ShortDumpDetailsResult{Count: len(dumps), Dumps: dumps})
 	})
 }

@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -21,6 +20,7 @@ func registerDDICTools(s toolAdder, client adt.DDICClient) {
 				"Queries DD03L on the SAP system.",
 		),
 		mcp.WithString("table_name", mcp.Required(), mcp.Description("DDIC table or structure name, e.g. T001, MARA, BKPF")),
+		mcp.WithOutputSchema[TableFieldsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("table_name", "")
 		if name == "" {
@@ -30,7 +30,6 @@ func registerDDICTools(s toolAdder, client adt.DDICClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(fields)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(TableFieldsResult{TableName: name, Count: len(fields), Fields: fields})
 	})
 }

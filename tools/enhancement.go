@@ -2,11 +2,17 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// BAdIImplementationWithXML wraps adt.BAdIImplementationInfo so the raw_xml
+// field is advertised on the output schema.
+type BAdIImplementationWithXML struct {
+	*adt.BAdIImplementationInfo
+	RawXML string `json:"raw_xml"`
+}
 
 func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 	s.AddTool(mcp.NewTool("get_badi_definition",
@@ -22,6 +28,7 @@ func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 				"Note: creating enhancement implementations requires SAP GUI (transaction SE19).",
 		),
 		mcp.WithString("spot_name", mcp.Required(), mcp.Description("Enhancement spot name, e.g. 'BADI_ACC_DOCUMENT'")),
+		mcp.WithOutputSchema[adt.EnhancementSpotInfo](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("spot_name", "")
 		if name == "" {
@@ -31,8 +38,7 @@ func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(result)
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(result)
 	})
 
 	s.AddTool(mcp.NewTool("get_badi_implementation",
@@ -49,6 +55,7 @@ func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 				"ADT REST does not support ENHO creation. Use set_badi_implementation to update existing ones.",
 		),
 		mcp.WithString("implementation_name", mcp.Required(), mcp.Description("Enhancement implementation name, e.g. 'ZEI_BADI_BPEM'")),
+		mcp.WithOutputSchema[BAdIImplementationWithXML](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("implementation_name", "")
 		if name == "" {
@@ -58,11 +65,10 @@ func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(struct {
-			*adt.BAdIImplementationInfo
-			RawXML string `json:"raw_xml"`
-		}{result, result.RawXML})
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(BAdIImplementationWithXML{
+			BAdIImplementationInfo: result,
+			RawXML:                 result.RawXML,
+		})
 	})
 
 	s.AddTool(mcp.NewTool("set_badi_implementation",
@@ -83,6 +89,7 @@ func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 		mcp.WithString("lock_handle", mcp.Required(), mcp.Description("Lock handle from lock_object")),
 		mcp.WithString("transport", mcp.Description("Transport request number (required for non-local packages)")),
 		mcp.WithString("etag", mcp.Required(), mcp.Description("ETag from get_badi_implementation")),
+		mcp.WithOutputSchema[SetEnhancementImplementationResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("implementation_name", "")
 		xmlBody := req.GetString("xml_body", "")
@@ -93,7 +100,6 @@ func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		out, _ := json.Marshal(map[string]string{"status": "ok"})
-		return mcp.NewToolResultText(string(out)), nil
+		return mcp.NewToolResultJSON(SetEnhancementImplementationResult{Status: "ok"})
 	})
 }

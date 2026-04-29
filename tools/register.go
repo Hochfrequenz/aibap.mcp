@@ -27,9 +27,36 @@ var AllGroups = []string{
 	"debug", "export", "system",
 }
 
+// defaultOffGroups lists tool groups that are hidden from MCP clients by
+// default. Hidden tools don't appear in the tool list and can't be called.
+//
+// Background (#230): the MCP server exposes 60+ tools. Each tool definition
+// is sent to the client on connect and consumes tokens in the LLM context
+// window. Tool groups were introduced to let users control which tools are
+// loaded. Groups in this map are off unless explicitly enabled via --tools
+// or the config's "tools" array.
+//
+// The problem is that MCP has no "show me what's hidden" mechanism — from
+// the client's perspective, hidden tools simply don't exist. There's no
+// discovery, no hint, nothing. So hiding tools here means users can't know
+// they're available unless they read this source code or the docs.
+//
+// "export" was originally in this map alongside "debug" (#230). Removed in
+// #303 because the export tools (export_package, export_packages,
+// export_customizing) are read-only and production-ready — hiding them
+// just caused confusion when users tried to export packages and couldn't
+// find the tools.
+//
+// "debug" stays off because debugger tools (breakpoints, stepping, variable
+// inspection) can interfere with other active debugger sessions on the same
+// SAP system. They're opt-in by design.
+//
+// TODO: this whole approach is a stopgap. The proper fix is either MCP-level
+// tool categories / lazy loading, or shorter tool descriptions that reduce
+// the token footprint without hiding functionality. We don't have a good
+// solution for this yet.
 var defaultOffGroups = map[string]bool{
-	"debug":  true,
-	"export": true,
+	"debug": true,
 }
 
 // DefaultGroups returns the default enabled/disabled state for each group.
@@ -63,7 +90,7 @@ func ParseToolGroups(names []string) map[string]bool {
 
 // RegisterAll registers all SAP ADT MCP tools on the given server.
 func RegisterAll(s *server.MCPServer, client adt.Client, selector SystemSelector) {
-	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), DefaultGroups(), nil)
+	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), DefaultGroups(), nil, nil)
 }
 
 // toolAdder is the subset of server.MCPServer used by register functions.
@@ -127,7 +154,9 @@ func getStringOrSlice(args map[string]any, key string) (string, []string) {
 // RegisterAllWithLockMap registers SAP ADT MCP tools using a provided lock map
 // and an enabledGroups map controlling which tool groups are active.
 // The fallback parameter is optional (nil = no fallback for unsupported operations).
-func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient) {
+// The elicitor parameter is optional (nil = destructive tools proceed without
+// confirmation, matching pre-elicitation behaviour).
+func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient, elicitor Elicitor) {
 	ls := &loggingServer{inner: s, selector: selector}
 
 	type group struct {
@@ -150,14 +179,14 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		{"objects", func() {
 			registerSearchTools(ls, client)
 			registerRepositoryTools(ls, client)
-			registerObjectTools(ls, client, fallback)
-			registerRefactoringTools(ls, client)
+			registerObjectTools(ls, client, fallback, elicitor)
+			registerRefactoringTools(ls, client, elicitor)
 			registerDDICTools(ls, client)
 		}},
 		{"version", func() { registerVersionTools(ls, client) }},
 		{"locking", func() {
 			registerLockTools(ls, client, lockMap, selector)
-			registerActivateTools(ls, client)
+			registerActivateTools(ls, client, lockMap, selector)
 		}},
 		{"testing", func() {
 			registerSyntaxCheckTools(ls, client)
@@ -170,15 +199,15 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		}},
 		{"shortdumps", func() { registerShortDumpTools(ls, client) }},
 		{"transport", func() {
-			registerTransportTools(ls, client, fallback)
-			registerRollbackTools(ls, client)
+			registerTransportTools(ls, client, fallback, elicitor)
+			registerRollbackTools(ls, client, elicitor)
 		}},
 		{"enhancements", func() { registerEnhancementTools(ls, client) }},
 		{"debug", func() { registerDebuggerTools(ls, client, selector) }},
 		{"export", func() {
 			registerExportTools(ls, client)
 			registerCustomizingTools(ls, client)
-			registerCustomizingWriteTools(ls, fallback)
+			registerCustomizingWriteTools(ls, fallback, elicitor)
 		}},
 		{"system", func() {
 			registerSystemTools(ls, selector)

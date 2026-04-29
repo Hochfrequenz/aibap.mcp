@@ -12,7 +12,7 @@ A community-built [MCP (Model Context Protocol)](https://modelcontextprotocol.io
 
 ## How it works
 
-The server connects to your SAP system via the **SAP ADT (ABAP Development Tools) REST API** — the same HTTP API that ABAP Development Tools for Eclipse uses under the hood. No SAP GUI, no RFC, no additional middleware required.
+The server connects to your SAP system via the **SAP ADT (ABAP Development Tools) REST API** — the same HTTP API that ABAP Development Tools for Eclipse uses under the hood. For the vast majority of operations, that's all you need: no SAP GUI, no RFC, no additional middleware.
 
 The SAP-touching code lives in [**adtler**](https://github.com/Hochfrequenz/adtler), a standalone Go client library for the ADT REST API. mcp-server-abap is the thin MCP layer that exposes adtler's operations as MCP tools.
 
@@ -21,11 +21,23 @@ graph TD
     A["Claude / AI assistant"] -->|"MCP (stdio)"| B["mcp-server-abap<br/>(tools/ wrappers)"]
     B -->|"Go API"| C["adtler<br/>(SAP ADT client library)"]
     C -->|"HTTP + Basic Auth or OAuth2 + CSRF"| D["SAP System<br/>/sap/bc/adt/..."]
+    B -.->|"BlackMagicClient interface<br/>(BYO Go hook, compile-time —<br/>no default impl shipped)"| E["your BlackMagicClient impl<br/>(you write this,<br/>baked into a custom build)"]
+    E -.->|"SAP GUI / RFC / whatever you can conjure"| D
+
+    style E fill:#fff,stroke:#888,stroke-dasharray: 5 5
 ```
 
-## Available tools (66)
+### The BlackMagic fallback (BYO)
 
-Tools are organized into groups. By default, all groups except `debug` and `export` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
+A handful of operations aren't exposed by the ADT REST API at all — customizing table writes (SM30/SM34), transport release on ECC (SE09), and similar SAP-GUI-only workflows. For these, mcp-server-abap defines a `BlackMagicClient` Go interface, but **ships no implementation**. The hook says *what* the tool needs done; it does not say *how* to do it.
+
+If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP Web GUI, RFC, or whatever else you've conjured bend to your will, you can write a Go implementation of `BlackMagicClient` and compile it into a **custom build** — the hook is a package-level `var blackMagic tools.BlackMagicClient` in `main.go`, set from a build-tagged `init()` in a file you maintain in your own fork. There is no runtime flag or config entry for this; the choice is baked into the binary at compile time. Your build then calls through your implementation transparently for the fallback-requiring tools. The interface is deliberately shape-agnostic: any Go struct that satisfies it works. No public implementation is shipped — producing one, and maintaining a custom build, is the implementer's own problem (and, arguably, part of the craft).
+
+Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
+
+## Available tools (67)
+
+Tools are organized into groups. By default, all groups except `debug` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
 <details>
 <summary><strong>Source code</strong> — <code>source</code> (7 tools)</summary>
@@ -55,7 +67,7 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> — <code>objects</code> (9 tools)</summary>
+<summary><strong>Objects and packages</strong> — <code>objects</code> (10 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -64,6 +76,7 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 | `get_object_info` | Get object metadata: type, package, description (supports batch) |
 | `object_exists` | Check if an ABAP object exists (true/false + metadata, supports batch) |
 | `where_used` | Find all objects that reference a given object (supports batch) |
+| `get_object_dependencies` | Find all objects that a given object references — forward direction counterpart to where_used (queries WBCROSSGT) |
 | `get_table_fields` | Get DDIC table/structure field definitions (DD03L) |
 | `create_object` | Create a new ABAP object (PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA) |
 | `delete_object` | Delete an ABAP object (uses optimistic locking) |
@@ -176,7 +189,7 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 </details>
 
 <details>
-<summary><strong>Export</strong> — <code>export</code> (4 tools, off by default)</summary>
+<summary><strong>Export</strong> — <code>export</code> (4 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -207,7 +220,11 @@ Tools are organized into groups. By default, all groups except `debug` and `expo
 
 ### 1. Download the binary
 
-Download the latest release for your platform from the [releases page](https://github.com/Hochfrequenz/mcp-server-abap/releases):
+Each release on the [releases page](https://github.com/Hochfrequenz/mcp-server-abap/releases) ships **two flavours** of the same binary. Pick one:
+
+#### Default build — silent
+
+No telemetry. Logs go only to your own stderr. Equivalent to building from source.
 
 | Platform | File |
 |----------|------|
@@ -216,7 +233,20 @@ Download the latest release for your platform from the [releases page](https://g
 | macOS (Apple Silicon) | `mcp-server-abap-*-darwin-arm64.tar.gz` |
 | Linux | `mcp-server-abap-*-linux-amd64.tar.gz` |
 
-Extract the archive. You'll get a single `mcp-server-abap` executable (or `mcp-server-abap.exe` on Windows).
+#### Build with remote logging to Hochfrequenz
+
+Same binary plus a compiled-in [Papertrail](https://www.papertrail.com/) destination that streams structured log events (tool name, SAP system key, duration, SAP object names, SAP error messages — **no credentials, no source, no row data**) to Hochfrequenz's log collector over TLS syslog. Helps us prioritise fixes and spot regressions for users who choose to opt in. Details and the opt-out env var are in [Logging](#logging) below.
+
+| Platform | File |
+|----------|------|
+| Windows | `mcp-server-abap-with-remote-logging-*-windows-amd64.zip` |
+| macOS (Intel) | `mcp-server-abap-with-remote-logging-*-darwin-amd64.tar.gz` |
+| macOS (Apple Silicon) | `mcp-server-abap-with-remote-logging-*-darwin-arm64.tar.gz` |
+| Linux | `mcp-server-abap-with-remote-logging-*-linux-amd64.tar.gz` |
+
+Run `mcp-server-abap --version` after extracting to confirm which flavour you have — the output ends with `remote-logging=on` or `remote-logging=off`.
+
+Extract the archive. You'll get a single executable (`.exe` on Windows).
 
 ### 2. Create `systems.json`
 
@@ -250,13 +280,21 @@ docker run -i -v ./config.json:/config.json -e SAP_CONFIG_FILE=/config.json ghcr
 
 ### Alternative: Build from source
 
-Requires Go 1.26+:
+Requires Go 1.26+. Either clone and build:
 
 ```bash
 git clone https://github.com/Hochfrequenz/mcp-server-abap.git
 cd mcp-server-abap
 go build -o mcp-server-abap .
 ```
+
+Or install directly with `go install`:
+
+```bash
+go install github.com/Hochfrequenz/mcp-server-abap@latest
+```
+
+Source builds always produce the silent variant (no remote logging baked in); the `-with-remote-logging` flavour is only produced by the release pipeline.
 
 ## Configuration
 
@@ -288,7 +326,7 @@ cp config.json.example config.json
 
 ### Tool groups
 
-By default, all tool groups except `debug` and `export` are enabled. You can customize which groups are loaded:
+By default, all tool groups except `debug` are enabled. You can customize which groups are loaded:
 
 **In `systems.json`** (top-level):
 
@@ -309,7 +347,7 @@ mcp-server-abap --tools=source,objects,transport,debug
 **Special values:**
 
 - `--tools=all` — enable all tool groups
-- No config and no flag — default set (everything except `debug` and `export`)
+- No config and no flag — default set (everything except `debug`)
 
 Available groups: `source`, `code-intelligence`, `objects`, `version`, `locking`, `testing`, `messages`, `shortdumps`, `transport`, `enhancements`, `debug`, `export`, `system`.
 
@@ -411,44 +449,50 @@ Logs go to stderr by default (text format). Configure via environment variables:
 |----------|---------|-------------|
 | `LOG_FORMAT` | `text` | `text` or `json` |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `PAPERTRAIL_HOST` | — <sup>1</sup> | Papertrail syslog host (e.g. `logs5.papertrailapp.com`) |
-| `PAPERTRAIL_PORT` | — <sup>1</sup> | Papertrail syslog port (e.g. `12345`) |
+| `PAPERTRAIL_HOST` | — | Papertrail syslog host (e.g. `logs5.papertrailapp.com`) |
+| `PAPERTRAIL_PORT` | — | Papertrail syslog port (e.g. `12345`) |
 
-<sup>1</sup> The pre-built binaries published on **GitHub Releases** (Linux, macOS, Windows) ship with a default Papertrail destination baked in — see below.
+Every log line carries `version`, `commit`, and `remote_logging=on|off` as default attributes so bug reports unambiguously identify which build emitted them.
 
-### Default Papertrail destination in release binaries
+### Which builds ship with remote logging
 
-The pre-built binaries on [GitHub Releases](https://github.com/Hochfrequenz/mcp-server-abap/releases) (Linux, macOS, **and** Windows) ship with Papertrail logging to `logs5.papertrailapp.com:35329` **enabled by default**. This sends operational metadata about MCP tool calls to a centralized log collector for monitoring and debugging. No SAP credentials, source code, or row data are transmitted — but the SAP object names you operate on (e.g. `ZCL_CUSTOMER_INVOICE`) and SAP error messages do appear in the logs.
+| Install path | Remote logging by default |
+|--------------|---------------------------|
+| `mcp-server-abap-*` release archive (default flavour) | **off** |
+| `mcp-server-abap-with-remote-logging-*` release archive | **on** — to `logs5.papertrailapp.com:35329` |
+| Docker image (`ghcr.io/hochfrequenz/mcp-server-abap`) | **off** |
+| Source build (`go build`, `make build`, `go install github.com/Hochfrequenz/mcp-server-abap@latest`) | **off** |
 
-**To disable** remote logging in a pre-built binary, set `PAPERTRAIL_HOST=` (explicit empty) in your environment before launching the server:
+The `-with-remote-logging` archive is the only path where telemetry is on by default. Picking it over the default archive is the consent step: users who download it have chosen to stream structured log events (tool name, SAP system key, duration, SAP object names such as `ZCL_CUSTOMER_INVOICE`, SAP error messages) to Hochfrequenz's Papertrail collector, where they help us prioritise fixes. **No credentials, source code, or table row data are transmitted.** Confirm which flavour you have with:
+
+```bash
+mcp-server-abap --version
+# mcp-server-abap v0.2.1 (commit abc1234, remote-logging=on)
+```
+
+### Disabling remote logging in the `-with-remote-logging` build
+
+Set `PAPERTRAIL_HOST=` (explicit empty) before launching the server:
 
 ```bash
 # Linux / macOS / Git Bash
-PAPERTRAIL_HOST= ./mcp-server-abap
+PAPERTRAIL_HOST= ./mcp-server-abap-with-remote-logging
 ```
 
 ```powershell
 # Windows PowerShell
 $env:PAPERTRAIL_HOST=""
-.\mcp-server-abap.exe
+.\mcp-server-abap-with-remote-logging.exe
 ```
 
-```cmd
-:: Windows cmd.exe
-set PAPERTRAIL_HOST=
-mcp-server-abap.exe
-```
+Setting either `PAPERTRAIL_HOST` or `PAPERTRAIL_PORT` (even to empty) is treated as an explicit override and disables the baked-in defaults. To point at a different Papertrail account, set both.
 
-Setting either `PAPERTRAIL_HOST` or `PAPERTRAIL_PORT` (even to empty) is treated as an explicit override and disables the baked-in defaults — to point at a different Papertrail account, set both.
+### Enabling your own Papertrail destination (any build)
 
-When building from source (`go build`, `make build`, `go install`) or running the **Docker image**, Papertrail is **off by default**. Enable it by setting `PAPERTRAIL_HOST` and `PAPERTRAIL_PORT` yourself, as described below.
+Every build honours `PAPERTRAIL_HOST` + `PAPERTRAIL_PORT` at runtime. To ship your own logs to your own Papertrail account from any build flavour:
 
-### Papertrail setup
-
-To send logs to [Papertrail](https://www.papertrail.com/):
-
-1. Create a Papertrail account and set up a **Log Destination** (Settings > Log Destinations)
-2. Note the host and port (e.g. `logs5.papertrailapp.com:12345`)
+1. Create a Papertrail account and set up a **Log Destination** (Settings > Log Destinations).
+2. Note the host and port (e.g. `logs5.papertrailapp.com:12345`).
 3. Set the environment variables before starting the server:
 
 ```bash
@@ -482,9 +526,35 @@ go test ./...
 
 ### Integration tests
 
-The ADT client integration tests live in [adtler](https://github.com/Hochfrequenz/adtler). To run them against a real SAP system, clone that repo and follow its README.
+#### MCP-layer integration tests (this repo)
 
-mcp-server-abap itself only has unit tests covering the MCP tool layer; the SAP-touching tests stayed with the client library.
+MCP-layer integration tests live in `tools/integration_test.go` behind `//go:build integration`. They are never run by default `go test ./...`.
+
+**Prerequisites:**
+
+- VPN connectivity to the target SAP system(s)
+- `~/.config/sap-mcp/systems.json` configured (see Setup above)
+- `Z_ADT_MCP_TEST` package installed on each target system — see [Hochfrequenz/Z_ADT_MCP_TEST](https://github.com/Hochfrequenz/Z_ADT_MCP_TEST)
+
+**Run:**
+
+```bash
+go test -tags integration -v -count=1 ./tools/...
+```
+
+**Target specific systems:**
+
+```bash
+MCP_INTEGRATION_SYSTEMS=hfq go test -tags integration -v -count=1 ./tools/...
+```
+
+The default target set is `hfq,s4u`.
+
+**Coverage visibility:** TestMain prints a grep-friendly summary at the top, e.g. `integration targets: hfq=OK s4u=UNREACHABLE`. Always check this — subtests skip loudly when a system or fixture is unreachable rather than failing, so it is possible to get a green `go test` without actually covering everything.
+
+#### ADT client integration tests (adtler)
+
+The ADT HTTP client integration tests live in [adtler](https://github.com/Hochfrequenz/adtler) and cover the ADT HTTP client, XML marshalling, customizing export, and OAuth2. To run them against a real SAP system, clone that repo and follow its README.
 
 ## Contributing
 
