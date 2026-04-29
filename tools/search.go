@@ -525,7 +525,7 @@ func chunkNames(names []string, maxBytes int) [][]string {
 	var cur []string
 	curLen := 0
 	for _, n := range names {
-		entryLen := len(n) + 3 // 'name', = name + 2 quotes + 1 comma
+		entryLen := len(n) + 3 // 'name', = name + 2 quotes + 1 comma; assumes no SQL-special chars, which holds for all DDIC names (enforced by identifierRe in adtler)
 		if len(cur) > 0 && curLen+entryLen > maxBytes {
 			chunks = append(chunks, cur)
 			cur = nil
@@ -561,8 +561,12 @@ func ddicQueryTabl(ctx context.Context, client adt.QueryClient, names []string, 
 				addDep(row[0], "DTEL", useTypeDataElement)
 			}
 			if row[1] != "" {
+				// CHECKTABLE is virtually always a transparent table; classifyDDICObjects is not needed.
 				addDep(row[1], "TABL", useTypeTable)
 			}
+		}
+		if len(qr.Rows) >= ddicMaxFieldRows {
+			*warnings = append(*warnings, fmt.Sprintf("DD03L result capped at %d rows; some field dependencies may be missing", ddicMaxFieldRows))
 		}
 	}
 }
@@ -621,7 +625,7 @@ func ddicQueryTtyp(ctx context.Context, client adt.QueryClient, names []string, 
 	for _, chunk := range chunkNames(names, ddicInListMaxBytes) {
 		qr, err := client.RunQuery(ctx,
 			fmt.Sprintf("SELECT ROWTYPE, ROWKIND FROM DD40L WHERE TYPENAME IN (%s)", buildSQLInList(chunk)),
-			ddicMaxFieldRows)
+			len(chunk))
 		if err != nil {
 			*warnings = append(*warnings, "DD40L query failed: "+err.Error())
 			continue
@@ -642,10 +646,11 @@ func ddicQueryTtyp(ctx context.Context, client adt.QueryClient, names []string, 
 			}
 		}
 	}
-	// Classify all ROWKIND='S' entries across chunks: TABLE vs STRUCTURE requires a DD02L lookup.
-	if len(rowKindS) > 0 {
-		cls := classifyDDICObjects(ctx, client, rowKindS)
-		for _, n := range rowKindS {
+	// Classify all ROWKIND='S' entries: TABLE vs STRUCTURE requires a DD02L lookup.
+	// Chunk to stay within ddicInListMaxBytes; errors degrade gracefully to UNKNOWN use_type.
+	for _, clsChunk := range chunkNames(rowKindS, ddicInListMaxBytes) {
+		cls := classifyDDICObjects(ctx, client, clsChunk)
+		for _, n := range clsChunk {
 			addDep(n, "TABL", cls[n])
 		}
 	}

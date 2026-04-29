@@ -180,7 +180,9 @@ func TestDdicChainDeps_TABL(t *testing.T) {
 					},
 				}, nil
 			case strings.Contains(sql, "DD02L") || strings.Contains(sql, "TADIR"):
-				// classifyDDICObjects is called for TCURC (check table)
+				// ddicQueryTabl hard-codes useTypeTable for CHECKTABLE — classifyDDICObjects is
+				// never called for TCURC. This branch guards against unexpected classification
+				// queries from deeper BFS levels.
 				return &adt.QueryResult{
 					Columns: []adt.QueryColumn{{Name: "TABNAME"}, {Name: "TABCLASS"}},
 					Rows:    [][]string{{"TCURC", "TRANSP"}},
@@ -240,6 +242,7 @@ func TestDdicChainDeps_DTEL(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestDdicChainDeps_DOMA(t *testing.T) {
 	// Depth=1: DOMA queries DD01L → discovers ENTITYTAB.
 	mock := &mockQueryClient{

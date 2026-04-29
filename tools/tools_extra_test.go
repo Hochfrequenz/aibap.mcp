@@ -1911,6 +1911,7 @@ func TestGetObjectDependenciesDTEL(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestGetObjectDependenciesDOMA(t *testing.T) {
 	mock := &mockClient{
 		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
