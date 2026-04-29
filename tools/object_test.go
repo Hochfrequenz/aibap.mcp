@@ -128,7 +128,7 @@ func (m *mockBlackMagicObj) CreateTransportFallback(context.Context, string, str
 	return "", nil
 }
 
-func (m *mockBlackMagicObj) UpdateCustomizing(context.Context, string, []tools.CustomizingEntry) error {
+func (m *mockBlackMagicObj) UpdateCustomizing(context.Context, string, []tools.CustomizingEntry, string) error {
 	return nil
 }
 

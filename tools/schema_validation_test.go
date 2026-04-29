@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const jsonTypeObject = "object"
+
 // listToolInputSchemas drives the MCP server through a `tools/list` call and
 // returns each tool's input schema as the raw map[string]any wire form. The
 // schema validation tests in schema_client_validation_test.go feed these
@@ -116,8 +118,8 @@ func stringSet(raw []any) map[string]bool {
 // schema. label is used in error messages.
 func assertClosedObjectShape(t *testing.T, label string, schema map[string]any, wantFields []string) {
 	t.Helper()
-	if schema["type"] != "object" {
-		t.Errorf("%s: type=%v want \"object\"", label, schema["type"])
+	if schema["type"] != jsonTypeObject {
+		t.Errorf("%s: type=%v want %q", label, schema["type"], jsonTypeObject)
 	}
 	if schema["additionalProperties"] != false {
 		t.Errorf("%s: additionalProperties=%v want false", label, schema["additionalProperties"])
@@ -142,11 +144,53 @@ func assertClosedObjectShape(t *testing.T, label string, schema map[string]any, 
 }
 
 // assertCustomizingEntriesItems asserts the update_customizing.entries items
-// schema describes the CustomizingEntry runtime shape (keys + values, both
-// required, both string-to-string maps).
+// schema describes the CustomizingEntry runtime shape: `keys` is the only
+// required field; `values` is optional (forbidden for op="delete", required
+// otherwise — the conditional rule is enforced in Go validation, not in the
+// JSON schema, so the schema marks values as optional); `op` is optional
+// with enum ["upsert", "delete"]. additionalProperties is closed.
 func assertCustomizingEntriesItems(t *testing.T, items map[string]any) {
 	t.Helper()
-	assertClosedObjectShape(t, "items", items, []string{"keys", "values"})
+	if items["type"] != jsonTypeObject {
+		t.Errorf("items: type=%v want %q", items["type"], jsonTypeObject)
+	}
+	if items["additionalProperties"] != false {
+		t.Errorf("items: additionalProperties=%v want false", items["additionalProperties"])
+	}
+	props, ok := items["properties"].(map[string]any)
+	if !ok || len(props) == 0 {
+		t.Fatalf("items: properties missing or empty: %v", items["properties"])
+	}
+	for _, want := range []string{"keys", "values", "op"} {
+		if _, ok := props[want]; !ok {
+			t.Errorf("items: properties missing %q", want)
+		}
+	}
+	req, _ := items["required"].([]any)
+	gotRequired := stringSet(req)
+	if !gotRequired["keys"] {
+		t.Errorf("items: required missing %q", "keys")
+	}
+	if gotRequired["values"] {
+		t.Errorf("items: required must NOT include %q (op=delete forbids values)", "values")
+	}
+	if gotRequired["op"] {
+		t.Errorf("items: required must NOT include %q (op defaults to upsert)", "op")
+	}
+	opSchema, ok := props["op"].(map[string]any)
+	if !ok {
+		t.Fatalf("items.op: not a schema object: %v", props["op"])
+	}
+	enum, ok := opSchema["enum"].([]any)
+	if !ok {
+		t.Fatalf("items.op: enum missing: %v", opSchema["enum"])
+	}
+	enumSet := stringSet(enum)
+	for _, want := range []string{"upsert", "delete"} {
+		if !enumSet[want] {
+			t.Errorf("items.op.enum missing %q", want)
+		}
+	}
 }
 
 // patchOpWantBranches enumerates the per-discriminator required-field sets

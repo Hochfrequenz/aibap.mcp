@@ -27,7 +27,7 @@ func (m *mockBlackMagic) ReleaseTransportFallback(ctx context.Context, transport
 	return nil
 }
 
-func (m *mockBlackMagic) UpdateCustomizing(context.Context, string, []tools.CustomizingEntry) error {
+func (m *mockBlackMagic) UpdateCustomizing(context.Context, string, []tools.CustomizingEntry, string) error {
 	return nil
 }
 
