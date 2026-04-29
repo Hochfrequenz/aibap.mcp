@@ -618,7 +618,7 @@ func ddicQueryDoma(ctx context.Context, client adt.QueryClient, names []string, 
 }
 
 // ddicQueryTtyp queries DD40L for TTYP entries: ROWKIND='E'→DTEL, ROWKIND='S'→TABLE/STRUCTURE.
-// ROWKIND='' means built-in scalar, no further traversal needed.
+// ROWKIND=” means built-in scalar, no further traversal needed.
 // DD40L has TYPENAME as PK; ddicMaxFieldRows is used as a safety cap.
 func ddicQueryTtyp(ctx context.Context, client adt.QueryClient, names []string, addDep func(string, string, string), warnings *[]string) {
 	var rowKindS []string
