@@ -16,14 +16,18 @@ const testTransportNumber = "HFQK900001"
 
 // mockBlackMagic implements tools.BlackMagicClient for testing.
 type mockBlackMagic struct {
-	createTransportFn func(ctx context.Context, category, target, description, devClass string) (string, error)
+	createTransportFn  func(ctx context.Context, category, target, description, devClass string) (string, error)
+	releaseTransportFn func(ctx context.Context, transport string) error
 }
 
-func (m *mockBlackMagic) ReleaseTransportFallback(context.Context, string) error {
+func (m *mockBlackMagic) ReleaseTransportFallback(ctx context.Context, transport string) error {
+	if m.releaseTransportFn != nil {
+		return m.releaseTransportFn(ctx, transport)
+	}
 	return nil
 }
 
-func (m *mockBlackMagic) UpdateCustomizing(context.Context, string, []tools.CustomizingEntry) error {
+func (m *mockBlackMagic) UpdateCustomizing(context.Context, string, []tools.CustomizingEntry, string) error {
 	return nil
 }
 
@@ -306,6 +310,140 @@ func TestReleaseTransport_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("expected releaseTransportFn to be called with nil elicitor (backwards compat)")
+	}
+}
+
+// TestReleaseTransport_SilentFail_UsesFallback verifies the ECC silent-fail
+// path: ADT returns nil error but the post-release status check still shows
+// status "D" (modifiable). When a fallback is configured, the tool routes
+// the release through it and reports via_fallback=true.
+func TestReleaseTransport_SilentFail_UsesFallback(t *testing.T) {
+	fallbackCalled := false
+	var gotTransport string
+	mock := &mockClient{
+		releaseTransportFn: func(_ context.Context, _ string) error {
+			return nil // ADT "succeeds" silently
+		},
+		getTransportInfoFn: func(_ context.Context, transport string) (*adt.TransportRequest, error) {
+			return &adt.TransportRequest{Number: transport, Status: "D"}, nil
+		},
+	}
+	fb := &mockBlackMagic{
+		releaseTransportFn: func(_ context.Context, transport string) error {
+			fallbackCalled = true
+			gotTransport = transport
+			return nil
+		},
+	}
+	s := newTestServerWithFallback(mock, fb)
+	result := callTool(t, s, "release_transport", map[string]interface{}{
+		"transport": testTransportNum,
+	})
+	if result.IsError {
+		t.Fatalf("expected success via fallback, got error: %v", result.Content)
+	}
+	if !fallbackCalled {
+		t.Fatal("expected fallback ReleaseTransportFallback to be called after silent ADT fail")
+	}
+	if gotTransport != testTransportNum {
+		t.Errorf("fallback got transport %q, want %s", gotTransport, testTransportNum)
+	}
+	var out tools.ReleaseTransportResult
+	_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
+	if !out.ViaFallback {
+		t.Error("expected via_fallback=true in result")
+	}
+	if !out.Released {
+		t.Error("expected released=true in result")
+	}
+}
+
+// TestReleaseTransport_SilentFail_NoFallback returns a clear error explaining
+// the silent fail and how to recover.
+func TestReleaseTransport_SilentFail_NoFallback(t *testing.T) {
+	mock := &mockClient{
+		releaseTransportFn: func(_ context.Context, _ string) error { return nil },
+		getTransportInfoFn: func(_ context.Context, transport string) (*adt.TransportRequest, error) {
+			return &adt.TransportRequest{Number: transport, Status: "D"}, nil
+		},
+	}
+	s := newTestServerWithFallback(mock, nil)
+	result := callTool(t, s, "release_transport", map[string]interface{}{
+		"transport": testTransportNum,
+	})
+	if !result.IsError {
+		t.Fatal("expected error result when ADT silently fails and no fallback is configured")
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	for _, want := range []string{"returned 200", "modifiable", "fallback"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("error message should contain %q, got: %s", want, text)
+		}
+	}
+}
+
+// TestReleaseTransport_ADTError_UsesFallback verifies that an outright ADT
+// error also triggers the fallback when one is configured.
+func TestReleaseTransport_ADTError_UsesFallback(t *testing.T) {
+	fallbackCalled := false
+	mock := &mockClient{
+		releaseTransportFn: func(_ context.Context, _ string) error {
+			return &adt.ADTError{StatusCode: 500, Message: "boom"}
+		},
+	}
+	fb := &mockBlackMagic{
+		releaseTransportFn: func(_ context.Context, _ string) error {
+			fallbackCalled = true
+			return nil
+		},
+	}
+	s := newTestServerWithFallback(mock, fb)
+	result := callTool(t, s, "release_transport", map[string]interface{}{
+		"transport": testTransportNum,
+	})
+	if result.IsError {
+		t.Fatalf("expected success via fallback, got error: %v", result.Content)
+	}
+	if !fallbackCalled {
+		t.Fatal("expected fallback to be called when ADT errors")
+	}
+	var out tools.ReleaseTransportResult
+	_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
+	if !out.ViaFallback {
+		t.Error("expected via_fallback=true after ADT error")
+	}
+}
+
+// TestReleaseTransport_ADTSuccess_NoFallback confirms the happy path is
+// untouched when GetTransportInfo reports the transport is now released.
+func TestReleaseTransport_ADTSuccess_NoFallback(t *testing.T) {
+	fallbackCalled := false
+	mock := &mockClient{
+		releaseTransportFn: func(_ context.Context, _ string) error { return nil },
+		getTransportInfoFn: func(_ context.Context, transport string) (*adt.TransportRequest, error) {
+			return &adt.TransportRequest{Number: transport, Status: "L"}, nil
+		},
+	}
+	fb := &mockBlackMagic{
+		releaseTransportFn: func(_ context.Context, _ string) error {
+			fallbackCalled = true
+			return nil
+		},
+	}
+	s := newTestServerWithFallback(mock, fb)
+	result := callTool(t, s, "release_transport", map[string]interface{}{
+		"transport": testTransportNum,
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %v", result.Content)
+	}
+	if fallbackCalled {
+		t.Error("fallback must NOT be called when ADT succeeds and status is L")
+	}
+	var out tools.ReleaseTransportResult
+	_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
+	if out.ViaFallback {
+		t.Error("expected via_fallback=false on ADT happy path")
 	}
 }
 
