@@ -110,18 +110,25 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 		})
 	})
 
-	// get_object_dependencies is intentionally NOT recursive:
+	// get_object_dependencies is intentionally NOT recursive for PROG/FUGR/FUNC/CLAS/INTF:
 	//
-	// For DDIC references, recursion is unnecessary. D010TAB is populated by the ABAP
-	// activator at activation time and already stores the complete, flat set of DDIC
-	// objects (tables, structures, type pools) used by a program — including all objects
-	// pulled in transitively via INCLUDE statements. A single query with MASTER = '<prog>'
-	// therefore returns the full dependency set with no need for client-side recursion.
+	// For those types, D010TAB is populated by the ABAP activator at activation time and
+	// already stores the complete, flat set of DDIC objects (tables, structures, type pools)
+	// used by a program — including all objects pulled in transitively via INCLUDE statements.
+	// A single query with MASTER = '<prog>' therefore returns the full dependency set with no
+	// need for client-side recursion.
 	//
-	// The scenario where recursion *would* be needed is transitive program-level dependencies
-	// (e.g. CALL PROGRAM / SUBMIT). D010TAB does not model those relationships at all; that
-	// is a different, significantly more complex question and is deliberately out of scope for
-	// this tool. If that information is ever needed, a separate tool should be implemented.
+	// TABL/DTEL/DOMA/TTYP use iterative BFS (ddicChainDeps) instead of recursive function
+	// calls. D010TAB does not model DDIC→DDIC chains at all — a TABL entry in D010TAB names
+	// the table but not its data elements, domains, or check tables. BFS over the DDIC catalog
+	// tables (DD03L, DD04L, DD01L, DD40L) is therefore required. Iterative BFS rather than
+	// recursive descent avoids stack overflow on cyclic type chains (e.g. DOMA→ENTITYTAB→
+	// TABL→field ROLLNAME→DTEL→DOMA is a classic cycle).
+	//
+	// The scenario where recursion *would* be needed for PROG-level deps is transitive
+	// program-level dependencies (e.g. CALL PROGRAM / SUBMIT). D010TAB does not model those
+	// relationships; that is a different, significantly more complex question and is
+	// deliberately out of scope for this tool.
 	s.AddTool(mcp.NewTool("get_object_dependencies",
 		mcp.WithTitleAnnotation("Get Object Dependencies"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -138,12 +145,18 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 				"  FUNC — function module: resolves FUGR via TFDIR, then queries D010TAB\n"+
 				"  CLAS — class: queries D010TAB (class pool program) + SEOMETAREL (interfaces, superclass)\n"+
 				"  INTF — interface: queries D010TAB (interface pool program) + SEOMETAREL (extended interfaces)\n"+
-				"For DDIC results, D010TAB is populated flat by the ABAP activator — no client-side recursion needed. "+
+				"  TABL — transparent table or structure: BFS over DD03L (fields→DTELs, check tables)\n"+
+				"  DTEL — data element: BFS over DD04L (domain)\n"+
+				"  DOMA — domain: BFS over DD01L (entity table)\n"+
+				"  TTYP — table type: BFS over DD40L (row type)\n"+
+				"For PROG/FUGR/FUNC/CLAS/INTF, D010TAB is populated flat by the ABAP activator — no client-side recursion needed. "+
+				"For TABL/DTEL/DOMA/TTYP, the DDIC type chain is traversed iteratively up to max_depth levels. "+
 				"Useful for transport completeness checks.",
 		),
-		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, FUGR, FUNC, CLAS, INTF")),
-		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_REPORT (PROG), Z_MY_FGRP (FUGR), Z_MY_FM (FUNC), ZCL_MY_CLASS (CLAS), ZIF_MY_INTF (INTF)")),
+		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, FUGR, FUNC, CLAS, INTF, TABL, DTEL, DOMA, TTYP")),
+		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_REPORT (PROG), Z_MY_FGRP (FUGR), Z_MY_FM (FUNC), ZCL_MY_CLASS (CLAS), ZIF_MY_INTF (INTF), ZORDERS (TABL), S_CARR_ID (DTEL), S_LAND1 (DOMA)")),
 		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
+		mcp.WithNumber("max_depth", mcp.Description("Maximum BFS depth for TABL/DTEL/DOMA/TTYP traversal (default: 3, min: 1, max: 10; ignored for PROG/FUGR/FUNC/CLAS/INTF)")),
 		mcp.WithOutputSchema[ObjectDependenciesResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		objType := strings.ToUpper(req.GetString("object_type", ""))
@@ -231,8 +244,29 @@ func registerSearchTools(s toolAdder, client searchQueryClient) {
 				Dependencies: all,
 			})
 
+		case "TABL", "DTEL", "DOMA", "TTYP":
+			maxDepth := int(req.GetFloat("max_depth", 3))
+			if maxDepth < 1 {
+				maxDepth = 1
+			}
+			if maxDepth > 10 {
+				maxDepth = 10
+			}
+			deps, warns := ddicChainDeps(ctx, client, objName, objType, maxDepth)
+			if maxResults > 0 && len(deps) > maxResults {
+				warns = append(warns, fmt.Sprintf("output truncated to %d entries (%d total)", maxResults, len(deps)))
+				deps = deps[:maxResults]
+			}
+			return mcp.NewToolResultJSON(ObjectDependenciesResult{
+				ObjectType:   objType,
+				ObjectName:   objName,
+				Count:        len(deps),
+				Dependencies: deps,
+				Warnings:     warns,
+			})
+
 		default:
-			return errorResult(fmt.Errorf("unsupported object_type %q: supported are PROG, FUGR, FUNC, CLAS, INTF", objType)), nil
+			return errorResult(fmt.Errorf("unsupported object_type %q: supported are PROG, FUGR, FUNC, CLAS, INTF, TABL, DTEL, DOMA, TTYP", objType)), nil
 		}
 	})
 }
@@ -468,4 +502,220 @@ func tabclassToUseType(tabclass string) string {
 	default:
 		return useTypeUnknown
 	}
+}
+
+// ddicMaxFieldRows caps DD03L batch queries. A table with 2000 fields would be
+// pathological; realistic SAP tables top out well below this.
+const ddicMaxFieldRows = 2000
+
+// ddicInListMaxBytes is the maximum byte length of a buildSQLInList result per
+// query batch. SAP's data-preview ABAP endpoint appends an internal INTO TABLE
+// clause; if the total SQL grows large, the parser misreads long IN-lists as
+// an unclosed string literal and raises a 400 "text literal longer than 255
+// characters" error. 150 bytes allows ~4-5 namespaced (30-char) names per
+// batch while permitting ~14 short standard names — keeping all batches well
+// inside the safe zone.
+const ddicInListMaxBytes = 150
+
+// chunkNames splits names into batches where buildSQLInList output for each
+// batch stays within maxBytes. This avoids SAP data-preview parser errors when
+// IN-lists become very long (see ddicInListMaxBytes).
+func chunkNames(names []string, maxBytes int) [][]string {
+	var chunks [][]string
+	var cur []string
+	curLen := 0
+	for _, n := range names {
+		entryLen := len(n) + 3 // 'name', = name + 2 quotes + 1 comma; assumes no SQL-special chars, which holds for all DDIC names (enforced by identifierRe in adtler)
+		if len(cur) > 0 && curLen+entryLen > maxBytes {
+			chunks = append(chunks, cur)
+			cur = nil
+			curLen = 0
+		}
+		cur = append(cur, n)
+		curLen += entryLen
+	}
+	if len(cur) > 0 {
+		chunks = append(chunks, cur)
+	}
+	return chunks
+}
+
+// ddicQueryTabl queries DD03L for TABL entries: ROLLNAME → DTEL, CHECKTABLE → TABL.
+func ddicQueryTabl(ctx context.Context, client adt.QueryClient, names []string, addDep func(string, string, string), warnings *[]string) {
+	for _, chunk := range chunkNames(names, ddicInListMaxBytes) {
+		qr, err := client.RunQuery(ctx,
+			fmt.Sprintf("SELECT ROLLNAME, CHECKTABLE FROM DD03L WHERE TABNAME IN (%s)", buildSQLInList(chunk)),
+			ddicMaxFieldRows)
+		if err != nil {
+			*warnings = append(*warnings, "DD03L query failed: "+err.Error())
+			continue
+		}
+		if qr == nil {
+			continue
+		}
+		for _, row := range qr.Rows {
+			if len(row) < 2 {
+				continue
+			}
+			if row[0] != "" {
+				addDep(row[0], "DTEL", useTypeDataElement)
+			}
+			if row[1] != "" {
+				// CHECKTABLE is virtually always a transparent table; classifyDDICObjects is not needed.
+				addDep(row[1], "TABL", useTypeTable)
+			}
+		}
+		if len(qr.Rows) >= ddicMaxFieldRows {
+			*warnings = append(*warnings, fmt.Sprintf("DD03L result capped at %d rows; some field dependencies may be missing", ddicMaxFieldRows))
+		}
+	}
+}
+
+// ddicQueryDtel queries DD04L for DTEL entries: DOMNAME → DOMA.
+// DD04L has ROLLNAME as PK, so the mapping is 1:1 — maxRows = chunk size is exact.
+func ddicQueryDtel(ctx context.Context, client adt.QueryClient, names []string, addDep func(string, string, string), warnings *[]string) {
+	for _, chunk := range chunkNames(names, ddicInListMaxBytes) {
+		qr, err := client.RunQuery(ctx,
+			fmt.Sprintf("SELECT DOMNAME FROM DD04L WHERE ROLLNAME IN (%s)", buildSQLInList(chunk)),
+			len(chunk))
+		if err != nil {
+			*warnings = append(*warnings, "DD04L query failed: "+err.Error())
+			continue
+		}
+		if qr == nil {
+			continue
+		}
+		for _, row := range qr.Rows {
+			if len(row) < 1 {
+				continue
+			}
+			addDep(row[0], "DOMA", useTypeDomain)
+		}
+	}
+}
+
+// ddicQueryDoma queries DD01L for DOMA entries: ENTITYTAB → TABL.
+// DD01L has DOMNAME as PK, so the mapping is 1:1 — maxRows = chunk size is exact.
+func ddicQueryDoma(ctx context.Context, client adt.QueryClient, names []string, addDep func(string, string, string), warnings *[]string) {
+	for _, chunk := range chunkNames(names, ddicInListMaxBytes) {
+		qr, err := client.RunQuery(ctx,
+			fmt.Sprintf("SELECT ENTITYTAB FROM DD01L WHERE DOMNAME IN (%s)", buildSQLInList(chunk)),
+			len(chunk))
+		if err != nil {
+			*warnings = append(*warnings, "DD01L query failed: "+err.Error())
+			continue
+		}
+		if qr == nil {
+			continue
+		}
+		for _, row := range qr.Rows {
+			if len(row) < 1 {
+				continue
+			}
+			addDep(row[0], "TABL", useTypeTable)
+		}
+	}
+}
+
+// ddicQueryTtyp queries DD40L for TTYP entries: ROWKIND='E'→DTEL, ROWKIND='S'→TABLE/STRUCTURE.
+// ROWKIND=” means built-in scalar, no further traversal needed.
+// DD40L has TYPENAME as PK; ddicMaxFieldRows is used as a safety cap.
+func ddicQueryTtyp(ctx context.Context, client adt.QueryClient, names []string, addDep func(string, string, string), warnings *[]string) {
+	var rowKindS []string
+	for _, chunk := range chunkNames(names, ddicInListMaxBytes) {
+		qr, err := client.RunQuery(ctx,
+			fmt.Sprintf("SELECT ROWTYPE, ROWKIND FROM DD40L WHERE TYPENAME IN (%s)", buildSQLInList(chunk)),
+			len(chunk))
+		if err != nil {
+			*warnings = append(*warnings, "DD40L query failed: "+err.Error())
+			continue
+		}
+		if qr == nil {
+			continue
+		}
+		for _, row := range qr.Rows {
+			if len(row) < 2 || row[0] == "" {
+				continue
+			}
+			rowType, rowKind := row[0], row[1]
+			switch rowKind {
+			case "E":
+				addDep(rowType, "DTEL", useTypeDataElement)
+			case "S":
+				rowKindS = append(rowKindS, rowType)
+			}
+		}
+	}
+	// Classify all ROWKIND='S' entries: TABLE vs STRUCTURE requires a DD02L lookup.
+	// Chunk to stay within ddicInListMaxBytes; errors degrade gracefully to UNKNOWN use_type.
+	for _, clsChunk := range chunkNames(rowKindS, ddicInListMaxBytes) {
+		cls := classifyDDICObjects(ctx, client, clsChunk)
+		for _, n := range clsChunk {
+			addDep(n, "TABL", cls[n])
+		}
+	}
+}
+
+// ddicChainDeps traverses the DDIC type chain starting from a single object
+// (TABL, DTEL, DOMA, or TTYP) using iterative BFS. It returns a flat, deduplicated
+// list of all transitive dependencies with correct use_type classification, along
+// with any non-fatal query warnings.
+//
+// Iterative BFS rather than recursive function calls avoids stack overflow on
+// cyclic type chains. DOMA→ENTITYTAB→TABL→field ROLLNAME→DTEL→DOMA is a classic cycle;
+// the visited map catches it at the DOMA re-entry so BFS terminates cleanly.
+func ddicChainDeps(ctx context.Context, client adt.QueryClient, name, objType string, maxDepth int) ([]ObjectDependency, []string) {
+	type queueEntry struct {
+		name    string
+		objType string
+	}
+
+	visited := make(map[string]bool)
+	visited[objType+"|"+name] = true
+
+	var deps []ObjectDependency
+	var warnings []string
+
+	current := []queueEntry{{name: name, objType: objType}}
+
+	for depth := 0; depth < maxDepth && len(current) > 0; depth++ {
+		var next []queueEntry
+
+		// addDep registers one discovered dependency, guarded by the visited map.
+		addDep := func(depName, depType, useType string) {
+			if depName == "" {
+				return
+			}
+			k := depType + "|" + depName
+			if visited[k] {
+				return
+			}
+			visited[k] = true
+			deps = append(deps, ObjectDependency{Name: depName, UseType: useType})
+			next = append(next, queueEntry{name: depName, objType: depType})
+		}
+
+		// Collect by DDIC type so each catalog table is queried exactly once per level.
+		typeGroups := map[string][]string{}
+		for _, e := range current {
+			typeGroups[e.objType] = append(typeGroups[e.objType], e.name)
+		}
+
+		if tabls := typeGroups["TABL"]; len(tabls) > 0 {
+			ddicQueryTabl(ctx, client, tabls, addDep, &warnings)
+		}
+		if dtels := typeGroups["DTEL"]; len(dtels) > 0 {
+			ddicQueryDtel(ctx, client, dtels, addDep, &warnings)
+		}
+		if domas := typeGroups["DOMA"]; len(domas) > 0 {
+			ddicQueryDoma(ctx, client, domas, addDep, &warnings)
+		}
+		if ttyps := typeGroups["TTYP"]; len(ttyps) > 0 {
+			ddicQueryTtyp(ctx, client, ttyps, addDep, &warnings)
+		}
+
+		current = next
+	}
+
+	return deps, warnings
 }
