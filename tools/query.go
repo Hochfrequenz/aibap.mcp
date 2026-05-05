@@ -17,7 +17,12 @@ func registerQueryTools(s toolAdder, client adt.QueryClient) {
 		mcp.WithDescription(
 			"Execute a SELECT query on SAP database tables. Returns columns and rows. "+
 				"Use standard ABAP SQL syntax (e.g. 'SELECT BUKRS, BUTXT FROM T001 ORDER BY BUKRS'). "+
-				"Only SELECT statements are supported — no INSERT, UPDATE, or DELETE.",
+				"Only SELECT statements are supported — no INSERT, UPDATE, or DELETE. "+
+				"SAP API Policy: This tool is intended for development tooling only (e.g. inspecting DDIC metadata, "+
+				"querying customizing tables during development). "+
+				"Do not use it for reading application or business tables, data integration, reporting, "+
+				"or any purpose outside the ADT development tooling scope — "+
+				"this would violate the SAP API Policy (https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf).",
 		),
 		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL SELECT statement, e.g. 'SELECT BUKRS, BUTXT FROM T001'")),
 		mcp.WithNumber("max_rows", mcp.Description("Maximum number of rows to return (default: 100)")),
