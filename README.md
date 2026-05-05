@@ -8,6 +8,11 @@ A community-built [MCP (Model Context Protocol)](https://modelcontextprotocol.io
 
 > **Community project.** This project is not affiliated with, endorsed by, or supported by SAP SE. SAP and ABAP are trademarks of SAP SE.
 
+## Obey SAP API Guidelines
+When using this MCP server, make sure to obey the [SAP API Policy](https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf) (see also [the respective FAQ](https://www.sap.com/documents/2026/04/e2a0665e-4c7f-0010-bca6-c68f7e60039b.html)).
+> [!WARNING]
+>  You must not use this MCP server for purposes outside the intended scope of the ADT API as a development tooling framework. Specifically, this MCP server is not intended for programmatic reading of application tables or export of business data, SQL execution against SAP backend systems, business data integration or runtime orchestration, agentic AI workflows operating on business data, or substitution for business APIs.
+
 ---
 
 ## How it works

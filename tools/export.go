@@ -75,7 +75,10 @@ func registerExportTools(s toolAdder, client interface {
 				"The pattern is sent to SAP (e.g. Z*) and supports SAP wildcards. "+
 				"Use include_patterns and exclude_patterns for local filtering AFTER the SAP search returns results. "+
 				"Example: pattern=Z*, exclude_patterns=ZCERE_*,ZTEST* exports all Z-packages except ZCERE_* and ZTEST*. "+
-				"Requires the companion ABAP package: https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT"),
+				"Requires the companion ABAP package: https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT. "+
+				"SAP API Policy: This tool is intended for development tooling only (source code export for version control / abapGit). "+
+				"Do not use it for business data export, data integration, or any purpose outside the ADT development tooling scope — "+
+				"this would violate the SAP API Policy (https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf)."),
 		mcp.WithString("pattern", mcp.Required(),
 			mcp.Description("Package search pattern sent to SAP (wildcards: * and ?), e.g. Z* or Z_MY_*. "+
 				"This is a server-side search — use a broad pattern and refine with include/exclude_patterns locally.")),
