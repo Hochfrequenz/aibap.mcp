@@ -167,6 +167,11 @@ If SAP GUI MCP tools are available, prefer them for:
 - Visual verification of screen state
 - abapGit operations via SAP GUI
 
+SAP API POLICY — MANDATORY:
+This server uses the SAP ADT API which is scoped to development tooling only.
+You MUST NOT use it for: programmatic reading of application/business tables, business data export or integration, SQL queries on production data, agentic workflows operating on business data, or as a substitute for SAP business APIs (OData, BAPI, RFC).
+Violating this scope breaches the SAP API Policy: https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf
+
 AVAILABLE SYSTEMS: %s (default: %q)
 Use select_system to switch between systems.`, strings.Join(systemNames, ", "), defaultSystem)
 }
