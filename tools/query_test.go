@@ -9,6 +9,7 @@ import (
 )
 
 func TestRunQuery_ValidPurpose_CallsRunQuery(t *testing.T) {
+	// nil elicitor is intentional: valid purpose must bypass elicitor entirely.
 	called := false
 	mock := &mockClient{
 		runQueryFn: func(_ context.Context, sql string, _ int) (*adt.QueryResult, error) {
