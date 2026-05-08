@@ -8,15 +8,24 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// validQueryPurposes lists the only values accepted for the run_query
-// "purpose" parameter. Callers outside this set must obtain explicit user
-// confirmation via the Elicitor before the query is executed.
-var validQueryPurposes = map[string]bool{
-	"ddic_inspection":      true,
-	"customizing_review":   true,
-	"transport_tracking":   true,
-	"development_metadata": true,
+// validQueryPurposeList is the single source of truth for accepted "purpose"
+// values for the run_query tool. Both the runtime validation map and the JSON
+// Schema enum are derived from this slice so they can never silently diverge.
+var validQueryPurposeList = []string{
+	"ddic_inspection",
+	"customizing_review",
+	"transport_tracking",
+	"development_metadata",
 }
+
+// validQueryPurposes is derived from validQueryPurposeList for O(1) lookup.
+var validQueryPurposes = func() map[string]bool {
+	m := make(map[string]bool, len(validQueryPurposeList))
+	for _, p := range validQueryPurposeList {
+		m[p] = true
+	}
+	return m
+}()
 
 func registerQueryTools(s toolAdder, client adt.QueryClient, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("run_query",
@@ -80,12 +89,13 @@ func withQueryPurposeParam() mcp.ToolOption {
 				"customizing_review: reading Customizing tables (T001, TVARVC, …). " +
 				"transport_tracking: reading transport catalog tables (E070, E071, …). " +
 				"development_metadata: reading development object catalog tables (TRDIR, TADIR, PROGDIR, …).",
-			"enum": []any{
-				"ddic_inspection",
-				"customizing_review",
-				"transport_tracking",
-				"development_metadata",
-			},
+			"enum": func() []any {
+				out := make([]any, len(validQueryPurposeList))
+				for i, p := range validQueryPurposeList {
+					out[i] = p
+				}
+				return out
+			}(),
 		}
 		t.InputSchema.Required = append(t.InputSchema.Required, "purpose")
 	}
