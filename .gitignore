@@ -1,11 +1,11 @@
 .env
-.claude/settings.local.json
+.claude/
 config.json
 config.yaml
 sapadt-mcp
-sapadt-mcp.exe
 mcp-server-abap
-mcp-server-abap.exe
+*.exe
 *.out
 dist/
 .worktrees/
+.idea/
