@@ -21,8 +21,12 @@ func textOfTE(res *mcp.CallToolResult) string {
 	return ""
 }
 
-const testProgURI = "/sap/bc/adt/programs/programs/zfoo"
-const testTextElementsURI = "/sap/bc/adt/textelements/programs/zfoo"
+const (
+	testProgURI         = "/sap/bc/adt/programs/programs/zfoo"
+	testTextElementsURI = "/sap/bc/adt/textelements/programs/zfoo"
+	testLockHandleX     = "lock-handle-X"
+	testTransportDEVK1  = "DEVK900001"
+)
 
 func TestSetTextElementsTool_SymbolsHappy(t *testing.T) {
 	var lockedURI, writtenURI, gotLock, gotTransport string
@@ -32,7 +36,7 @@ func TestSetTextElementsTool_SymbolsHappy(t *testing.T) {
 	mock := &mockClient{
 		lockObjectFn: func(_ context.Context, uri string) (string, error) {
 			lockedURI = uri
-			return "lock-handle-X", nil
+			return testLockHandleX, nil
 		},
 		setTextElementsFn: func(_ context.Context, uri string, sym []adt.TextSymbol, sel []adt.SelectionText, lock, tr string) error {
 			writtenURI, gotLock, gotTransport = uri, lock, tr
@@ -45,7 +49,7 @@ func TestSetTextElementsTool_SymbolsHappy(t *testing.T) {
 	res := callTool(t, s, "set_text_elements", map[string]interface{}{
 		"object_uri": testProgURI,
 		"symbols":    `[{"key":"001","text":"hello","max_length":5}]`,
-		"transport":  "DEVK900001",
+		"transport":  testTransportDEVK1,
 	})
 	if res.IsError {
 		t.Fatalf("unexpected IsError: %s", textOfTE(res))
@@ -57,10 +61,10 @@ func TestSetTextElementsTool_SymbolsHappy(t *testing.T) {
 	if writtenURI != testProgURI {
 		t.Errorf("write URI: got %q, want %q", writtenURI, testProgURI)
 	}
-	if gotLock != "lock-handle-X" {
+	if gotLock != testLockHandleX {
 		t.Errorf("lock handle passed to SetTextElements: got %q", gotLock)
 	}
-	if gotTransport != "DEVK900001" {
+	if gotTransport != testTransportDEVK1 {
 		t.Errorf("transport: got %q", gotTransport)
 	}
 	if len(gotSymbols) != 1 || gotSymbols[0].Key != "001" || gotSymbols[0].Text != "hello" || gotSymbols[0].MaxLength != 5 {
@@ -74,7 +78,7 @@ func TestSetTextElementsTool_SymbolsHappy(t *testing.T) {
 	if err := json.Unmarshal([]byte(textOfTE(res)), &out); err != nil {
 		t.Fatalf("unmarshal: %v\nbody: %s", err, textOfTE(res))
 	}
-	if !out.Success || out.SymbolsCount != 1 || out.SelectionsCount != 0 || out.LockHandle != "lock-handle-X" {
+	if !out.Success || out.SymbolsCount != 1 || out.SelectionsCount != 0 || out.LockHandle != testLockHandleX {
 		t.Errorf("result: %+v", out)
 	}
 }
