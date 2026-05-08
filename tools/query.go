@@ -85,26 +85,23 @@ func registerQueryTools(s toolAdder, client adt.QueryClient, elicitor Elicitor) 
 	})
 }
 
-// withQueryPurposeParam adds the "purpose" parameter with a JSON Schema enum
-// to the run_query tool definition so MCP clients (and Claude) see the valid
-// values at tool-listing time.
+// withQueryPurposeParam adds the optional "purpose" parameter to the run_query
+// tool definition. The parameter is intentionally NOT required and carries no
+// enum constraint in the JSON Schema: a schema-level required+enum would cause
+// conforming MCP clients to reject calls with a missing or unrecognised value
+// before they reach the handler, making it impossible for the Elicitor to ask
+// the user for confirmation. Enforcement and human-in-the-loop confirmation are
+// handled exclusively in the handler.
 func withQueryPurposeParam() mcp.ToolOption {
 	return func(t *mcp.Tool) {
 		t.InputSchema.Properties["purpose"] = map[string]any{
 			"type": "string",
-			"description": "Declared reason for this query — must be one of the approved development-tooling categories. " +
-				"ddic_inspection: reading DDIC metadata tables (DD01L, DD02L, …). " +
-				"customizing_review: reading Customizing tables (T001, TVARVC, …). " +
-				"transport_tracking: reading transport catalog tables (E070, E071, …). " +
-				"development_metadata: reading development object catalog tables (TRDIR, TADIR, PROGDIR, …).",
-			"enum": func() []any {
-				out := make([]any, len(validQueryPurposeList))
-				for i, p := range validQueryPurposeList {
-					out[i] = p
-				}
-				return out
-			}(),
+			"description": "Declared reason for this query — should be one of the approved development-tooling categories: " +
+				"ddic_inspection (DDIC metadata tables: DD01L, DD02L, …), " +
+				"customizing_review (Customizing tables: T001, TVARVC, …), " +
+				"transport_tracking (transport catalog tables: E070, E071, …), " +
+				"development_metadata (development object catalog: TRDIR, TADIR, PROGDIR, …). " +
+				"Omitting or using a different value triggers human confirmation.",
 		}
-		t.InputSchema.Required = append(t.InputSchema.Required, "purpose")
 	}
 }
