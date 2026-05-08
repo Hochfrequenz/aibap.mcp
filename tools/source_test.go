@@ -254,6 +254,9 @@ func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { retur
 func (m *mockClient) GetTextElements(context.Context, string) (*adt.TextElements, error) {
 	return &adt.TextElements{}, nil
 }
+func (m *mockClient) SetTextElements(context.Context, string, []adt.TextSymbol, []adt.SelectionText, string, string) error {
+	return nil
+}
 func (m *mockClient) GetMessageClass(context.Context, string) (*adt.MessageClassInfo, error) {
 	return &adt.MessageClassInfo{}, nil
 }
@@ -261,7 +264,9 @@ func (m *mockClient) SearchMessages(context.Context, string, int) ([]adt.Message
 	return nil, nil
 }
 func (m *mockClient) SetMessages(context.Context, string, string, []adt.Message) error { return nil }
-func (m *mockClient) NavigateToDefinition(context.Context, string) (string, error)     { return "", nil }
+func (m *mockClient) NavigateToDefinition(context.Context, string, string) (string, error) {
+	return "", nil
+}
 func (m *mockClient) Rename(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error) {
 	if m.renameFn != nil {
 		return m.renameFn(ctx, uri, newName, transport)
