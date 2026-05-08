@@ -211,7 +211,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		}},
 		{"system", func() {
 			registerSystemTools(ls, selector)
-			registerQueryTools(ls, client)
+			registerQueryTools(ls, client, elicitor)
 		}},
 	}
 
