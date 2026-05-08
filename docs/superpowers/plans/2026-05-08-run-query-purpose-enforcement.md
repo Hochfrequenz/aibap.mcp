@@ -134,6 +134,13 @@ go test ./tools/... -run "TestRunQuery_" -v
 
 Expected: FAIL — `run_query` does not have a `purpose` parameter yet, so `TestRunQuery_ValidPurpose_CallsRunQuery` succeeds (no enforcement), and `TestRunQuery_MissingPurpose_NilElicitor_HardBlock` fails because RunQuery gets called instead of being blocked.
 
+- [ ] **Step 3: Commit the failing tests**
+
+```
+git add tools/query_test.go
+git commit -m "test: add failing tests for run_query purpose enforcement"
+```
+
 ---
 
 ### Task 2: Add `purpose` parameter and enforcement to `registerQueryTools`
@@ -236,6 +243,7 @@ func withQueryPurposeParam() mcp.ToolOption {
 				"development_metadata",
 			},
 		}
+		t.InputSchema.Required = append(t.InputSchema.Required, "purpose")
 	}
 }
 ```
@@ -279,7 +287,7 @@ Expected: all tests PASS. Fix any compilation errors before continuing.
 - [ ] **Step 5: Commit**
 
 ```
-git add tools/query.go tools/register.go tools/query_test.go
+git add tools/query.go tools/register.go
 git commit -m "feat: enforce purpose parameter on run_query via Elicitor pattern"
 ```
 
@@ -395,6 +403,13 @@ Expected: all tests PASS.
 git add tools/structured_content_shape_test.go
 git commit -m "test: synthesize first enum value in reflective shape test"
 ```
+
+---
+
+### Known Limitations (no code change required)
+
+- **Elicitation not supported:** `ConfirmDestructive` silently passes through when the MCP client returns `ErrElicitationNotSupported` or `ErrNoActiveSession`. This is a backwards-compatibility contract shared by all elicitor usages in this repo, not a regression introduced here. Enforcement is best-effort on clients that don't support elicitation.
+- **`RegisterAll` wrapper:** `RegisterAll` (used in some test harnesses) calls `RegisterAllWithLockMap` with `nil` as the elicitor. After this change, any `run_query` call via `RegisterAll` without a valid `purpose` will hard-block. This is intentional — `RegisterAll` is a convenience wrapper; production binaries use `RegisterAllWithLockMap` directly.
 
 ---
 
