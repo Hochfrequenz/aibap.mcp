@@ -50,6 +50,7 @@ type mockClient struct {
 	getTransportObjectsFn func(ctx context.Context, transport string) ([]adt.TransportObject, error)
 	getTransportInfoFn    func(ctx context.Context, transport string) (*adt.TransportRequest, error)
 	runQueryFn            func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
+	setTextElementsFn     func(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -254,7 +255,10 @@ func (m *mockClient) GetABAPDoc(context.Context, string) (string, error) { retur
 func (m *mockClient) GetTextElements(context.Context, string) (*adt.TextElements, error) {
 	return &adt.TextElements{}, nil
 }
-func (m *mockClient) SetTextElements(context.Context, string, []adt.TextSymbol, []adt.SelectionText, string, string) error {
+func (m *mockClient) SetTextElements(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error {
+	if m.setTextElementsFn != nil {
+		return m.setTextElementsFn(ctx, uri, symbols, selections, lockHandle, transport)
+	}
 	return nil
 }
 func (m *mockClient) GetMessageClass(context.Context, string) (*adt.MessageClassInfo, error) {
