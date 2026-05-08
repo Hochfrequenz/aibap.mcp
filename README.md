@@ -40,7 +40,7 @@ If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP W
 
 Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
 
-## Available tools (67)
+## Available tools (68)
 
 Tools are organized into groups. By default, all groups except `debug` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
@@ -134,6 +134,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 | `search_messages` | Search messages across all message classes |
 | `set_messages` | Write messages to a message class |
 | `get_text_elements` | Read text symbols and selection texts of a program |
+| `set_text_elements` | Write text symbols and/or selection texts (S/4 only) |
 
 </details>
 
