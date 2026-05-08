@@ -53,8 +53,8 @@ func registerQueryTools(s toolAdder, client adt.QueryClient, elicitor Elicitor) 
 		if !validQueryPurposes[purpose] {
 			if elicitor == nil {
 				return errorResult(fmt.Errorf(
-					"run_query blocked: 'purpose' is missing or not a recognised development-tooling value. "+
-						"Valid values: ddic_inspection, customizing_review, transport_tracking, development_metadata. "+
+					"run_query blocked: 'purpose' is missing or not a recognised development-tooling value. " +
+						"Valid values: ddic_inspection, customizing_review, transport_tracking, development_metadata. " +
 						"Querying tables outside this scope may violate the SAP API Policy",
 				)), nil
 			}
