@@ -3,20 +3,28 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // validQueryPurposeList is the single source of truth for accepted "purpose"
-// values for the run_query tool. Both the runtime validation map and the JSON
-// Schema enum are derived from this slice so they can never silently diverge.
+// values for the run_query tool. The runtime validation map, the JSON Schema
+// enum, and all human-readable strings are derived from this slice.
 var validQueryPurposeList = []string{
 	"ddic_inspection",
 	"customizing_review",
 	"transport_tracking",
 	"development_metadata",
 }
+
+// validPurposesInline is a comma-separated list of valid purpose values for
+// use in tool descriptions and error messages.
+var validPurposesInline = strings.Join(validQueryPurposeList, ", ")
+
+// validPurposesSlash is a slash-separated list for use in elicitor prompts.
+var validPurposesSlash = strings.Join(validQueryPurposeList, " / ")
 
 // validQueryPurposes is derived from validQueryPurposeList for O(1) lookup.
 var validQueryPurposes = func() map[string]bool {
@@ -40,7 +48,7 @@ func registerQueryTools(s toolAdder, client adt.QueryClient, elicitor Elicitor) 
 				"Only SELECT statements are supported — no INSERT, UPDATE, or DELETE. "+
 				"SAP API Policy: This tool is intended for development tooling only. "+
 				"You MUST declare the purpose of the query via the 'purpose' parameter. "+
-				"Valid values: ddic_inspection, customizing_review, transport_tracking, development_metadata. "+
+				"Valid values: "+validPurposesInline+". "+
 				"Queries outside these categories may violate the SAP API Policy "+
 				"(https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf).",
 		),
@@ -53,14 +61,14 @@ func registerQueryTools(s toolAdder, client adt.QueryClient, elicitor Elicitor) 
 		if !validQueryPurposes[purpose] {
 			if elicitor == nil {
 				return errorResult(fmt.Errorf(
-					"run_query blocked: 'purpose' is missing or not a recognised development-tooling value. " +
-						"Valid values: ddic_inspection, customizing_review, transport_tracking, development_metadata. " +
-						"Querying tables outside this scope may violate the SAP API Policy",
+					"run_query blocked: 'purpose' is missing or not a recognised development-tooling value. "+
+						"Valid values: %s. Querying tables outside this scope may violate the SAP API Policy",
+					validPurposesInline,
 				)), nil
 			}
 			proceed, reason := ConfirmDestructive(ctx, elicitor,
 				"run_query requires a valid purpose. Declare why this query is needed for development tooling "+
-					"(ddic_inspection / customizing_review / transport_tracking / development_metadata). "+
+					"("+validPurposesSlash+"). "+
 					"If none applies, this query may violate the SAP API Policy.")
 			if !proceed {
 				return errorResult(fmt.Errorf("run_query aborted: %s", reason)), nil

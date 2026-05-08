@@ -36,7 +36,7 @@ func TestRunQuery_ValidPurpose_CallsRunQuery(t *testing.T) {
 			if sql != "SELECT * FROM DD01L" {
 				t.Errorf("unexpected sql: %q", sql)
 			}
-			return &adt.QueryResult{Columns: []string{"DOMNAME"}, Rows: [][]string{{"CHAR10"}}}, nil
+			return &adt.QueryResult{Columns: []adt.QueryColumn{{Name: "DOMNAME"}}, Rows: [][]string{{"CHAR10"}}}, nil
 		},
 	}
 	s := newTestServerWithFallbackElicitor(mock, nil, nil)
