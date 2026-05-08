@@ -275,6 +275,10 @@ func defaultValueFromSchema(schema map[string]any) any {
 	if schema == nil {
 		return "x"
 	}
+	// enum: pick the first allowed value rather than a generic "x".
+	if enum, ok := schema["enum"].([]any); ok && len(enum) > 0 {
+		return enum[0]
+	}
 	// oneOf: pick the first branch's default.
 	if oneOf, ok := schema["oneOf"].([]any); ok && len(oneOf) > 0 {
 		if first, ok := oneOf[0].(map[string]any); ok {
