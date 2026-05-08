@@ -195,6 +195,14 @@ type SetMessagesResult struct {
 	MessagesCount int    `json:"messages_count"`
 }
 
+type SetTextElementsResult struct {
+	Success         bool   `json:"success"`
+	ObjectURI       string `json:"object_uri"`
+	SymbolsCount    int    `json:"symbols_count"`
+	SelectionsCount int    `json:"selections_count"`
+	LockHandle      string `json:"lock_handle"`
+}
+
 type SyntaxCheckBatchResult struct {
 	Total         int                      `json:"total"`
 	Clean         int                      `json:"clean"`
