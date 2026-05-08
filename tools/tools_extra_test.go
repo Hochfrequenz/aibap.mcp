@@ -311,7 +311,7 @@ func TestGetCompletionsTool(t *testing.T) {
 	mock := &mockClient{
 		getCompletionsFn: func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error) {
 			gotURI, gotSource, gotLine, gotColumn = uri, source, line, column
-			return []adt.CompletionItem{{Text: "DATA", Description: "keyword"}}, nil
+			return []adt.CompletionItem{{Text: "DATA"}}, nil
 		},
 	}
 	s := newTestServer(mock)
