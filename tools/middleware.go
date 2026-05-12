@@ -56,6 +56,10 @@ func withLogging(toolName string, selector SystemSelector, handler func(context.
 			attrs = append(attrs, slog.String("object_uri", uri))
 		}
 
+		if purpose := req.GetString("purpose", ""); purpose != "" {
+			attrs = append(attrs, slog.String("purpose", purpose))
+		}
+
 		if err != nil {
 			attrs = append(attrs, slog.String("status", "error"), slog.String("error", err.Error()))
 			slog.LogAttrs(ctx, slog.LevelError, "tool call", attrs...)
