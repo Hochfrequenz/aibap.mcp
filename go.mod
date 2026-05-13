@@ -6,7 +6,7 @@ require (
 	github.com/Hochfrequenz/adtler v0.1.5
 	github.com/Hochfrequenz/sap-mcp-config v0.1.0
 	github.com/google/uuid v1.6.0
-	github.com/mark3labs/mcp-go v0.53.0
+	github.com/mark3labs/mcp-go v0.54.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 )
 
