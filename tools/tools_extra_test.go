@@ -145,18 +145,80 @@ func TestUnlockObjectToolNoHandle(t *testing.T) {
 }
 
 func TestUnlockObjectToolError(t *testing.T) {
+	lockMap := adt.NewLockMap()
+	lockMap.Set("dev:"+testObjectURI, "handle123", "")
 	mock := &mockClient{
 		unlockObjectFn: func(ctx context.Context, uri, lockHandle string) error {
 			return &adt.ADTError{StatusCode: 400, Message: "unlock failed"}
 		},
 	}
-	s := newTestServer(mock)
+	s := newTestServerWithLockMap(mock, lockMap)
 	result := callTool(t, s, "unlock_object", map[string]interface{}{
 		"object_uri":  testObjectURI,
 		"lock_handle": "handle123",
 	})
 	if !result.IsError {
 		t.Fatal("expected IsError=true")
+	}
+}
+
+// Regression for #383: unlock_object must refuse to call SAP when the
+// supplied handle does not match the one tracked in the session lock map.
+// SAP's UNLOCK endpoint returns 2xx regardless of handle correctness, so
+// blindly forwarding the call leads us to report `unlocked: true` while
+// the lock remains held server-side.
+func TestUnlockObjectToolRejectsMismatchedHandle(t *testing.T) {
+	lockMap := adt.NewLockMap()
+	lockMap.Set("dev:"+testObjectURI, "real-handle", "")
+	called := false
+	mock := &mockClient{
+		unlockObjectFn: func(ctx context.Context, uri, lockHandle string) error {
+			called = true
+			return nil
+		},
+	}
+	s := newTestServerWithLockMap(mock, lockMap)
+	result := callTool(t, s, "unlock_object", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"lock_handle": "wrong-handle",
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true for mismatched lock_handle")
+	}
+	if called {
+		t.Error("UnlockObject must not be called when supplied handle does not match tracked handle")
+	}
+	if state, ok := lockMap.Get("dev:" + testObjectURI); !ok || state.LockHandle != "real-handle" {
+		t.Error("lock map entry must not be deleted when validation rejects the call")
+	}
+	if !strings.Contains(firstText(result), "#383") {
+		t.Errorf("error message should reference #383 so callers can find the rationale; got: %s", firstText(result))
+	}
+}
+
+// Regression for #383: unlock_object must refuse to call SAP when the URI
+// is not tracked in the session lock map, even if the caller supplies an
+// explicit lock_handle. Stateful-session handles from other sessions are
+// not valid here, and SAP's UNLOCK endpoint cannot be trusted to tell us
+// so.
+func TestUnlockObjectToolRejectsUntrackedURI(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		unlockObjectFn: func(ctx context.Context, uri, lockHandle string) error {
+			called = true
+			return nil
+		},
+	}
+	s := newTestServerWithLockMap(mock, adt.NewLockMap())
+	result := callTool(t, s, "unlock_object", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"lock_handle": "some-handle",
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true when URI is not tracked in the session lock map")
+	}
+	if called {
+		t.Error("UnlockObject must not be called when the URI is not tracked")
 	}
 }
 
