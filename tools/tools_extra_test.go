@@ -146,7 +146,7 @@ func TestUnlockObjectToolNoHandle(t *testing.T) {
 
 func TestUnlockObjectToolError(t *testing.T) {
 	lockMap := adt.NewLockMap()
-	lockMap.Set("dev:"+testObjectURI, "handle123", "")
+	lockMap.Set(adt.LockKey("dev", testObjectURI), "handle123", "")
 	mock := &mockClient{
 		unlockObjectFn: func(ctx context.Context, uri, lockHandle string) error {
 			return &adt.ADTError{StatusCode: 400, Message: "unlock failed"}
@@ -165,11 +165,12 @@ func TestUnlockObjectToolError(t *testing.T) {
 // Regression for #383: unlock_object must refuse to call SAP when the
 // supplied handle does not match the one tracked in the session lock map.
 // SAP's UNLOCK endpoint returns 2xx regardless of handle correctness, so
-// blindly forwarding the call leads us to report `unlocked: true` while
-// the lock remains held server-side.
+// blindly forwarding the call would propagate a false `unlocked: true`
+// while the lock remains held server-side.
 func TestUnlockObjectToolRejectsMismatchedHandle(t *testing.T) {
 	lockMap := adt.NewLockMap()
-	lockMap.Set("dev:"+testObjectURI, "real-handle", "")
+	key := adt.LockKey("dev", testObjectURI)
+	lockMap.Set(key, "real-handle", "")
 	called := false
 	mock := &mockClient{
 		unlockObjectFn: func(ctx context.Context, uri, lockHandle string) error {
@@ -188,11 +189,8 @@ func TestUnlockObjectToolRejectsMismatchedHandle(t *testing.T) {
 	if called {
 		t.Error("UnlockObject must not be called when supplied handle does not match tracked handle")
 	}
-	if state, ok := lockMap.Get("dev:" + testObjectURI); !ok || state.LockHandle != "real-handle" {
+	if state, ok := lockMap.Get(key); !ok || state.LockHandle != "real-handle" {
 		t.Error("lock map entry must not be deleted when validation rejects the call")
-	}
-	if !strings.Contains(firstText(result), "#383") {
-		t.Errorf("error message should reference #383 so callers can find the rationale; got: %s", firstText(result))
 	}
 }
 
@@ -209,7 +207,8 @@ func TestUnlockObjectToolRejectsUntrackedURI(t *testing.T) {
 			return nil
 		},
 	}
-	s := newTestServerWithLockMap(mock, adt.NewLockMap())
+	lockMap := adt.NewLockMap()
+	s := newTestServerWithLockMap(mock, lockMap)
 	result := callTool(t, s, "unlock_object", map[string]interface{}{
 		"object_uri":  testObjectURI,
 		"lock_handle": "some-handle",
@@ -219,6 +218,9 @@ func TestUnlockObjectToolRejectsUntrackedURI(t *testing.T) {
 	}
 	if called {
 		t.Error("UnlockObject must not be called when the URI is not tracked")
+	}
+	if _, ok := lockMap.Get(adt.LockKey("dev", testObjectURI)); ok {
+		t.Error("lock map must remain empty when the validation rejects an untracked URI")
 	}
 }
 

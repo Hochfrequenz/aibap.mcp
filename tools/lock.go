@@ -35,7 +35,7 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Unlock a previously locked ABAP object. Validates the supplied handle against the session's lock map: a mismatched handle, or an object not tracked as locked in this session, is rejected without contacting SAP — because SAP's UNLOCK endpoint returns 2xx regardless of whether the lock existed, the handle was valid, or the URI matched (see #383)."),
+		mcp.WithDescription("Unlock a previously locked ABAP object. Validates the supplied handle against the session lock map; rejects mismatched or untracked handles without contacting SAP."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
 			mcp.Description(descADTObjectURI),
@@ -48,20 +48,18 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 		uri := req.GetString(paramObjectURI, "")
 		lockHandle := req.GetString("lock_handle", "")
 		key := adt.LockKey(selector.ActiveName(), uri)
+		// SAP's UNLOCK endpoint returns 2xx regardless of whether the lock
+		// existed, the handle was valid, or the URI matched (see #383).
+		// Validate against the session lock map first so we never propagate
+		// that lie and never wipe a real entry on a no-op call.
 		state, tracked := lockMap.Get(key)
 		if !tracked {
-			return errorResult(fmt.Errorf(
-				"no lock tracked for %s in this session; refusing to unlock because SAP's UNLOCK endpoint reports success regardless of actual lock state (see #383)",
-				uri,
-			)), nil
+			return errorResult(fmt.Errorf("no lock tracked for %s in this session", uri)), nil
 		}
 		if lockHandle == "" {
 			lockHandle = state.LockHandle
 		} else if lockHandle != state.LockHandle {
-			return errorResult(fmt.Errorf(
-				"lock_handle does not match the handle tracked for %s in this session; refusing to unlock (see #383)",
-				uri,
-			)), nil
+			return errorResult(fmt.Errorf("lock_handle does not match the handle tracked for %s in this session", uri)), nil
 		}
 		if err := client.UnlockObject(ctx, uri, lockHandle); err != nil {
 			return errorResult(err), nil
