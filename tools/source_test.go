@@ -3,6 +3,7 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -835,5 +836,48 @@ func TestAddToTransportTool(t *testing.T) {
 	}
 	if gotTransport != testTransportNum {
 		t.Errorf("transport: got %q", gotTransport)
+	}
+}
+
+// Regression for #380: get_include_source must surface a "missing
+// parameter" error rather than forwarding an empty string to adtler,
+// which produces the misleading 'unknown include type ""' message.
+// An LLM that omits the parameter (or uses a wrong key like
+// 'include_type') needs to know the *key* was wrong, not the *value*.
+func TestGetIncludeSourceToolRejectsMissingInclude(t *testing.T) {
+	mock := &mockClient{}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_include_source", map[string]interface{}{
+		"object_uri": testObjectURI,
+		// 'include' deliberately omitted
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true when 'include' is missing")
+	}
+	text := firstText(result)
+	if !strings.Contains(text, "'include'") {
+		t.Errorf("error message should name the missing parameter 'include'; got: %s", text)
+	}
+	if strings.Contains(text, "unknown include type") {
+		t.Errorf("error message must not be the adtler 'unknown include type' message — that misleads callers into thinking they passed a bad value; got: %s", text)
+	}
+}
+
+// Regression for #380: same guard must apply to set_include_source.
+func TestSetIncludeSourceToolRejectsMissingInclude(t *testing.T) {
+	mock := &mockClient{}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri": testObjectURI,
+		"source":     "* hello",
+		"etag":       "etag-1",
+		// 'include' deliberately omitted
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true when 'include' is missing")
+	}
+	text := firstText(result)
+	if !strings.Contains(text, "'include'") {
+		t.Errorf("error message should name the missing parameter 'include'; got: %s", text)
 	}
 }

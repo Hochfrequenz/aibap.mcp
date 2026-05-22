@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -115,6 +116,9 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		include := req.GetString("include", "")
+		if include == "" {
+			return errorResult(fmt.Errorf("required parameter 'include' is missing or empty — must be one of: testclasses, definitions, implementations, macros")), nil
+		}
 		result, err := client.GetIncludeSource(ctx, uri, include)
 		if err != nil {
 			return errorResult(err), nil
@@ -146,6 +150,9 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		include := req.GetString("include", "")
+		if include == "" {
+			return errorResult(fmt.Errorf("required parameter 'include' is missing or empty — must be one of: testclasses, definitions, implementations, macros")), nil
+		}
 		source := req.GetString("source", "")
 		lh := req.GetString("lock_handle", "")
 		transport := req.GetString("transport", "")
