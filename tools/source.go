@@ -2,13 +2,15 @@ package tools
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 	"sync"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+var errMissingIncludeParam = errors.New("required parameter 'include' is missing or empty — must be one of: testclasses, definitions, implementations, macros")
 
 func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("get_source",
@@ -117,7 +119,7 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		uri := req.GetString(paramObjectURI, "")
 		include := req.GetString("include", "")
 		if include == "" {
-			return errorResult(fmt.Errorf("required parameter 'include' is missing or empty — must be one of: testclasses, definitions, implementations, macros")), nil
+			return errorResult(errMissingIncludeParam), nil
 		}
 		result, err := client.GetIncludeSource(ctx, uri, include)
 		if err != nil {
@@ -151,7 +153,7 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		uri := req.GetString(paramObjectURI, "")
 		include := req.GetString("include", "")
 		if include == "" {
-			return errorResult(fmt.Errorf("required parameter 'include' is missing or empty — must be one of: testclasses, definitions, implementations, macros")), nil
+			return errorResult(errMissingIncludeParam), nil
 		}
 		source := req.GetString("source", "")
 		lh := req.GetString("lock_handle", "")

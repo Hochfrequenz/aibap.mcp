@@ -863,7 +863,7 @@ func TestGetIncludeSourceToolRejectsMissingInclude(t *testing.T) {
 	}
 }
 
-// Regression for #380: same guard must apply to set_include_source.
+// Same guard, set side.
 func TestSetIncludeSourceToolRejectsMissingInclude(t *testing.T) {
 	mock := &mockClient{}
 	s := newTestServer(mock)
