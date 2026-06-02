@@ -38,7 +38,7 @@ A handful of operations aren't exposed by the ADT REST API at all — customizin
 
 If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP Web GUI, RFC, or whatever else you've conjured bend to your will, you can write a Go implementation of `BlackMagicClient` and compile it into a **custom build** — the hook is a package-level `var blackMagic tools.BlackMagicClient` in `main.go`, set from a build-tagged `init()` in a file you maintain in your own fork. There is no runtime flag or config entry for this; the choice is baked into the binary at compile time. Your build then calls through your implementation transparently for the fallback-requiring tools. The interface is deliberately shape-agnostic: any Go struct that satisfies it works. No public implementation is shipped — producing one, and maintaining a custom build, is the implementer's own problem (and, arguably, part of the craft).
 
-Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
+Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
 
 ## Available tools (68)
 
@@ -256,7 +256,7 @@ Extract the archive. You'll get a single executable (`.exe` on Windows).
 
 ### 2. Create `systems.json`
 
-Create `~/.config/sap-mcp/systems.json` (shared with [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp) — configure once, use everywhere):
+Create `~/.config/sap-mcp/systems.json` (shared with [sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp) — configure once, use everywhere):
 
 ```json
 {
