@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	"github.com/Hochfrequenz/aibap.mcp/config"
 )
 
 func TestLoadWithTools(t *testing.T) {

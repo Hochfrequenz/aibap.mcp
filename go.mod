@@ -1,4 +1,4 @@
-module github.com/Hochfrequenz/mcp-server-abap
+module github.com/Hochfrequenz/aibap.mcp
 
 go 1.26
 
