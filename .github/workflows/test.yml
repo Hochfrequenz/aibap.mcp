@@ -34,17 +34,17 @@ jobs:
           go-version: '1.26.x'
 
       - name: Build binary
-        run: go build -ldflags "-X main.version=smoke-test" -o mcp-server-abap${{ runner.os == 'Windows' && '.exe' || '' }} .
+        run: go build -ldflags "-X main.version=smoke-test" -o aibap.mcp${{ runner.os == 'Windows' && '.exe' || '' }} .
 
       - name: Smoke test --version
         run: |
-          ./mcp-server-abap${{ runner.os == 'Windows' && '.exe' || '' }} --version
-          ./mcp-server-abap${{ runner.os == 'Windows' && '.exe' || '' }} --version | grep -q "smoke-test"
+          ./aibap.mcp${{ runner.os == 'Windows' && '.exe' || '' }} --version
+          ./aibap.mcp${{ runner.os == 'Windows' && '.exe' || '' }} --version | grep -q "smoke-test"
         shell: bash
 
       - name: Upload binary
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
-          name: mcp-server-abap-windows-amd64.exe
-          path: mcp-server-abap.exe
+          name: aibap.mcp-windows-amd64.exe
+          path: aibap.mcp.exe

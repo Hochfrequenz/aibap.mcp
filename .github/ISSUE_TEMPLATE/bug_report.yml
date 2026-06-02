@@ -1,0 +1,63 @@
+name: Bug report
+description: Something does not work as expected
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: system_type
+    attributes:
+      label: SAP system type
+      options:
+        - ECC (R/3)
+        - S/4HANA on-premise
+        - Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: sap_version
+    attributes:
+      label: SAP release / support package
+      placeholder: "e.g. ECC 6.0 EHP8 SP20 or S/4 2023 FPS02"
+
+  - type: input
+    id: server_version
+    attributes:
+      label: aibap.mcp version
+      placeholder: "e.g. v1.2.3 or commit SHA"
+    validations:
+      required: true
+
+  - type: textarea
+    id: tool_call
+    attributes:
+      label: Tool call + arguments
+      description: Copy-paste the MCP tool name and the exact JSON arguments you passed.
+      placeholder: |
+        Tool: get_source
+        Arguments:
+        {
+          "objectUri": "/sap/bc/adt/programs/programs/zmyprogram",
+          "system": "hfq"
+        }
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result (error message / unexpected output)
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Log output, related issues, steps to reproduce, etc.

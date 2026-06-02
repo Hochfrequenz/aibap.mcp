@@ -13,10 +13,10 @@ import (
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/Hochfrequenz/adtler/auth"
-	"github.com/Hochfrequenz/mcp-server-abap/cmd"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
-	"github.com/Hochfrequenz/mcp-server-abap/logging"
-	"github.com/Hochfrequenz/mcp-server-abap/tools"
+	"github.com/Hochfrequenz/aibap.mcp/cmd"
+	"github.com/Hochfrequenz/aibap.mcp/config"
+	"github.com/Hochfrequenz/aibap.mcp/logging"
+	"github.com/Hochfrequenz/aibap.mcp/tools"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -29,14 +29,14 @@ var blackMagic tools.BlackMagicClient
 
 func main() {
 	// Override the default token path so existing users keep their tokens at
-	// the old mcp-server-abap location. The auth package now defaults to the
+	// the old aibap.mcp location. The auth package now defaults to the
 	// generic "sap-adt" directory for standalone library use.
 	auth.DefaultTokenPath = func() string {
 		configDir, err := os.UserConfigDir()
 		if err != nil {
 			configDir = filepath.Join(os.Getenv("HOME"), ".config")
 		}
-		return filepath.Join(configDir, "mcp-server-abap", "tokens.json")
+		return filepath.Join(configDir, "aibap.mcp", "tokens.json")
 	}
 
 	// Handle --version flag
@@ -45,7 +45,7 @@ func main() {
 		if logging.RemoteLoggingBakedIn() {
 			rl = "on"
 		}
-		fmt.Printf("mcp-server-abap %s (commit %s, remote-logging=%s)\n", version, logging.BuildInfo(), rl)
+		fmt.Printf("aibap.mcp %s (commit %s, remote-logging=%s)\n", version, logging.BuildInfo(), rl)
 		return
 	}
 
@@ -100,7 +100,7 @@ func run() error {
 		enabledGroups = tools.DefaultGroups()
 	}
 
-	clients, err := adt.NewClientsFromConfig(&cfg.Config, "mcp-server-abap")
+	clients, err := adt.NewClientsFromConfig(&cfg.Config, "aibap.mcp")
 	if err != nil {
 		return fmt.Errorf("building ADT clients: %w", err)
 	}

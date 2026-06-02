@@ -1,8 +1,8 @@
-![Unittest status badge](https://github.com/Hochfrequenz/mcp-server-abap/workflows/Unittests/badge.svg)
-![Coverage status badge](https://github.com/Hochfrequenz/mcp-server-abap/workflows/coverage/badge.svg)
-![Linter status badge](https://github.com/Hochfrequenz/mcp-server-abap/workflows/golangci-lint/badge.svg)
+![Unittest status badge](https://github.com/Hochfrequenz/aibap.mcp/workflows/Unittests/badge.svg)
+![Coverage status badge](https://github.com/Hochfrequenz/aibap.mcp/workflows/coverage/badge.svg)
+![Linter status badge](https://github.com/Hochfrequenz/aibap.mcp/workflows/golangci-lint/badge.svg)
 
-# mcp-server-abap
+# aibap.mcp
 
 A community-built [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that lets AI assistants like Claude read, write, and manage ABAP source code on SAP systems — directly from the editor.
 
@@ -19,11 +19,11 @@ When using this MCP server, make sure to obey the [SAP API Policy](https://help.
 
 The server connects to your SAP system via the **SAP ADT (ABAP Development Tools) REST API** — the same HTTP API that ABAP Development Tools for Eclipse uses under the hood. For the vast majority of operations, that's all you need: no SAP GUI, no RFC, no additional middleware.
 
-The SAP-touching code lives in [**adtler**](https://github.com/Hochfrequenz/adtler), a standalone Go client library for the ADT REST API. mcp-server-abap is the thin MCP layer that exposes adtler's operations as MCP tools.
+The SAP-touching code lives in [**adtler**](https://github.com/Hochfrequenz/adtler), a standalone Go client library for the ADT REST API. aibap.mcp is the thin MCP layer that exposes adtler's operations as MCP tools.
 
 ```mermaid
 graph TD
-    A["Claude / AI assistant"] -->|"MCP (stdio)"| B["mcp-server-abap<br/>(tools/ wrappers)"]
+    A["Claude / AI assistant"] -->|"MCP (stdio)"| B["aibap.mcp<br/>(tools/ wrappers)"]
     B -->|"Go API"| C["adtler<br/>(SAP ADT client library)"]
     C -->|"HTTP + Basic Auth or OAuth2 + CSRF"| D["SAP System<br/>/sap/bc/adt/..."]
     B -.->|"BlackMagicClient interface<br/>(BYO Go hook, compile-time —<br/>no default impl shipped)"| E["your BlackMagicClient impl<br/>(you write this,<br/>baked into a custom build)"]
@@ -34,7 +34,7 @@ graph TD
 
 ### The BlackMagic fallback (BYO)
 
-A handful of operations aren't exposed by the ADT REST API at all — customizing table writes (SM30/SM34), transport release on ECC (SE09), and similar SAP-GUI-only workflows. For these, mcp-server-abap defines a `BlackMagicClient` Go interface, but **ships no implementation**. The hook says *what* the tool needs done; it does not say *how* to do it.
+A handful of operations aren't exposed by the ADT REST API at all — customizing table writes (SM30/SM34), transport release on ECC (SE09), and similar SAP-GUI-only workflows. For these, aibap.mcp defines a `BlackMagicClient` Go interface, but **ships no implementation**. The hook says *what* the tool needs done; it does not say *how* to do it.
 
 If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP Web GUI, RFC, or whatever else you've conjured bend to your will, you can write a Go implementation of `BlackMagicClient` and compile it into a **custom build** — the hook is a package-level `var blackMagic tools.BlackMagicClient` in `main.go`, set from a build-tagged `init()` in a file you maintain in your own fork. There is no runtime flag or config entry for this; the choice is baked into the binary at compile time. Your build then calls through your implementation transparently for the fallback-requiring tools. The interface is deliberately shape-agnostic: any Go struct that satisfies it works. No public implementation is shipped — producing one, and maintaining a custom build, is the implementer's own problem (and, arguably, part of the craft).
 
@@ -226,7 +226,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 
 ### 1. Download the binary
 
-Each release on the [releases page](https://github.com/Hochfrequenz/mcp-server-abap/releases) ships **two flavours** of the same binary. Pick one:
+Each release on the [releases page](https://github.com/Hochfrequenz/aibap.mcp/releases) ships **two flavours** of the same binary. Pick one:
 
 #### Default build — silent
 
@@ -234,10 +234,10 @@ No telemetry. Logs go only to your own stderr. Equivalent to building from sourc
 
 | Platform | File |
 |----------|------|
-| Windows | `mcp-server-abap-*-windows-amd64.zip` |
-| macOS (Intel) | `mcp-server-abap-*-darwin-amd64.tar.gz` |
-| macOS (Apple Silicon) | `mcp-server-abap-*-darwin-arm64.tar.gz` |
-| Linux | `mcp-server-abap-*-linux-amd64.tar.gz` |
+| Windows | `aibap.mcp-*-windows-amd64.zip` |
+| macOS (Intel) | `aibap.mcp-*-darwin-amd64.tar.gz` |
+| macOS (Apple Silicon) | `aibap.mcp-*-darwin-arm64.tar.gz` |
+| Linux | `aibap.mcp-*-linux-amd64.tar.gz` |
 
 #### Build with remote logging to Hochfrequenz
 
@@ -245,12 +245,12 @@ Same binary plus a compiled-in [Papertrail](https://www.papertrail.com/) destina
 
 | Platform | File |
 |----------|------|
-| Windows | `mcp-server-abap-with-remote-logging-*-windows-amd64.zip` |
-| macOS (Intel) | `mcp-server-abap-with-remote-logging-*-darwin-amd64.tar.gz` |
-| macOS (Apple Silicon) | `mcp-server-abap-with-remote-logging-*-darwin-arm64.tar.gz` |
-| Linux | `mcp-server-abap-with-remote-logging-*-linux-amd64.tar.gz` |
+| Windows | `aibap.mcp-with-remote-logging-*-windows-amd64.zip` |
+| macOS (Intel) | `aibap.mcp-with-remote-logging-*-darwin-amd64.tar.gz` |
+| macOS (Apple Silicon) | `aibap.mcp-with-remote-logging-*-darwin-arm64.tar.gz` |
+| Linux | `aibap.mcp-with-remote-logging-*-linux-amd64.tar.gz` |
 
-Run `mcp-server-abap --version` after extracting to confirm which flavour you have — the output ends with `remote-logging=on` or `remote-logging=off`.
+Run `aibap.mcp --version` after extracting to confirm which flavour you have — the output ends with `remote-logging=on` or `remote-logging=off`.
 
 Extract the archive. You'll get a single executable (`.exe` on Windows).
 
@@ -280,8 +280,8 @@ See [Usage with Claude](#usage-with-claude) below for copy-paste configuration s
 ### Alternative: Docker
 
 ```bash
-docker pull ghcr.io/hochfrequenz/mcp-server-abap:latest
-docker run -i -v ./config.json:/config.json -e SAP_CONFIG_FILE=/config.json ghcr.io/hochfrequenz/mcp-server-abap
+docker pull ghcr.io/hochfrequenz/aibap.mcp:latest
+docker run -i -v ./config.json:/config.json -e SAP_CONFIG_FILE=/config.json ghcr.io/hochfrequenz/aibap.mcp
 ```
 
 ### Alternative: Build from source
@@ -289,15 +289,15 @@ docker run -i -v ./config.json:/config.json -e SAP_CONFIG_FILE=/config.json ghcr
 Requires Go 1.26+. Either clone and build:
 
 ```bash
-git clone https://github.com/Hochfrequenz/mcp-server-abap.git
-cd mcp-server-abap
-go build -o mcp-server-abap .
+git clone https://github.com/Hochfrequenz/aibap.mcp.git
+cd aibap.mcp
+go build -o aibap.mcp .
 ```
 
 Or install directly with `go install`:
 
 ```bash
-go install github.com/Hochfrequenz/mcp-server-abap@latest
+go install github.com/Hochfrequenz/aibap.mcp@latest
 ```
 
 Source builds always produce the silent variant (no remote logging baked in); the `-with-remote-logging` flavour is only produced by the release pipeline.
@@ -347,7 +347,7 @@ By default, all tool groups except `debug` are enabled. You can customize which 
 **Via CLI flag** (overrides config):
 
 ```bash
-mcp-server-abap --tools=source,objects,transport,debug
+aibap.mcp --tools=source,objects,transport,debug
 ```
 
 **Special values:**
@@ -366,7 +366,7 @@ For systems with SAML SSO, omit `user` and `password` to use OAuth2:
   "systems": {
     "prod": {
       "host": "https://your-prod-system:8000",
-      "oauth2_client_id": "mcp-server-abap"
+      "oauth2_client_id": "aibap.mcp"
     }
   }
 }
@@ -375,12 +375,12 @@ For systems with SAML SSO, omit `user` and `password` to use OAuth2:
 Then authenticate via browser before starting the server:
 
 ```bash
-mcp-server-abap login prod
+aibap.mcp login prod
 ```
 
-This opens your browser for SAML authentication. After login, tokens are cached in `~/.config/mcp-server-abap/tokens.json` and refreshed automatically.
+This opens your browser for SAML authentication. After login, tokens are cached in `~/.config/aibap.mcp/tokens.json` and refreshed automatically.
 
-**SAP prerequisites:** Register OAuth2 client `mcp-server-abap` in transaction `SOAUTH2` with grant type "Authorization Code" and redirect URI pattern `http://localhost:*`. SAML IdP trust must be configured in transaction `SAML2`.
+**SAP prerequisites:** Register OAuth2 client `aibap.mcp` in transaction `SOAUTH2` with grant type "Authorization Code" and redirect URI pattern `http://localhost:*`. SAML IdP trust must be configured in transaction `SAML2`.
 
 Alternatively, configure via environment variables:
 
@@ -398,7 +398,7 @@ Add to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "abap": {
-      "command": "/path/to/mcp-server-abap",
+      "command": "/path/to/aibap.mcp",
       "args": [],
       "env": {
         "SAP_CONFIG_FILE": "/path/to/config.json"
@@ -414,7 +414,7 @@ To reduce token footprint, load only the tool groups you need:
 {
   "mcpServers": {
     "abap": {
-      "command": "/path/to/mcp-server-abap",
+      "command": "/path/to/aibap.mcp",
       "args": ["--tools=source,objects,testing,transport"],
       "env": {
         "SAP_CONFIG_FILE": "/path/to/config.json"
@@ -429,7 +429,7 @@ To reduce token footprint, load only the tool groups you need:
 Add to your Claude Code MCP settings or run directly:
 
 ```bash
-SAP_CONFIG_FILE=/path/to/config.json mcp-server-abap
+SAP_CONFIG_FILE=/path/to/config.json aibap.mcp
 ```
 
 ## Example workflow
@@ -464,16 +464,16 @@ Every log line carries `version`, `commit`, and `remote_logging=on|off` as defau
 
 | Install path | Remote logging by default |
 |--------------|---------------------------|
-| `mcp-server-abap-*` release archive (default flavour) | **off** |
-| `mcp-server-abap-with-remote-logging-*` release archive | **on** — to `logs5.papertrailapp.com:35329` |
-| Docker image (`ghcr.io/hochfrequenz/mcp-server-abap`) | **off** |
-| Source build (`go build`, `make build`, `go install github.com/Hochfrequenz/mcp-server-abap@latest`) | **off** |
+| `aibap.mcp-*` release archive (default flavour) | **off** |
+| `aibap.mcp-with-remote-logging-*` release archive | **on** — to `logs5.papertrailapp.com:35329` |
+| Docker image (`ghcr.io/hochfrequenz/aibap.mcp`) | **off** |
+| Source build (`go build`, `make build`, `go install github.com/Hochfrequenz/aibap.mcp@latest`) | **off** |
 
 The `-with-remote-logging` archive is the only path where telemetry is on by default. Picking it over the default archive is the consent step: users who download it have chosen to stream structured log events (tool name, SAP system key, duration, SAP object names such as `ZCL_CUSTOMER_INVOICE`, SAP error messages) to Hochfrequenz's Papertrail collector, where they help us prioritise fixes. **No credentials, source code, or table row data are transmitted.** Confirm which flavour you have with:
 
 ```bash
-mcp-server-abap --version
-# mcp-server-abap v0.2.1 (commit abc1234, remote-logging=on)
+aibap.mcp --version
+# aibap.mcp v0.2.1 (commit abc1234, remote-logging=on)
 ```
 
 ### Disabling remote logging in the `-with-remote-logging` build
@@ -482,13 +482,13 @@ Set `PAPERTRAIL_HOST=` (explicit empty) before launching the server:
 
 ```bash
 # Linux / macOS / Git Bash
-PAPERTRAIL_HOST= ./mcp-server-abap-with-remote-logging
+PAPERTRAIL_HOST= ./aibap.mcp-with-remote-logging
 ```
 
 ```powershell
 # Windows PowerShell
 $env:PAPERTRAIL_HOST=""
-.\mcp-server-abap-with-remote-logging.exe
+.\aibap.mcp-with-remote-logging.exe
 ```
 
 Setting either `PAPERTRAIL_HOST` or `PAPERTRAIL_PORT` (even to empty) is treated as an explicit override and disables the baked-in defaults. To point at a different Papertrail account, set both.
@@ -504,17 +504,17 @@ Every build honours `PAPERTRAIL_HOST` + `PAPERTRAIL_PORT` at runtime. To ship yo
 ```bash
 export PAPERTRAIL_HOST=logs5.papertrailapp.com
 export PAPERTRAIL_PORT=12345
-SAP_CONFIG_FILE=config.json ./mcp-server-abap
+SAP_CONFIG_FILE=config.json ./aibap.mcp
 ```
 
 Logs are sent over TLS. Both stderr and Papertrail receive every log event.
 
 ## Architecture
 
-The MCP server is a thin layer over the **[adtler](https://github.com/Hochfrequenz/adtler)** Go library, which provides the SAP ADT HTTP client and OAuth2 token management. mcp-server-abap depends on adtler the same way any other Go consumer would, and the library can be used standalone in CLIs, CI pipelines, and other integrations.
+The MCP server is a thin layer over the **[adtler](https://github.com/Hochfrequenz/adtler)** Go library, which provides the SAP ADT HTTP client and OAuth2 token management. aibap.mcp depends on adtler the same way any other Go consumer would, and the library can be used standalone in CLIs, CI pipelines, and other integrations.
 
 ```
-mcp-server-abap
+aibap.mcp
 ├── tools/         — MCP tool handlers (thin wrappers around adtler)
 ├── config/        — Multi-system JSON config loading
 ├── cmd/           — CLI (login subcommand)

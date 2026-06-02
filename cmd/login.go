@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/Hochfrequenz/adtler/auth"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
+	"github.com/Hochfrequenz/aibap.mcp/config"
 )
 
-const defaultOAuth2ClientID = "mcp-server-abap"
+const defaultOAuth2ClientID = "aibap.mcp"
 
 // effectiveOAuth2ClientID returns the system's OAuth2 client ID,
 // falling back to defaultOAuth2ClientID.

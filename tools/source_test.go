@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/Hochfrequenz/adtler/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/tools"
+	"github.com/Hochfrequenz/aibap.mcp/tools"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
