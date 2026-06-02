@@ -9,7 +9,6 @@
 ## Development setup
 
 ```bash
-go build -o mcp-server-abap .
 go test ./...
 gofmt -w .
 go vet ./...
@@ -40,7 +39,7 @@ Most SAP-touching fixes belong in [adtler](https://github.com/Hochfrequenz/adtle
 ## Pull requests
 
 - Link to the issue in the PR description (`Closes #N`).
-- Run `gofmt`, `go vet ./...`, and `go test ./...` before pushing.
+- Run `gofmt`, `go vet ./...`, `go test ./...`, and `make lint` before pushing.
 - CI must be green before requesting review.
 
 ## Code style
