@@ -134,6 +134,7 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 
 	s.AddTool(mcp.NewTool("set_include_source",
 		mcp.WithTitleAnnotation("Set Class Include Source"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),

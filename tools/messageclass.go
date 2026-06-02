@@ -70,6 +70,7 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 
 	s.AddTool(mcp.NewTool("set_messages",
 		mcp.WithTitleAnnotation("Set Message Class Messages"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),

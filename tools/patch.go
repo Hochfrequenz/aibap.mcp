@@ -76,6 +76,7 @@ func registerPatchTools(s toolAdder, client interface {
 }, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("patch_source",
 		mcp.WithTitleAnnotation("Patch Source Code"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Apply patch operations to ABAP source code. Supports line-based (insert/replace/delete) and text-based (search_replace) operations. Automatically acquires a lock if none exists."),

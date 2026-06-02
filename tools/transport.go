@@ -32,6 +32,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 
 	s.AddTool(mcp.NewTool("add_to_transport",
 		mcp.WithTitleAnnotation("Add to Transport"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
@@ -50,6 +51,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 
 	s.AddTool(mcp.NewTool("create_transport_task",
 		mcp.WithTitleAnnotation("Create Transport Task"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
@@ -80,6 +82,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 
 	s.AddTool(mcp.NewTool("create_transport",
 		mcp.WithTitleAnnotation("Create Transport Request"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
@@ -133,6 +136,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 
 	s.AddTool(mcp.NewTool("release_transport",
 		mcp.WithTitleAnnotation("Release Transport"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
@@ -195,6 +199,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 
 	s.AddTool(mcp.NewTool("delete_transport",
 		mcp.WithTitleAnnotation("Delete Transport"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
@@ -220,6 +225,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 
 	s.AddTool(mcp.NewTool("remove_from_transport",
 		mcp.WithTitleAnnotation("Remove from Transport"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),

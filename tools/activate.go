@@ -27,6 +27,7 @@ func registerActivateTools(s toolAdder, client interface {
 
 	s.AddTool(mcp.NewTool("activate_objects",
 		mcp.WithTitleAnnotation("Activate Objects"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
@@ -69,6 +70,7 @@ func registerActivateTools(s toolAdder, client interface {
 	// Backward-compatible alias: activate a single object by URI string.
 	s.AddTool(mcp.NewTool("activate_object",
 		mcp.WithTitleAnnotation("Activate Object"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),

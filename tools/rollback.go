@@ -31,6 +31,7 @@ var sourceTypeToEndpoint = map[string]string{
 func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("rollback_transport",
 		mcp.WithTitleAnnotation("Rollback Transport"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),

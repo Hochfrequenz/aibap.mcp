@@ -16,6 +16,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 }, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("set_source_from_file",
 		mcp.WithTitleAnnotation("Set Source from File"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),

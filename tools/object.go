@@ -20,6 +20,7 @@ var ddicTypes = map[string]bool{
 func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMagicClient, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("create_object",
 		mcp.WithTitleAnnotation("Create ABAP Object"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Create a new ABAP object. Supported types: PROG (program), CLAS (class), INTF (interface), FUGR (function group), MSAG (message class), DDLS (CDS view, S4 only), TABL (table, S4 only), DTEL (data element, S4 only), DOMA (domain, S4 only). DDLS/TABL are created empty — use set_source_from_file with CDS DDL syntax to define them, then activate."),
@@ -73,6 +74,7 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 
 	s.AddTool(mcp.NewTool("delete_object",
 		mcp.WithTitleAnnotation("Delete ABAP Object"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
