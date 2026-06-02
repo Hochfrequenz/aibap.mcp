@@ -22,7 +22,7 @@ body:
   - type: input
     id: server_version
     attributes:
-      label: mcp-server-abap version
+      label: aibap.mcp version
       placeholder: "e.g. v1.2.3 or commit SHA"
     validations:
       required: true

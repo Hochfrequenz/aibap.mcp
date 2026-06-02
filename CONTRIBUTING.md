@@ -1,4 +1,4 @@
-# Contributing to mcp-server-abap
+# Contributing to aibap.mcp
 
 ## Before you start
 
