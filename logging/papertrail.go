@@ -29,7 +29,7 @@ func newPapertrailHandler(host, port string, level slog.Level) slog.Handler {
 	buf := &strings.Builder{}
 	program, _ := os.Hostname()
 	if program == "" {
-		program = "mcp-server-abap"
+		program = "aibap.mcp"
 	}
 	return &papertrailHandler{
 		host:    host,
@@ -77,7 +77,7 @@ func (h *papertrailHandler) Handle(ctx context.Context, r slog.Record) error {
 	// Syslog format with RFC 3339 timestamp (accepted by Papertrail).
 	priority := syslogPriority(r.Level)
 	ts := r.Time.UTC().Format(time.RFC3339)
-	line := fmt.Sprintf("<%d>%s %s %s: %s\n", priority, ts, h.program, "mcp-server-abap", msg)
+	line := fmt.Sprintf("<%d>%s %s %s: %s\n", priority, ts, h.program, "aibap.mcp", msg)
 
 	// Send, reconnecting once on failure.
 	if err := h.send([]byte(line)); err != nil {

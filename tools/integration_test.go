@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"github.com/Hochfrequenz/adtler/adt"
-	"github.com/Hochfrequenz/mcp-server-abap/config"
-	"github.com/Hochfrequenz/mcp-server-abap/tools"
+	"github.com/Hochfrequenz/aibap.mcp/config"
+	"github.com/Hochfrequenz/aibap.mcp/tools"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -93,7 +93,7 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
-	clients, err := adt.NewClientsFromConfig(&cfg.Config, "mcp-server-abap")
+	clients, err := adt.NewClientsFromConfig(&cfg.Config, "aibap.mcp")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "integration tests: NewClientsFromConfig failed: %v — all systems will be SKIPPED\n", err)
 		printReachabilitySummary(integrationSystems)
@@ -159,7 +159,7 @@ func TestMain(m *testing.M) {
 	}
 	registry = reg
 
-	sharedServer = server.NewMCPServer("mcp-server-abap-integration", "0.0.0")
+	sharedServer = server.NewMCPServer("aibap.mcp-integration", "0.0.0")
 	tools.RegisterAllWithLockMap(
 		sharedServer,
 		registry,

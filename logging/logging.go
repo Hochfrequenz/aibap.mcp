@@ -83,9 +83,9 @@ func Setup(version string) {
 
 // RemoteLoggingBakedIn reports whether this binary was built with a
 // Papertrail destination compiled in via -ldflags -X. True only for the
-// `mcp-server-abap-with-remote-logging-*` release archives built by
+// `aibap.mcp-with-remote-logging-*` release archives built by
 // GoReleaser; false for source builds, the Docker image, and the default
-// `mcp-server-abap-*` release archives. Callers should display this in
+// `aibap.mcp-*` release archives. Callers should display this in
 // `--version` output and log lines so bug reports unambiguously identify
 // which variant a user is running.
 //

@@ -22,7 +22,7 @@ jobs:
           # The adt/auth packages live in github.com/Hochfrequenz/adtler now and
           # have their own coverage thresholds in that repo's CI.
           declare -A thresholds=(
-            ["github.com/Hochfrequenz/mcp-server-abap/config"]=75
+            ["github.com/Hochfrequenz/aibap.mcp/config"]=75
           )
 
           failed=0
