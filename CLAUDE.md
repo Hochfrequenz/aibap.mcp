@@ -25,7 +25,7 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 ## Workflow
 
 - One PR per issue. Don't bundle unrelated changes.
-- Always use feature branches (`feat/`, `fix/`, `test/`, `refactor/`), never commit directly to `main`.
+- Always use feature branches (`feat/`, `fix/`, `test/`, `refactor/`, `docs/`, `chore/`), never commit directly to `main`.
 - Only pick up **unassigned** issues. Assign yourself before starting work.
 - Run `gofmt`, `go vet ./...`, and `go test ./...` before committing.
 

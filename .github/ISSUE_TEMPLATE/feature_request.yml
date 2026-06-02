@@ -26,7 +26,6 @@ body:
       options:
         - ECC (R/3)
         - S/4HANA on-premise
-        - S/4HANA Cloud
         - All / unknown
 
   - type: textarea
