@@ -1,0 +1,41 @@
+name: Feature request
+description: Propose a new MCP tool or an enhancement to an existing one
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What SAP ADT operation or workflow is currently missing or painful?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What tool name, parameters, and return shape do you have in mind?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: system_type
+    attributes:
+      label: Target SAP system type
+      multiple: true
+      options:
+        - ECC (R/3)
+        - S/4HANA on-premise
+        - S/4HANA Cloud
+        - All / unknown
+
+  - type: textarea
+    id: adt_endpoint
+    attributes:
+      label: Known ADT endpoint (if any)
+      description: If you know the ADT REST endpoint this would call, paste it here.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
