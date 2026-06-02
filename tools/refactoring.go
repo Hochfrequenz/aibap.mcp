@@ -11,6 +11,7 @@ import (
 func registerRefactoringTools(s toolAdder, client adt.RefactoringClient, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("rename",
 		mcp.WithTitleAnnotation("Rename Symbol"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(

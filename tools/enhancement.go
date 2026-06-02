@@ -73,6 +73,7 @@ func registerEnhancementTools(s toolAdder, client adt.EnhancementClient) {
 
 	s.AddTool(mcp.NewTool("set_badi_implementation",
 		mcp.WithTitleAnnotation("Update BAdI Implementation"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),

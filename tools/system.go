@@ -9,6 +9,7 @@ import (
 func registerSystemTools(s toolAdder, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("select_system",
 		mcp.WithTitleAnnotation("Select SAP System"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),

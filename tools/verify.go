@@ -18,6 +18,7 @@ type VerifyResult struct {
 func registerVerifyTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("verify_source",
 		mcp.WithTitleAnnotation("Verify Source"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),

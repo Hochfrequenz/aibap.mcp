@@ -11,6 +11,7 @@ import (
 func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("lock_object",
 		mcp.WithTitleAnnotation("Lock Object"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
@@ -32,6 +33,7 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 
 	s.AddTool(mcp.NewTool("unlock_object",
 		mcp.WithTitleAnnotation("Unlock Object"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),

@@ -60,6 +60,7 @@ func registerTextElementTools(s toolAdder, client interface {
 
 	s.AddTool(mcp.NewTool("set_text_elements",
 		mcp.WithTitleAnnotation("Set Text Elements"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),

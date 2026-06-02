@@ -47,6 +47,7 @@ var customizingEntryItemsSchema = map[string]any{
 func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("update_customizing",
 		mcp.WithTitleAnnotation("Update Customizing"),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
