@@ -3,6 +3,7 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -955,6 +956,26 @@ func TestCreateTestIncludeToolExplicitLockHandle(t *testing.T) {
 	}
 	if gotLH != "explicit-handle" {
 		t.Errorf("expected explicit handle to take precedence; got %q", gotLH)
+	}
+}
+
+func TestCreateTestIncludeToolPropagatesAdtlerError(t *testing.T) {
+	const classURI = "/sap/bc/adt/oo/classes/ZCL_TEST"
+	mock := &mockClient{
+		createTestIncludeFn: func(_ context.Context, _, _, _ string) error {
+			return fmt.Errorf("SAP ADT error 500: ExceptionResourceSaveFailure")
+		},
+	}
+	lockMap := adt.NewLockMap()
+	lockMap.Set(adt.LockKey("dev", classURI), testAutoHandle, "")
+	s := newTestServerWithLockMap(mock, lockMap)
+
+	result := callTool(t, s, "create_test_include", map[string]interface{}{
+		"object_uri": classURI,
+	})
+
+	if !result.IsError {
+		t.Fatal("expected IsError=true when adtler returns an error")
 	}
 }
 
