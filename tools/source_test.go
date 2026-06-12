@@ -19,6 +19,7 @@ const (
 	testETagNew       = `"etag-new"`
 	testETagAfter     = `"etag-after"`
 	testLockHandle123 = "lock-handle-123"
+	testAutoHandle    = "auto-handle"
 	testObjectURIOK   = "/sap/bc/adt/programs/programs/ZOK"
 	testObjectURIFail = "/sap/bc/adt/programs/programs/ZFAIL"
 	testTransportNum  = "DEVK900123"
@@ -896,7 +897,7 @@ func TestCreateTestIncludeTool(t *testing.T) {
 		},
 	}
 	lockMap := adt.NewLockMap()
-	lockMap.Set(adt.LockKey("dev", classURI), "auto-handle", "")
+	lockMap.Set(adt.LockKey("dev", classURI), testAutoHandle, "")
 	s := newTestServerWithLockMap(mock, lockMap)
 
 	result := callTool(t, s, "create_test_include", map[string]interface{}{
@@ -923,8 +924,8 @@ func TestCreateTestIncludeTool(t *testing.T) {
 	if gotURI != classURI {
 		t.Errorf("adtler uri: got %q, want %q", gotURI, classURI)
 	}
-	if gotLH != "auto-handle" {
-		t.Errorf("lock handle from map: got %q, want %q", gotLH, "auto-handle")
+	if gotLH != testAutoHandle {
+		t.Errorf("lock handle from map: got %q, want %q", gotLH, testAutoHandle)
 	}
 	if gotTransport != testTransportNum {
 		t.Errorf("transport: got %q, want %q", gotTransport, testTransportNum)
