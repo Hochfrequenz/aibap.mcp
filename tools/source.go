@@ -169,4 +169,35 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 			Include: include,
 		})
 	})
+
+	s.AddTool(mcp.NewTool("create_test_include",
+		mcp.WithTitleAnnotation("Create Test-Classes Include"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription(
+			"Bootstrap the test-classes include (CCAU) for a class that has never had one. "+
+				"set_include_source fails with 500 when the include has no inactive version; "+
+				"call this tool first to create it, then write source with set_include_source. "+
+				"The class must be locked first (use lock_object).",
+		),
+		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description("Class URI, e.g. /sap/bc/adt/oo/classes/ZCL_MY_CLASS")),
+		mcp.WithString("lock_handle", mcp.Description("Lock handle from lock_object (optional, looked up from lock map)")),
+		mcp.WithString("transport", mcp.Description("Transport request number (required for non-local packages)")),
+		mcp.WithOutputSchema[CreateTestIncludeResult](),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		uri := req.GetString(paramObjectURI, "")
+		lh := req.GetString("lock_handle", "")
+		if lh == "" {
+			if state, ok := lockMap.Get(adt.LockKey(selector.ActiveName(), uri)); ok {
+				lh = state.LockHandle
+			}
+		}
+		transport := req.GetString("transport", "")
+		if err := client.CreateTestInclude(ctx, uri, lh, transport); err != nil {
+			return errorResult(err), nil
+		}
+		return mcp.NewToolResultJSON(CreateTestIncludeResult{ClassURI: uri, Created: true})
+	})
 }
