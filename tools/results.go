@@ -34,6 +34,11 @@ type SetIncludeSourceResult struct {
 	Include string `json:"include"`
 }
 
+type CreateTestIncludeResult struct {
+	ClassURI string `json:"class_uri"`
+	Created  bool   `json:"created"`
+}
+
 type SourceMultiResult struct {
 	Total      int                `json:"total"`
 	Succeeded  int                `json:"succeeded"`
