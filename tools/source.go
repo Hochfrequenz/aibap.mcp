@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -190,9 +191,11 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		uri := req.GetString(paramObjectURI, "")
 		lh := req.GetString("lock_handle", "")
 		if lh == "" {
-			if state, ok := lockMap.Get(adt.LockKey(selector.ActiveName(), uri)); ok {
-				lh = state.LockHandle
+			state, tracked := lockMap.Get(adt.LockKey(selector.ActiveName(), uri))
+			if !tracked || state.LockHandle == "" {
+				return errorResult(fmt.Errorf("no lock tracked for %s in this session — call lock_object first", uri)), nil
 			}
+			lh = state.LockHandle
 		}
 		transport := req.GetString("transport", "")
 		if err := client.CreateTestInclude(ctx, uri, lh, transport); err != nil {

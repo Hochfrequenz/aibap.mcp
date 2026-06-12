@@ -957,3 +957,21 @@ func TestCreateTestIncludeToolExplicitLockHandle(t *testing.T) {
 		t.Errorf("expected explicit handle to take precedence; got %q", gotLH)
 	}
 }
+
+func TestCreateTestIncludeToolRejectsWhenNoLockTracked(t *testing.T) {
+	const classURI = "/sap/bc/adt/oo/classes/ZCL_TEST"
+	s := newTestServerWithLockMap(&mockClient{}, adt.NewLockMap())
+
+	result := callTool(t, s, "create_test_include", map[string]interface{}{
+		"object_uri": classURI,
+		// no lock_handle, nothing in lock map
+	})
+
+	if !result.IsError {
+		t.Fatal("expected IsError=true when no lock is tracked and no handle provided")
+	}
+	text := firstText(result)
+	if !strings.Contains(text, "lock_object") {
+		t.Errorf("error message should hint at lock_object; got: %s", text)
+	}
+}
