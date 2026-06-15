@@ -39,7 +39,7 @@ func buildDeleteMessage(ctx context.Context, uri string, sc adt.SearchClient, qc
 	}
 
 	sql := fmt.Sprintf(
-		"SELECT AUTHOR CREATED_ON FROM TADIR WHERE PGMID = 'R3TR' AND OBJECT = '%s' AND OBJ_NAME = '%s'",
+		"SELECT AUTHOR, CREATED_ON FROM TADIR WHERE PGMID = 'R3TR' AND OBJECT = '%s' AND OBJ_NAME = '%s'",
 		adt.EscapeValue(objType), adt.EscapeValue(info.Name),
 	)
 	if qr, err := qc.RunQuery(ctx, sql, 1); err == nil && qr != nil && len(qr.Rows) == 1 {
