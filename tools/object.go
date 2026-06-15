@@ -39,17 +39,26 @@ func buildDeleteMessage(ctx context.Context, uri string, sc adt.SearchClient, qc
 	}
 
 	sql := fmt.Sprintf(
-		"SELECT SINGLE AUTHOR CREATED_ON FROM TADIR WHERE PGMID = 'R3TR' AND OBJECT = '%s' AND OBJ_NAME = '%s'",
-		objType, info.Name,
+		"SELECT AUTHOR CREATED_ON FROM TADIR WHERE PGMID = 'R3TR' AND OBJECT = '%s' AND OBJ_NAME = '%s'",
+		adt.EscapeValue(objType), adt.EscapeValue(info.Name),
 	)
 	if qr, err := qc.RunQuery(ctx, sql, 1); err == nil && qr != nil && len(qr.Rows) == 1 {
 		row := qr.Rows[0]
-		var meta []string
-		if len(row) > 0 && row[0] != "" {
-			meta = append(meta, "Author: "+row[0])
+		authorIdx, createdIdx := -1, -1
+		for i, col := range qr.Columns {
+			switch col.Name {
+			case "AUTHOR":
+				authorIdx = i
+			case "CREATED_ON":
+				createdIdx = i
+			}
 		}
-		if len(row) > 1 && len(row[1]) == 8 {
-			d := row[1]
+		var meta []string
+		if authorIdx >= 0 && authorIdx < len(row) && row[authorIdx] != "" {
+			meta = append(meta, "Author: "+row[authorIdx])
+		}
+		if createdIdx >= 0 && createdIdx < len(row) && len(row[createdIdx]) == 8 {
+			d := row[createdIdx]
 			meta = append(meta, "Created: "+d[:4]+"-"+d[4:6]+"-"+d[6:])
 		}
 		if len(meta) > 0 {
