@@ -17,7 +17,50 @@ var ddicTypes = map[string]bool{
 	"DOMA": true,
 }
 
-func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMagicClient, elicitor Elicitor) {
+// buildDeleteMessage forms the elicitation prompt for delete_object, enriched
+// with TADIR metadata (type, package, author, creation date) when available.
+// Falls back to the bare URI when GetObjectInfo returns an error or empty name.
+func buildDeleteMessage(ctx context.Context, uri string, sc adt.SearchClient, qc adt.QueryClient) string {
+	const irreversible = "\nThis is irreversible."
+	if sc == nil || qc == nil {
+		return "About to delete " + uri + "." + irreversible
+	}
+
+	info, err := sc.GetObjectInfo(ctx, uri)
+	if err != nil || info == nil || info.Name == "" {
+		return "About to delete " + uri + "." + irreversible
+	}
+
+	// ADT type includes suffix (e.g. "PROG/P") — strip it for display and TADIR lookup.
+	objType := strings.SplitN(info.Type, "/", 2)[0]
+	line := fmt.Sprintf("About to delete %s %s", objType, info.Name)
+	if info.PackageName != "" {
+		line += " (Package: " + info.PackageName + ")"
+	}
+
+	sql := fmt.Sprintf(
+		"SELECT SINGLE AUTHOR CREATED_ON FROM TADIR WHERE PGMID = 'R3TR' AND OBJECT = '%s' AND OBJ_NAME = '%s'",
+		objType, info.Name,
+	)
+	if qr, err := qc.RunQuery(ctx, sql, 1); err == nil && qr != nil && len(qr.Rows) == 1 {
+		row := qr.Rows[0]
+		var meta []string
+		if len(row) > 0 && row[0] != "" {
+			meta = append(meta, "Author: "+row[0])
+		}
+		if len(row) > 1 && len(row[1]) == 8 {
+			d := row[1]
+			meta = append(meta, "Created: "+d[:4]+"-"+d[4:6]+"-"+d[6:])
+		}
+		if len(meta) > 0 {
+			line += " | " + strings.Join(meta, " | ")
+		}
+	}
+
+	return line + "." + irreversible
+}
+
+func registerObjectTools(s toolAdder, client adt.ObjectClient, sc adt.SearchClient, qc adt.QueryClient, fallback BlackMagicClient, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("create_object",
 		mcp.WithTitleAnnotation("Create ABAP Object"),
 		mcp.WithReadOnlyHintAnnotation(false),
@@ -95,8 +138,7 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		transport := req.GetString("transport", "")
-		proceed, reason := ConfirmDestructive(ctx, elicitor,
-			fmt.Sprintf("Confirm deletion of %s. This is irreversible.", uri))
+		proceed, reason := ConfirmDestructive(ctx, elicitor, buildDeleteMessage(ctx, uri, sc, qc))
 		if !proceed {
 			return errorResult(&adt.ADTError{StatusCode: 400, Message: "delete_object aborted: " + reason}), nil
 		}
