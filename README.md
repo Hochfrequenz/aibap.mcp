@@ -40,12 +40,12 @@ If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP W
 
 Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
 
-## Available tools (68)
+## Available tools (69)
 
 Tools are organized into groups. By default, all groups except `debug` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
 <details>
-<summary><strong>Source code</strong> — <code>source</code> (7 tools)</summary>
+<summary><strong>Source code</strong> — <code>source</code> (8 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -56,6 +56,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 | `set_include_source` | Write class include source (requires lock on the class) |
 | `patch_source` | Apply line-based or search/replace edits to source code (auto-locks) |
 | `pretty_print` | Format ABAP source code using SAP Pretty Printer |
+| `create_test_include` | Bootstrap the test-classes include (CCAU) for a class that has never had one |
 
 </details>
 

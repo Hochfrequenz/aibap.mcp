@@ -68,7 +68,7 @@ func TestPatchSourceToolAutoLock(t *testing.T) {
 		},
 		lockObjectFn: func(ctx context.Context, u string) (string, error) {
 			autoLockCalled = true
-			return "auto-handle", nil
+			return testAutoHandle, nil
 		},
 		setSourceFn: func(ctx context.Context, u, source, lockHandle, transport, etag string) (string, error) {
 			return `"e2"`, nil
@@ -99,8 +99,8 @@ func TestPatchSourceToolAutoLock(t *testing.T) {
 	if !ok {
 		t.Fatal("expected lock map entry after auto-lock")
 	}
-	if state.LockHandle != "auto-handle" {
-		t.Errorf("lock handle: got %q, want %q", state.LockHandle, "auto-handle")
+	if state.LockHandle != testAutoHandle {
+		t.Errorf("lock handle: got %q, want %q", state.LockHandle, testAutoHandle)
 	}
 
 	// Response should indicate locked=true.
