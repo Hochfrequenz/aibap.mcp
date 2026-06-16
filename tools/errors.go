@@ -18,7 +18,7 @@ import (
 // adt.ExceptionType* constants; the rest are declared here per adtler's
 // "compare against bare strings for IDs not listed" guidance.
 const (
-	excTypeAlreadyExists       = "ExceptionResourceAlreadyExists" // 400 on S4U, 405 on HFQ
+	excTypeAlreadyExists       = "ExceptionResourceAlreadyExists" // 400 on S/4, 405 on R/3
 	excTypeLockConflict        = "ExceptionResourceLockConflict"  // 409, S4U only
 	excTypeInvalidEtag         = "ExceptionResourceInvalidEtag"   // 412
 	excTypeNotAcceptable       = "ExceptionResourceNotAcceptable" // 406
