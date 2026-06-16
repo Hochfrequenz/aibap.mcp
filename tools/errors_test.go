@@ -77,6 +77,15 @@ func TestMatchHint_ByExceptionType(t *testing.T) {
 		// Genuine method-not-allowed (S4U only) — distinct Type from
 		// "already exists", so it must NOT produce the already-exists hint.
 		{"method not allowed", &adt.ADTError{StatusCode: 405, Type: "ExceptionNotAllowed", Message: "not allowed"}, "not allowed"},
+
+		// Creation failure arrives as HTTP 500 (verified live on S4U+HFQ:
+		// the PROGRAM-create endpoint reports an existing name this way, not
+		// as ExceptionResourceAlreadyExists — issue #406). The Tier-1 Type
+		// rule must beat the generic Tier-2 {statusCode: 500} catch-all so the
+		// user gets the actionable "already exists / object_exists" hint
+		// instead of the misleading "check ST22 short dumps" guidance.
+		{"creation failure (S4U, English)", &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceCreationFailure", Message: "A program or include already exists with the name ZFOO"}, "already exists"},
+		{"creation failure (HFQ, German)", &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceCreationFailure", Message: "Es existiert bereits ein Programm oder Include mit dem Namen ZFOO"}, "object_exists"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

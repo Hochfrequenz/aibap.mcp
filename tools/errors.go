@@ -25,6 +25,13 @@ const (
 	excTypeUnsupportedMedia    = "ExceptionUnsupportedMediaType"  // 415
 	excTypeUnprocessableEntity = "ExceptionUnprocessableEntity"   // 422
 	excTypeNotAllowed          = "ExceptionNotAllowed"            // 405, S4U only (absent on HFQ)
+	// excTypeCreationFailure is the Type the object-creation endpoints raise
+	// when a create cannot complete. Notably, the PROGRAM-create endpoint
+	// reports an existing-name collision as this (HTTP 500) rather than as
+	// ExceptionResourceAlreadyExists — verified live on both S4U ("A program
+	// or include already exists with the name …") and HFQ ("Es existiert
+	// bereits ein Programm oder Include …"). See issue #406 / PR #407.
+	excTypeCreationFailure = "ExceptionResourceCreationFailure"
 )
 
 // etagMismatchHint is shared by the ExceptionResourceInvalidEtag and
@@ -76,6 +83,14 @@ var hintRules = []hintRule{
 	{excType: excTypeUnsupportedMedia, hint: "Unsupported media type (415) — the request Content-Type is not accepted. Check the Content-Type header."},
 	{excType: excTypeUnprocessableEntity, hint: "Request rejected due to semantic errors (422) — check that all required fields and parameter values are valid."},
 	{excType: excTypeNotAllowed, hint: "Method not allowed (405) — this operation is not supported for this resource."},
+	// Creation failures arrive as HTTP 500, so this Type rule MUST precede
+	// the generic Tier-2 {statusCode: 500} fallback below, or the catch-all
+	// would shadow it (matchHint is first-match-wins). The most common cause
+	// is a name collision — the PROGRAM endpoint in particular reports
+	// "already exists" this way instead of as ExceptionResourceAlreadyExists
+	// (issue #406 / PR #407). Naming that cause first is far more actionable
+	// than the generic 500 "check ST22" guidance, which implies a crash.
+	{excType: excTypeCreationFailure, hint: "Object creation failed. The most common cause is that an object with that name already exists — check with `object_exists` or `search_objects`, or choose a different name. Otherwise verify the name, package, and that this object type is supported on this system."},
 
 	// Tier 2 — by status code (Type-free fallbacks for legacy
 	// <ExceptionText> bodies, HTML pages, and plain text).
