@@ -41,6 +41,10 @@ const lockConflictHint = "Save conflict — another process holds a conflicting 
 // (a 400 on S4U, a 405 on HFQ) and the English plain-text fallback.
 const alreadyExistsHint = "Object already exists. Use `search_objects` to find it, or choose a different name."
 
+// lockedHint is shared by the ExceptionResourceLocked Type and the 423
+// status-code fallback.
+const lockedHint = "Object is locked. Use `unlock_object` if it's your own lock, or `get_transport_requests` to find the locking transport."
+
 type hintRule struct {
 	excType     string // "" = match any exception Type; exact, case-insensitive
 	statusCode  int    // 0 = match any status code
@@ -63,6 +67,7 @@ type hintRule struct {
 //	                       has no dedicated Type. See issue #406.
 var hintRules = []hintRule{
 	// Tier 1 — by exception Type.
+	{excType: adt.ExceptionTypeResourceLocked, hint: lockedHint},
 	{excType: excTypeLockConflict, hint: lockConflictHint},
 	{excType: excTypeAlreadyExists, hint: alreadyExistsHint},
 	{excType: excTypeInvalidEtag, hint: etagMismatchHint},
@@ -72,21 +77,30 @@ var hintRules = []hintRule{
 	{excType: excTypeUnprocessableEntity, hint: "Request rejected due to semantic errors (422) — check that all required fields and parameter values are valid."},
 	{excType: excTypeNotAllowed, hint: "Method not allowed (405) — this operation is not supported for this resource."},
 
-	// Tier 2 — by status code (Type-free fallbacks).
-	{statusCode: 423, hint: "Object is locked. Use `unlock_object` if it's your own lock, or `get_transport_requests` to find the locking transport."},
+	// Tier 2 — by status code (Type-free fallbacks for legacy
+	// <ExceptionText> bodies, HTML pages, and plain text).
+	{statusCode: 423, hint: lockedHint},
 	{statusCode: 404, hint: "Object not found. Check the URI spelling or use `search_objects` to find it."},
 	{statusCode: 403, hint: "Authorization error. Check that the ADT user has the required S_DEVELOP authorizations."},
 	{statusCode: 412, hint: etagMismatchHint},
 	{statusCode: 409, hint: lockConflictHint},
+	// 405 is ambiguous across systems (method-not-allowed on S4U,
+	// "already exists" on HFQ — see issue #406), so the Type-free
+	// fallback names both rather than guessing.
+	{statusCode: 405, hint: "Method not allowed (405) — either the operation is not supported for this resource, or (on ECC) the object already exists. Check with `object_exists` / `search_objects`."},
 	{statusCode: 400, textPattern: "transport", hint: "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."},
 	{statusCode: 400, hint: "Bad request — the server rejected the request. Check the syntax, required parameters, or the CSRF token."},
 	{statusCode: 500, hint: "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."},
 
-	// Tier 3 — by localised text (language-fragile, last resort). These
-	// only reliably fire for our own English-language plain errors;
-	// localised SAP messages are handled by the Tier-1 Type rules above.
+	// Tier 3 — by localised text (language-fragile, last resort). Only
+	// reliably fires for our own English-language plain errors and for
+	// English SAP messages when Type is empty; localised SAP messages are
+	// handled by the Tier-1 Type rules above. The former "inactive" rule
+	// was removed: verified on both S4U and HFQ that activation failures
+	// return a structured ActivationResult (Success=false) with no Go
+	// error, so they never reach errorResult — the rule was dead code, and
+	// "inactive" would not match HFQ's German message anyway (issue #406).
 	{textPattern: "already exists", hint: alreadyExistsHint},
-	{textPattern: "inactive", hint: "Activation failed — dependent objects may be inactive. Use `activate_objects` with all dependencies."},
 }
 
 // errorResult converts an error to an MCP error result with the SAP error

@@ -51,6 +51,9 @@ func TestMatchHint_ByExceptionType(t *testing.T) {
 		err      error
 		wantHint string
 	}{
+		// 423 matched by Type (adtler-exported constant), not just status.
+		{"resource locked", &adt.ADTError{StatusCode: 423, Type: "ExceptionResourceLocked", Message: "Ressource ist gesperrt"}, "unlock_object"},
+
 		// 409 on S4U is a save/lock conflict, NOT "already exists".
 		{"lock conflict", &adt.ADTError{StatusCode: 409, Type: "ExceptionResourceLockConflict", Message: "Ressource konnte nicht gesichert werden"}, "Save conflict"},
 
@@ -97,8 +100,12 @@ func TestMatchHint_StatusCodeFallback(t *testing.T) {
 	}{
 		{"412 no type", &adt.ADTError{StatusCode: 412, Message: "precondition failed"}, "ETag mismatch"},
 		{"409 no type", &adt.ADTError{StatusCode: 409, Message: "conflict"}, "Save conflict"},
+		{"405 no type (ambiguous fallback)", &adt.ADTError{StatusCode: 405, Message: "method not allowed"}, "Method not allowed"},
 		{"400 transport beats catch-all", &adt.ADTError{StatusCode: 400, Message: "transport required"}, "create_transport"},
 		{"400 catch-all", &adt.ADTError{StatusCode: 400, Message: "malformed"}, "Bad request"},
+		// A Type adtler knows but hintRules does not list must fall
+		// through Tier 1 into the Tier-2 status rule.
+		{"unlisted type falls through to status", &adt.ADTError{StatusCode: 400, Type: "ExceptionResourceWrongData", Message: "bad data"}, "Bad request"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -117,7 +124,6 @@ func TestMatchHint_PlainError(t *testing.T) {
 		wantHint string
 	}{
 		{"already exists", fmt.Errorf("object ZTABLE already exists"), "already exists"},
-		{"inactive", fmt.Errorf("activation failed: object is inactive"), "activate_objects"},
 		{"random error", fmt.Errorf("something went wrong"), ""},
 	}
 	for _, tt := range tests {
