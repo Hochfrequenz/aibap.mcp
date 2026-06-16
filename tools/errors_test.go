@@ -124,6 +124,11 @@ func TestMatchHint_PlainError(t *testing.T) {
 		wantHint string
 	}{
 		{"already exists", fmt.Errorf("object ZTABLE already exists"), "already exists"},
+		// Real ReleaseTransport error text captured live from S4U (issue
+		// #406): releasing a request with an inactive object. It is a
+		// plain wrapped error, not an adt.ADTError, so only the Tier-3
+		// text rule can catch it.
+		{"inactive object in transport release", fmt.Errorf("ReleaseTransport S4UK900001 failed: Release of transport request/task S4UK900001 has failed. See Problems view: Object REPS ZFOO is inactive"), "activate_objects"},
 		{"random error", fmt.Errorf("something went wrong"), ""},
 	}
 	for _, tt := range tests {

@@ -93,14 +93,21 @@ var hintRules = []hintRule{
 	{statusCode: 500, hint: "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."},
 
 	// Tier 3 — by localised text (language-fragile, last resort). Only
-	// reliably fires for our own English-language plain errors and for
-	// English SAP messages when Type is empty; localised SAP messages are
-	// handled by the Tier-1 Type rules above. The former "inactive" rule
-	// was removed: verified on both S4U and HFQ that activation failures
-	// return a structured ActivationResult (Success=false) with no Go
-	// error, so they never reach errorResult — the rule was dead code, and
-	// "inactive" would not match HFQ's German message anyway (issue #406).
+	// reliably fires for English-language messages; localised SAP messages
+	// are otherwise handled by the Tier-1 Type rules above.
+	//   - "already exists": our own English plain errors, and English SAP
+	//     messages when Type is empty.
+	//   - "inactive": releasing a transport that contains an inactive
+	//     object. Verified on S4U (issue #406): ReleaseTransport returns a
+	//     plain Go error — not an adt.ADTError, so there is no Type or
+	//     status code to match on — whose text reads "… Object REPS <name>
+	//     is inactive". (Note: plain activation via activate_objects does
+	//     NOT reach errorResult; it returns a structured ActivationResult
+	//     with Success=false.) ADT release only works on S/4 (ECC needs
+	//     SE09) and our S4U answers in English; a German-logon S/4 would
+	//     say "inaktiv" and miss — accepted, which is why this is Tier 3.
 	{textPattern: "already exists", hint: alreadyExistsHint},
+	{textPattern: "inactive", hint: "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."},
 }
 
 // errorResult converts an error to an MCP error result with the SAP error
