@@ -20,8 +20,8 @@ func TestMatchHint_ADTError(t *testing.T) {
 		{"404 not found", &adt.ADTError{StatusCode: 404, Message: "Object not found"}, "search_objects"},
 		{"403 forbidden", &adt.ADTError{StatusCode: 403, Message: "Forbidden"}, "S_DEVELOP"},
 		{"400 transport", &adt.ADTError{StatusCode: 400, Message: "transport required for package ZDEV"}, "create_transport"},
-		{"400 other", &adt.ADTError{StatusCode: 400, Message: "invalid parameter"}, ""},
-		{"409 conflict", &adt.ADTError{StatusCode: 409, Message: "resource already exists"}, "already exists"},
+		{"400 catch-all (no type, no transport)", &adt.ADTError{StatusCode: 400, Message: "invalid parameter"}, "Bad request"},
+		{"409 lock conflict fallback (no type)", &adt.ADTError{StatusCode: 409, Message: "resource already exists"}, "Save conflict"},
 		{"500 server", &adt.ADTError{StatusCode: 500, Message: "internal error"}, "SM21"},
 		{"200 no hint", &adt.ADTError{StatusCode: 200, Message: "ok"}, ""},
 	}
@@ -41,6 +41,91 @@ func TestMatchHint_ADTError(t *testing.T) {
 	}
 }
 
+// TestMatchHint_ByExceptionType pins the Tier-1 matching on the
+// language- and system-independent adt.ADTError.Type identifier. All
+// Type IDs and their status codes were read from the live ABAP source
+// (GET_HTTP_STATUS) on both S/4 and R/3 — see issue #406.
+func TestMatchHint_ByExceptionType(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		wantHint string
+	}{
+		// 423 matched by Type (adtler-exported constant), not just status.
+		{"resource locked", &adt.ADTError{StatusCode: 423, Type: "ExceptionResourceLocked", Message: "Ressource ist gesperrt"}, "unlock_object"},
+
+		// 409 on S/4 is a save/lock conflict, NOT "already exists".
+		{"lock conflict", &adt.ADTError{StatusCode: 409, Type: "ExceptionResourceLockConflict", Message: "Ressource konnte nicht gesichert werden"}, "Save conflict"},
+
+		// "Already exists" returns 400 on S/4 and 405 on R/3 — the Type
+		// rule must produce the same hint regardless of status code, and
+		// regardless of the message language.
+		{"already exists S/4 (400, English)", &adt.ADTError{StatusCode: 400, Type: "ExceptionResourceAlreadyExists", Message: "Resource CLASS ZFOO already exists"}, "already exists"},
+		{"already exists R/3 (405, German)", &adt.ADTError{StatusCode: 405, Type: "ExceptionResourceAlreadyExists", Message: "Ressource CLASS ZFOO existiert bereits"}, "already exists"},
+
+		// ETag/precondition: two distinct classes, one hint.
+		{"invalid etag", &adt.ADTError{StatusCode: 412, Type: "ExceptionResourceInvalidEtag", Message: "eTag differs"}, "ETag mismatch"},
+		{"precondition failed", &adt.ADTError{StatusCode: 412, Type: "ExceptionPreconditionFailed", Message: "Vorbedingung fehlgeschlagen"}, "ETag mismatch"},
+
+		// Content negotiation.
+		{"not acceptable", &adt.ADTError{StatusCode: 406, Type: "ExceptionResourceNotAcceptable", Message: "not acceptable"}, "negotiation"},
+		{"unsupported media type", &adt.ADTError{StatusCode: 415, Type: "ExceptionUnsupportedMediaType", Message: "unsupported"}, "Content-Type"},
+
+		// Semantic.
+		{"unprocessable entity", &adt.ADTError{StatusCode: 422, Type: "ExceptionUnprocessableEntity", Message: "semantic errors"}, "semantic"},
+
+		// Genuine method-not-allowed (S/4 only) — distinct Type from
+		// "already exists", so it must NOT produce the already-exists hint.
+		{"method not allowed", &adt.ADTError{StatusCode: 405, Type: "ExceptionNotAllowed", Message: "not allowed"}, "not allowed"},
+
+		// Creation failure arrives as HTTP 500 (verified live on S/4+R/3:
+		// the PROGRAM-create endpoint reports an existing name this way, not
+		// as ExceptionResourceAlreadyExists — issue #406). The Tier-1 Type
+		// rule must beat the generic Tier-2 {statusCode: 500} catch-all so the
+		// user gets the actionable "already exists / object_exists" hint
+		// instead of the misleading "check ST22 short dumps" guidance.
+		{"creation failure (S/4, English)", &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceCreationFailure", Message: "A program or include already exists with the name ZFOO"}, "already exists"},
+		{"creation failure (R/3, German)", &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceCreationFailure", Message: "Es existiert bereits ein Programm oder Include mit dem Namen ZFOO"}, "object_exists"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hint := matchHint(tt.err)
+			if !strings.Contains(hint, tt.wantHint) {
+				t.Errorf("hint should contain %q, got: %s", tt.wantHint, hint)
+			}
+		})
+	}
+}
+
+// TestMatchHint_StatusCodeFallback pins Tier-2 matching: when Type is
+// empty (legacy <ExceptionText> envelopes, HTML error pages, plain
+// bodies) the matcher falls back to the status code, which is
+// language-independent.
+func TestMatchHint_StatusCodeFallback(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		wantHint string
+	}{
+		{"412 no type", &adt.ADTError{StatusCode: 412, Message: "precondition failed"}, "ETag mismatch"},
+		{"409 no type", &adt.ADTError{StatusCode: 409, Message: "conflict"}, "Save conflict"},
+		{"405 no type (ambiguous fallback)", &adt.ADTError{StatusCode: 405, Message: "method not allowed"}, "Method not allowed"},
+		{"400 transport beats catch-all", &adt.ADTError{StatusCode: 400, Message: "transport required"}, "create_transport"},
+		{"400 catch-all", &adt.ADTError{StatusCode: 400, Message: "malformed"}, "Bad request"},
+		// A Type adtler knows but hintRules does not list must fall
+		// through Tier 1 into the Tier-2 status rule.
+		{"unlisted type falls through to status", &adt.ADTError{StatusCode: 400, Type: "ExceptionResourceWrongData", Message: "bad data"}, "Bad request"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hint := matchHint(tt.err)
+			if !strings.Contains(hint, tt.wantHint) {
+				t.Errorf("hint should contain %q, got: %s", tt.wantHint, hint)
+			}
+		})
+	}
+}
+
 func TestMatchHint_PlainError(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -48,7 +133,11 @@ func TestMatchHint_PlainError(t *testing.T) {
 		wantHint string
 	}{
 		{"already exists", fmt.Errorf("object ZTABLE already exists"), "already exists"},
-		{"inactive", fmt.Errorf("activation failed: object is inactive"), "activate_objects"},
+		// Real ReleaseTransport error text captured live from S/4 (issue
+		// #406): releasing a request with an inactive object. It is a
+		// plain wrapped error, not an adt.ADTError, so only the Tier-3
+		// text rule can catch it.
+		{"inactive object in transport release", fmt.Errorf("ReleaseTransport S4UK900001 failed: Release of transport request/task S4UK900001 has failed. See Problems view: Object REPS ZFOO is inactive"), "activate_objects"},
 		{"random error", fmt.Errorf("something went wrong"), ""},
 	}
 	for _, tt := range tests {
