@@ -39,6 +39,49 @@ func parseTargetSystems(env string) []string {
 	return out
 }
 
+// canonicalizeSystems maps each requested system key to the matching key in
+// clients using a case-insensitive comparison, returning the exact client
+// key (the form select_system and the registry expect). Requested keys with
+// no case-insensitive match are returned unchanged so they still surface as
+// not-in-config rather than being silently dropped.
+func canonicalizeSystems(requested []string, clients map[string]adt.Client) []string {
+	out := make([]string, len(requested))
+	for i, r := range requested {
+		out[i] = r // default: unchanged (will skip as not-in-config)
+		for k := range clients {
+			if strings.EqualFold(k, r) {
+				out[i] = k
+				break
+			}
+		}
+	}
+	return out
+}
+
+func TestCanonicalizeSystems(t *testing.T) {
+	// Values are irrelevant — only the keys matter for case-folding.
+	clients := map[string]adt.Client{"HFQ": nil, "S4U": nil}
+	cases := []struct {
+		name      string
+		requested []string
+		want      []string
+	}{
+		{"lower-case default maps to config keys", []string{"hfq", "s4u"}, []string{"HFQ", "S4U"}},
+		{"mixed case folds", []string{"Hfq", "s4U"}, []string{"HFQ", "S4U"}},
+		{"exact match preserved", []string{"HFQ"}, []string{"HFQ"}},
+		{"unknown key left unchanged", []string{"nope"}, []string{"nope"}},
+		{"mix of known and unknown", []string{"hfq", "nope"}, []string{"HFQ", "nope"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := canonicalizeSystems(c.requested, clients)
+			if !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("canonicalizeSystems(%v) = %v; want %v", c.requested, got, c.want)
+			}
+		})
+	}
+}
+
 func TestParseTargetSystems(t *testing.T) {
 	cases := []struct {
 		name string
@@ -98,6 +141,22 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "integration tests: NewClientsFromConfig failed: %v — all systems will be SKIPPED\n", err)
 		printReachabilitySummary(integrationSystems)
 		os.Exit(m.Run())
+	}
+
+	// systems.json keys are case-sensitive (e.g. "HFQ"/"S4U"), but callers
+	// commonly request them in lower case — and parseTargetSystems' own
+	// default ("hfq", "s4u") is lower-case. Without canonicalisation every
+	// requested key would miss the exact-match inConfig() check below and the
+	// ENTIRE integration suite would silently SKIP (a false-green CI run).
+	// Canonicalise each requested key to the exact client key so inConfig(),
+	// select_system, the registry, and reachable[] all agree. Unmatched keys
+	// are left unchanged so they still surface as not-in-config. Re-seed
+	// reachable under the canonical keys (the initial seeding above used the
+	// raw requested keys, which is correct only for the earlier early-exits).
+	integrationSystems = canonicalizeSystems(integrationSystems, clients)
+	reachable = map[string]bool{}
+	for _, sys := range integrationSystems {
+		reachable[sys] = false
 	}
 
 	// Restrict to intersection of requested and configured systems.
