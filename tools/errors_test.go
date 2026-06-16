@@ -44,7 +44,7 @@ func TestMatchHint_ADTError(t *testing.T) {
 // TestMatchHint_ByExceptionType pins the Tier-1 matching on the
 // language- and system-independent adt.ADTError.Type identifier. All
 // Type IDs and their status codes were read from the live ABAP source
-// (GET_HTTP_STATUS) on both S4U and HFQ — see issue #406.
+// (GET_HTTP_STATUS) on both S/4 and R/3 — see issue #406.
 func TestMatchHint_ByExceptionType(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -54,14 +54,14 @@ func TestMatchHint_ByExceptionType(t *testing.T) {
 		// 423 matched by Type (adtler-exported constant), not just status.
 		{"resource locked", &adt.ADTError{StatusCode: 423, Type: "ExceptionResourceLocked", Message: "Ressource ist gesperrt"}, "unlock_object"},
 
-		// 409 on S4U is a save/lock conflict, NOT "already exists".
+		// 409 on S/4 is a save/lock conflict, NOT "already exists".
 		{"lock conflict", &adt.ADTError{StatusCode: 409, Type: "ExceptionResourceLockConflict", Message: "Ressource konnte nicht gesichert werden"}, "Save conflict"},
 
-		// "Already exists" returns 400 on S4U and 405 on HFQ — the Type
+		// "Already exists" returns 400 on S/4 and 405 on R/3 — the Type
 		// rule must produce the same hint regardless of status code, and
 		// regardless of the message language.
-		{"already exists S4U (400, English)", &adt.ADTError{StatusCode: 400, Type: "ExceptionResourceAlreadyExists", Message: "Resource CLASS ZFOO already exists"}, "already exists"},
-		{"already exists HFQ (405, German)", &adt.ADTError{StatusCode: 405, Type: "ExceptionResourceAlreadyExists", Message: "Ressource CLASS ZFOO existiert bereits"}, "already exists"},
+		{"already exists S/4 (400, English)", &adt.ADTError{StatusCode: 400, Type: "ExceptionResourceAlreadyExists", Message: "Resource CLASS ZFOO already exists"}, "already exists"},
+		{"already exists R/3 (405, German)", &adt.ADTError{StatusCode: 405, Type: "ExceptionResourceAlreadyExists", Message: "Ressource CLASS ZFOO existiert bereits"}, "already exists"},
 
 		// ETag/precondition: two distinct classes, one hint.
 		{"invalid etag", &adt.ADTError{StatusCode: 412, Type: "ExceptionResourceInvalidEtag", Message: "eTag differs"}, "ETag mismatch"},
@@ -74,18 +74,18 @@ func TestMatchHint_ByExceptionType(t *testing.T) {
 		// Semantic.
 		{"unprocessable entity", &adt.ADTError{StatusCode: 422, Type: "ExceptionUnprocessableEntity", Message: "semantic errors"}, "semantic"},
 
-		// Genuine method-not-allowed (S4U only) — distinct Type from
+		// Genuine method-not-allowed (S/4 only) — distinct Type from
 		// "already exists", so it must NOT produce the already-exists hint.
 		{"method not allowed", &adt.ADTError{StatusCode: 405, Type: "ExceptionNotAllowed", Message: "not allowed"}, "not allowed"},
 
-		// Creation failure arrives as HTTP 500 (verified live on S4U+HFQ:
+		// Creation failure arrives as HTTP 500 (verified live on S/4+R/3:
 		// the PROGRAM-create endpoint reports an existing name this way, not
 		// as ExceptionResourceAlreadyExists — issue #406). The Tier-1 Type
 		// rule must beat the generic Tier-2 {statusCode: 500} catch-all so the
 		// user gets the actionable "already exists / object_exists" hint
 		// instead of the misleading "check ST22 short dumps" guidance.
-		{"creation failure (S4U, English)", &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceCreationFailure", Message: "A program or include already exists with the name ZFOO"}, "already exists"},
-		{"creation failure (HFQ, German)", &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceCreationFailure", Message: "Es existiert bereits ein Programm oder Include mit dem Namen ZFOO"}, "object_exists"},
+		{"creation failure (S/4, English)", &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceCreationFailure", Message: "A program or include already exists with the name ZFOO"}, "already exists"},
+		{"creation failure (R/3, German)", &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceCreationFailure", Message: "Es existiert bereits ein Programm oder Include mit dem Namen ZFOO"}, "object_exists"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -133,7 +133,7 @@ func TestMatchHint_PlainError(t *testing.T) {
 		wantHint string
 	}{
 		{"already exists", fmt.Errorf("object ZTABLE already exists"), "already exists"},
-		// Real ReleaseTransport error text captured live from S4U (issue
+		// Real ReleaseTransport error text captured live from S/4 (issue
 		// #406): releasing a request with an inactive object. It is a
 		// plain wrapped error, not an adt.ADTError, so only the Tier-3
 		// text rule can catch it.

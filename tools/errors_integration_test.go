@@ -15,9 +15,9 @@ import (
 //
 // PR #407 corrects and completes the hint rules in tools/errors.go. Its
 // central claims are about LIVE behaviour — which exception Type and HTTP
-// status code each error condition produces on S4U (S/4) vs HFQ (ECC):
+// status code each error condition produces on S/4 (S/4) vs R/3 (ECC):
 //
-//	| HTTP      | Exception Type                  | S4U | HFQ    |
+//	| HTTP      | Exception Type                  | S/4 | R/3    |
 //	|-----------|---------------------------------|-----|--------|
 //	| 404       | ExceptionResourceNotFound       | ✅  | ✅     |
 //	| 400 / 405 | ExceptionResourceAlreadyExists  | 400 | 405    |
@@ -92,7 +92,7 @@ func TestIntegration_ErrorHint_NotFound404(t *testing.T) {
 			if status != 404 {
 				t.Errorf("expected HTTP 404, got %d; raw: %s", status, text)
 			}
-			// PR #407: both S4U and HFQ emit ExceptionResourceNotFound for 404.
+			// PR #407: both S/4 and R/3 emit ExceptionResourceNotFound for 404.
 			if excType != "ExceptionResourceNotFound" {
 				t.Errorf("expected Type ExceptionResourceNotFound (PR #407 claims both systems), got %q; raw: %s", excType, text)
 			}
@@ -109,7 +109,7 @@ func TestIntegration_ErrorHint_NotFound404(t *testing.T) {
 
 // TestIntegration_ErrorHint_AlreadyExists verifies the flagship claim of
 // PR #407: "already exists" returns DIFFERENT status codes on the two
-// systems (400 on S4U, 405 on HFQ) but the SAME exception Type
+// systems (400 on S/4, 405 on R/3) but the SAME exception Type
 // (ExceptionResourceAlreadyExists), so the Tier-1 Type rule produces one
 // consistent hint regardless of status code or logon language.
 //
@@ -123,7 +123,7 @@ func TestIntegration_ErrorHint_NotFound404(t *testing.T) {
 //
 // Target: CL_ABAP_TYPEDESCR, a standard ABAP RTTI class present on every
 // system, so the test needs no Z_ADT_MCP_TEST fixture and works identically
-// on S4U and HFQ. We never attempt to delete it (it is a standard SAP
+// on S/4 and R/3. We never attempt to delete it (it is a standard SAP
 // object) — the create simply must fail.
 func TestIntegration_ErrorHint_AlreadyExists(t *testing.T) {
 	const (
@@ -195,7 +195,7 @@ func TestIntegration_ErrorHint_AlreadyExists(t *testing.T) {
 // already exists does NOT raise ExceptionResourceAlreadyExists (as the
 // OO-class endpoint does). Instead the program-create endpoint raises a 500
 // ExceptionResourceCreationFailure whose message names the collision
-// (English on S4U, "existiert bereits" on HFQ).
+// (English on S/4, "existiert bereits" on R/3).
 //
 // Before the fix this fell through to the generic Tier-2 {statusCode: 500}
 // rule and the user got the misleading "SAP server error … check SM21/ST22"

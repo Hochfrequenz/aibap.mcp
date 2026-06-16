@@ -11,25 +11,25 @@ import (
 
 // SAP exception Type identifiers from <exc:exception><type id="…"/>. These
 // are the GET_TYPE / co_type constants of the CX_ADT_RES_* classes, read
-// directly from the live ABAP source on both S4U and HFQ (issue #406). They
+// directly from the live ABAP source on both S/4 and R/3 (issue #406). They
 // are stable across SAP releases and locales — far safer to match against
-// than the localised <message> text, which differs by logon language (S4U
-// answers in English, HFQ in German). adtler exposes a few as
+// than the localised <message> text, which differs by logon language (S/4
+// answers in English, R/3 in German). adtler exposes a few as
 // adt.ExceptionType* constants; the rest are declared here per adtler's
 // "compare against bare strings for IDs not listed" guidance.
 const (
 	excTypeAlreadyExists       = "ExceptionResourceAlreadyExists" // 400 on S/4, 405 on R/3
-	excTypeLockConflict        = "ExceptionResourceLockConflict"  // 409, S4U only
+	excTypeLockConflict        = "ExceptionResourceLockConflict"  // 409, S/4 only
 	excTypeInvalidEtag         = "ExceptionResourceInvalidEtag"   // 412
 	excTypeNotAcceptable       = "ExceptionResourceNotAcceptable" // 406
 	excTypeUnsupportedMedia    = "ExceptionUnsupportedMediaType"  // 415
 	excTypeUnprocessableEntity = "ExceptionUnprocessableEntity"   // 422
-	excTypeNotAllowed          = "ExceptionNotAllowed"            // 405, S4U only (absent on HFQ)
+	excTypeNotAllowed          = "ExceptionNotAllowed"            // 405, S/4 only (absent on R/3)
 	// excTypeCreationFailure is the Type the object-creation endpoints raise
 	// when a create cannot complete. Notably, the PROGRAM-create endpoint
 	// reports an existing-name collision as this (HTTP 500) rather than as
-	// ExceptionResourceAlreadyExists — verified live on both S4U ("A program
-	// or include already exists with the name …") and HFQ ("Es existiert
+	// ExceptionResourceAlreadyExists — verified live on both S/4 ("A program
+	// or include already exists with the name …") and R/3 ("Es existiert
 	// bereits ein Programm oder Include …"). See issue #406 / PR #407.
 	excTypeCreationFailure = "ExceptionResourceCreationFailure"
 )
@@ -41,11 +41,11 @@ const etagMismatchHint = "ETag mismatch — the object was modified since your l
 // lockConflictHint is shared by the ExceptionResourceLockConflict Type and
 // the 409 status-code fallback. 409 is a save/lock conflict, not an
 // "already exists" condition — the latter has its own Type (and is a 400 on
-// S4U / 405 on HFQ).
+// S/4 / 405 on R/3).
 const lockConflictHint = "Save conflict — another process holds a conflicting lock. Use `get_transport_requests` to check the locking transport, or `unlock_object` if the lock is stale."
 
 // alreadyExistsHint is shared by the ExceptionResourceAlreadyExists Type
-// (a 400 on S4U, a 405 on HFQ) and the English plain-text fallback.
+// (a 400 on S/4, a 405 on R/3) and the English plain-text fallback.
 const alreadyExistsHint = "Object already exists. Use `search_objects` to find it, or choose a different name."
 
 // lockedHint is shared by the ExceptionResourceLocked Type and the 423
@@ -99,8 +99,8 @@ var hintRules = []hintRule{
 	{statusCode: 403, hint: "Authorization error. Check that the ADT user has the required S_DEVELOP authorizations."},
 	{statusCode: 412, hint: etagMismatchHint},
 	{statusCode: 409, hint: lockConflictHint},
-	// 405 is ambiguous across systems (method-not-allowed on S4U,
-	// "already exists" on HFQ — see issue #406), so the Type-free
+	// 405 is ambiguous across systems (method-not-allowed on S/4,
+	// "already exists" on R/3 — see issue #406), so the Type-free
 	// fallback names both rather than guessing.
 	{statusCode: 405, hint: "Method not allowed (405) — either the operation is not supported for this resource, or (on ECC) the object already exists. Check with `object_exists` / `search_objects`."},
 	{statusCode: 400, textPattern: "transport", hint: "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."},
@@ -113,13 +113,13 @@ var hintRules = []hintRule{
 	//   - "already exists": our own English plain errors, and English SAP
 	//     messages when Type is empty.
 	//   - "inactive": releasing a transport that contains an inactive
-	//     object. Verified on S4U (issue #406): ReleaseTransport returns a
+	//     object. Verified on S/4 (issue #406): ReleaseTransport returns a
 	//     plain Go error — not an adt.ADTError, so there is no Type or
 	//     status code to match on — whose text reads "… Object REPS <name>
 	//     is inactive". (Note: plain activation via activate_objects does
 	//     NOT reach errorResult; it returns a structured ActivationResult
 	//     with Success=false.) ADT release only works on S/4 (ECC needs
-	//     SE09) and our S4U answers in English; a German-logon S/4 would
+	//     SE09) and our S/4 answers in English; a German-logon S/4 would
 	//     say "inaktiv" and miss — accepted, which is why this is Tier 3.
 	{textPattern: "already exists", hint: alreadyExistsHint},
 	{textPattern: "inactive", hint: "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."},
