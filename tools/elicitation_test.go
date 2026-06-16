@@ -11,13 +11,15 @@ import (
 )
 
 type stubElicitor struct {
-	result *mcp.ElicitationResult
-	err    error
-	called int
+	result      *mcp.ElicitationResult
+	err         error
+	called      int
+	lastMessage string
 }
 
-func (s *stubElicitor) RequestElicitation(_ context.Context, _ mcp.ElicitationRequest) (*mcp.ElicitationResult, error) {
+func (s *stubElicitor) RequestElicitation(_ context.Context, req mcp.ElicitationRequest) (*mcp.ElicitationResult, error) {
 	s.called++
+	s.lastMessage = req.Params.Message
 	return s.result, s.err
 }
 

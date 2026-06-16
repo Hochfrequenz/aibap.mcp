@@ -3,6 +3,7 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -19,6 +20,7 @@ const (
 	testETagNew       = `"etag-new"`
 	testETagAfter     = `"etag-after"`
 	testLockHandle123 = "lock-handle-123"
+	testAutoHandle    = "auto-handle"
 	testObjectURIOK   = "/sap/bc/adt/programs/programs/ZOK"
 	testObjectURIFail = "/sap/bc/adt/programs/programs/ZFAIL"
 	testTransportNum  = "DEVK900123"
@@ -52,6 +54,7 @@ type mockClient struct {
 	getTransportInfoFn    func(ctx context.Context, transport string) (*adt.TransportRequest, error)
 	runQueryFn            func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
 	setTextElementsFn     func(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error
+	createTestIncludeFn   func(ctx context.Context, uri, lockHandle, transport string) error
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -75,7 +78,10 @@ func (m *mockClient) GetIncludeSource(context.Context, string, string) (*adt.Sou
 func (m *mockClient) SetIncludeSource(context.Context, string, string, string, string, string, string) (string, error) {
 	return "new-etag", nil
 }
-func (m *mockClient) CreateTestInclude(context.Context, string, string, string) error {
+func (m *mockClient) CreateTestInclude(ctx context.Context, uri, lockHandle, transport string) error {
+	if m.createTestIncludeFn != nil {
+		return m.createTestIncludeFn(ctx, uri, lockHandle, transport)
+	}
 	return nil
 }
 func (m *mockClient) ActivateObjects(ctx context.Context, uris []string) (*adt.ActivationResult, error) {
@@ -879,5 +885,114 @@ func TestSetIncludeSourceToolRejectsMissingInclude(t *testing.T) {
 	text := firstText(result)
 	if !strings.Contains(text, "'include'") {
 		t.Errorf("error message should name the missing parameter 'include'; got: %s", text)
+	}
+}
+
+func TestCreateTestIncludeTool(t *testing.T) {
+	const classURI = "/sap/bc/adt/oo/classes/ZCL_TEST"
+	var gotURI, gotLH, gotTransport string
+	mock := &mockClient{
+		createTestIncludeFn: func(_ context.Context, uri, lh, transport string) error {
+			gotURI, gotLH, gotTransport = uri, lh, transport
+			return nil
+		},
+	}
+	lockMap := adt.NewLockMap()
+	lockMap.Set(adt.LockKey("dev", classURI), testAutoHandle, "")
+	s := newTestServerWithLockMap(mock, lockMap)
+
+	result := callTool(t, s, "create_test_include", map[string]interface{}{
+		"object_uri": classURI,
+		"transport":  testTransportNum,
+	})
+
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var got struct {
+		ClassURI string `json:"class_uri"`
+		Created  bool   `json:"created"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &got); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if !got.Created {
+		t.Error("expected created=true")
+	}
+	if got.ClassURI != classURI {
+		t.Errorf("class_uri: got %q, want %q", got.ClassURI, classURI)
+	}
+	if gotURI != classURI {
+		t.Errorf("adtler uri: got %q, want %q", gotURI, classURI)
+	}
+	if gotLH != testAutoHandle {
+		t.Errorf("lock handle from map: got %q, want %q", gotLH, testAutoHandle)
+	}
+	if gotTransport != testTransportNum {
+		t.Errorf("transport: got %q, want %q", gotTransport, testTransportNum)
+	}
+}
+
+func TestCreateTestIncludeToolExplicitLockHandle(t *testing.T) {
+	const classURI = "/sap/bc/adt/oo/classes/ZCL_TEST"
+	var gotLH string
+	mock := &mockClient{
+		createTestIncludeFn: func(_ context.Context, _, lh, _ string) error {
+			gotLH = lh
+			return nil
+		},
+	}
+	lockMap := adt.NewLockMap()
+	lockMap.Set(adt.LockKey("dev", classURI), "map-handle", "")
+	s := newTestServerWithLockMap(mock, lockMap)
+
+	result := callTool(t, s, "create_test_include", map[string]interface{}{
+		"object_uri":  classURI,
+		"lock_handle": "explicit-handle",
+	})
+
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	if gotLH != "explicit-handle" {
+		t.Errorf("expected explicit handle to take precedence; got %q", gotLH)
+	}
+}
+
+func TestCreateTestIncludeToolPropagatesAdtlerError(t *testing.T) {
+	const classURI = "/sap/bc/adt/oo/classes/ZCL_TEST"
+	mock := &mockClient{
+		createTestIncludeFn: func(_ context.Context, _, _, _ string) error {
+			return fmt.Errorf("SAP ADT error 500: ExceptionResourceSaveFailure")
+		},
+	}
+	lockMap := adt.NewLockMap()
+	lockMap.Set(adt.LockKey("dev", classURI), testAutoHandle, "")
+	s := newTestServerWithLockMap(mock, lockMap)
+
+	result := callTool(t, s, "create_test_include", map[string]interface{}{
+		"object_uri": classURI,
+	})
+
+	if !result.IsError {
+		t.Fatal("expected IsError=true when adtler returns an error")
+	}
+}
+
+func TestCreateTestIncludeToolRejectsWhenNoLockTracked(t *testing.T) {
+	const classURI = "/sap/bc/adt/oo/classes/ZCL_TEST"
+	s := newTestServerWithLockMap(&mockClient{}, adt.NewLockMap())
+
+	result := callTool(t, s, "create_test_include", map[string]interface{}{
+		"object_uri": classURI,
+		// no lock_handle, nothing in lock map
+	})
+
+	if !result.IsError {
+		t.Fatal("expected IsError=true when no lock is tracked and no handle provided")
+	}
+	text := firstText(result)
+	if !strings.Contains(text, "lock_object") {
+		t.Errorf("error message should hint at lock_object; got: %s", text)
 	}
 }
