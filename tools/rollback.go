@@ -21,11 +21,15 @@ type RollbackEntry struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-var sourceTypeToEndpoint = map[string]string{
-	"PROG": "/sap/bc/adt/programs/programs/",
-	"CLAS": "/sap/bc/adt/oo/classes/",
-	"INTF": "/sap/bc/adt/oo/interfaces/",
-	"FUGR": "/sap/bc/adt/functions/groups/",
+// rollbackSourceTypes is the set of object types rollback_transport restores
+// source for. DDIC types (TABL, DTEL, ...) are intentionally excluded and
+// skipped rather than rolled back. The ADT resource URI itself is built by
+// adt.ObjectURI.
+var rollbackSourceTypes = map[string]bool{
+	"PROG": true,
+	"CLAS": true,
+	"INTF": true,
+	"FUGR": true,
 }
 
 func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
@@ -73,15 +77,20 @@ func doRollback(ctx context.Context, client adt.Client, transport string) (*Roll
 			continue
 		}
 
-		endpoint, ok := sourceTypeToEndpoint[obj.Type]
-		if !ok {
+		if !rollbackSourceTypes[obj.Type] {
 			result.Skipped = append(result.Skipped, RollbackEntry{
 				Type: obj.Type, Name: obj.Name, Reason: "non-source object type",
 			})
 			continue
 		}
 
-		objectURI := endpoint + strings.ToLower(obj.Name)
+		objectURI, err := adt.ObjectURI(obj.Type, obj.Name)
+		if err != nil {
+			result.Skipped = append(result.Skipped, RollbackEntry{
+				Type: obj.Type, Name: obj.Name, Reason: err.Error(),
+			})
+			continue
+		}
 		if err := rollbackObject(ctx, client, objectURI, transport); err != nil {
 			result.Failed = append(result.Failed, RollbackEntry{
 				Type: obj.Type, Name: obj.Name, Reason: err.Error(),
