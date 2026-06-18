@@ -52,6 +52,7 @@ type mockClient struct {
 	removeFromTransportFn func(ctx context.Context, taskNr, parentTr, pgmid, objType, objName, wbType, position string) error
 	getTransportObjectsFn func(ctx context.Context, transport string) ([]adt.TransportObject, error)
 	getTransportInfoFn    func(ctx context.Context, transport string) (*adt.TransportRequest, error)
+	rollbackTransportFn   func(ctx context.Context, transport string) (*adt.RollbackResult, error)
 	runQueryFn            func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
 	setTextElementsFn     func(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error
 	createTestIncludeFn   func(ctx context.Context, uri, lockHandle, transport string) error
@@ -279,6 +280,12 @@ func (m *mockClient) ReleaseTransportVerified(ctx context.Context, transport str
 		return &adt.ReleaseResult{Transport: transport, Released: false}, nil
 	}
 	return &adt.ReleaseResult{Transport: transport, Released: true}, nil
+}
+func (m *mockClient) RollbackTransport(ctx context.Context, transport string) (*adt.RollbackResult, error) {
+	if m.rollbackTransportFn != nil {
+		return m.rollbackTransportFn(ctx, transport)
+	}
+	return &adt.RollbackResult{}, nil
 }
 func (m *mockClient) GetTransportTasks(context.Context, string) ([]string, error) {
 	return nil, nil
