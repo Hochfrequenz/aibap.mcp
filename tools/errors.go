@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -9,120 +8,60 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// SAP exception Type identifiers from <exc:exception><type id="…"/>. These
-// are the GET_TYPE / co_type constants of the CX_ADT_RES_* classes, read
-// directly from the live ABAP source on both S/4 and R/3 (issue #406). They
-// are stable across SAP releases and locales — far safer to match against
-// than the localised <message> text, which differs by logon language (S/4
-// answers in English, R/3 in German). adtler exposes a few as
-// adt.ExceptionType* constants; the rest are declared here per adtler's
-// "compare against bare strings for IDs not listed" guidance.
+// Recovery hints, keyed below by adt.ErrorKind. These reference MCP tool names
+// (`unlock_object`, `search_objects`, …) and are the one genuinely MCP-side
+// concern in error handling — the SAP-stable classification of which exception
+// Type / status code means what now lives in adtler (adt.ClassifyError).
 const (
-	excTypeAlreadyExists       = "ExceptionResourceAlreadyExists" // 400 on S/4, 405 on R/3
-	excTypeLockConflict        = "ExceptionResourceLockConflict"  // 409, S/4 only
-	excTypeInvalidEtag         = "ExceptionResourceInvalidEtag"   // 412
-	excTypeNotAcceptable       = "ExceptionResourceNotAcceptable" // 406
-	excTypeUnsupportedMedia    = "ExceptionUnsupportedMediaType"  // 415
-	excTypeUnprocessableEntity = "ExceptionUnprocessableEntity"   // 422
-	excTypeNotAllowed          = "ExceptionNotAllowed"            // 405, S/4 only (absent on R/3)
-	// excTypeCreationFailure is the Type the object-creation endpoints raise
-	// when a create cannot complete. Notably, the PROGRAM-create endpoint
-	// reports an existing-name collision as this (HTTP 500) rather than as
-	// ExceptionResourceAlreadyExists — verified live on both S/4 ("A program
-	// or include already exists with the name …") and R/3 ("Es existiert
-	// bereits ein Programm oder Include …"). See issue #406 / PR #407.
-	excTypeCreationFailure = "ExceptionResourceCreationFailure"
+	etagMismatchHint     = "ETag mismatch — the object was modified since your lock was acquired. Re-lock the object and retry the write."
+	lockConflictHint     = "Save conflict — another process holds a conflicting lock. Use `get_transport_requests` to check the locking transport, or `unlock_object` if the lock is stale."
+	alreadyExistsHint    = "Object already exists. Use `search_objects` to find it, or choose a different name."
+	lockedHint           = "Object is locked. Use `unlock_object` if it's your own lock, or `get_transport_requests` to find the locking transport."
+	notAcceptableHint    = "Content negotiation failed (406) — the server cannot produce the requested Accept type. Check the Accept header, or try the other system's API version."
+	unsupportedMediaHint = "Unsupported media type (415) — the request Content-Type is not accepted. Check the Content-Type header."
+	unprocessableHint    = "Request rejected due to semantic errors (422) — check that all required fields and parameter values are valid."
+	// methodNotAllowedHint covers both genuine method-not-allowed (S/4) and the
+	// bare-405 case where ECC reports an existing object as a 405, so it names
+	// both possibilities (adt.ClassifyError collapses both to
+	// ErrorMethodNotAllowed). See mcp-server-abap #406.
+	methodNotAllowedHint = "Method not allowed (405) — either the operation is not supported for this resource, or (on ECC) the object already exists. Check with `object_exists` / `search_objects`."
+	// creationFailedHint: object-creation endpoints report a name collision as
+	// ExceptionResourceCreationFailure (HTTP 500), not as
+	// ExceptionResourceAlreadyExists — so name that likely cause first rather
+	// than the generic "check ST22" 500 guidance (#406 / #407).
+	creationFailedHint = "Object creation failed. The most common cause is that an object with that name already exists — check with `object_exists` or `search_objects`, or choose a different name. Otherwise verify the name, package, and that this object type is supported on this system."
+	notFoundHint       = "Object not found. Check the URI spelling or use `search_objects` to find it."
+	forbiddenHint      = "Authorization error. Check that the ADT user has the required S_DEVELOP authorizations."
+	badRequestHint     = "Bad request — the server rejected the request. Check the syntax, required parameters, or the CSRF token."
+	serverErrorHint    = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
+	transportHint      = "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."
+	inactiveHint       = "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."
 )
 
-// etagMismatchHint is shared by the ExceptionResourceInvalidEtag and
-// ExceptionPreconditionFailed Types and the 412 status-code fallback.
-const etagMismatchHint = "ETag mismatch — the object was modified since your lock was acquired. Re-lock the object and retry the write."
-
-// lockConflictHint is shared by the ExceptionResourceLockConflict Type and
-// the 409 status-code fallback. 409 is a save/lock conflict, not an
-// "already exists" condition — the latter has its own Type (and is a 400 on
-// S/4 / 405 on R/3).
-const lockConflictHint = "Save conflict — another process holds a conflicting lock. Use `get_transport_requests` to check the locking transport, or `unlock_object` if the lock is stale."
-
-// alreadyExistsHint is shared by the ExceptionResourceAlreadyExists Type
-// (a 400 on S/4, a 405 on R/3) and the English plain-text fallback.
-const alreadyExistsHint = "Object already exists. Use `search_objects` to find it, or choose a different name."
-
-// lockedHint is shared by the ExceptionResourceLocked Type and the 423
-// status-code fallback.
-const lockedHint = "Object is locked. Use `unlock_object` if it's your own lock, or `get_transport_requests` to find the locking transport."
-
-type hintRule struct {
-	excType     string // "" = match any exception Type; exact, case-insensitive
-	statusCode  int    // 0 = match any status code
-	textPattern string // "" = match any text; checked case-insensitive
-	hint        string
-}
-
-// hintRules is evaluated top-to-bottom, first match wins, in three tiers:
+// hintByKind maps an adt.ErrorKind to the MCP-flavored recovery hint. Kinds
+// absent from the map (e.g. adt.ErrorUnknown) get no hint here and fall through
+// to the localised-text fallbacks in matchHint.
 //
-//	Tier 1 (excType)     — the SAP-stable, language- and status-code-independent
-//	                       exception identifier. Preferred for everything that
-//	                       carries a modern <exc:exception> envelope.
-//	Tier 2 (statusCode)  — fallback for errors with no Type (legacy
-//	                       <ExceptionText> bodies, HTML pages, plain text).
-//	                       Status codes are language-independent.
-//	Tier 3 (textPattern) — last resort, for conditions that carry no clean
-//	                       Type. NOTE: these match localised text and so are
-//	                       language-fragile (they silently miss on German
-//	                       systems). Kept only for the activation case, which
-//	                       has no dedicated Type. See issue #406.
-var hintRules = []hintRule{
-	// Tier 1 — by exception Type.
-	{excType: adt.ExceptionTypeResourceLocked, hint: lockedHint},
-	{excType: excTypeLockConflict, hint: lockConflictHint},
-	{excType: excTypeAlreadyExists, hint: alreadyExistsHint},
-	{excType: excTypeInvalidEtag, hint: etagMismatchHint},
-	{excType: adt.ExceptionTypePreconditionFailed, hint: etagMismatchHint},
-	{excType: excTypeNotAcceptable, hint: "Content negotiation failed (406) — the server cannot produce the requested Accept type. Check the Accept header, or try the other system's API version."},
-	{excType: excTypeUnsupportedMedia, hint: "Unsupported media type (415) — the request Content-Type is not accepted. Check the Content-Type header."},
-	{excType: excTypeUnprocessableEntity, hint: "Request rejected due to semantic errors (422) — check that all required fields and parameter values are valid."},
-	{excType: excTypeNotAllowed, hint: "Method not allowed (405) — this operation is not supported for this resource."},
-	// Creation failures arrive as HTTP 500, so this Type rule MUST precede
-	// the generic Tier-2 {statusCode: 500} fallback below, or the catch-all
-	// would shadow it (matchHint is first-match-wins). The most common cause
-	// is a name collision — the PROGRAM endpoint in particular reports
-	// "already exists" this way instead of as ExceptionResourceAlreadyExists
-	// (issue #406 / PR #407). Naming that cause first is far more actionable
-	// than the generic 500 "check ST22" guidance, which implies a crash.
-	{excType: excTypeCreationFailure, hint: "Object creation failed. The most common cause is that an object with that name already exists — check with `object_exists` or `search_objects`, or choose a different name. Otherwise verify the name, package, and that this object type is supported on this system."},
-
-	// Tier 2 — by status code (Type-free fallbacks for legacy
-	// <ExceptionText> bodies, HTML pages, and plain text).
-	{statusCode: 423, hint: lockedHint},
-	{statusCode: 404, hint: "Object not found. Check the URI spelling or use `search_objects` to find it."},
-	{statusCode: 403, hint: "Authorization error. Check that the ADT user has the required S_DEVELOP authorizations."},
-	{statusCode: 412, hint: etagMismatchHint},
-	{statusCode: 409, hint: lockConflictHint},
-	// 405 is ambiguous across systems (method-not-allowed on S/4,
-	// "already exists" on R/3 — see issue #406), so the Type-free
-	// fallback names both rather than guessing.
-	{statusCode: 405, hint: "Method not allowed (405) — either the operation is not supported for this resource, or (on ECC) the object already exists. Check with `object_exists` / `search_objects`."},
-	{statusCode: 400, textPattern: "transport", hint: "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."},
-	{statusCode: 400, hint: "Bad request — the server rejected the request. Check the syntax, required parameters, or the CSRF token."},
-	{statusCode: 500, hint: "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."},
-
-	// Tier 3 — by localised text (language-fragile, last resort). Only
-	// reliably fires for English-language messages; localised SAP messages
-	// are otherwise handled by the Tier-1 Type rules above.
-	//   - "already exists": our own English plain errors, and English SAP
-	//     messages when Type is empty.
-	//   - "inactive": releasing a transport that contains an inactive
-	//     object. Verified on S/4 (issue #406): ReleaseTransport returns a
-	//     plain Go error — not an adt.ADTError, so there is no Type or
-	//     status code to match on — whose text reads "… Object REPS <name>
-	//     is inactive". (Note: plain activation via activate_objects does
-	//     NOT reach errorResult; it returns a structured ActivationResult
-	//     with Success=false.) ADT release only works on S/4 (ECC needs
-	//     SE09) and our S/4 answers in English; a German-logon S/4 would
-	//     say "inaktiv" and miss — accepted, which is why this is Tier 3.
-	{textPattern: "already exists", hint: alreadyExistsHint},
-	{textPattern: "inactive", hint: "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."},
+// adt.ErrorInvalidLockHandle maps to lockedHint for now: a stale/invalid lock
+// handle still points the user at unlock_object / get_transport_requests, which
+// preserves the pre-adt.ClassifyError behavior (a 423 fell through to the
+// locked hint via the status code). mcp-server-abap #378 will give it a
+// dedicated hint.
+var hintByKind = map[adt.ErrorKind]string{
+	adt.ErrorLocked:            lockedHint,
+	adt.ErrorInvalidLockHandle: lockedHint,
+	adt.ErrorLockConflict:      lockConflictHint,
+	adt.ErrorAlreadyExists:     alreadyExistsHint,
+	adt.ErrorEtagMismatch:      etagMismatchHint,
+	adt.ErrorNotAcceptable:     notAcceptableHint,
+	adt.ErrorUnsupportedMedia:  unsupportedMediaHint,
+	adt.ErrorUnprocessable:     unprocessableHint,
+	adt.ErrorMethodNotAllowed:  methodNotAllowedHint,
+	adt.ErrorCreationFailed:    creationFailedHint,
+	adt.ErrorNotFound:          notFoundHint,
+	adt.ErrorForbidden:         forbiddenHint,
+	adt.ErrorBadRequest:        badRequestHint,
+	adt.ErrorServerError:       serverErrorHint,
 }
 
 // errorResult converts an error to an MCP error result with the SAP error
@@ -151,27 +90,37 @@ func errorResult(err error) *mcp.CallToolResult {
 	}
 }
 
+// matchHint returns an actionable recovery hint for an error, or "" if none
+// applies. It classifies the error via adt.ClassifyError (which prefers the
+// SAP-stable exception Type over the HTTP status code) and looks up the hint
+// wording by kind, with two consumer-side refinements that adtler's
+// protocol-level classification intentionally does not cover:
+//
+//   - A 400 that mentions a transport gets the more specific transport hint
+//     instead of the generic bad-request hint.
+//   - Errors that carry no ADT Type or status — plain Go errors such as the
+//     ReleaseTransport "… is inactive" failure, or our own English
+//     "already exists" messages — are matched on localised text as a last
+//     resort. This tier is language-fragile (it silently misses on German
+//     systems) and is kept only for conditions with no clean Type (#406).
 func matchHint(err error) string {
-	var adtErr *adt.ADTError
-	statusCode := 0
-	excType := ""
-	if errors.As(err, &adtErr) {
-		statusCode = adtErr.StatusCode
-		excType = adtErr.Type
-	}
+	kind := adt.ClassifyError(err)
 	errText := strings.ToLower(err.Error())
 
-	for _, rule := range hintRules {
-		if rule.excType != "" && !strings.EqualFold(rule.excType, excType) {
-			continue
-		}
-		if rule.statusCode != 0 && rule.statusCode != statusCode {
-			continue
-		}
-		if rule.textPattern != "" && !strings.Contains(errText, strings.ToLower(rule.textPattern)) {
-			continue
-		}
-		return rule.hint
+	// Transport-specific 400 beats the generic bad-request hint.
+	if kind == adt.ErrorBadRequest && strings.Contains(errText, "transport") {
+		return transportHint
+	}
+	if hint, ok := hintByKind[kind]; ok {
+		return hint
+	}
+
+	// Tier 3: localised-text fallbacks for errors with no ADT Type/status.
+	switch {
+	case strings.Contains(errText, "already exists"):
+		return alreadyExistsHint
+	case strings.Contains(errText, "inactive"):
+		return inactiveHint
 	}
 	return ""
 }
