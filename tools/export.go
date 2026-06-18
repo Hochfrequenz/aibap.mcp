@@ -119,8 +119,8 @@ func registerExportTools(s toolAdder, client interface {
 			return errorResult(fmt.Errorf("output_dir %q does not exist or is not a directory", outputDir)), nil
 		}
 
-		// Search for packages matching the pattern (DEVC/K = package object type).
-		packages, err := client.SearchObjects(ctx, pattern, "DEVC/K", maxPackages)
+		// Search for packages matching the pattern.
+		packages, err := client.SearchPackages(ctx, pattern, maxPackages)
 		if err != nil {
 			return errorResult(fmt.Errorf("searching packages: %w", err)), nil
 		}
