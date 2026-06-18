@@ -112,9 +112,9 @@ func TestMatchHint_StatusCodeFallback(t *testing.T) {
 		{"405 no type (ambiguous fallback)", &adt.ADTError{StatusCode: 405, Message: "method not allowed"}, "Method not allowed"},
 		{"400 transport beats catch-all", &adt.ADTError{StatusCode: 400, Message: "transport required"}, "create_transport"},
 		{"400 catch-all", &adt.ADTError{StatusCode: 400, Message: "malformed"}, "Bad request"},
-		// A Type adtler knows but hintRules does not list must fall
-		// through Tier 1 into the Tier-2 status rule.
-		{"unlisted type falls through to status", &adt.ADTError{StatusCode: 400, Type: "ExceptionResourceWrongData", Message: "bad data"}, "Bad request"},
+		// A Type adt.ClassifyError does not recognise must fall through to
+		// the status-code classification (here 400 -> bad request).
+		{"unrecognised type falls through to status", &adt.ADTError{StatusCode: 400, Type: "ExceptionSomethingBrandNew", Message: "bad data"}, "Bad request"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -189,7 +189,7 @@ func TestErrorResult_WithoutHint(t *testing.T) {
 // conform to each tool's declared outputSchema, and a typed error DTO
 // would contradict every tool's schema. The SAP status code, when
 // available, is preserved in the text fallback via adt.ADTError.Error().
-// Hints are appended for known error patterns (see hintRules in errors.go).
+// Hints are appended for known error patterns (see hintByKind in errors.go).
 // Update this test only if the change is intentional and documented in
 // the PR that breaks the contract.
 func TestErrorResult_PinsWireContract(t *testing.T) {
