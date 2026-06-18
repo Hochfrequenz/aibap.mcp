@@ -3,34 +3,10 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
-
-type RollbackResult struct {
-	Restored []RollbackEntry `json:"restored"`
-	Skipped  []RollbackEntry `json:"skipped"`
-	Failed   []RollbackEntry `json:"failed"`
-}
-
-type RollbackEntry struct {
-	Type   string `json:"type"`
-	Name   string `json:"name"`
-	Reason string `json:"reason,omitempty"`
-}
-
-// rollbackSourceTypes is the set of object types rollback_transport restores
-// source for. DDIC types (TABL, DTEL, ...) are intentionally excluded and
-// skipped rather than rolled back. The ADT resource URI itself is built by
-// adt.ObjectURI.
-var rollbackSourceTypes = map[string]bool{
-	"PROG": true,
-	"CLAS": true,
-	"INTF": true,
-	"FUGR": true,
-}
 
 func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
 	s.AddTool(mcp.NewTool("rollback_transport",
@@ -46,7 +22,7 @@ func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
 				"This is destructive — it overwrites current source with historical versions.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number to roll back")),
-		mcp.WithOutputSchema[RollbackResult](),
+		mcp.WithOutputSchema[adt.RollbackResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		transport := req.GetString("transport", "")
 		proceed, reason := ConfirmDestructive(ctx, elicitor,
@@ -54,112 +30,10 @@ func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
 		if !proceed {
 			return errorResult(&adt.ADTError{StatusCode: 400, Message: "rollback_transport aborted: " + reason}), nil
 		}
-		result, err := doRollback(ctx, client, transport)
+		result, err := client.RollbackTransport(ctx, transport)
 		if err != nil {
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultJSON(result)
 	})
-}
-
-func doRollback(ctx context.Context, client adt.Client, transport string) (*RollbackResult, error) {
-	objects, err := client.GetTransportObjects(ctx, transport)
-	if err != nil {
-		return nil, fmt.Errorf("reading transport objects: %w", err)
-	}
-
-	result := &RollbackResult{}
-	for _, obj := range objects {
-		if obj.PgmID != "R3TR" {
-			result.Skipped = append(result.Skipped, RollbackEntry{
-				Type: obj.Type, Name: obj.Name, Reason: "not R3TR",
-			})
-			continue
-		}
-
-		if !rollbackSourceTypes[obj.Type] {
-			result.Skipped = append(result.Skipped, RollbackEntry{
-				Type: obj.Type, Name: obj.Name, Reason: "non-source object type",
-			})
-			continue
-		}
-
-		objectURI, err := adt.ObjectURI(obj.Type, obj.Name)
-		if err != nil {
-			result.Skipped = append(result.Skipped, RollbackEntry{
-				Type: obj.Type, Name: obj.Name, Reason: err.Error(),
-			})
-			continue
-		}
-		if err := rollbackObject(ctx, client, objectURI, transport); err != nil {
-			result.Failed = append(result.Failed, RollbackEntry{
-				Type: obj.Type, Name: obj.Name, Reason: err.Error(),
-			})
-		} else {
-			result.Restored = append(result.Restored, RollbackEntry{
-				Type: obj.Type, Name: obj.Name,
-			})
-		}
-	}
-	return result, nil
-}
-
-func rollbackObject(ctx context.Context, client adt.Client, objectURI, transport string) error {
-	versions, err := client.GetVersionHistory(ctx, objectURI)
-	if err != nil {
-		return fmt.Errorf("get version history: %w", err)
-	}
-
-	var restoreURI string
-	seenTransport := false
-	for _, v := range versions {
-		if v.Transport == transport {
-			seenTransport = true
-			continue
-		}
-		if seenTransport {
-			restoreURI = v.ContentURI
-			break
-		}
-	}
-	if !seenTransport {
-		return fmt.Errorf("transport %s not found in version history", transport)
-	}
-	if restoreURI == "" {
-		return fmt.Errorf("no version before transport %s (object may have been created by this transport)", transport)
-	}
-
-	oldSource, err := client.GetVersionSource(ctx, restoreURI)
-	if err != nil {
-		return fmt.Errorf("get version source: %w", err)
-	}
-
-	lockHandle, err := client.LockObject(ctx, objectURI)
-	if err != nil {
-		return fmt.Errorf("lock: %w", err)
-	}
-	defer func() { _ = client.UnlockObject(ctx, objectURI, lockHandle) }()
-
-	current, err := client.GetSource(ctx, objectURI)
-	if err != nil {
-		return fmt.Errorf("get current source: %w", err)
-	}
-
-	_, err = client.SetSource(ctx, objectURI, oldSource, lockHandle, "", current.ETag)
-	if err != nil {
-		return fmt.Errorf("set source: %w", err)
-	}
-
-	actResult, err := client.ActivateObjects(ctx, []string{objectURI})
-	if err != nil {
-		return fmt.Errorf("activate: %w", err)
-	}
-	if !actResult.Success {
-		msgs := make([]string, len(actResult.Messages))
-		for i, m := range actResult.Messages {
-			msgs[i] = m.Text
-		}
-		return fmt.Errorf("activation failed: %s", strings.Join(msgs, "; "))
-	}
-	return nil
 }

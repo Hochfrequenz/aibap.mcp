@@ -9,23 +9,23 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// emptyTransportObjectsMock makes `rollback_transport` short-circuit quickly
-// by returning an empty object list — enough to exercise the elicitation
-// gate without driving the full rollback pipeline.
-func emptyTransportObjectsMock(calledGate *bool) *mockClient {
+// rollbackGateMock records whether `rollback_transport` reached the
+// adt.RollbackTransport call — enough to exercise the elicitation gate without
+// driving the (now adtler-side) rollback pipeline.
+func rollbackGateMock(calledGate *bool) *mockClient {
 	return &mockClient{
-		getTransportObjectsFn: func(_ context.Context, _ string) ([]adt.TransportObject, error) {
+		rollbackTransportFn: func(_ context.Context, _ string) (*adt.RollbackResult, error) {
 			if calledGate != nil {
 				*calledGate = true
 			}
-			return nil, nil
+			return &adt.RollbackResult{}, nil
 		},
 	}
 }
 
 func TestRollbackTransport_ElicitationAccepted(t *testing.T) {
 	called := false
-	mock := emptyTransportObjectsMock(&called)
+	mock := rollbackGateMock(&called)
 	el := &stubElicitor{result: &mcp.ElicitationResult{
 		ElicitationResponse: mcp.ElicitationResponse{
 			Action:  mcp.ElicitationResponseActionAccept,
@@ -40,7 +40,7 @@ func TestRollbackTransport_ElicitationAccepted(t *testing.T) {
 		t.Fatalf("expected success, got error: %v", result.Content)
 	}
 	if !called {
-		t.Fatal("expected getTransportObjectsFn to be called after accept")
+		t.Fatal("expected rollbackTransportFn to be called after accept")
 	}
 	if el.called != 1 {
 		t.Errorf("expected 1 elicitation call, got %d", el.called)
@@ -49,7 +49,7 @@ func TestRollbackTransport_ElicitationAccepted(t *testing.T) {
 
 func TestRollbackTransport_ElicitationDeclined(t *testing.T) {
 	called := false
-	mock := emptyTransportObjectsMock(&called)
+	mock := rollbackGateMock(&called)
 	el := &stubElicitor{result: &mcp.ElicitationResult{
 		ElicitationResponse: mcp.ElicitationResponse{Action: mcp.ElicitationResponseActionDecline},
 	}}
@@ -61,7 +61,7 @@ func TestRollbackTransport_ElicitationDeclined(t *testing.T) {
 		t.Fatal("expected error result on decline")
 	}
 	if called {
-		t.Fatal("getTransportObjectsFn should NOT have been called on decline")
+		t.Fatal("rollbackTransportFn should NOT have been called on decline")
 	}
 	text := result.Content[0].(mcp.TextContent).Text
 	if !strings.Contains(text, "rollback_transport aborted") {
@@ -71,7 +71,7 @@ func TestRollbackTransport_ElicitationDeclined(t *testing.T) {
 
 func TestRollbackTransport_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
 	called := false
-	mock := emptyTransportObjectsMock(&called)
+	mock := rollbackGateMock(&called)
 	s := newTestServerWithFallbackElicitor(mock, nil, nil)
 	result := callTool(t, s, "rollback_transport", map[string]interface{}{
 		"transport": testTransportNum,
@@ -80,6 +80,6 @@ func TestRollbackTransport_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
 		t.Fatalf("expected success with nil elicitor, got error: %v", result.Content)
 	}
 	if !called {
-		t.Fatal("expected getTransportObjectsFn to be called with nil elicitor (backwards compat)")
+		t.Fatal("expected rollbackTransportFn to be called with nil elicitor (backwards compat)")
 	}
 }
