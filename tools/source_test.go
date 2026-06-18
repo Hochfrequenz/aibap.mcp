@@ -37,6 +37,7 @@ type mockClient struct {
 	getObjectFn           func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
 	syntaxCheckFn         func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
 	verifySourceFn        func(ctx context.Context, source string) (bool, []adt.SyntaxMessage, error)
+	getObjectDepsFn       func(ctx context.Context, objType, objName string, maxResults, maxDepth int) (*adt.DependencyResult, error)
 	runTestsFn            func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
 	getTransportFn        func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
 	addTransportFn        func(ctx context.Context, uri, transport string) error
@@ -136,6 +137,12 @@ func (m *mockClient) VerifySource(ctx context.Context, source string) (bool, []a
 		return m.verifySourceFn(ctx, source)
 	}
 	return true, nil, nil
+}
+func (m *mockClient) GetObjectDependencies(ctx context.Context, objType, objName string, maxResults, maxDepth int) (*adt.DependencyResult, error) {
+	if m.getObjectDepsFn != nil {
+		return m.getObjectDepsFn(ctx, objType, objName, maxResults, maxDepth)
+	}
+	return &adt.DependencyResult{}, nil
 }
 func (m *mockClient) BatchSyntaxCheck(ctx context.Context, uris []string) []adt.ObjectSyntaxResult {
 	results := make([]adt.ObjectSyntaxResult, len(uris))
