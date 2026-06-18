@@ -99,6 +99,12 @@ func (m *mockClient) SearchObjects(ctx context.Context, q, t string, n int) ([]a
 	}
 	return nil, nil
 }
+func (m *mockClient) SearchPackages(ctx context.Context, q string, n int) ([]adt.ObjectInfo, error) {
+	if m.searchFn != nil {
+		return m.searchFn(ctx, q, adt.ObjectTypePackage, n)
+	}
+	return nil, nil
+}
 func (m *mockClient) WhereUsed(ctx context.Context, uri string) ([]adt.ObjectInfo, error) {
 	if m.whereUsedFn != nil {
 		return m.whereUsedFn(ctx, uri)
