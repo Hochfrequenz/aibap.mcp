@@ -261,6 +261,25 @@ func (m *mockClient) ReleaseTransport(ctx context.Context, transport string) err
 func (m *mockClient) ReleaseTransportWithTasks(context.Context, string) error {
 	return nil
 }
+
+// ReleaseTransportVerified mirrors adtler's real composition (release, then
+// confirm via a status read) so it routes through the same releaseTransportFn
+// and getTransportInfoFn hooks the tests configure.
+func (m *mockClient) ReleaseTransportVerified(ctx context.Context, transport string, includeTasks bool) (*adt.ReleaseResult, error) {
+	var err error
+	if includeTasks {
+		err = m.ReleaseTransportWithTasks(ctx, transport)
+	} else {
+		err = m.ReleaseTransport(ctx, transport)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if info, infoErr := m.GetTransportInfo(ctx, transport); infoErr == nil && info != nil && info.Status == "D" {
+		return &adt.ReleaseResult{Transport: transport, Released: false}, nil
+	}
+	return &adt.ReleaseResult{Transport: transport, Released: true}, nil
+}
 func (m *mockClient) GetTransportTasks(context.Context, string) ([]string, error) {
 	return nil, nil
 }

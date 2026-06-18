@@ -162,21 +162,12 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		}
 		includeTasks := req.GetBool("include_tasks", false)
 
-		var releaseErr error
-		if includeTasks {
-			releaseErr = client.ReleaseTransportWithTasks(ctx, transport)
-		} else {
-			releaseErr = client.ReleaseTransport(ctx, transport)
-		}
-
-		// ECC silent-fail detection: ADT can return 200 while leaving the
-		// transport modifiable. Verify via a status read.
-		silentFail := false
-		if releaseErr == nil {
-			if info, infoErr := client.GetTransportInfo(ctx, transport); infoErr == nil && info != nil && info.Status == "D" {
-				silentFail = true
-			}
-		}
+		// ReleaseTransportVerified releases and confirms via a post-release
+		// status read: ADT (notably on ECC) can return 200 while leaving the
+		// transport modifiable. Released=false with a nil error is that
+		// "silent failure".
+		res, releaseErr := client.ReleaseTransportVerified(ctx, transport, includeTasks)
+		silentFail := releaseErr == nil && res != nil && !res.Released
 
 		if (releaseErr != nil || silentFail) && fallback != nil {
 			if fbErr := fallback.ReleaseTransportFallback(ctx, transport); fbErr != nil {
