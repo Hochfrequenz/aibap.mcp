@@ -4,29 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
-
-// textElementsResourceURI maps a program/class/function-group object URI to
-// the corresponding /sap/bc/adt/textelements/... URI. SAP binds the
-// enqueue lock for text-element writes to this resource, not to the
-// underlying program — the caller-visible object URI alone is not enough
-// to acquire a usable lock.
-func textElementsResourceURI(objectURI string) (string, error) {
-	switch {
-	case strings.HasPrefix(objectURI, "/sap/bc/adt/programs/programs/"):
-		return strings.Replace(objectURI, "/sap/bc/adt/programs/programs/", "/sap/bc/adt/textelements/programs/", 1), nil
-	case strings.HasPrefix(objectURI, "/sap/bc/adt/oo/classes/"):
-		return strings.Replace(objectURI, "/sap/bc/adt/oo/classes/", "/sap/bc/adt/textelements/classes/", 1), nil
-	case strings.HasPrefix(objectURI, "/sap/bc/adt/functions/groups/"):
-		return strings.Replace(objectURI, "/sap/bc/adt/functions/groups/", "/sap/bc/adt/textelements/functiongroups/", 1), nil
-	default:
-		return "", fmt.Errorf("text elements not supported for %q (only programs, classes, function groups)", objectURI)
-	}
-}
 
 func registerTextElementTools(s toolAdder, client interface {
 	adt.DocuClient
@@ -107,7 +88,7 @@ func registerTextElementTools(s toolAdder, client interface {
 		}
 
 		// Lock the textelements resource (separate enqueue from the program lock).
-		lockURI, err := textElementsResourceURI(uri)
+		lockURI, err := adt.TextElementLockURI(uri)
 		if err != nil {
 			return errorResult(&adt.ADTError{StatusCode: 400, Message: err.Error()}), nil
 		}
