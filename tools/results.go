@@ -276,19 +276,6 @@ type WhereUsedBatchResult struct {
 	Results         []WhereUsedBatchEntry `json:"results"`
 }
 
-type ObjectDependency struct {
-	Name    string `json:"name"`
-	UseType string `json:"use_type"`
-}
-
-type ObjectDependenciesResult struct {
-	ObjectType   string             `json:"object_type"`
-	ObjectName   string             `json:"object_name"`
-	Count        int                `json:"count"`
-	Dependencies []ObjectDependency `json:"dependencies"`
-	Warnings     []string           `json:"warnings,omitempty"`
-}
-
 // Wrapper result types for tools that previously returned top-level JSON
 // arrays. MCP 2025-06-18 requires CallToolResult.structuredContent to be a
 // JSON object; nesting the slice in a named struct satisfies the spec and
