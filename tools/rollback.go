@@ -87,7 +87,7 @@ func doRollback(ctx context.Context, client adt.Client, transport string) (*Roll
 		objectURI, err := adt.ObjectURI(obj.Type, obj.Name)
 		if err != nil {
 			result.Skipped = append(result.Skipped, RollbackEntry{
-				Type: obj.Type, Name: obj.Name, Reason: "non-source object type",
+				Type: obj.Type, Name: obj.Name, Reason: err.Error(),
 			})
 			continue
 		}
