@@ -46,7 +46,10 @@ func registerVerifyTools(s toolAdder, client adt.Client) {
 func verifySource(ctx context.Context, client adt.Client, source string) (*VerifyResult, error) {
 	// Generate a unique temporary name.
 	name := fmt.Sprintf("Z_MCP_VERIFY_%06d", rand.Intn(999999)) //nolint:gosec
-	objectURI := "/sap/bc/adt/programs/programs/" + name
+	objectURI, err := adt.ObjectURI("PROG", name)
+	if err != nil {
+		return nil, fmt.Errorf("verify_source: %w", err)
+	}
 
 	// 1. Create temporary program in $TMP.
 	if err := client.CreateObject(ctx, "PROG", name, "$TMP", "MCP verify_source temp", ""); err != nil {
