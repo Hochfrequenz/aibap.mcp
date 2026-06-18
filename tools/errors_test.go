@@ -189,7 +189,7 @@ func TestErrorResult_WithoutHint(t *testing.T) {
 // conform to each tool's declared outputSchema, and a typed error DTO
 // would contradict every tool's schema. The SAP status code, when
 // available, is preserved in the text fallback via adt.ADTError.Error().
-// Hints are appended for known error patterns (see hintRules in errors.go).
+// Hints are appended for known error patterns (see hintByKind in errors.go).
 // Update this test only if the change is intentional and documented in
 // the PR that breaks the contract.
 func TestErrorResult_PinsWireContract(t *testing.T) {
