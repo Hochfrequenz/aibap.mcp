@@ -141,7 +141,7 @@ func TestSetTextElementsTool_RejectsUnsupportedObjectType(t *testing.T) {
 	if !res.IsError {
 		t.Fatalf("expected IsError on unsupported type")
 	}
-	if !strings.Contains(textOfTE(res), "text elements not supported") {
+	if !strings.Contains(textOfTE(res), "unsupported object type for text elements") {
 		t.Errorf("error text mismatch: %s", textOfTE(res))
 	}
 }
