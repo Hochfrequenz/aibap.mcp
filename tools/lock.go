@@ -74,32 +74,32 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 	})
 }
 
-// registerResetSessionTool registers reset_session — the in-process recovery
+// registerForceUnlockTool registers force_unlock — the in-process recovery
 // path for stuck ENQUEUE locks (#383). SAP's UNLOCK endpoint is unreliable and
 // secondary auto-locks on coupled objects are invisible to the client, so the
 // only recovery used to be SM12 deletion or a full server-process restart.
 // Terminating the stateful SAP session releases every ENQUEUE held under it;
 // adt.SystemClient.Logout does exactly that (GET /sap/public/bc/icf/logoff)
 // and drops the cookie jar. The next request re-authenticates lazily.
-func registerResetSessionTool(s toolAdder, client adt.SystemClient, lockMap *adt.LockMap, tracker *sessionLockTracker, selector SystemSelector) {
-	s.AddTool(mcp.NewTool("reset_session",
-		mcp.WithTitleAnnotation("Reset SAP Session"),
+func registerForceUnlockTool(s toolAdder, client adt.SystemClient, lockMap *adt.LockMap, tracker *sessionLockTracker, selector SystemSelector) {
+	s.AddTool(mcp.NewTool("force_unlock",
+		mcp.WithTitleAnnotation("Force Unlock (Reset SAP Session)"),
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Recover from stuck edit locks by terminating the SAP stateful session for the active system. This releases ALL ENQUEUE locks held under that session server-side — including secondary locks on coupled objects that unlock_object cannot reach — and clears the active system's cached lock handles. Use when a write fails with 403 \"currently editing\" or 423 and unlock_object does not help. Session-wide: any locks you are intentionally holding on the active system are also released. The connection re-authenticates automatically on the next call."),
-		mcp.WithOutputSchema[ResetSessionResult](),
+		mcp.WithDescription("Force-release stuck edit locks by terminating the SAP stateful session for the active system. This releases ALL ENQUEUE locks held under that session server-side — including secondary locks on coupled objects that unlock_object cannot reach — and clears the active system's cached lock handles. Use when a write fails with 403 \"currently editing\" or 423 and unlock_object does not help. Session-wide: any locks you are intentionally holding on the active system are also released. The connection re-authenticates automatically on the next call."),
+		mcp.WithOutputSchema[ForceUnlockResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		active := selector.ActiveName()
 		// Terminate the SAP session first. Only clear local state if the
 		// server-side release actually happened — otherwise the lock map
 		// would desync from SAP (the enqueues would still be held).
 		if err := client.Logout(ctx); err != nil {
-			return errorResult(fmt.Errorf("reset_session: terminating SAP session for %q: %w", active, err)), nil
+			return errorResult(fmt.Errorf("force_unlock: terminating SAP session for %q: %w", active, err)), nil
 		}
 		cleared := tracker.forgetSystem(lockMap, active)
-		return mcp.NewToolResultJSON(ResetSessionResult{
+		return mcp.NewToolResultJSON(ForceUnlockResult{
 			System:       active,
 			SessionReset: true,
 			LocksCleared: cleared,

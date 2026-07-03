@@ -9,7 +9,7 @@ import (
 
 // sessionLockTracker records the lock-map keys created during the process's
 // SAP session(s). adt.LockMap is not enumerable from outside adtler, so
-// without this a reset_session could not forget the cached lock handles that a
+// without this a force_unlock could not forget the cached lock handles that a
 // dropped SAP session has invalidated — the next write would reuse a stale
 // handle and fail with 423 ExceptionResourceInvalidLockHandle instead of the
 // old 403. See #383.

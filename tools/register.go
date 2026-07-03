@@ -159,7 +159,7 @@ func getStringOrSlice(args map[string]any, key string) (string, []string) {
 func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient, elicitor Elicitor) {
 	ls := &loggingServer{inner: s, selector: selector}
 
-	// tracker records lock-map keys so reset_session can clear the active
+	// tracker records lock-map keys so force_unlock can clear the active
 	// system's cached handles after a session drop (adt.LockMap is not
 	// enumerable). See #383.
 	tracker := newSessionLockTracker()
@@ -191,7 +191,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		{"version", func() { registerVersionTools(ls, client) }},
 		{"locking", func() {
 			registerLockTools(ls, client, lockMap, tracker, selector)
-			registerResetSessionTool(ls, client, lockMap, tracker, selector)
+			registerForceUnlockTool(ls, client, lockMap, tracker, selector)
 			registerActivateTools(ls, client, lockMap, selector)
 		}},
 		{"testing", func() {

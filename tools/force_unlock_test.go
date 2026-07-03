@@ -8,10 +8,10 @@ import (
 	"github.com/Hochfrequenz/adtler/adt"
 )
 
-// reset_session terminates the active system's SAP session (releasing every
+// force_unlock terminates the active system's SAP session (releasing every
 // ENQUEUE server-side) and clears that system's cached lock handles from the
 // session lock map. See #383.
-func TestResetSessionTool(t *testing.T) {
+func TestForceUnlockTool(t *testing.T) {
 	var logoutCalled bool
 	lockMap := adt.NewLockMap()
 	mock := &mockClient{
@@ -33,7 +33,7 @@ func TestResetSessionTool(t *testing.T) {
 	}
 	lockMap.Set("prod:"+testObjectURI, "prod-handle", "")
 
-	result := callTool(t, s, "reset_session", map[string]interface{}{})
+	result := callTool(t, s, "force_unlock", map[string]interface{}{})
 	if result.IsError {
 		t.Fatalf("unexpected error result: %v", result)
 	}
@@ -68,9 +68,9 @@ func TestResetSessionTool(t *testing.T) {
 	}
 }
 
-// When SAP session termination fails, reset_session must report an error and
+// When SAP session termination fails, force_unlock must report an error and
 // leave the lock map alone (the enqueues are still held server-side).
-func TestResetSessionToolLogoutError(t *testing.T) {
+func TestForceUnlockToolLogoutError(t *testing.T) {
 	lockMap := adt.NewLockMap()
 	mock := &mockClient{
 		lockObjectFn: func(ctx context.Context, uri string) (string, error) {
@@ -85,7 +85,7 @@ func TestResetSessionToolLogoutError(t *testing.T) {
 		t.Fatalf("lock_object failed: %v", r)
 	}
 
-	result := callTool(t, s, "reset_session", map[string]interface{}{})
+	result := callTool(t, s, "force_unlock", map[string]interface{}{})
 	if !result.IsError {
 		t.Fatal("expected IsError=true when Logout fails")
 	}

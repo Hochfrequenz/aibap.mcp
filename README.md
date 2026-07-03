@@ -108,7 +108,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 |------|-------------|
 | `lock_object` | Lock an object for editing (returns lock handle) |
 | `unlock_object` | Release a lock on an object |
-| `reset_session` | Recover from stuck edit locks by terminating the active system's SAP session (releases all its ENQUEUEs) |
+| `force_unlock` | Force-release stuck edit locks by terminating the active system's SAP session (releases all its ENQUEUEs) |
 | `activate_object` | Activate a single ABAP object |
 | `activate_objects` | Activate multiple objects at once |
 | `get_inactive_objects` | List all inactive objects for the current user |

@@ -73,11 +73,11 @@ type UnlockResult struct {
 	Unlocked bool   `json:"unlocked"`
 }
 
-// ResetSessionResult reports the outcome of a reset_session call: the SAP
+// ForceUnlockResult reports the outcome of a force_unlock call: the SAP
 // stateful session for the active system was terminated (releasing every
 // ENQUEUE held under it server-side) and the active system's cached lock
 // handles were cleared from the session lock map. See #383.
-type ResetSessionResult struct {
+type ForceUnlockResult struct {
 	System       string `json:"system"`
 	SessionReset bool   `json:"session_reset"`
 	LocksCleared int    `json:"locks_cleared"`
