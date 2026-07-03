@@ -10,7 +10,7 @@ import (
 func registerActivateTools(s toolAdder, client interface {
 	adt.ObjectClient
 	adt.LockClient
-}, lockMap *adt.LockMap, selector SystemSelector) {
+}, lockMap *adt.LockMap, tracker *sessionLockTracker, selector SystemSelector) {
 	// unlockBeforeActivate releases locks held by the MCP session for the
 	// given URIs. Activation replaces the inactive version — the lock from
 	// set_source_from_file / patch_source is no longer needed and would
@@ -21,6 +21,7 @@ func registerActivateTools(s toolAdder, client interface {
 			if state, ok := lockMap.Get(key); ok && state.LockHandle != "" {
 				_ = client.UnlockObject(ctx, uri, state.LockHandle)
 				lockMap.Delete(key)
+				tracker.untrack(key)
 			}
 		}
 	}

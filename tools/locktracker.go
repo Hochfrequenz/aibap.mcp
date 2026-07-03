@@ -60,11 +60,19 @@ func (t *sessionLockTracker) forgetSystem(lockMap *adt.LockMap, systemName strin
 	defer t.mu.Unlock()
 	cleared := 0
 	for key := range t.keys {
-		if strings.HasPrefix(key, prefix) {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		// Count only handles the lock map actually still holds. A tracked key
+		// may already be gone (released by unlock_object/activate) or may never
+		// have been stored (explicit-handle writes bypass the map), in which
+		// case Delete is a silent no-op and must not inflate the count. Always
+		// drop the tracker entry to reclaim it either way.
+		if _, held := lockMap.Get(key); held {
 			lockMap.Delete(key)
-			delete(t.keys, key)
 			cleared++
 		}
+		delete(t.keys, key)
 	}
 	return cleared
 }
