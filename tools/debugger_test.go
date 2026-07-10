@@ -1,6 +1,12 @@
 package tools
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/mark3labs/mcp-go/mcp"
+)
 
 // TestBuildDebugSessionsResult guards the regression from issue #433: an empty
 // SAP response body (no active debuggee sessions) must not crash. Previously the
@@ -23,5 +29,26 @@ func TestBuildDebugSessionsResult(t *testing.T) {
 	got := buildDebugSessionsResult([]byte(xml))
 	if !got.HasSessions || got.Raw != xml {
 		t.Errorf("xml: got %+v, want HasSessions=true and Raw=%q", got, xml)
+	}
+}
+
+// TestDebugSessionsResultMarshalsToObject closes the loop the reflective
+// structured_content_shape_test guardrail can't reach (debug_get_sessions is in
+// knownOptOuts): the value the handler feeds to NewToolResultJSON must round-trip
+// to a JSON object, per the MCP 2025-06-18 structuredContent requirement. Covers
+// both the empty and non-empty branches.
+func TestDebugSessionsResultMarshalsToObject(t *testing.T) {
+	for _, body := range [][]byte{[]byte(""), []byte(`<sessions><session id="123"/></sessions>`)} {
+		res, err := mcp.NewToolResultJSON(buildDebugSessionsResult(body))
+		if err != nil {
+			t.Fatalf("body %q: NewToolResultJSON returned error: %v", body, err)
+		}
+		out, err := json.Marshal(res.StructuredContent)
+		if err != nil {
+			t.Fatalf("body %q: marshal StructuredContent: %v", body, err)
+		}
+		if !strings.HasPrefix(string(out), "{") {
+			t.Errorf("body %q: StructuredContent is not a JSON object: %s", body, out)
+		}
 	}
 }
