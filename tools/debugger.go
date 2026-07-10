@@ -12,10 +12,10 @@ import (
 
 // buildDebugSessionsResult converts the raw GetDebuggeeSessions response into a
 // typed result. The body is SAP ASX XML (not JSON), and it is empty when there
-// are no active debuggee sessions. Forwarding empty/XML bytes through
-// NewToolResultJSON's json.Marshal fails ("unexpected end of JSON input"), so we
-// wrap the payload in a struct and treat an empty/whitespace body as "no
-// sessions". See issue #433.
+// are no active debuggee sessions. Forwarding these bytes as json.RawMessage to
+// NewToolResultJSON fails JSON validation (e.g. an empty body yields "unexpected end
+// of JSON input"), so we wrap the payload in a struct and treat an
+// empty/whitespace body as "no sessions". See issue #433.
 func buildDebugSessionsResult(data []byte) DebugSessionsResult {
 	if len(bytes.TrimSpace(data)) == 0 {
 		return DebugSessionsResult{HasSessions: false}
