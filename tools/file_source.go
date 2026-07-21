@@ -13,7 +13,7 @@ import (
 func registerFileSourceTools(s toolAdder, client interface {
 	adt.SourceClient
 	adt.LockClient
-}, lockMap *adt.LockMap, selector SystemSelector) {
+}, lockMap *adt.LockMap, tracker *sessionLockTracker, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("set_source_from_file",
 		mcp.WithTitleAnnotation("Set Source from File"),
 		mcp.WithReadOnlyHintAnnotation(false),
@@ -55,6 +55,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		if err != nil {
 			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
 		}
+		tracker.track(key)
 
 		// Get ETag if not in lock map.
 		etag, err := lockMap.ResolveETag(ctx, client, key, uri)

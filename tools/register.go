@@ -159,6 +159,11 @@ func getStringOrSlice(args map[string]any, key string) (string, []string) {
 func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient, elicitor Elicitor) {
 	ls := &loggingServer{inner: s, selector: selector}
 
+	// tracker records lock-map keys so force_unlock can clear the active
+	// system's cached handles after a session drop (adt.LockMap is not
+	// enumerable). See #383.
+	tracker := newSessionLockTracker()
+
 	type group struct {
 		name     string
 		register func()
@@ -166,8 +171,8 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 	groups := []group{
 		{"source", func() {
 			registerSourceTools(ls, client, lockMap, selector)
-			registerPatchTools(ls, client, lockMap, selector)
-			registerFileSourceTools(ls, client, lockMap, selector)
+			registerPatchTools(ls, client, lockMap, tracker, selector)
+			registerFileSourceTools(ls, client, lockMap, tracker, selector)
 			registerPrettyPrinterTools(ls, client)
 		}},
 		{"code-intelligence", func() {
@@ -185,8 +190,9 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		}},
 		{"version", func() { registerVersionTools(ls, client) }},
 		{"locking", func() {
-			registerLockTools(ls, client, lockMap, selector)
-			registerActivateTools(ls, client, lockMap, selector)
+			registerLockTools(ls, client, lockMap, tracker, selector)
+			registerForceUnlockTool(ls, client, lockMap, tracker, selector)
+			registerActivateTools(ls, client, lockMap, tracker, selector)
 		}},
 		{"testing", func() {
 			registerSyntaxCheckTools(ls, client)
@@ -195,7 +201,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		}},
 		{"messages", func() {
 			registerMessageClassTools(ls, client)
-			registerTextElementTools(ls, client, lockMap, selector)
+			registerTextElementTools(ls, client, lockMap, tracker, selector)
 		}},
 		{"shortdumps", func() { registerShortDumpTools(ls, client) }},
 		{"transport", func() {

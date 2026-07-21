@@ -73,7 +73,7 @@ var patchOpItemsSchema = map[string]any{
 func registerPatchTools(s toolAdder, client interface {
 	adt.SourceClient
 	adt.LockClient
-}, lockMap *adt.LockMap, selector SystemSelector) {
+}, lockMap *adt.LockMap, tracker *sessionLockTracker, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("patch_source",
 		mcp.WithTitleAnnotation("Patch Source Code"),
 		mcp.WithReadOnlyHintAnnotation(false),
@@ -128,6 +128,7 @@ func registerPatchTools(s toolAdder, client interface {
 		if err != nil {
 			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
 		}
+		tracker.track(key)
 		autoLocked := !preExisting
 
 		// Get current source.

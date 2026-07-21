@@ -12,7 +12,7 @@ import (
 func registerTextElementTools(s toolAdder, client interface {
 	adt.DocuClient
 	adt.LockClient
-}, lockMap *adt.LockMap, selector SystemSelector) {
+}, lockMap *adt.LockMap, tracker *sessionLockTracker, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("get_text_elements",
 		mcp.WithTitleAnnotation("Get Text Elements"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -97,6 +97,7 @@ func registerTextElementTools(s toolAdder, client interface {
 		if err != nil {
 			return errorResult(fmt.Errorf("lock textelements resource: %w", err)), nil
 		}
+		tracker.track(key)
 
 		if err := client.SetTextElements(ctx, uri, symbols, selections, lockHandle, transport); err != nil {
 			return errorResult(err), nil

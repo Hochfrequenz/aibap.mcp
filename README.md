@@ -40,7 +40,7 @@ If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP W
 
 Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
 
-## Available tools (69)
+## Available tools (70)
 
 Tools are organized into groups. By default, all groups except `debug` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
@@ -102,12 +102,13 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 </details>
 
 <details>
-<summary><strong>Locking and activation</strong> — <code>locking</code> (5 tools)</summary>
+<summary><strong>Locking and activation</strong> — <code>locking</code> (6 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `lock_object` | Lock an object for editing (returns lock handle) |
 | `unlock_object` | Release a lock on an object |
+| `force_unlock` | Force-release stuck edit locks by terminating the active system's SAP session (releases all its ENQUEUEs) |
 | `activate_object` | Activate a single ABAP object |
 | `activate_objects` | Activate multiple objects at once |
 | `get_inactive_objects` | List all inactive objects for the current user |

@@ -58,6 +58,7 @@ type mockClient struct {
 	runQueryFn            func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
 	setTextElementsFn     func(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error
 	createTestIncludeFn   func(ctx context.Context, uri, lockHandle, transport string) error
+	logoutFn              func(ctx context.Context) error
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -358,7 +359,12 @@ func (m *mockClient) GetShortDumps(context.Context, string, string, string) ([]a
 func (m *mockClient) SystemInfo() (string, string) {
 	return "https://mock.example.com:443", "100"
 }
-func (m *mockClient) Logout(context.Context) error { return nil }
+func (m *mockClient) Logout(ctx context.Context) error {
+	if m.logoutFn != nil {
+		return m.logoutFn(ctx)
+	}
+	return nil
+}
 
 func newTestServer(client adt.Client) *server.MCPServer {
 	return newTestServerWithSelector(client, &mockSelector{}, adt.NewLockMap())
