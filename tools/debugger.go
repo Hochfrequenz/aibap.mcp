@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,19 @@ import (
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// buildDebugSessionsResult converts the raw GetDebuggeeSessions response into a
+// typed result. The body is SAP ASX XML (not JSON), and it is empty when there
+// are no active debuggee sessions. Forwarding these bytes as json.RawMessage to
+// NewToolResultJSON fails JSON validation (e.g. an empty body yields "unexpected end
+// of JSON input"), so we wrap the payload in a struct and treat an
+// empty/whitespace body as "no sessions". See issue #433.
+func buildDebugSessionsResult(data []byte) DebugSessionsResult {
+	if len(bytes.TrimSpace(data)) == 0 {
+		return DebugSessionsResult{HasSessions: false}
+	}
+	return DebugSessionsResult{HasSessions: true, Raw: string(data)}
+}
 
 // debugRawJSON wraps a JSON byte payload from the adtler debugger API so it
 // round-trips through NewToolResultJSON without being base64-encoded.
@@ -177,13 +191,14 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 			mcp.Required(),
 			mcp.Description("SAP username for the debug session"),
 		),
+		mcp.WithOutputSchema[DebugSessionsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
 		data, err := getSession(user).GetDebuggeeSessions(ctx)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultJSON(json.RawMessage(data))
+		return mcp.NewToolResultJSON(buildDebugSessionsResult(data))
 	})
 
 	s.AddTool(mcp.NewTool("debug_attach",

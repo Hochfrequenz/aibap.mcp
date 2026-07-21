@@ -155,6 +155,15 @@ type DebugStartResult struct {
 	DebuggeeID   string `json:"debuggee_id"`
 }
 
+// DebugSessionsResult reports active debuggee sessions. GetDebuggeeSessions
+// returns SAP ASX XML (Accept: application/vnd.sap.as+xml), not JSON, so the
+// raw payload is forwarded as a string rather than parsed. HasSessions is
+// false when SAP returns an empty body (no active sessions).
+type DebugSessionsResult struct {
+	HasSessions bool   `json:"has_sessions"`
+	Raw         string `json:"raw,omitempty"`
+}
+
 type UpdateCustomizingResult struct {
 	Status string `json:"status"`
 	Table  string `json:"table"`
