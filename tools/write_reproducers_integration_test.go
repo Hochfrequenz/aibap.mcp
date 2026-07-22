@@ -143,7 +143,9 @@ func TestIntegration_Reproduce383_DDLS(t *testing.T) {
 				var ex struct {
 					Exists bool `json:"exists"`
 				}
-				_ = json.Unmarshal([]byte(textOf(exR)), &ex)
+				if err := json.Unmarshal([]byte(textOf(exR)), &ex); err != nil {
+					t.Fatalf("create_object(DDLS) failed (%s) and object_exists returned unparseable output: %v\nraw: %s", msg, err, textOf(exR))
+				}
 				if !ex.Exists {
 					t.Fatalf("create_object(DDLS): %s", msg)
 				}
@@ -216,7 +218,9 @@ func TestIntegration_Reproduce442_LockedInTransport(t *testing.T) {
 				var ex struct {
 					Exists bool `json:"exists"`
 				}
-				_ = json.Unmarshal([]byte(textOf(exR)), &ex)
+				if err := json.Unmarshal([]byte(textOf(exR)), &ex); err != nil {
+					t.Fatalf("create_object(DDLS) failed (%s) and object_exists returned unparseable output: %v\nraw: %s", msg, err, textOf(exR))
+				}
 				if !ex.Exists {
 					t.Fatalf("create_object(DDLS): %s", msg)
 				}
