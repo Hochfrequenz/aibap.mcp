@@ -118,22 +118,19 @@ func registerPatchTools(s toolAdder, client interface {
 
 		// Resolve lock handle: explicit param > lock map > auto-lock.
 		key := adt.LockKey(selector.ActiveName(), uri)
-		preExisting := explicitHandle != ""
-		if !preExisting {
-			if state, ok := lockMap.Get(key); ok && state.LockHandle != "" {
-				preExisting = true
-			}
-		}
+		autoLocked := !lockPreExisted(lockMap, key, explicitHandle)
 		lockHandle, err := lockMap.ResolveLock(ctx, client, key, uri, explicitHandle)
 		if err != nil {
 			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
 		}
 		tracker.track(key)
-		autoLocked := !preExisting
 
 		// Get current source.
 		srcResult, err := client.GetSource(ctx, uri)
 		if err != nil {
+			if autoLocked {
+				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+			}
 			return errorResult(err), nil
 		}
 		etag := srcResult.ETag
@@ -142,12 +139,18 @@ func registerPatchTools(s toolAdder, client interface {
 		oldSource := srcResult.Source
 		newSource, err := adt.ApplyPatchOps(oldSource, ops)
 		if err != nil {
+			if autoLocked {
+				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+			}
 			return errorResult(fmt.Errorf("patch failed: %w", err)), nil
 		}
 
 		// Write patched source back.
 		newETag, err := client.SetSource(ctx, uri, newSource, lockHandle, transport, etag)
 		if err != nil {
+			if autoLocked {
+				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+			}
 			return errorResult(err), nil
 		}
 

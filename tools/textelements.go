@@ -93,6 +93,7 @@ func registerTextElementTools(s toolAdder, client interface {
 			return errorResult(&adt.ADTError{StatusCode: 400, Message: err.Error()}), nil
 		}
 		key := adt.LockKey(selector.ActiveName(), lockURI)
+		autoLocked := !lockPreExisted(lockMap, key, explicitHandle)
 		lockHandle, err := lockMap.ResolveLock(ctx, client, key, lockURI, explicitHandle)
 		if err != nil {
 			return errorResult(fmt.Errorf("lock textelements resource: %w", err)), nil
@@ -100,6 +101,12 @@ func registerTextElementTools(s toolAdder, client interface {
 		tracker.track(key)
 
 		if err := client.SetTextElements(ctx, uri, symbols, selections, lockHandle, transport); err != nil {
+			// #383: release the lock we auto-acquired this call so a failed write
+			// doesn't leave the textelements resource locked. (Unlock the lock
+			// URI — the separate textelements enqueue we acquired above.)
+			if autoLocked {
+				releaseAutoLock(ctx, client, lockMap, tracker, key, lockURI, lockHandle)
+			}
 			return errorResult(err), nil
 		}
 
