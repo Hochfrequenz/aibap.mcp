@@ -134,7 +134,7 @@ func TestPatchSourceToolExplicitLockHandle(t *testing.T) {
 	s := newTestServerWithLockMap(mock, lockMap)
 	result := callTool(t, s, "patch_source", map[string]interface{}{
 		"object_uri":  uri,
-		"lock_handle": "explicit-handle",
+		"lock_handle": testExplicitHandle,
 		"operations": []interface{}{
 			map[string]interface{}{
 				"type":    "search_replace",
@@ -147,8 +147,8 @@ func TestPatchSourceToolExplicitLockHandle(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", firstText(result))
 	}
-	if gotLockHandle != "explicit-handle" {
-		t.Errorf("SetSource lock handle: got %q, want %q", gotLockHandle, "explicit-handle")
+	if gotLockHandle != testExplicitHandle {
+		t.Errorf("SetSource lock handle: got %q, want %q", gotLockHandle, testExplicitHandle)
 	}
 }
 

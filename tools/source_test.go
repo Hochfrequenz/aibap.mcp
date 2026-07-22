@@ -17,13 +17,15 @@ const testObjectURI = "/sap/bc/adt/programs/programs/ZTEST"
 
 // Shared test constants to satisfy goconst across the package.
 const (
-	testETagNew       = `"etag-new"`
-	testETagAfter     = `"etag-after"`
-	testLockHandle123 = "lock-handle-123"
-	testAutoHandle    = "auto-handle"
-	testObjectURIOK   = "/sap/bc/adt/programs/programs/ZOK"
-	testObjectURIFail = "/sap/bc/adt/programs/programs/ZFAIL"
-	testTransportNum  = "DEVK900123"
+	testETagNew        = `"etag-new"`
+	testETagAfter      = `"etag-after"`
+	testLockHandle123  = "lock-handle-123"
+	testAutoHandle     = "auto-handle"
+	testObjectURIOK    = "/sap/bc/adt/programs/programs/ZOK"
+	testObjectURIFail  = "/sap/bc/adt/programs/programs/ZFAIL"
+	testTransportNum   = "DEVK900123"
+	testExplicitHandle = "explicit-handle"
+	testNewETag        = "new-etag"
 )
 
 // mockClient is a test double for adt.Client.
@@ -75,7 +77,7 @@ func (m *mockClient) SetSource(ctx context.Context, uri, source, lockHandle, tra
 	if m.setSourceFn != nil {
 		return m.setSourceFn(ctx, uri, source, lockHandle, transport, etag)
 	}
-	return "new-etag", nil
+	return testNewETag, nil
 }
 func (m *mockClient) GetIncludeSource(context.Context, string, string) (*adt.SourceResult, error) {
 	return &adt.SourceResult{}, nil
@@ -84,7 +86,7 @@ func (m *mockClient) SetIncludeSource(ctx context.Context, uri, include, source,
 	if m.setIncludeSourceFn != nil {
 		return m.setIncludeSourceFn(ctx, uri, include, source, lockHandle, transport, etag)
 	}
-	return "new-etag", nil
+	return testNewETag, nil
 }
 func (m *mockClient) CreateTestInclude(ctx context.Context, uri, lockHandle, transport string) error {
 	if m.createTestIncludeFn != nil {
@@ -953,7 +955,7 @@ func TestSetIncludeSourceToolResolvesLockFromMap(t *testing.T) {
 	mock := &mockClient{
 		setIncludeSourceFn: func(_ context.Context, _, include, source, lh, transport, etag string) (string, error) {
 			gotInclude, gotSource, gotLH, gotTransport, gotETag = include, source, lh, transport, etag
-			return "new-etag", nil
+			return testNewETag, nil
 		},
 	}
 	lockMap := adt.NewLockMap()
@@ -997,7 +999,7 @@ func TestSetIncludeSourceToolExplicitLockHandleWins(t *testing.T) {
 	mock := &mockClient{
 		setIncludeSourceFn: func(_ context.Context, _, _, _, lh, _, _ string) (string, error) {
 			gotLH = lh
-			return "new-etag", nil
+			return testNewETag, nil
 		},
 	}
 	// Empty lock map on purpose: an explicit handle must be used WITHOUT any map
@@ -1009,13 +1011,13 @@ func TestSetIncludeSourceToolExplicitLockHandleWins(t *testing.T) {
 		"include":     "testclasses",
 		"source":      "* hello",
 		"etag":        "etag-1",
-		"lock_handle": "explicit-handle",
+		"lock_handle": testExplicitHandle,
 	})
 
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", firstText(result))
 	}
-	if gotLH != "explicit-handle" {
+	if gotLH != testExplicitHandle {
 		t.Errorf("expected explicit handle to take precedence; got %q", gotLH)
 	}
 }
@@ -1101,13 +1103,13 @@ func TestCreateTestIncludeToolExplicitLockHandle(t *testing.T) {
 
 	result := callTool(t, s, "create_test_include", map[string]interface{}{
 		"object_uri":  classURI,
-		"lock_handle": "explicit-handle",
+		"lock_handle": testExplicitHandle,
 	})
 
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", firstText(result))
 	}
-	if gotLH != "explicit-handle" {
+	if gotLH != testExplicitHandle {
 		t.Errorf("expected explicit handle to take precedence; got %q", gotLH)
 	}
 }
