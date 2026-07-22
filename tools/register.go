@@ -192,6 +192,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		{"locking", func() {
 			registerLockTools(ls, client, lockMap, tracker, selector)
 			registerForceUnlockTool(ls, client, lockMap, tracker, selector)
+			registerListLocksTool(ls, lockMap, tracker)
 			registerActivateTools(ls, client, lockMap, tracker, selector)
 		}},
 		{"testing", func() {

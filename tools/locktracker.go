@@ -48,6 +48,21 @@ func (t *sessionLockTracker) untrack(key string) {
 	delete(t.keys, key)
 }
 
+// snapshot returns a copy of the currently tracked keys in unspecified order.
+// A nil tracker returns nil. Callers needing determinism must sort.
+func (t *sessionLockTracker) snapshot() []string {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	keys := make([]string, 0, len(t.keys))
+	for k := range t.keys {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 // forgetSystem drops every tracked key belonging to systemName from both the
 // tracker and the backing lock map, returning the number of entries cleared.
 // A nil tracker clears nothing and returns 0.
