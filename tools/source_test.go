@@ -58,6 +58,7 @@ type mockClient struct {
 	runQueryFn            func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
 	setTextElementsFn     func(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error
 	createTestIncludeFn   func(ctx context.Context, uri, lockHandle, transport string) error
+	setIncludeSourceFn    func(ctx context.Context, uri, include, source, lockHandle, transport, etag string) (string, error)
 	logoutFn              func(ctx context.Context) error
 }
 
@@ -79,7 +80,10 @@ func (m *mockClient) SetSource(ctx context.Context, uri, source, lockHandle, tra
 func (m *mockClient) GetIncludeSource(context.Context, string, string) (*adt.SourceResult, error) {
 	return &adt.SourceResult{}, nil
 }
-func (m *mockClient) SetIncludeSource(context.Context, string, string, string, string, string, string) (string, error) {
+func (m *mockClient) SetIncludeSource(ctx context.Context, uri, include, source, lockHandle, transport, etag string) (string, error) {
+	if m.setIncludeSourceFn != nil {
+		return m.setIncludeSourceFn(ctx, uri, include, source, lockHandle, transport, etag)
+	}
 	return "new-etag", nil
 }
 func (m *mockClient) CreateTestInclude(ctx context.Context, uri, lockHandle, transport string) error {
@@ -937,6 +941,103 @@ func TestSetIncludeSourceToolRejectsMissingInclude(t *testing.T) {
 	text := firstText(result)
 	if !strings.Contains(text, "'include'") {
 		t.Errorf("error message should name the missing parameter 'include'; got: %s", text)
+	}
+}
+
+func TestSetIncludeSourceToolResolvesLockFromMap(t *testing.T) {
+	// #401 / #436: with no explicit lock_handle, the handler must resolve it from
+	// the session lock map and pass it to adtler (a non-empty handle is what lets
+	// adtler drop the broken If-Match precondition).
+	const classURI = "/sap/bc/adt/oo/classes/ZCL_TEST"
+	var gotInclude, gotSource, gotLH, gotTransport, gotETag string
+	mock := &mockClient{
+		setIncludeSourceFn: func(_ context.Context, _, include, source, lh, transport, etag string) (string, error) {
+			gotInclude, gotSource, gotLH, gotTransport, gotETag = include, source, lh, transport, etag
+			return "new-etag", nil
+		},
+	}
+	lockMap := adt.NewLockMap()
+	lockMap.Set(adt.LockKey("dev", classURI), testAutoHandle, "")
+	s := newTestServerWithLockMap(mock, lockMap)
+
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri": classURI,
+		"include":    "testclasses",
+		"source":     "* hello",
+		"transport":  testTransportNum,
+		"etag":       "etag-1",
+		// no lock_handle — must be resolved from the map
+	})
+
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	// The resolved handle must be forwarded, AND the other args must survive
+	// alongside it — #436 is about the etag/lock-handle interaction specifically.
+	if gotLH != testAutoHandle {
+		t.Errorf("lock handle from map: got %q, want %q", gotLH, testAutoHandle)
+	}
+	if gotInclude != "testclasses" {
+		t.Errorf("include: got %q, want %q", gotInclude, "testclasses")
+	}
+	if gotSource != "* hello" {
+		t.Errorf("source: got %q, want %q", gotSource, "* hello")
+	}
+	if gotTransport != testTransportNum {
+		t.Errorf("transport: got %q, want %q", gotTransport, testTransportNum)
+	}
+	if gotETag != "etag-1" {
+		t.Errorf("etag: got %q, want %q", gotETag, "etag-1")
+	}
+}
+
+func TestSetIncludeSourceToolExplicitLockHandleWins(t *testing.T) {
+	const classURI = "/sap/bc/adt/oo/classes/ZCL_TEST"
+	var gotLH string
+	mock := &mockClient{
+		setIncludeSourceFn: func(_ context.Context, _, _, _, lh, _, _ string) (string, error) {
+			gotLH = lh
+			return "new-etag", nil
+		},
+	}
+	// Empty lock map on purpose: an explicit handle must be used WITHOUT any map
+	// lookup. A regression that always consulted the map would fail here.
+	s := newTestServerWithLockMap(mock, adt.NewLockMap())
+
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri":  classURI,
+		"include":     "testclasses",
+		"source":      "* hello",
+		"etag":        "etag-1",
+		"lock_handle": "explicit-handle",
+	})
+
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	if gotLH != "explicit-handle" {
+		t.Errorf("expected explicit handle to take precedence; got %q", gotLH)
+	}
+}
+
+func TestSetIncludeSourceToolRejectsWhenNoLockTracked(t *testing.T) {
+	const classURI = "/sap/bc/adt/oo/classes/ZCL_TEST"
+	s := newTestServerWithLockMap(&mockClient{}, adt.NewLockMap())
+
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri": classURI,
+		"include":    "testclasses",
+		"source":     "* hello",
+		"etag":       "etag-1",
+		// no lock_handle, nothing in the lock map
+	})
+
+	if !result.IsError {
+		t.Fatal("expected IsError=true when no lock is tracked and no handle provided")
+	}
+	text := firstText(result)
+	if !strings.Contains(text, "lock_object") {
+		t.Errorf("error message should hint at lock_object; got: %s", text)
 	}
 }
 

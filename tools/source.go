@@ -159,6 +159,20 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 		}
 		source := req.GetString("source", "")
 		lh := req.GetString("lock_handle", "")
+		// Resolve the lock handle from the session lock map when the caller did
+		// not pass one explicitly — the tool description promises this, and
+		// create_test_include does the same (#401). It is also load-bearing for
+		// the #436 fix: adtler's SetIncludeSource only omits the broken If-Match
+		// precondition when a lock handle is present, so a missing handle here
+		// would resurrect the 412. Reject early when no lock is tracked rather
+		// than letting SAP return an opaque error.
+		if lh == "" {
+			state, tracked := lockMap.Get(adt.LockKey(selector.ActiveName(), uri))
+			if !tracked || state.LockHandle == "" {
+				return errorResult(fmt.Errorf("no lock tracked for %s in this session — call lock_object first", uri)), nil
+			}
+			lh = state.LockHandle
+		}
 		transport := req.GetString("transport", "")
 		etag := req.GetString("etag", "")
 		newETag, err := client.SetIncludeSource(ctx, uri, include, source, lh, transport, etag)
