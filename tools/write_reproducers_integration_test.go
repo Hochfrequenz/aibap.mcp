@@ -140,10 +140,16 @@ func TestIntegration_Reproduce383_DDLS(t *testing.T) {
 				}
 				// May already exist from a prior run — reuse if so.
 				exR := callTool(t, sharedServer, "object_exists", map[string]interface{}{"object_uri": uri})
+				exRaw := textOf(exR)
+				if exR.IsError {
+					t.Fatalf("create_object(DDLS) failed (%s) and object_exists also errored: %s", msg, exRaw)
+				}
 				var ex struct {
 					Exists bool `json:"exists"`
 				}
-				_ = json.Unmarshal([]byte(textOf(exR)), &ex)
+				if err := json.Unmarshal([]byte(exRaw), &ex); err != nil {
+					t.Fatalf("create_object(DDLS) failed (%s) and object_exists returned unparseable output: %v\nraw: %s", msg, err, exRaw)
+				}
 				if !ex.Exists {
 					t.Fatalf("create_object(DDLS): %s", msg)
 				}
@@ -213,10 +219,16 @@ func TestIntegration_Reproduce442_LockedInTransport(t *testing.T) {
 					t.Skipf("DDLS creation not available on %s (ECC?): %s", sys, msg)
 				}
 				exR := callTool(t, sharedServer, "object_exists", map[string]interface{}{"object_uri": uri})
+				exRaw := textOf(exR)
+				if exR.IsError {
+					t.Fatalf("create_object(DDLS) failed (%s) and object_exists also errored: %s", msg, exRaw)
+				}
 				var ex struct {
 					Exists bool `json:"exists"`
 				}
-				_ = json.Unmarshal([]byte(textOf(exR)), &ex)
+				if err := json.Unmarshal([]byte(exRaw), &ex); err != nil {
+					t.Fatalf("create_object(DDLS) failed (%s) and object_exists returned unparseable output: %v\nraw: %s", msg, err, exRaw)
+				}
 				if !ex.Exists {
 					t.Fatalf("create_object(DDLS): %s", msg)
 				}

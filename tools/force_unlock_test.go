@@ -82,11 +82,15 @@ func TestForceUnlockTool_NoOrphanGuidanceWhenLocksCleared(t *testing.T) {
 	if r := callTool(t, s, "lock_object", map[string]interface{}{"object_uri": testObjectURI}); r.IsError {
 		t.Fatalf("lock_object failed: %v", r)
 	}
+	res := callTool(t, s, "force_unlock", map[string]interface{}{})
+	if res.IsError {
+		t.Fatalf("force_unlock errored: %s", firstText(res))
+	}
 	var got struct {
 		LocksCleared int    `json:"locks_cleared"`
 		Message      string `json:"message"`
 	}
-	if err := json.Unmarshal([]byte(firstText(callTool(t, s, "force_unlock", map[string]interface{}{}))), &got); err != nil {
+	if err := json.Unmarshal([]byte(firstText(res)), &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if got.LocksCleared != 1 {
@@ -108,11 +112,15 @@ func TestForceUnlockTool_OrphanGuidanceWhenNothingCleared(t *testing.T) {
 	mock := &mockClient{logoutFn: func(ctx context.Context) error { return nil }}
 	s := newTestServerWithLockMap(mock, lockMap)
 
+	res := callTool(t, s, "force_unlock", map[string]interface{}{})
+	if res.IsError {
+		t.Fatalf("force_unlock errored: %s", firstText(res))
+	}
 	var got struct {
 		LocksCleared int    `json:"locks_cleared"`
 		Message      string `json:"message"`
 	}
-	if err := json.Unmarshal([]byte(firstText(callTool(t, s, "force_unlock", map[string]interface{}{}))), &got); err != nil {
+	if err := json.Unmarshal([]byte(firstText(res)), &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if got.LocksCleared != 0 {
