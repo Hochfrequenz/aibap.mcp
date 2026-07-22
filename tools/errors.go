@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -36,6 +37,15 @@ const (
 	serverErrorHint    = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
 	transportHint      = "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."
 	inactiveHint       = "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."
+	// objectLockedInTransportHint names the blocking request (parsed by adtler
+	// from the 409 message — see adt.ADTError.LockingTransport) so the caller
+	// can act on it directly. The %[1]s verb is the request ID, reused twice.
+	// This is a CTS object-directory registration, a different lock domain from
+	// the runtime ENQUEUE, so unlock_object/force_unlock/SM12 do NOT clear it —
+	// the fix is to write to the request the object is already registered in.
+	// The request may belong to another user (as in #442's own repro), so we do
+	// not auto-retry; we surface it for the caller to decide. See #442.
+	objectLockedInTransportHint = "The object is already registered in open transport request `%[1]s` — a CTS registration, distinct from the runtime lock, so `unlock_object`/`force_unlock`/SM12 will not clear it. Retry the write with `transport=%[1]s`. If `%[1]s` is not yours to use, coordinate with its owner or reassign the object via SE09/SE10."
 )
 
 // hintByKind maps an adt.ErrorKind to the MCP-flavored recovery hint. Kinds
@@ -107,6 +117,18 @@ func matchHint(err error) string {
 	kind := adt.ClassifyError(err)
 	errText := strings.ToLower(err.Error())
 
+	// Object registered in another open CTS request: name that request so the
+	// caller can retarget the write at it. Dynamic (embeds the parsed request
+	// ID), so it cannot live in the static hintByKind map.
+	if kind == adt.ErrorObjectLockedInTransport {
+		if tr, ok := lockingTransportOf(err); ok {
+			return fmt.Sprintf(objectLockedInTransportHint, tr)
+		}
+		// adtler only assigns this kind when a request ID was parsed, so this is
+		// effectively unreachable; fall back to the generic conflict hint.
+		return lockConflictHint
+	}
+
 	// Transport-specific 400 beats the generic bad-request hint.
 	if kind == adt.ErrorBadRequest && strings.Contains(errText, "transport") {
 		return transportHint
@@ -123,4 +145,15 @@ func matchHint(err error) string {
 		return inactiveHint
 	}
 	return ""
+}
+
+// lockingTransportOf extracts the CTS request named in a "locked in request
+// <TR>" conflict, unwrapping to the underlying *adt.ADTError. The parse itself
+// lives in adtler (adt.ADTError.LockingTransport).
+func lockingTransportOf(err error) (string, bool) {
+	var adtErr *adt.ADTError
+	if errors.As(err, &adtErr) {
+		return adtErr.LockingTransport()
+	}
+	return "", false
 }
