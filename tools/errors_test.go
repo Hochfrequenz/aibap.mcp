@@ -174,13 +174,13 @@ func TestMatchHint_ObjectLockedInTransport(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hint := matchHint(tt.err)
-			// The exact request ID from the message must appear...
-			var want string
-			if strings.Contains(tt.err.Error(), "S4UK903759") {
-				want = "S4UK903759"
-			} else {
-				want = "S4UK901974"
+			// Derive the expected request ID the same way production does, so a
+			// new fixture can't silently assert the wrong transport.
+			want, ok := lockingTransportOf(tt.err)
+			if !ok {
+				t.Fatalf("fixture message has no parseable transport: %s", tt.err.Error())
 			}
+			// The exact request ID from the message must appear...
 			if !strings.Contains(hint, want) {
 				t.Errorf("hint should name transport %q, got: %s", want, hint)
 			}
