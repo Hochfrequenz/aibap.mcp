@@ -68,6 +68,22 @@ type LockResult struct {
 	Handle string `json:"handle"`
 }
 
+// LockInfo describes one client-side-tracked lock: a lock this MCP session
+// acquired and still holds in its lock map. See list_locks.
+type LockInfo struct {
+	System     string `json:"system"`
+	URI        string `json:"uri"`
+	LockHandle string `json:"lock_handle"`
+	ETag       string `json:"etag,omitempty"`
+}
+
+// LockListResult wraps the list_locks slice in an object so structuredContent
+// stays a JSON object rather than a bare array (see #351).
+type LockListResult struct {
+	Count int        `json:"count"`
+	Locks []LockInfo `json:"locks"`
+}
+
 type UnlockResult struct {
 	URI      string `json:"uri"`
 	Unlocked bool   `json:"unlocked"`
