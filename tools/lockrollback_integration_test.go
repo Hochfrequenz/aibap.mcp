@@ -9,15 +9,23 @@ import (
 	"testing"
 )
 
-// TestIntegration_LockRollbackOnWriteFailure proves the #383 rollback fix
-// against a live SAP system: an auto-locked write that FAILS must leave the
-// object re-lockable (the enqueue actually released), not "currently editing".
+// TestIntegration_LockRollbackOnWriteFailure is a live smoke test of the #383
+// rollback path: it triggers a real auto-locked write failure and confirms the
+// rollback runs against SAP without error and the object is subsequently usable.
 //
 // It triggers a real failure without mutating the fixture: writing a
 // transportable object's own current source back WITHOUT a transport fails with
 // 400 "corrNr could not be found" AFTER the auto-lock — exactly the leak path.
 // On systems where the object is local ($TMP) the write succeeds (a harmless
 // same-source no-op) and the subtest skips, since there is no failure to roll back.
+//
+// NOTE on strength: the follow-up lock_object runs in the SAME MCP session, so
+// if the rollback did NOT release, ADT may still return a (re-entrant) handle
+// rather than 403 — this test can't distinguish that. The authoritative release
+// guarantee is the unit test asserting UnlockObject is called with the exact
+// auto-acquired handle, plus adtler#58 (a same-session dequeue with the real
+// handle releases the enqueue). A cross-session assertion would need a second
+// client, which this single-session harness doesn't provide.
 func TestIntegration_LockRollbackOnWriteFailure(t *testing.T) {
 	const uri = "/sap/bc/adt/programs/programs/z_adt_mcp_test_report"
 
@@ -62,11 +70,11 @@ func TestIntegration_LockRollbackOnWriteFailure(t *testing.T) {
 			// "currently editing".
 			lockR := callTool(t, sharedServer, "lock_object", map[string]interface{}{"object_uri": uri})
 			if lockR.IsError {
-				t.Fatalf("REGRESSION #383 — object still locked after failed write (rollback did not release): %s", textOf(lockR))
+				t.Fatalf("object not usable after failed write (rollback path regressed): %s", textOf(lockR))
 			}
 			// Clean up the lock we just took to verify.
 			_ = callTool(t, sharedServer, "unlock_object", map[string]interface{}{"object_uri": uri})
-			t.Logf("#383 rollback OK on %s: object re-lockable after failed write (enqueue released)", sys)
+			t.Logf("#383 rollback smoke OK on %s: failed write rolled back cleanly, object re-lockable (same session)", sys)
 		})
 	}
 }

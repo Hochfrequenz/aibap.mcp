@@ -31,12 +31,13 @@ func writeTempSource(t *testing.T, body string) string {
 // leaving the object locked (list_locks stuck at 1).
 func TestSetSourceFromFile_RollsBackAutoLockOnWriteFailure(t *testing.T) {
 	var unlocked bool
+	var gotHandle string
 	mock := &mockClient{
 		lockObjectFn: func(_ context.Context, _ string) (string, error) { return autoHandle, nil },
 		setSourceFn: func(_ context.Context, _, _, _, _, _ string) (string, error) {
 			return "", fmt.Errorf("SAP ADT error 400 (ExceptionParameterNotFound): corrNr")
 		},
-		unlockObjectFn: func(_ context.Context, _, _ string) error { unlocked = true; return nil },
+		unlockObjectFn: func(_ context.Context, _, lh string) error { unlocked = true; gotHandle = lh; return nil },
 	}
 	lockMap := adt.NewLockMap()
 	s := newTestServerWithLockMap(mock, lockMap)
@@ -51,8 +52,36 @@ func TestSetSourceFromFile_RollsBackAutoLockOnWriteFailure(t *testing.T) {
 	if !unlocked {
 		t.Error("auto-acquired lock was NOT rolled back on write failure (#383)")
 	}
+	// The rollback must release the exact handle it auto-acquired — SAP's
+	// dequeue is a no-op on a wrong/empty handle.
+	if gotHandle != autoHandle {
+		t.Errorf("UnlockObject called with %q, want the auto-acquired handle %q", gotHandle, autoHandle)
+	}
 	if _, ok := lockMap.Get(adt.LockKey("dev", rollbackURI)); ok {
 		t.Error("lock map still holds the auto-acquired lock after rollback")
+	}
+}
+
+func TestSetTextElements_RollsBackAutoLockOnWriteFailure(t *testing.T) {
+	var unlocked bool
+	mock := &mockClient{
+		lockObjectFn: func(_ context.Context, _ string) (string, error) { return autoHandle, nil },
+		setTextElementsFn: func(_ context.Context, _ string, _ []adt.TextSymbol, _ []adt.SelectionText, _, _ string) error {
+			return errors.New(rollbackErrMsg)
+		},
+		unlockObjectFn: func(_ context.Context, _, _ string) error { unlocked = true; return nil },
+	}
+	s := newTestServerWithLockMap(mock, adt.NewLockMap())
+
+	res := callTool(t, s, "set_text_elements", map[string]interface{}{
+		"object_uri": rollbackURI,
+		"symbols":    "[{}]", // one (empty) symbol → passes the non-empty guard
+	})
+	if !res.IsError {
+		t.Fatal("expected IsError=true (SetTextElements failed)")
+	}
+	if !unlocked {
+		t.Error("set_text_elements did not roll back the auto-acquired lock on write failure (#383)")
 	}
 }
 

@@ -21,6 +21,11 @@ import (
 // Limitation: secondary/coupled locks that SAP auto-acquires on related objects
 // (e.g. a RAP BDEF's implementation class) are not reachable by this primary
 // handle and are not released here — that is tracked separately (#442/#443).
+// The UnlockObject error is intentionally ignored and the ledger is cleared
+// unconditionally: SAP's UNLOCK gives no reliable success signal (see
+// adtler#58), so there is nothing actionable to branch on. This is a deliberate
+// fail-closed choice — after a failed write we forget the cached handle rather
+// than keep a handle that a retry would reuse against a possibly-released lock.
 func releaseAutoLock(ctx context.Context, unlocker adt.LockClient, lockMap *adt.LockMap, tracker *sessionLockTracker, key, uri, lockHandle string) {
 	_ = unlocker.UnlockObject(ctx, uri, lockHandle)
 	lockMap.Delete(key)
