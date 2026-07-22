@@ -156,6 +156,46 @@ func TestMatchHint_PlainError(t *testing.T) {
 	}
 }
 
+// TestMatchHint_ObjectLockedInTransport pins the #442 hint: a CTS "locked in
+// request <TR>" 409 must produce a hint that names the blocking request and
+// tells the caller to retry against it. The messages are captured verbatim
+// from live S/4 (HF S/4 Mandant 100) — the classification lives in adtler
+// (adt.ErrorObjectLockedInTransport + LockingTransport); this asserts the
+// wrapper turns it into an actionable, transport-named hint.
+func TestMatchHint_ObjectLockedInTransport(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{"typed 409 DDLS", &adt.ADTError{StatusCode: 409, Type: "ExceptionResourceLockConflict", Message: "Object R3TR DDLS Z_ADT_MCP_LCK442 is already locked in request S4UK903759 of user KLEINK"}},
+		{"typed 409 CINC", &adt.ADTError{StatusCode: 409, Type: "ExceptionResourceLockConflict", Message: "Object LIMU CINC /HFQ/BP_DD_ADRESSE============CCIMP is already locked in request S4UK901974 of user BECKT"}},
+		{"wrapped", fmt.Errorf("set source: %w", &adt.ADTError{StatusCode: 409, Type: "ExceptionResourceLockConflict", Message: "Object R3TR DDLS Z_FOO is already locked in request S4UK903759 of user KLEINK"})},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hint := matchHint(tt.err)
+			// Derive the expected request ID the same way production does, so a
+			// new fixture can't silently assert the wrong transport.
+			want, ok := lockingTransportOf(tt.err)
+			if !ok {
+				t.Fatalf("fixture message has no parseable transport: %s", tt.err.Error())
+			}
+			// The exact request ID from the message must appear...
+			if !strings.Contains(hint, want) {
+				t.Errorf("hint should name transport %q, got: %s", want, hint)
+			}
+			// ...and the hint must steer to retrying with that transport, not to
+			// the (useless here) unlock_object/SM12 path.
+			if !strings.Contains(hint, "transport="+want) {
+				t.Errorf("hint should tell caller to retry with transport=%s, got: %s", want, hint)
+			}
+			if strings.Contains(hint, "Save conflict") {
+				t.Errorf("should NOT fall back to the generic lock-conflict hint, got: %s", hint)
+			}
+		})
+	}
+}
+
 func TestErrorResult_WithHint(t *testing.T) {
 	err := &adt.ADTError{StatusCode: 423, Message: "User SMITH is editing Z_REPORT"}
 	result := errorResult(err)
