@@ -95,6 +95,9 @@ func TestForceUnlockTool_NoOrphanGuidanceWhenLocksCleared(t *testing.T) {
 	if strings.Contains(got.Message, "SM12") {
 		t.Errorf("message should not mention SM12 when a lock was cleared, got: %s", got.Message)
 	}
+	if !strings.Contains(got.Message, "terminated") {
+		t.Errorf("base message should still be present, got: %s", got.Message)
+	}
 }
 
 // When force_unlock clears nothing, a still-blocking write means the lock is

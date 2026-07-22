@@ -101,13 +101,15 @@ func registerForceUnlockTool(s toolAdder, client adt.SystemClient, lockMap *adt.
 		cleared := tracker.forgetSystem(lockMap, active)
 		msg := fmt.Sprintf("SAP session for %q terminated; %d cached lock handle(s) cleared. The connection re-authenticates on the next call.", active, cleared)
 		if cleared == 0 {
-			// No handle was held under this session, so dropping it released
-			// nothing. If a write is still blocked, the lock is orphaned or
-			// foreign — held by a prior session (a restarted MCP process, a
-			// version switch) or another user — and no ADT call can reach it
-			// (there is no enqueue-read endpoint). Steer the user to SM12 rather
-			// than leaving them to retry force_unlock in vain. See #449.
-			msg += " No cached lock handles were held for this system, so nothing was released. If a write is still blocked, the lock is orphaned or foreign (held by a prior session or another user) and cannot be cleared over ADT — delete it via SM12 (see #449)."
+			// No cached handle was held for this system. The logout may still
+			// have released untracked session-owned locks (secondary/coupled
+			// locks, explicit-handle writes) — so we don't claim "nothing was
+			// released". But if a write is STILL blocked after the reset, the
+			// lock is orphaned or foreign — held by a prior session (a restarted
+			// MCP process, a version switch) or another user — and no ADT call
+			// can reach it (there is no enqueue-read endpoint). Steer the user to
+			// SM12 rather than leaving them to retry force_unlock in vain. #449.
+			msg += " No cached lock handles were held for this system to clear. If a write is still blocked despite the session reset, the lock is orphaned or foreign (held by a prior session or another user) and cannot be cleared over ADT — delete it via SM12 (see #449)."
 		}
 		return mcp.NewToolResultJSON(ForceUnlockResult{
 			System:       active,
