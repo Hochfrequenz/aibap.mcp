@@ -51,6 +51,9 @@ func registerFileSourceTools(s toolAdder, client interface {
 		source := string(data)
 
 		// Resolve lock handle: explicit param > lock map > auto-lock.
+		// Track whether WE auto-acquire the lock this call so we can roll it
+		// back if the write fails (#383) — never release a caller-owned lock.
+		autoLocked := !lockPreExisted(lockMap, key, explicitHandle)
 		lockHandle, err := lockMap.ResolveLock(ctx, client, key, uri, explicitHandle)
 		if err != nil {
 			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
@@ -60,12 +63,18 @@ func registerFileSourceTools(s toolAdder, client interface {
 		// Get ETag if not in lock map.
 		etag, err := lockMap.ResolveETag(ctx, client, key, uri)
 		if err != nil {
+			if autoLocked {
+				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+			}
 			return errorResult(err), nil
 		}
 
 		// Write source
 		newETag, err := client.SetSource(ctx, uri, source, lockHandle, transport, etag)
 		if err != nil {
+			if autoLocked {
+				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+			}
 			return errorResult(err), nil
 		}
 		lockMap.UpdateETag(key, newETag)

@@ -134,6 +134,9 @@ func registerPatchTools(s toolAdder, client interface {
 		// Get current source.
 		srcResult, err := client.GetSource(ctx, uri)
 		if err != nil {
+			if autoLocked {
+				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+			}
 			return errorResult(err), nil
 		}
 		etag := srcResult.ETag
@@ -142,12 +145,18 @@ func registerPatchTools(s toolAdder, client interface {
 		oldSource := srcResult.Source
 		newSource, err := adt.ApplyPatchOps(oldSource, ops)
 		if err != nil {
+			if autoLocked {
+				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+			}
 			return errorResult(fmt.Errorf("patch failed: %w", err)), nil
 		}
 
 		// Write patched source back.
 		newETag, err := client.SetSource(ctx, uri, newSource, lockHandle, transport, etag)
 		if err != nil {
+			if autoLocked {
+				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+			}
 			return errorResult(err), nil
 		}
 
