@@ -64,14 +64,16 @@ func TestSetSourceFromFile_RollsBackAutoLockOnWriteFailure(t *testing.T) {
 
 func TestSetTextElements_RollsBackAutoLockOnWriteFailure(t *testing.T) {
 	var unlocked bool
+	var gotURI string
 	mock := &mockClient{
 		lockObjectFn: func(_ context.Context, _ string) (string, error) { return autoHandle, nil },
 		setTextElementsFn: func(_ context.Context, _ string, _ []adt.TextSymbol, _ []adt.SelectionText, _, _ string) error {
 			return errors.New(rollbackErrMsg)
 		},
-		unlockObjectFn: func(_ context.Context, _, _ string) error { unlocked = true; return nil },
+		unlockObjectFn: func(_ context.Context, uri, _ string) error { unlocked = true; gotURI = uri; return nil },
 	}
-	s := newTestServerWithLockMap(mock, adt.NewLockMap())
+	lockMap := adt.NewLockMap()
+	s := newTestServerWithLockMap(mock, lockMap)
 
 	res := callTool(t, s, "set_text_elements", map[string]interface{}{
 		"object_uri": rollbackURI,
@@ -82,6 +84,18 @@ func TestSetTextElements_RollsBackAutoLockOnWriteFailure(t *testing.T) {
 	}
 	if !unlocked {
 		t.Error("set_text_elements did not roll back the auto-acquired lock on write failure (#383)")
+	}
+	// Must release the TEXTELEMENTS resource lock (lockURI), not the object URI —
+	// unlocking the wrong URI would be a silent no-op.
+	lockURI, err := adt.TextElementLockURI(rollbackURI)
+	if err != nil {
+		t.Fatalf("TextElementLockURI: %v", err)
+	}
+	if gotURI != lockURI {
+		t.Errorf("UnlockObject called with URI %q, want the textelements lock URI %q", gotURI, lockURI)
+	}
+	if _, ok := lockMap.Get(adt.LockKey("dev", lockURI)); ok {
+		t.Error("lock map still holds the auto-acquired textelements lock after rollback")
 	}
 }
 
@@ -131,6 +145,30 @@ func TestSetSourceFromFile_KeepsPreExistingLockOnFailure(t *testing.T) {
 	}
 	if _, ok := lockMap.Get(adt.LockKey("dev", rollbackURI)); !ok {
 		t.Error("pre-existing lock was wrongly removed from the map")
+	}
+}
+
+// If the rollback's UnlockObject itself fails (non-2xx: the lock is definitely
+// still held), the ledger entry must be KEPT so the lock stays visible in
+// list_locks and recoverable via force_unlock — not silently discarded.
+func TestSetSourceFromFile_KeepsLockWhenUnlockErrors(t *testing.T) {
+	mock := &mockClient{
+		lockObjectFn:   func(_ context.Context, _ string) (string, error) { return autoHandle, nil },
+		setSourceFn:    func(_ context.Context, _, _, _, _, _ string) (string, error) { return "", errors.New(rollbackErrMsg) },
+		unlockObjectFn: func(_ context.Context, _, _ string) error { return errors.New("unlock transport error") },
+	}
+	lockMap := adt.NewLockMap()
+	s := newTestServerWithLockMap(mock, lockMap)
+
+	res := callTool(t, s, "set_source_from_file", map[string]interface{}{
+		"object_uri": rollbackURI,
+		"file_path":  writeTempSource(t, "REPORT z.\n"),
+	})
+	if !res.IsError {
+		t.Fatal("expected IsError=true")
+	}
+	if _, ok := lockMap.Get(adt.LockKey("dev", rollbackURI)); !ok {
+		t.Error("lock was dropped from the ledger even though UnlockObject failed — lost the recoverable handle (#383)")
 	}
 }
 
