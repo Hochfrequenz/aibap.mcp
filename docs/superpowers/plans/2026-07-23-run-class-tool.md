@@ -54,7 +54,7 @@ Bumping widens `adt.Client` with `ClassRunClient`, so `mockClient` stops satisfy
 
 **Files:**
 - Modify: `go.mod`, `go.sum`
-- Modify: `tools/source_test.go:30-63` (struct fields) and after `tools/source_test.go:265` (RunQuery stub) for the new `RunClass` stub
+- Modify: `tools/source_test.go:32-62` (struct fields) and after `tools/source_test.go:271` (RunQuery stub) for the new `RunClass` stub
 
 **Interfaces:**
 - Consumes: `adt.ClassRunResult`, `adt.ClassRunClient` (from adtler v0.3.12).
@@ -123,7 +123,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Files:**
 - Create: `tools/classrun.go`
 - Create: `tools/classrun_test.go`
-- Modify: `tools/register.go:218-221` (the `system` group closure)
+- Modify: `tools/register.go:219` (the `system` group closure)
 
 **Interfaces:**
 - Consumes: `adt.ObjectClient.GetObjectInfo`, `adt.ClassRunClient.RunClass`, `ConfirmDestructive(ctx, Elicitor, string) (bool, string)`, `errorResult(error)`, `mockClient.runClassFn`, `stubElicitor{result,err,called}`, `newTestServerWithFallbackElicitor(client, fallback, elicitor)` (transport_test.go:51).
@@ -363,7 +363,7 @@ func buildRunClassMessage(className string) string {
 
 - [ ] **Step 4: Wire the tool into the `system` group**
 
-In `tools/register.go`, extend the `system` group closure (currently lines 218-221):
+In `tools/register.go`, extend the `system` group closure (starts at line 219):
 
 ```go
 		{"system", func() {
