@@ -61,6 +61,7 @@ type mockClient struct {
 	setTextElementsFn     func(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error
 	createTestIncludeFn   func(ctx context.Context, uri, lockHandle, transport string) error
 	setIncludeSourceFn    func(ctx context.Context, uri, include, source, lockHandle, transport, etag string) (string, error)
+	runClassFn            func(ctx context.Context, className string) (*adt.ClassRunResult, error)
 	logoutFn              func(ctx context.Context) error
 }
 
@@ -370,6 +371,12 @@ func (m *mockClient) Logout(ctx context.Context) error {
 		return m.logoutFn(ctx)
 	}
 	return nil
+}
+func (m *mockClient) RunClass(ctx context.Context, className string) (*adt.ClassRunResult, error) {
+	if m.runClassFn != nil {
+		return m.runClassFn(ctx, className)
+	}
+	return &adt.ClassRunResult{ClassName: className}, nil
 }
 
 func newTestServer(client adt.Client) *server.MCPServer {
