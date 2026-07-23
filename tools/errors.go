@@ -26,6 +26,13 @@ const (
 	// both possibilities (adt.ClassifyError collapses both to
 	// ErrorMethodNotAllowed). See mcp-server-abap #406.
 	methodNotAllowedHint = "Method not allowed (405) — either the operation is not supported for this resource, or (on ECC) the object already exists. Check with `object_exists` / `search_objects`."
+	// noDeleteHandlerHint: some resources have no DELETE handler and reject it
+	// with 405 "... does not support method DELETE" — notably SAP Gateway VIT
+	// objects (IWSG/IWOM/OA2S). ADT cannot delete these at all; the correct 406
+	// Accept header (adtler#73) gets past the ETag fetch, but the DELETE itself
+	// is unsupported over ADT REST. Point the user at a GUI/black-magic path.
+	// See mcp-server-abap#404.
+	noDeleteHandlerHint = "This object cannot be deleted via ADT — the resource has no DELETE handler (e.g. SAP Gateway VIT objects: IWSG/IWOM/OA2S). Delete it from a GUI (SE80 / SEGW) via the `sapwebgui` MCP, or use a BlackMagic-backed path."
 	// creationFailedHint: object-creation endpoints report a name collision as
 	// ExceptionResourceCreationFailure (HTTP 500), not as
 	// ExceptionResourceAlreadyExists — so name that likely cause first rather
@@ -127,6 +134,13 @@ func matchHint(err error) string {
 		// adtler only assigns this kind when a request ID was parsed, so this is
 		// effectively unreachable; fall back to the generic conflict hint.
 		return lockConflictHint
+	}
+
+	// A resource with no DELETE handler (405 "... does not support method
+	// DELETE" — e.g. SAP Gateway VIT objects) gets the actionable no-delete
+	// hint instead of the generic method-not-allowed one. See #404.
+	if kind == adt.ErrorMethodNotAllowed && strings.Contains(errText, "does not support method delete") {
+		return noDeleteHandlerHint
 	}
 
 	// Transport-specific 400 beats the generic bad-request hint.

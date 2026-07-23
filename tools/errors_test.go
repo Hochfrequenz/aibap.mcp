@@ -196,6 +196,33 @@ func TestMatchHint_ObjectLockedInTransport(t *testing.T) {
 	}
 }
 
+// TestMatchHint_NoDeleteHandler pins the #404 hint: a 405 "... does not support
+// method DELETE" (e.g. SAP Gateway VIT objects) must steer the user to a GUI /
+// black-magic path rather than the generic method-not-allowed hint. A generic
+// 405 must still get the generic hint.
+func TestMatchHint_NoDeleteHandler(t *testing.T) {
+	vit := &adt.ADTError{StatusCode: 405, Message: "Resource controller does not support method DELETE"}
+	hint := matchHint(vit)
+	if !strings.Contains(hint, "cannot be deleted via ADT") {
+		t.Errorf("VIT delete 405 should get the no-delete-handler hint, got: %s", hint)
+	}
+	if !strings.Contains(hint, "sapwebgui") {
+		t.Errorf("hint should point at a GUI path, got: %s", hint)
+	}
+
+	// A typed VIT 405 (ExceptionNotAllowed) must also match on the message.
+	vitTyped := &adt.ADTError{StatusCode: 405, Type: "ExceptionNotAllowed", Message: "Resource controller does not support method DELETE"}
+	if !strings.Contains(matchHint(vitTyped), "cannot be deleted via ADT") {
+		t.Errorf("typed VIT delete 405 should also get the no-delete-handler hint")
+	}
+
+	// A generic 405 (not a delete-unsupported message) keeps the generic hint.
+	generic := &adt.ADTError{StatusCode: 405, Message: "method not allowed"}
+	if got := matchHint(generic); !strings.Contains(got, "Method not allowed (405)") {
+		t.Errorf("generic 405 should keep the generic method-not-allowed hint, got: %s", got)
+	}
+}
+
 func TestErrorResult_WithHint(t *testing.T) {
 	err := &adt.ADTError{StatusCode: 423, Message: "User SMITH is editing Z_REPORT"}
 	result := errorResult(err)
