@@ -10,10 +10,13 @@ import (
 // the client cannot see (#429). The debugger tools themselves are untouched.
 func TestServerInstructions_DebugLineIsConditional(t *testing.T) {
 	const debugClaim = "Debugging (breakpoints, stepping, variable inspection)"
+	// Assert the leading newline too, so a dropped "\n" (which would run the
+	// bullet onto the DDIC line) is caught rather than passing on the bare claim.
+	const debugBullet = "\n- " + debugClaim
 
 	withDebug := serverInstructions([]string{"HF S/4"}, "HF S/4", true)
-	if !strings.Contains(withDebug, debugClaim) {
-		t.Errorf("debug enabled: instructions should advertise debugging, got:\n%s", withDebug)
+	if !strings.Contains(withDebug, debugBullet) {
+		t.Errorf("debug enabled: instructions should advertise debugging as its own bullet, got:\n%s", withDebug)
 	}
 
 	withoutDebug := serverInstructions([]string{"HF S/4"}, "HF S/4", false)
