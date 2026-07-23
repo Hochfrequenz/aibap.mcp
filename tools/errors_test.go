@@ -221,6 +221,13 @@ func TestMatchHint_NoDeleteHandler(t *testing.T) {
 	if got := matchHint(generic); !strings.Contains(got, "Method not allowed (405)") {
 		t.Errorf("generic 405 should keep the generic method-not-allowed hint, got: %s", got)
 	}
+
+	// The branch gates on kind AND text: the same message on a non-405 status
+	// must NOT produce the no-delete hint.
+	non405 := &adt.ADTError{StatusCode: 400, Message: "Resource controller does not support method DELETE"}
+	if got := matchHint(non405); strings.Contains(got, "cannot be deleted via ADT") {
+		t.Errorf("no-delete hint must require a 405, not just the message; got: %s", got)
+	}
 }
 
 func TestErrorResult_WithHint(t *testing.T) {

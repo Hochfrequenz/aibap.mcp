@@ -31,6 +31,8 @@ const (
 	// objects (IWSG/IWOM/OA2S). ADT cannot delete these at all; the correct 406
 	// Accept header (adtler#73) gets past the ETag fetch, but the DELETE itself
 	// is unsupported over ADT REST. Point the user at a GUI/black-magic path.
+	// Matched on localised message text (see matchHint), so it misses on
+	// non-English systems and degrades to methodNotAllowedHint there.
 	// See mcp-server-abap#404.
 	noDeleteHandlerHint = "This object cannot be deleted via ADT — the resource has no DELETE handler (e.g. SAP Gateway VIT objects: IWSG/IWOM/OA2S). Delete it from a GUI (SE80 / SEGW) via the `sapwebgui` MCP, or use a BlackMagic-backed path."
 	// creationFailedHint: object-creation endpoints report a name collision as
@@ -110,16 +112,24 @@ func errorResult(err error) *mcp.CallToolResult {
 // matchHint returns an actionable recovery hint for an error, or "" if none
 // applies. It classifies the error via adt.ClassifyError (which prefers the
 // SAP-stable exception Type over the HTTP status code) and looks up the hint
-// wording by kind, with two consumer-side refinements that adtler's
+// wording by kind, with several consumer-side refinements that adtler's
 // protocol-level classification intentionally does not cover:
 //
+//   - An object locked in another open CTS request (ErrorObjectLockedInTransport)
+//     gets a hint naming that request (dynamic, so not in the static map).
+//   - A 405 "… does not support method DELETE" (e.g. Gateway VIT objects) gets
+//     the no-delete-handler hint instead of the generic method-not-allowed one.
 //   - A 400 that mentions a transport gets the more specific transport hint
 //     instead of the generic bad-request hint.
 //   - Errors that carry no ADT Type or status — plain Go errors such as the
 //     ReleaseTransport "… is inactive" failure, or our own English
 //     "already exists" messages — are matched on localised text as a last
-//     resort. This tier is language-fragile (it silently misses on German
-//     systems) and is kept only for conditions with no clean Type (#406).
+//     resort.
+//
+// The last two bullets (and the 405 refinement) match on localised message
+// text, so they are language-fragile: they silently miss on non-English
+// systems and degrade to the kind-based hint. That tradeoff is accepted for
+// conditions with no clean Type (#406, #404).
 func matchHint(err error) string {
 	kind := adt.ClassifyError(err)
 	errText := strings.ToLower(err.Error())
