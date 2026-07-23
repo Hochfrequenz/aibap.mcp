@@ -145,12 +145,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func callRunClass(t *testing.T, s interface {
-	// minimal: use the shared helper newTestServerWithFallbackElicitor result
-}, className string) {
-	t.Helper()
-}
-
 func TestRunClass_HappyPath(t *testing.T) {
 	var gotClass string
 	mock := &mockClient{
@@ -176,7 +170,7 @@ func TestRunClass_HappyPath(t *testing.T) {
 	if el.called != 1 {
 		t.Errorf("elicitor called %d times, want 1", el.called)
 	}
-	if !strings.Contains(mustText(t, res), "hello from abap") {
+	if !strings.Contains(res.Content[0].(mcp.TextContent).Text, "hello from abap") {
 		t.Errorf("console output missing from result: %v", res.Content)
 	}
 }
@@ -229,7 +223,7 @@ func TestRunClass_ConfirmationDeclined(t *testing.T) {
 	if runCalled {
 		t.Error("RunClass must not be called when confirmation is declined")
 	}
-	if !strings.Contains(mustText(t, res), "run_class aborted") {
+	if !strings.Contains(res.Content[0].(mcp.TextContent).Text, "run_class aborted") {
 		t.Errorf("expected 'run_class aborted' in error, got: %v", res.Content)
 	}
 }
@@ -273,7 +267,10 @@ func TestRunClass_RunClassError(t *testing.T) {
 }
 ```
 
-Note: `callTool` and `mustText` are the shared test helpers already used by the other `_test.go` files in this package. If a helper with a different name is in use (e.g. `callToolExpectText`), match the existing convention — grep `func callTool` / `func mustText` in `tools/*_test.go` and reuse verbatim. Delete the unused `callRunClass` stub above; it is a placeholder to remove once you confirm the real helper names.
+Note on test helpers (verified against the codebase):
+- `callTool(t *testing.T, s *server.MCPServer, toolName string, args map[string]interface{}) *mcp.CallToolResult` exists at `tools/testhelper_test.go:16` — use it verbatim (`map[string]any` is identical to `map[string]interface{}`).
+- There is **no** `mustText` helper. The package reads result text inline via `res.Content[0].(mcp.TextContent).Text` (see `transport_test.go:66`, `object_test.go:111`, `rollback_test.go:66`). This snippet uses that inline pattern — do not introduce a `mustText` helper.
+- `res.IsError` is the error flag on `*mcp.CallToolResult`. Success payloads flow through `NewToolResultJSON`, which also populates `Content[0]` as `TextContent` (the JSON fallback), so the substring checks work on the success path.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -446,7 +443,7 @@ package tools_test
 //   }
 //   // Substring, NOT equality: S4U uses out->write (formatted), HFQ uses
 //   // out->write_text (raw) — both contain CLASSRUN_OK but format differs.
-//   if !strings.Contains(mustText(t, res), "CLASSRUN_OK") {
+//   if !strings.Contains(res.Content[0].(mcp.TextContent).Text, "CLASSRUN_OK") {
 //       t.Errorf("%s: unexpected console output: %v", sysName, res.Content)
 //   }
 ```
@@ -505,5 +502,6 @@ Expected: all required checks pass (unit tests, lint, coverage — `tools` has n
 ## Self-Review Notes
 
 - **Spec coverage:** motivation/scope (Tasks 2, wiring) ✓; `class_name` input + CLAS URI construction (Task 2 handler) ✓; `adt.ClassRunResult` wire type + `WithOutputSchema` (Task 2) ✓; `destructive=true` annotation (Task 2) ✓; confirmation via `ConfirmDestructive` + `buildRunClassMessage` (Task 2) ✓; class-exists pre-check, no interface check (Task 2 handler + comment) ✓; error handling incl. aborted / classrun failure / runtime exception (handler forwards `errorResult`, adtler maps exception → `ADTError`) ✓; structured-content guardrail, no opt-out (Task 2 Step 6) ✓; unit + integration tests (Tasks 2, 3) ✓; rollout/bump (Task 1) ✓; tracker reconciliation (Task 4) ✓.
-- **Placeholders:** none left. The Task 3 fixture string was resolved to `CLASSRUN_OK` by live verification against HFQ + S4U (2026-07-23). The `callRunClass` stub in the unit-test snippet is explicitly marked for deletion.
+- **Placeholders:** none left. The Task 3 fixture string was resolved to `CLASSRUN_OK` by live verification against HFQ + S4U (2026-07-23). The `callRunClass` stub was removed after review.
+- **Test helpers (verified):** `callTool` exists (`testhelper_test.go:16`); `mustText` does **not** — result text is read inline via `res.Content[0].(mcp.TextContent).Text`, matching the package convention. All snippets use the inline form.
 - **Type consistency:** `runClassFn` signature matches `RunClass` matches the `classRunClient` interface matches `adt.ClassRunClient`. `adt.ClassRunResult{ClassName, ConsoleOutput}` used identically in the mock stub, the handler return, and the output schema.
