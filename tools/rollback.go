@@ -24,7 +24,10 @@ func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number to roll back")),
 		mcp.WithOutputSchema[adt.RollbackResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		transport := req.GetString("transport", "")
+		transport, errRes := requireString(req, "transport")
+		if errRes != nil {
+			return errRes, nil
+		}
 		proceed, reason := ConfirmDestructive(ctx, elicitor,
 			fmt.Sprintf("Confirm rollback of transport %s. All source objects in it will be restored to their pre-transport version.", transport))
 		if !proceed {
