@@ -18,6 +18,10 @@ import (
 // omitted or misspelled. requireString turns that into a clear, uniform
 // message. See #386.
 //
+// The returned value is trimmed, so do NOT use this for parameters where
+// surrounding whitespace is significant (e.g. ABAP source code) — read those
+// with req.GetString and validate separately.
+//
 // Usage:
 //
 //	transport, errRes := requireString(req, "transport")
@@ -28,8 +32,9 @@ func requireString(req mcp.CallToolRequest, name string) (string, *mcp.CallToolR
 	val, err := req.RequireString(name)
 	if err != nil {
 		// Absent or wrong type: mcp-go's message ("required argument ... not
-		// found" / "... is not a string") is preserved via %w.
-		return "", errorResult(fmt.Errorf("required parameter %q is missing: %w", name, err))
+		// found" / "... is not a string") is preserved via %w and already
+		// distinguishes the two, so the prefix here stays neutral.
+		return "", errorResult(fmt.Errorf("invalid required parameter %q: %w", name, err))
 	}
 	if val = strings.TrimSpace(val); val == "" {
 		return "", errorResult(fmt.Errorf("required parameter %q must not be empty", name))

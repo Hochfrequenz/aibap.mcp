@@ -34,11 +34,12 @@ func TestRequireString(t *testing.T) {
 	}{
 		{name: "present", args: map[string]any{"transport": "DEVK900123"}, key: "transport", wantVal: "DEVK900123"},
 		{name: "trimmed", args: map[string]any{"transport": "  DEVK900123 "}, key: "transport", wantVal: "DEVK900123"},
-		{name: "absent", args: map[string]any{}, key: "transport", wantErr: true, errParts: []string{"transport", "missing"}},
-		{name: "wrong key", args: map[string]any{"transprt": "x"}, key: "transport", wantErr: true, errParts: []string{"transport", "missing"}},
+		{name: "absent", args: map[string]any{}, key: "transport", wantErr: true, errParts: []string{"transport", "not found"}},
+		{name: "nil args", args: nil, key: "transport", wantErr: true, errParts: []string{"transport", "not found"}},
+		{name: "wrong key", args: map[string]any{"transprt": "x"}, key: "transport", wantErr: true, errParts: []string{"transport", "not found"}},
 		{name: "empty", args: map[string]any{"transport": ""}, key: "transport", wantErr: true, errParts: []string{"transport", "empty"}},
 		{name: "whitespace only", args: map[string]any{"transport": "   "}, key: "transport", wantErr: true, errParts: []string{"transport", "empty"}},
-		{name: "wrong type", args: map[string]any{"transport": 42}, key: "transport", wantErr: true, errParts: []string{"transport"}},
+		{name: "wrong type", args: map[string]any{"transport": 42}, key: "transport", wantErr: true, errParts: []string{"transport", "not a string"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
