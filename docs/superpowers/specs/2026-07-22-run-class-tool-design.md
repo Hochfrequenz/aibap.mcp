@@ -2,22 +2,37 @@
 
 - **Date:** 2026-07-22
 - **Repo:** aibap.mcp
-- **Status:** Proposed (revised after agent review)
+- **Status:** Proposed (revised: decoupled from lock use-case, explicit confirmation)
 - **Companion spec:** adtler `RunClass` endpoint client — `<adtler>/docs/superpowers/specs/2026-07-22-classrun-endpoint-design.md`. This tool **consumes** `adt.Client.RunClass`; this PR is **`blocked-by-adtler`** until that endpoint ships in a tagged adtler release and is bumped here.
 
 ## Motivation
 
 There is no way to execute arbitrary ABAP headlessly through this MCP today.
 ADT's classrun capability ("Run as ABAP Application") runs any global class that
-implements `IF_OO_ADT_CLASSRUN` and returns its console output. Exposing this as
-a generic `run_class` tool unlocks diagnostic and helper flows that ADT
-otherwise cannot reach.
+implements `IF_OO_ADT_CLASSRUN` and returns its console output. Exposing it as a
+generic `run_class` tool makes "run this ABAP now" a first-class MCP operation
+and closes the object lifecycle loop: `create_object` → `set_source_from_file`
+→ `activate_object` → **`run_class`**. Today anything that needs SE24 F9 / SE38
+forces a switch to a GUI-driven MCP; `run_class` keeps it in ADT.
 
-The concrete driver is issue #383: cleaning up stale/orphaned enqueue locks
-headlessly requires deploying a helper class (calling `cl_enq_admin~remove_locks`
-or `ENQUE_DELETE`) and executing it — exactly what classrun does. That
-lock-cleanup tool is a **separate, later** effort; `run_class` is the generic
-primitive it will build on. This spec covers only the generic tool.
+The tool stands on this generic capability alone — no single downstream use is
+the reason it exists. Concrete uses it unlocks:
+
+- **Diagnostics / introspection** — a helper class prints system state or
+  configuration to the console.
+- **Data fixes / setup helpers** — one-off maintenance logic in a dev system,
+  no GUI.
+- **Reproducers** — make a bug's minimal repro tool-callable instead of manual
+  SE24 F9 / SE38.
+- **Orphaned enqueue-lock cleanup** — *one* example, explicitly **not** the
+  driver. A deployed helper (e.g. `cl_enq_admin~remove_locks`) could clear a
+  stale enqueue that `force_unlock` cannot (see #383). This is **unproven
+  end-to-end**: it may 403 cross-session (needs `S_ENQUE` authorization for
+  another session's lock), and it touches only the runtime **ENQUEUE** domain —
+  it does **not** clear a #442 "locked in request `<TR>`" CTS-registration
+  conflict (different lock domain, cleared by retargeting the transport / SE09).
+  Any lock-cleanup tool is a separate, later effort built on this primitive;
+  `run_class` does not depend on it succeeding.
 
 ## Scope
 
@@ -52,10 +67,9 @@ interface pre-check** (see Pre-validation).
   side effects (COMMIT WORK, data changes) are possible."*
 - **Annotations:** `readOnly=false`, `idempotent=false`, `openWorld=true`, and
   **`destructive=true`** — `run_class` can trigger arbitrary side effects
-  (COMMIT WORK, deletes); the #383 driver literally deletes enqueue locks. A
-  client wiring the `Elicitor` (as object/transport/query tools do) will then
-  prompt for confirmation before execution. This is categorically riskier than
-  `activate_objects` (which legitimately sets `false`).
+  (COMMIT WORK, deletes). This is the machine-readable hint; the user-facing
+  guard is the explicit confirmation below (see Confirmation). Categorically
+  riskier than `activate_objects` (which legitimately sets `false`).
 - **Output:** reuse **`adt.ClassRunResult`** directly as the wire type
   (`{class_name, console_output}`) via `mcp.NewToolResultJSON` +
   `mcp.WithOutputSchema[adt.ClassRunResult]()`. No parallel DTO — the success
@@ -67,7 +81,36 @@ The client dependency is `interface { adt.ObjectClient; adt.ClassRunClient }`,
 filled from the `adt.Client` passed to `RegisterAllWithLockMap` — which requires
 adtler to **embed `ClassRunClient` in the aggregate `Client` interface**
 (companion-spec prerequisite; without it the wiring and the `mockClient` break).
-Follows the `registerActivateTools` pattern.
+`registerClassRunTools(s, client, elicitor)` is wired into the **`system`**
+group in `RegisterAllWithLockMap`, which already forwards `elicitor` to
+`registerQueryTools` — no new plumbing. Follows the `registerObjectTools` /
+`registerQueryTools` pattern (client + `Elicitor`).
+
+## Confirmation (elicitation)
+
+Because `run_class` can trigger arbitrary side effects, the handler asks for
+explicit confirmation **before** the classrun POST, reusing the existing
+`ConfirmDestructive(ctx, elicitor, message)` helper — the same path as
+`delete_object`, `rollback_transport`, and `run_query`. A
+`buildRunClassMessage(className)` helper produces a class-specific risk message:
+
+> *"Class `<NAME>` is about to be executed via ADT classrun. It runs arbitrary
+> ABAP under the configured user and may cause side effects: COMMIT WORK, data
+> changes, or deletions. Approve execution?"*
+
+Only the **helper→`ConfirmDestructive` shape** mirrors `delete_object`, not the
+signature: `buildRunClassMessage` takes just `className` and returns a static
+string — unlike `buildDeleteMessage(ctx, uri, sc, qc)`, which enriches the
+prompt with TADIR metadata. No ctx/client params are needed here.
+
+Decline/cancel → `errorResult(&adt.ADTError{StatusCode: 400, Message:
+"run_class aborted: " + reason})`, **no POST** (same wrapping as
+`delete_object`, object.go:152 — `errorResult` takes an `error`, not a string).
+When the client wires no `Elicitor` (nil), `ConfirmDestructive` returns
+`(true, "")` and the class runs unconditionally — matching the stock-binary
+behaviour of every other destructive tool (see `elicitation.go`). Confirmation
+runs **after** the class-exists check, so a missing class fails cheaply without
+prompting.
 
 ## Pre-validation
 
@@ -75,7 +118,11 @@ One cheap, safe check before calling `RunClass`:
 
 | Check | How | Error on failure |
 |---|---|---|
-| Class exists | `ObjectExists` / `GetObjectInfo` on the CLAS URI | `class ZCL_X does not exist` |
+| Class exists | `GetObjectInfo` on the CLAS URI; a non-nil error is the "missing" signal (same convention as the `object_exists` tool, repository.go:106) | `class ZCL_X does not exist` |
+
+There is no `ObjectExists` client method — `object_exists` is itself built on
+`GetObjectInfo`, treating a non-nil error as absent. This spec uses the same
+signal.
 
 **No interface pre-check.** Detecting `IF_OO_ADT_CLASSRUN` via
 `GetObjectDependencies` (SEOMETAREL) only sees **directly** implemented
@@ -94,14 +141,16 @@ Pre-validation failure → `errorResult(err)`; `StructuredContent` stays unset
 ```
 run_class(class_name)
   → build CLAS URI
-  → ObjectExists?            ── missing → errorResult, no POST
+  → GetObjectInfo?           ── err/missing → errorResult, no prompt, no POST
+  → ConfirmDestructive(...)  ── declined → errorResult "run_class aborted", no POST
   → client.RunClass(ctx, class_name)                      [adtler]
   → adt.ClassRunResult{class_name, console_output}        → NewToolResultJSON
 ```
 
 ## Error handling
 
-- **Class missing:** early `errorResult`, no classrun POST.
+- **Class missing:** early `errorResult`, no confirmation prompt, no classrun POST.
+- **Confirmation declined/cancelled:** `errorResult(&adt.ADTError{StatusCode: 400, Message: "run_class aborted: " + reason})`, no POST.
 - **classrun POST failure:** `adt.ADTError` forwarded via `errorResult`; the SAP
   message text (`"SAP ADT error N: "` prefix) flows into the text content.
 - **Runtime exception in the class:** per the adtler verification point — HTTP
@@ -116,19 +165,33 @@ run_class(class_name)
 `run_class` stays in the regular `structured_content_shape_test.go` coverage —
 **no `knownOptOut`.** The guardrail runs against a `mockClient`, never a real
 HTTP client, so there is no panic risk (unlike the `debug_*` tools, whose
-opt-out exists because `adt.NewDebugSession` panics on the mock). A blind
-reflective call with `{"class_name":"x"}` hits the class-exists check, which on
-the mock returns "not found" → `errorResult` with `StructuredContent` unset →
-spec-legal → test passes. The only code needed: the `mockClient` gains a
-`RunClass` stub (returns `&adt.ClassRunResult{}, nil`) so it still satisfies
-`adt.Client`.
+opt-out exists because `adt.NewDebugSession` panics on the mock).
+
+The blind reflective call `{"class_name":"x"}` exercises the **happy path**, not
+an early error — and that is fine. The default `mockClient.GetObjectInfo`
+returns `(&adt.ObjectInfo{}, nil)` (no error), so the class-exists check treats
+the class as present. The shape test registers tools with a **nil elicitor**
+(`RegisterAllWithLockMap(..., nil, nil)`), so `ConfirmDestructive` returns
+`(true, "")` and the call proceeds to `client.RunClass`. The `mockClient`
+`RunClass` stub must therefore return `(&adt.ClassRunResult{}, nil)` — a valid,
+object-shaped success payload — which is what keeps the guardrail green. **The
+stub is load-bearing for the guardrail, not just for interface satisfaction:**
+if it returned an error or `nil`, the reflective call would fail the shape
+assertion. (Both real-world paths — success and the various `errorResult`
+branches above — are object-shaped or leave `StructuredContent` unset, so both
+are spec-legal regardless.)
 
 ## Testing
 
-**Unit (mock client):**
-- Class missing → early error, `RunClass` **not** called.
-- Happy path → `RunClass` called once, result returned with expected
-  `console_output`.
+**Unit (mock client + stub `Elicitor`):**
+- Class missing → early error, no prompt, `RunClass` **not** called.
+- Confirmation declined → `errorResult("run_class aborted: …")`, `RunClass`
+  **not** called (stub returns decline; mirrors `object_test.go` /
+  `rollback_test.go`).
+- Nil elicitor → proceeds without prompting (`ConfirmDestructive` returns
+  `(true, "")`).
+- Happy path (stub accepts) → `RunClass` called once, result returned with
+  expected `console_output`.
 - classrun error from client → `errorResult`.
 
 **Integration (`//go:build integration`, live, `MCP_INTEGRATION_SYSTEMS` = hfq,s4u):**
