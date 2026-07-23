@@ -34,12 +34,14 @@ func TestRequireString(t *testing.T) {
 	}{
 		{name: "present", args: map[string]any{"transport": "DEVK900123"}, key: "transport", wantVal: "DEVK900123"},
 		{name: "trimmed", args: map[string]any{"transport": "  DEVK900123 "}, key: "transport", wantVal: "DEVK900123"},
-		{name: "absent", args: map[string]any{}, key: "transport", wantErr: true, errParts: []string{"transport", "not found"}},
-		{name: "nil args", args: nil, key: "transport", wantErr: true, errParts: []string{"transport", "not found"}},
-		{name: "wrong key", args: map[string]any{"transprt": "x"}, key: "transport", wantErr: true, errParts: []string{"transport", "not found"}},
-		{name: "empty", args: map[string]any{"transport": ""}, key: "transport", wantErr: true, errParts: []string{"transport", "empty"}},
-		{name: "whitespace only", args: map[string]any{"transport": "   "}, key: "transport", wantErr: true, errParts: []string{"transport", "empty"}},
-		{name: "wrong type", args: map[string]any{"transport": 42}, key: "transport", wantErr: true, errParts: []string{"transport", "not a string"}},
+		// Assert only on this repo's stable wrapper wording + the param name,
+		// never on mcp-go's internal phrasing (which could change on a bump).
+		{name: "absent", args: map[string]any{}, key: "transport", wantErr: true, errParts: []string{"invalid required parameter", "transport"}},
+		{name: "nil args", args: nil, key: "transport", wantErr: true, errParts: []string{"invalid required parameter", "transport"}},
+		{name: "wrong key", args: map[string]any{"transprt": "x"}, key: "transport", wantErr: true, errParts: []string{"invalid required parameter", "transport"}},
+		{name: "empty", args: map[string]any{"transport": ""}, key: "transport", wantErr: true, errParts: []string{"must not be empty", "transport"}},
+		{name: "whitespace only", args: map[string]any{"transport": "   "}, key: "transport", wantErr: true, errParts: []string{"must not be empty", "transport"}},
+		{name: "wrong type", args: map[string]any{"transport": 42}, key: "transport", wantErr: true, errParts: []string{"invalid required parameter", "transport"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
