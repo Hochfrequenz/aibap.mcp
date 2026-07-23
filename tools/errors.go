@@ -33,7 +33,7 @@ const (
 	// is unsupported over ADT REST. Point the user at a GUI/black-magic path.
 	// Matched on localised message text (see matchHint), so it misses on
 	// non-English systems and degrades to methodNotAllowedHint there.
-	// See mcp-server-abap#404.
+	// See #404 (local) and adtler#73 (the 406 Accept-header fix).
 	noDeleteHandlerHint = "This object cannot be deleted via ADT — the resource has no DELETE handler (e.g. SAP Gateway VIT objects: IWSG/IWOM/OA2S). Delete it from a GUI (SE80 / SEGW) via the `sapwebgui` MCP, or use a BlackMagic-backed path."
 	// creationFailedHint: object-creation endpoints report a name collision as
 	// ExceptionResourceCreationFailure (HTTP 500), not as
