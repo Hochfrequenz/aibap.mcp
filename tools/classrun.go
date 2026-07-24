@@ -24,6 +24,10 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
+		// TEMPORARY: the "Known limitation" paragraph below documents a
+		// classrun workaround tracked in Hochfrequenz/adtler#106. Remove that
+		// paragraph (and the mirrored note in the spec/plan docs) once adtler
+		// fixes classrun load generation.
 		mcp.WithDescription(
 			"Execute an ABAP class that implements IF_OO_ADT_CLASSRUN (ADT 'Run as "+
 				"ABAP Application') and return its console output. The class must already "+
@@ -33,7 +37,17 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 				"(CREATE PUBLIC), implement the interface IF_OO_ADT_CLASSRUN, and put "+
 				"its logic in the method 'if_oo_adt_classrun~main'. Only what that "+
 				"method writes to the 'out' handler (out->write( ... ) or "+
-				"out->write_text( ... )) is captured and returned as console_output.",
+				"out->write_text( ... )) is captured and returned as console_output.\n\n"+
+				"Known limitation (workaround, tracked in adtler#106): classrun runs "+
+				"the class's generated runtime load and does not itself generate it, and "+
+				"activating over ADT does not (re)generate it. So a class freshly "+
+				"created/activated via this MCP can fail with 'does not implement "+
+				"if_oo_adt_classrun~main method' (no load yet), and a class that was "+
+				"changed and re-activated can return the PREVIOUS version's output "+
+				"(stale load). Workaround: generate the load once by instantiating the "+
+				"class outside classrun before calling run_class - e.g. run it in Eclipse "+
+				"('Run as ABAP Application'), or execute a small report that does "+
+				"CREATE OBJECT of the class - then run_class returns the current version.",
 		),
 		mcp.WithString("class_name", mcp.Required(),
 			mcp.Description("Name of the global class to execute, e.g. 'ZCL_MY_RUNNER'")),

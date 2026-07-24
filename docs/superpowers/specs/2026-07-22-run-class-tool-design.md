@@ -68,7 +68,20 @@ interface pre-check** (see Pre-validation).
   paragraph: the class must be a global, instantiable class (CREATE PUBLIC),
   implement IF_OO_ADT_CLASSRUN, and put its logic in `if_oo_adt_classrun~main`;
   only what that method writes to the `out` handler (`out->write( ... )` /
-  `out->write_text( ... )`) is returned as `console_output`.
+  `out->write_text( ... )`) is returned as `console_output`. The description
+  also carries a **temporary "Known limitation" workaround paragraph** (see
+  below) — remove it once adtler#106 is fixed.
+- **Known limitation — classrun load generation (temporary, adtler#106):**
+  classrun executes the class's generated runtime load and does not itself
+  generate it, and ADT activation does not (re)generate it. A class freshly
+  created/activated via this MCP can return the "does not implement
+  `if_oo_adt_classrun~main`" soft-failure (no load yet), and a changed +
+  re-activated class can return the previous version's output (stale load).
+  Confirmed live on S4U (SAP_BASIS 758). Workaround (documented in the tool
+  description): generate the load once by instantiating the class outside
+  classrun (Eclipse "Run as ABAP Application", or a report doing `CREATE
+  OBJECT`) before calling `run_class`. Remove the workaround note here and in
+  the tool description once adtler#106 lands.
 - **Annotations:** `readOnly=false`, `idempotent=false`, `openWorld=true`, and
   **`destructive=true`** — `run_class` can trigger arbitrary side effects
   (COMMIT WORK, deletes). This is the machine-readable hint; the user-facing
