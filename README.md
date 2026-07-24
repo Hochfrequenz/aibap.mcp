@@ -40,7 +40,7 @@ If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP W
 
 Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
 
-## Available tools (71)
+## Available tools (72)
 
 Tools are organized into groups. By default, all groups except `debug` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
@@ -210,12 +210,13 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 </details>
 
 <details>
-<summary><strong>System</strong> — <code>system</code> (2 tools)</summary>
+<summary><strong>System</strong> — <code>system</code> (3 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
 | `select_system` | Switch the active SAP system (multi-system config) |
 | `run_query` | Execute a SELECT query on SAP database tables (read-only) |
+| `run_class` | Execute an ABAP class implementing `IF_OO_ADT_CLASSRUN` and return its console output |
 
 </details>
 
