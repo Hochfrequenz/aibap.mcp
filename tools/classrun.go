@@ -51,10 +51,7 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 		// Confirm AFTER the existence check so a missing class fails cheaply.
 		proceed, reason := ConfirmDestructive(ctx, elicitor, buildRunClassMessage(className))
 		if !proceed {
-			return errorResult(&adt.ADTError{
-				StatusCode: 400,
-				Message:    "run_class aborted: " + reason,
-			}), nil
+			return errorResult(fmt.Errorf("run_class aborted: %s", reason)), nil
 		}
 
 		result, err := client.RunClass(ctx, className)
