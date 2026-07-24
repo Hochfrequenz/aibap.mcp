@@ -43,6 +43,13 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 		// signal (same convention as the object_exists tool). No interface
 		// pre-check - SEOMETAREL misses inherited interfaces; let classrun's
 		// own error surface if the class is not runnable.
+		//
+		// Namespaced classes are handled correctly: a name like "/FOO/CL_BAR"
+		// yields ".../classes//foo/cl_bar" (note the double slash), which
+		// adtler's GetObjectInfo -> doRead -> encodeNamespacePath percent-
+		// encodes to ".../classes/%2ffoo%2fcl_bar". RunClass -> doMutate applies
+		// the identical encoding, so the pre-check and the execution stay
+		// consistent for namespace objects.
 		uri := "/sap/bc/adt/oo/classes/" + strings.ToLower(className)
 		if _, err := client.GetObjectInfo(ctx, uri); err != nil {
 			return errorResult(fmt.Errorf("class %s does not exist: %w", className, err)), nil

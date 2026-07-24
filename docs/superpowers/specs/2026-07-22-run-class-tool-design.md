@@ -2,8 +2,8 @@
 
 - **Date:** 2026-07-22
 - **Repo:** aibap.mcp
-- **Status:** Proposed (revised: decoupled from lock use-case, explicit confirmation)
-- **Companion spec:** adtler `RunClass` endpoint client — `<adtler>/docs/superpowers/specs/2026-07-22-classrun-endpoint-design.md`. This tool **consumes** `adt.Client.RunClass`; this PR is **`blocked-by-adtler`** until that endpoint ships in a tagged adtler release and is bumped here.
+- **Status:** Implemented (this PR; revised: decoupled from lock use-case, explicit confirmation)
+- **Companion spec:** adtler `RunClass` endpoint client — `<adtler>/docs/superpowers/specs/2026-07-22-classrun-endpoint-design.md`. This tool **consumes** `adt.Client.RunClass`, shipped in **adtler v0.3.12** (already on `main`); the tool is **no longer `blocked-by-adtler`**.
 
 ## Motivation
 
@@ -77,7 +77,8 @@ interface pre-check** (see Pre-validation).
   match, so the CLAUDE.md "prefer the adtler struct as the wire type" rule
   applies. Do **not** define a separate `RunClassResult`.
 
-The client dependency is `interface { adt.ObjectClient; adt.ClassRunClient }`,
+The client dependency is `interface { adt.SearchClient; adt.ClassRunClient }`
+(the existence pre-check calls `GetObjectInfo`, which lives on `adt.SearchClient`),
 filled from the `adt.Client` passed to `RegisterAllWithLockMap` — which requires
 adtler to **embed `ClassRunClient` in the aggregate `Client` interface**
 (companion-spec prerequisite; without it the wiring and the `mockClient` break).
@@ -103,9 +104,11 @@ signature: `buildRunClassMessage` takes just `className` and returns a static
 string — unlike `buildDeleteMessage(ctx, uri, sc, qc)`, which enriches the
 prompt with TADIR metadata. No ctx/client params are needed here.
 
-Decline/cancel → `errorResult(&adt.ADTError{StatusCode: 400, Message:
-"run_class aborted: " + reason})`, **no POST** (same wrapping as
-`delete_object`, object.go:152 — `errorResult` takes an `error`, not a string).
+Decline/cancel → `errorResult(fmt.Errorf("run_class aborted: %s", reason))`,
+**no POST** (same wrapping as `run_query`, query.go:74 — a plain error, not a
+fabricated `adt.ADTError{StatusCode: 400}` which would render a misleading
+"SAP ADT error 400" + bad-request/CSRF hint even though no HTTP call was made;
+`errorResult` takes an `error`, not a string).
 When the client wires no `Elicitor` (nil), `ConfirmDestructive` returns
 `(true, "")` and the class runs unconditionally — matching the stock-binary
 behaviour of every other destructive tool (see `elicitation.go`). Confirmation
@@ -150,7 +153,7 @@ run_class(class_name)
 ## Error handling
 
 - **Class missing:** early `errorResult`, no confirmation prompt, no classrun POST.
-- **Confirmation declined/cancelled:** `errorResult(&adt.ADTError{StatusCode: 400, Message: "run_class aborted: " + reason})`, no POST.
+- **Confirmation declined/cancelled:** `errorResult(fmt.Errorf("run_class aborted: %s", reason))`, no POST.
 - **classrun POST failure:** `adt.ADTError` forwarded via `errorResult`; the SAP
   message text (`"SAP ADT error N: "` prefix) flows into the text content.
 - **Runtime exception in the class:** per the adtler verification point — HTTP
@@ -201,7 +204,12 @@ are spec-legal regardless.)
 Coverage: `tools` has no enforced minimum (thin wrapper), but the handler gets
 unit tests per the TDD convention.
 
-## Rollout / linkage (blocked-by-adtler)
+## Rollout / linkage (resolved — no longer blocked)
+
+> **Status update:** all three steps below are done. adtler v0.3.12 shipped
+> `RunClass` and is on `main` (dependabot #458); this branch is rebased onto it
+> and carries the implementation. The historical rollout plan is kept below for
+> context.
 
 1. adtler ships `RunClass` + embeds `ClassRunClient` in `Client` (companion spec), tagged release.
 2. This repo bumps adtler (`go get …@vX.Y.Z`, no pseudo-version to `main`), then adds `run_class`.

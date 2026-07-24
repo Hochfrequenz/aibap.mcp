@@ -126,7 +126,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Modify: `tools/register.go:219` (the `system` group closure)
 
 **Interfaces:**
-- Consumes: `adt.ObjectClient.GetObjectInfo`, `adt.ClassRunClient.RunClass`, `ConfirmDestructive(ctx, Elicitor, string) (bool, string)`, `errorResult(error)`, `mockClient.runClassFn`, `stubElicitor{result,err,called}`, `newTestServerWithFallbackElicitor(client, fallback, elicitor)` (transport_test.go:51).
+- Consumes: `adt.SearchClient.GetObjectInfo` (GetObjectInfo lives on `SearchClient`, not `ObjectClient`), `adt.ClassRunClient.RunClass`, `ConfirmDestructive(ctx, Elicitor, string) (bool, string)`, `errorResult(error)`, `mockClient.runClassFn`, `stubElicitor{result,err,called}`, `newTestServerWithFallbackElicitor(client, fallback, elicitor)` (transport_test.go:51).
 - Produces: MCP tool `run_class` with input `class_name` and output shape `adt.ClassRunResult`.
 
 - [ ] **Step 1: Write the failing unit tests**
@@ -296,7 +296,7 @@ import (
 // classRunClient is the narrow client surface run_class needs: an existence
 // pre-check plus the classrun execution call.
 type classRunClient interface {
-	adt.ObjectClient
+	adt.SearchClient // GetObjectInfo lives here, not on adt.ObjectClient
 	adt.ClassRunClient
 }
 
@@ -326,18 +326,24 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 		// signal (same convention as the object_exists tool). No interface
 		// pre-check — SEOMETAREL misses inherited interfaces; let classrun's
 		// own error surface if the class is not runnable.
+		//
+		// Namespace-safe: "/FOO/CL_BAR" yields ".../classes//foo/cl_bar" (double
+		// slash), which adtler's GetObjectInfo -> encodeNamespacePath encodes to
+		// ".../classes/%2ffoo%2fcl_bar". RunClass -> doMutate encodes identically,
+		// so pre-check and execution agree for namespace objects.
 		uri := "/sap/bc/adt/oo/classes/" + strings.ToLower(className)
 		if _, err := client.GetObjectInfo(ctx, uri); err != nil {
 			return errorResult(fmt.Errorf("class %s does not exist: %w", className, err)), nil
 		}
 
 		// Confirm AFTER the existence check so a missing class fails cheaply.
+		// Decline returns a plain error (matching the run_query sibling), NOT a
+		// fabricated adt.ADTError{StatusCode: 400} — no HTTP call happened, and a
+		// synthetic 400 would render a misleading "SAP ADT error 400" + bad-
+		// request/CSRF hint to the caller.
 		proceed, reason := ConfirmDestructive(ctx, elicitor, buildRunClassMessage(className))
 		if !proceed {
-			return errorResult(&adt.ADTError{
-				StatusCode: 400,
-				Message:    "run_class aborted: " + reason,
-			}), nil
+			return errorResult(fmt.Errorf("run_class aborted: %s", reason)), nil
 		}
 
 		result, err := client.RunClass(ctx, className)
@@ -373,7 +379,7 @@ In `tools/register.go`, extend the `system` group closure (starts at line 219):
 		}},
 ```
 
-`client` is `adt.Client`, which embeds both `ObjectClient` and `ClassRunClient`, so it satisfies `classRunClient`. `elicitor` is already in scope here — no signature change to `RegisterAllWithLockMap`.
+`client` is `adt.Client`, which embeds both `SearchClient` and `ClassRunClient`, so it satisfies `classRunClient`. `elicitor` is already in scope here — no signature change to `RegisterAllWithLockMap`.
 
 - [ ] **Step 5: Run the unit tests to verify they pass**
 
