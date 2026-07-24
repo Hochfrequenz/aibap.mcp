@@ -5,10 +5,12 @@
 MCP server that exposes SAP ADT (ABAP Development Tools) operations as tools for Claude.
 Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 
+**Scope guardrail**: this is an ADT *development-tooling* server. It must not be extended into reading application tables, exporting business data, running SQL against the backend, or agentic workflows over business data — see the intended-scope warning and SAP API Policy in `README.md`. Push back on feature requests that cross that line rather than implementing them.
+
 ## Build & Run
 
-- **Build**: `make build` (or `go build -o aibap.mcp .`)
-- **Lint**: `make lint` (runs `golangci-lint` with `dupl`, `goconst`, `gocyclo` enabled)
+- **Build**: `make build` (produces `mcp-server-abap`; plain `go build .` also works)
+- **Lint**: `make lint` (runs `golangci-lint run ./...`). CI additionally enables `dupl`, `goconst`, `gocyclo` — see `.github/workflows/golangci-lint.yml`.
 - **Format**: `gofmt -w .`
 
 ## Testing
@@ -29,19 +31,24 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 - Only pick up **unassigned** issues. Assign yourself before starting work.
 - Run `gofmt`, `go vet ./...`, and `go test ./...` before committing.
 
+## Issue & PR Comments
+
+- **Write for a cold reader.** Every comment on an issue or PR must stand on its own: clear to someone who has never worked on it and isn't in this conversation. State what you did and why, spell out issue/object/tool references instead of pronouns like "it" or "the fix", and link the relevant commit, PR, or adtler change. Be concise — no filler, no restating the obvious, no narrating your own process.
+- **Independent review before substantive comments.** Before posting an issue analysis, PR description, review summary, or closing rationale, hand the draft to an independent subagent (one with no stake in the work) to check the claims are accurate, the reasoning sound, and it reads clearly cold. Post only after that pass. Trivial acknowledgements and one-line status updates are exempt.
+
 ## Cross-Repo Issue Tracking (adtler)
 
 Since most fixes now live in [adtler](https://github.com/Hochfrequenz/adtler), issues here often can't be closed until the next adtler release is consumed via `go get`. To keep this visible:
 
-1. **Label proactively**: Whenever you (or an agent) conclude that an aibap.mcp issue can't be resolved without an adtler change, immediately add the `blocked-by-adtler` label and append it to the tracking issue — don't wait to be asked. Same rule when you spot a new adtler commit/release that resolves an existing open issue here: label it, add a checklist bullet, link the adtler commit or PR. Query open blockers with `gh issue list --label blocked-by-adtler`.
+1. **Label proactively**: Whenever you (or an agent) conclude that an aibap.mcp issue can't be resolved without an adtler change, immediately add the `blocked-by-adtler` label and append it to the tracking issue. Same rule when you spot a new adtler commit/release that resolves an existing open issue here: label it, add a checklist bullet, link the adtler commit or PR. Query open blockers with `gh issue list --label blocked-by-adtler`.
 2. **Tracking issue**: A single open issue titled `Next adtler release: bump to vX.Y.Z` collects all blocked issues as a checklist, each bullet `- [ ] #<n> — short description (adtler: <commit-or-PR>)`. There should only ever be one such tracking issue open at a time.
 3. **Reproducer snippet on every `blocked-by-adtler` issue**: each such issue must include a copy-pastable MCP tool call (tool name + arguments JSON) or equivalent Go snippet, the target system (`hfq` R/3 / `s4u` S/4), any session preconditions (e.g. "fresh MCP session, no preceding `get_atc_customizing` — see adtler#44"), the "fixed" expected output, and the "broken" current output. This snippet is what the bump PR's reproducer-verify step runs. Without it, false negatives like aibap.mcp#306 are easy to ship. Example: aibap.mcp#288.
 4. **When bumping adtler**:
    - **Automated path (preferred)**: dependabot opens the bump PR automatically on a new adtler release. `.github/workflows/adtler-bump-template.yml` rewrites the PR body with the tracking issue's checklist + pre-populated `Closes #` lines, and adds the `needs-reproducer-verify` label. Walk each linked issue, run its reproducer against the relevant system(s), prune `Closes` lines for anything still failing, and remove the label before merging.
    - **Manual path**: open a branch `chore/bump-adtler-vX.Y.Z`, run `go get github.com/Hochfrequenz/adtler@vX.Y.Z && go mod tidy`, verify `go test ./...` passes, and replicate the same PR-body checklist and reproducer verification by hand.
-   - **Pre-release path (draft release exists, tag not yet pushed)**: when you want to verify reproducers before adtler publishes the tag, open `chore/bump-adtler-vX.Y.Z` and pin to the adtler `main` HEAD via `go get github.com/Hochfrequenz/adtler@<commit-sha>`. This produces a `vX.Y.Z-0.<timestamp>-<sha>` pseudo-version in `go.mod`. Run reproducers as usual, open the PR as `Draft`, and once the real tag publishes push a follow-up commit that re-pins to `@vX.Y.Z` before marking the PR ready. Pseudo-versions must never reach `main`.
+   - **Pre-release path (draft release exists, tag not yet pushed)**: to verify reproducers before adtler publishes the tag, open `chore/bump-adtler-vX.Y.Z` and pin to the adtler `main` HEAD via `go get github.com/Hochfrequenz/adtler@<commit-sha>`. This produces a `vX.Y.Z-0.<timestamp>-<sha>` pseudo-version in `go.mod`. Run reproducers as usual, open the PR as `Draft`, and once the real tag publishes push a follow-up commit that re-pins to `@vX.Y.Z` before marking the PR ready. Pseudo-versions must never reach `main`.
    - Either path: every checked item on the tracking issue's checklist needs its own `Closes #` line in the merged PR body.
-5. **After merge**: open a fresh `Next adtler release: bump to vX.Y.Z` tracking issue, and move any blockers whose reproducer still failed onto its checklist. **If no blockers remain (all reproducers passed and there are no open `blocked-by-adtler` issues), defer creation until the first new blocker arrives — the agent labelling that issue creates the tracker as part of point 1.** Empty trackers are bureaucracy; create on demand.
+5. **After merge**: open a fresh `Next adtler release: bump to vX.Y.Z` tracking issue, and move any blockers whose reproducer still failed onto its checklist. **If no blockers remain (all reproducers passed and there are no open `blocked-by-adtler` issues), defer creation until the first new blocker arrives — the agent labelling that issue creates the tracker as part of point 1.**
 6. **Throwaway reproducer harness**: bump PRs collect every linked issue's reproducer in a single `tools/bump_<version>_verify_integration_test.go` file (build tag `integration`, function names prefixed `TestBumpVerify_`). Issue bodies remain the source of truth for the snippet; this file just makes them tool-callable in one `go test -tags integration -run BumpVerify ./tools/...` invocation. Add a `// Delete after the bump PR merges.` header comment, list the file in the PR's Test Plan as a follow-up deletion item, and remove it in a follow-up commit on the same PR before merge (or in a chore PR immediately after).
 
 ## Adding a New Tool
@@ -63,7 +70,7 @@ The 2025-06-18 MCP spec has first-class support for typed output via `structured
 - Declare the output schema on every tool that returns an object shape: `mcp.WithOutputSchema[T]()` as a `ToolOption` alongside `mcp.WithDescription(...)` etc. `T` is usually an adtler struct (e.g. `adt.ATCCustomizingResult`) or a local result type in `tools/results.go`.
 - Prefer the adtler struct as the wire type when the handler already just marshals one. No parallel DTO layer.
 - If there is no adtler type, define a named struct in `tools/results.go` with explicit `json:"..."` tags. One type per tool is fine. Don't inline `struct{...}` literals or `map[string]any{...}`.
-- Single-handler types (tightly coupled to one registration) can live next to the registration instead of `tools/results.go` — see `RollbackResult`, `NavigationResult`, `VerifyResult`, `BAdIImplementationWithXML`.
+- Single-handler types (tightly coupled to one registration) can live next to the registration instead of `tools/results.go` — see `NavigationResult`, `VerifyResult`, `BAdIImplementationWithXML`.
 
 **Do not:**
 
@@ -119,7 +126,7 @@ SAP ADT endpoints advertise their supported content types and API versions via t
 - **Source path varies by object type**: Programs use `{uri}/source/main`, class includes use `{uri}/includes/{type}` (no `/source/main`), DDIC objects (DTEL, DOMA, TABL) may not have a `/source/main` endpoint at all.
 - **ETag fetching uses a two-step fallback**: `ResolveETag` first calls `GetSource` (fine for source-bearing objects), and if that fails (400 for CLAS on S/4, 404 for DDIC) falls back to `FetchETag` — a GET on the bare object URI with a type-appropriate `Accept` header, which works for all object types. Don't regress this fallback; see adtler#9, adtler#14.
 - **Preserve full Content-Type in ETags**: SAP ETags may embed `text/plain; charset=utf-8` — never strip the charset suffix, or the `If-Match` will fail with 412. See adtler#15 and the `source_etag_charset_integration_test.go` regression guard.
-- **Test against both systems** — the discovery response differs between S/4 and ECC. A content type that works on one may 406 on the other.
+- **Test against both systems** (see Investigating ADT Endpoints, step 7) — discovery responses differ between S/4 and ECC; a content type that works on one may 406 on the other.
 
 ## Coding Pitfalls
 
