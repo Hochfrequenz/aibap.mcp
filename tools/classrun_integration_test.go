@@ -3,6 +3,7 @@
 package tools_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -29,8 +30,27 @@ func TestIntegrationRunClass(t *testing.T) {
 				t.Fatalf("run_class(%q) returned IsError=true: %s", className, textOf(res))
 			}
 
-			if !strings.Contains(textOf(res), "CLASSRUN_OK") {
-				t.Errorf("run_class(%q) console output missing CLASSRUN_OK; got: %s", className, textOf(res))
+			// Parse the typed ClassRunResult and assert on named fields (matching
+			// the harness convention, e.g. TestIntegration_GetSource). A raw
+			// substring on the whole JSON blob would still pass if a
+			// serialization regression swapped the two fields or emitted the
+			// output under the wrong key.
+			var payload struct {
+				ClassName     string `json:"class_name"`
+				ConsoleOutput string `json:"console_output"`
+			}
+			if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
+				t.Fatalf("unmarshal run_class result: %v\nraw: %s", err, textOf(res))
+			}
+			// The tool must echo back the class it actually ran.
+			if payload.ClassName != className {
+				t.Errorf("class_name: got %q, want %q", payload.ClassName, className)
+			}
+			// The sentinel must land in console_output specifically — it appears
+			// in neither the class name nor any request argument, so a match
+			// here can only come from the class actually executing.
+			if !strings.Contains(payload.ConsoleOutput, "CLASSRUN_OK") {
+				t.Errorf("console_output missing CLASSRUN_OK; got: %q", payload.ConsoleOutput)
 			}
 		})
 	}
@@ -64,8 +84,21 @@ func TestIntegrationRunClass_Error(t *testing.T) {
 			if !res.IsError {
 				t.Fatalf("run_class(%q) expected IsError=true on HFQ, got success: %s", className, textOf(res))
 			}
-			if textOf(res) == "" {
-				t.Errorf("run_class(%q) expected non-empty error text on HFQ", className)
+			txt := textOf(res)
+			t.Logf("HFQ run_class(%q) error text: %s", className, txt)
+
+			// IsError alone is not enough: the handler's own existence pre-check
+			// (GetObjectInfo) also yields IsError=true, with a "does not exist"
+			// message, BEFORE RunClass is ever called. This test must prove the
+			// classrun runtime-exception path was exercised — not the pre-check
+			// or any unrelated error. adtler maps an uncaught ABAP exception
+			// (cx_sy_zerodivide here) to a *adt.ADTError with status >= 500,
+			// rendered as "SAP ADT error 5xx: ...".
+			if strings.Contains(txt, "does not exist") {
+				t.Fatalf("run_class hit the existence pre-check, not the classrun runtime-exception path: %s", txt)
+			}
+			if !strings.Contains(txt, "SAP ADT error 5") {
+				t.Errorf("expected a 5xx server dump (cx_sy_zerodivide), got: %s", txt)
 			}
 		})
 	}
