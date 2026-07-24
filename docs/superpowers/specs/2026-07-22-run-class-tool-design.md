@@ -61,10 +61,14 @@ interface pre-check** (see Pre-validation).
   (`/sap/bc/adt/oo/classes/<name>`) itself. Note: `class_name` deviates from the
   usual `paramObjectURI` convention because the handler constructs the URI and
   the adtler call also takes a bare `className`; documented here as intentional.
-- **Description (draft):** *"Execute an ABAP class that implements
-  IF_OO_ADT_CLASSRUN (ADT 'Run as ABAP Application') and return its console
-  output. The class must already exist and be active. Runs arbitrary ABAP —
-  side effects (COMMIT WORK, data changes) are possible."*
+- **Description:** *"Execute an ABAP class that implements IF_OO_ADT_CLASSRUN
+  (ADT 'Run as ABAP Application') and return its console output. The class must
+  already exist and be active. Runs arbitrary ABAP — side effects (COMMIT WORK,
+  data changes, deletions) are possible."* followed by a **Class requirements**
+  paragraph: the class must be a global, instantiable class (CREATE PUBLIC),
+  implement IF_OO_ADT_CLASSRUN, and put its logic in `if_oo_adt_classrun~main`;
+  only what that method writes to the `out` handler (`out->write( ... )` /
+  `out->write_text( ... )`) is returned as `console_output`.
 - **Annotations:** `readOnly=false`, `idempotent=false`, `openWorld=true`, and
   **`destructive=true`** — `run_class` can trigger arbitrary side effects
   (COMMIT WORK, deletes). This is the machine-readable hint; the user-facing

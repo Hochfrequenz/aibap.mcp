@@ -28,7 +28,12 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 			"Execute an ABAP class that implements IF_OO_ADT_CLASSRUN (ADT 'Run as "+
 				"ABAP Application') and return its console output. The class must already "+
 				"exist and be active. Runs arbitrary ABAP - side effects (COMMIT WORK, "+
-				"data changes, deletions) are possible.",
+				"data changes, deletions) are possible.\n\n"+
+				"Class requirements: it must be a global, instantiable class "+
+				"(CREATE PUBLIC), implement the interface IF_OO_ADT_CLASSRUN, and put "+
+				"its logic in the method 'if_oo_adt_classrun~main'. Only what that "+
+				"method writes to the 'out' handler (out->write( ... ) or "+
+				"out->write_text( ... )) is captured and returned as console_output.",
 		),
 		mcp.WithString("class_name", mcp.Required(),
 			mcp.Description("Name of the global class to execute, e.g. 'ZCL_MY_RUNNER'")),
