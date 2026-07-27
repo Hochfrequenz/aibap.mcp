@@ -38,16 +38,19 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 				"its logic in the method 'if_oo_adt_classrun~main'. Only what that "+
 				"method writes to the 'out' handler (out->write( ... ) or "+
 				"out->write_text( ... )) is captured and returned as console_output.\n\n"+
-				"Known limitation (workaround, tracked in adtler#106): classrun runs "+
-				"the class's generated runtime load and does not itself generate it, and "+
-				"activating over ADT does not (re)generate it. So a class freshly "+
-				"created/activated via this MCP can fail with 'does not implement "+
-				"if_oo_adt_classrun~main method' (no load yet), and a class that was "+
-				"changed and re-activated can return the PREVIOUS version's output "+
-				"(stale load). Workaround: generate the load once by instantiating the "+
-				"class outside classrun before calling run_class - e.g. run it in Eclipse "+
-				"('Run as ABAP Application'), or execute a small report that does "+
-				"CREATE OBJECT of the class - then run_class returns the current version.",
+				"Known limitation on S/4 systems (workaround, tracked in adtler#106): "+
+				"on S/4, classrun runs the class's generated runtime load and does not "+
+				"itself generate it, and activating over ADT does not (re)generate it. So "+
+				"on S/4 a class freshly created/activated via this MCP can fail with "+
+				"'does not implement if_oo_adt_classrun~main method' (no load yet), and a "+
+				"class that was changed and re-activated can return the PREVIOUS version's "+
+				"output (stale load). On ECC/R3 systems activation regenerates the load, "+
+				"so run_class works correctly straight after activation and no workaround "+
+				"is needed (verified HFQ vs S4U, 2026-07-27). S/4 workaround: generate the "+
+				"load once by instantiating the class outside classrun before calling "+
+				"run_class - e.g. run it in Eclipse ('Run as ABAP Application'), or execute "+
+				"a small report that does CREATE OBJECT of the class - then run_class "+
+				"returns the current version.",
 		),
 		mcp.WithString("class_name", mcp.Required(),
 			mcp.Description("Name of the global class to execute, e.g. 'ZCL_MY_RUNNER'")),
