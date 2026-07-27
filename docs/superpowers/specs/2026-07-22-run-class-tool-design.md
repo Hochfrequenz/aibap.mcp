@@ -68,23 +68,15 @@ interface pre-check** (see Pre-validation).
   paragraph: the class must be a global, instantiable class (CREATE PUBLIC),
   implement IF_OO_ADT_CLASSRUN, and put its logic in `if_oo_adt_classrun~main`;
   only what that method writes to the `out` handler (`out->write( ... )` /
-  `out->write_text( ... )`) is returned as `console_output`. The description
-  also carries a **temporary "Known limitation" workaround paragraph** (see
-  below) — remove it once adtler#106 is fixed.
-- **Known limitation — classrun load generation on S/4 (temporary, adtler#106):**
-  on S/4, classrun executes the class's generated runtime load and does not
-  itself generate it, and ADT activation does not (re)generate it. A class
-  freshly created/activated via this MCP can return the "does not implement
-  `if_oo_adt_classrun~main`" soft-failure (no load yet), and a changed +
-  re-activated class can return the previous version's output (stale load).
-  **This is S/4-specific:** verified 2026-07-27 that on ECC/R3 (HFQ) activation
-  regenerates the load, so `run_class` works correctly straight after activation
-  and no workaround is needed; both defects reproduce only on S/4 (S4U, SAP_BASIS
-  758). S/4 workaround (documented in the tool description): generate the load
-  once by instantiating the class outside classrun (Eclipse "Run as ABAP
-  Application", or a report doing `CREATE OBJECT`) before calling `run_class`.
-  Remove the workaround note here and in the tool description once adtler#106
-  lands (defect 1 via adtler#107; defect 2 pending the Eclipse-capture work).
+  `out->write_text( ... )`) is returned as `console_output`.
+- **classrun load generation (adtler#106, resolved):** both the fresh-class
+  "does not implement `if_oo_adt_classrun~main`" soft-failure and the stale
+  re-activated output were caused by adtler reusing one HTTP session across the
+  create → activate → run lifecycle on S/4. Fixed in adtler#107: `RunClass` runs
+  each classrun on an isolated fresh session, which generates the load from the
+  current active source. `run_class` now returns correct output on both S/4 and
+  ECC with no manual pre-generation; the temporary workaround note has been
+  removed from the tool description.
 - **Annotations:** `readOnly=false`, `idempotent=false`, `openWorld=true`, and
   **`destructive=true`** — `run_class` can trigger arbitrary side effects
   (COMMIT WORK, deletes). This is the machine-readable hint; the user-facing
