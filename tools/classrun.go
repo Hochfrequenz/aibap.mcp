@@ -46,7 +46,7 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 				"class that was changed and re-activated can return the PREVIOUS version's "+
 				"output (stale load). On ECC/R3 systems activation regenerates the load, "+
 				"so run_class works correctly straight after activation and no workaround "+
-				"is needed (verified HFQ vs S4U, 2026-07-27). S/4 workaround: generate the "+
+				"is needed. S/4 workaround: generate the "+
 				"load once by instantiating the class outside classrun before calling "+
 				"run_class - e.g. run it in Eclipse ('Run as ABAP Application'), or execute "+
 				"a small report that does CREATE OBJECT of the class - then run_class "+
