@@ -29,6 +29,29 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 - Only pick up **unassigned** issues. Assign yourself before starting work.
 - Run `gofmt`, `go vet ./...`, and `go test ./...` before committing.
 
+## Versioning
+
+Releases are tagged `vX.Y.Z`. While the project is pre-1.0, the **minor** position is the
+compatibility axis: bump it whenever a consumer could notice the change without reading the
+code. For an MCP server that means the **tool surface** — the tool list and each tool's
+declared inputs and outputs — not internal structure.
+
+| Change | Bump |
+|---|---|
+| Tool added or removed | **minor** (`0.X.0`) |
+| Parameter added as required, renamed, or removed | **minor** |
+| `outputSchema` / returned shape changed | **minor** |
+| Tool semantics changed — same call, materially different behaviour | **minor** |
+| Bug fix, better error message, internal refactor, docs | **patch** (`0.x.Y`) |
+| Tool description text reworded, no behaviour change | **patch** |
+| adtler bump | **patch**, unless it changes a tool's behaviour or surface — then **minor** |
+
+The adtler row is the one that gets missed. A bump that only removes a workaround is a patch
+(v0.7.7); a bump that makes a previously failing call succeed is a minor.
+
+Do not retag a published version to correct a past bump. Note the correction in that release's
+notes instead — the tag is an identifier, the release notes are the record.
+
 ## Cross-Repo Issue Tracking (adtler)
 
 Since most fixes now live in [adtler](https://github.com/Hochfrequenz/adtler), issues here often can't be closed until the next adtler release is consumed via `go get`. To keep this visible:
