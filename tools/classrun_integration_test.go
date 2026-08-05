@@ -90,6 +90,10 @@ func TestIntegrationRunClass_DataWrite(t *testing.T) {
 			if err := json.Unmarshal([]byte(textOf(res)), &payload); err != nil {
 				t.Fatalf("unmarshal run_class result: %v\nraw: %s", err, textOf(res))
 			}
+			// The tool must echo back the class it actually ran.
+			if payload.ClassName != className {
+				t.Errorf("class_name: got %q, want %q", payload.ClassName, className)
+			}
 
 			// Row values are the part of the contract every system honours —
 			// these can only appear here via the data-dump form actually running.

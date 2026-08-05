@@ -34,9 +34,9 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 				"its logic in the method 'if_oo_adt_classrun~main'. Only what that "+
 				"method writes to the 'out' handler is captured and returned as "+
 				"console_output: out->write( ... ), out->write_text( ... ), or "+
-				"out->write( data = <itab_or_struct> name = '<label>' ) for a formatted "+
-				"dump of an internal table or structure - the practical way to return a "+
-				"result set from a classrun.",
+				"out->write( data = lt_result name = 'RESULT' ) - passing an internal "+
+				"table or structure plus a label - for a formatted dump. This last form "+
+				"is the practical way to return a result set from a classrun.",
 		),
 		mcp.WithString("class_name", mcp.Required(),
 			mcp.Description("Name of the global class to execute, e.g. 'ZCL_MY_RUNNER'")),
