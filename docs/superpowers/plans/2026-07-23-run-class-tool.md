@@ -315,8 +315,11 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 				"Class requirements: it must be a global, instantiable class "+
 				"(CREATE PUBLIC), implement the interface IF_OO_ADT_CLASSRUN, and put "+
 				"its logic in the method 'if_oo_adt_classrun~main'. Only what that "+
-				"method writes to the 'out' handler (out->write( ... ) or "+
-				"out->write_text( ... )) is captured and returned as console_output.",
+				"method writes to the 'out' handler is captured and returned as "+
+				"console_output: out->write( ... ), out->write_text( ... ), or "+
+				"out->write( data = lt_result name = 'RESULT' ) - passing an internal "+
+				"table or structure plus a label - for a formatted dump. This last form "+
+				"is the practical way to return a result set from a classrun.",
 		),
 		mcp.WithString("class_name", mcp.Required(),
 			mcp.Description("Name of the global class to execute, e.g. 'ZCL_MY_RUNNER'")),
@@ -379,6 +382,19 @@ func buildRunClassMessage(className string) string {
 > returns correct output on both S/4 and ECC, so no manual pre-generation is
 > needed. Both defect 1 (fresh class) and defect 2 (stale re-activated output)
 > are covered.
+
+> **Post-ship note (issue #465, resolved):** two independent findings from a
+> GUI-vs-ADT diff experiment. **Part A:** `RunClass` used to POST through
+> adtler's 30-second short-timeout HTTP client regardless of how long the
+> executed ABAP legitimately needed — bounded batch-style use in a way callers
+> could not see or configure. Fixed in adtler v0.3.14 (adtler#115): `RunClass`
+> now goes through the long-timeout client with a caller-overridable 5-minute
+> default deadline, matching `RunQuery`. **Part B:** the description above now
+> documents `out->write( data = lt_result name = 'RESULT' )` — the only
+> convenient way to return a table or structure from a classrun, and not
+> derivable from the `out->write( ... )` / `out->write_text( ... )` forms
+> alone. Verified live: the row values render on both HFQ and S4U, but HFQ
+> silently drops the `name=` label while S4U renders it.
 
 - [ ] **Step 4: Wire the tool into the `system` group**
 

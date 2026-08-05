@@ -67,8 +67,11 @@ interface pre-check** (see Pre-validation).
   data changes, deletions) are possible."* followed by a **Class requirements**
   paragraph: the class must be a global, instantiable class (CREATE PUBLIC),
   implement IF_OO_ADT_CLASSRUN, and put its logic in `if_oo_adt_classrun~main`;
-  only what that method writes to the `out` handler (`out->write( ... )` /
-  `out->write_text( ... )`) is returned as `console_output`.
+  only what that method writes to the `out` handler is returned as
+  `console_output`: `out->write( ... )`, `out->write_text( ... )`, or
+  `out->write( data = lt_result name = 'RESULT' )` for a formatted dump of an
+  internal table or structure — the practical way to return a result set from
+  a classrun.
 - **classrun load generation (adtler#106, resolved):** both the fresh-class
   "does not implement `if_oo_adt_classrun~main`" soft-failure and the stale
   re-activated output were caused by adtler reusing one HTTP session across the
@@ -77,6 +80,14 @@ interface pre-check** (see Pre-validation).
   current active source. `run_class` now returns correct output on both S/4 and
   ECC with no manual pre-generation; the temporary workaround note has been
   removed from the tool description.
+- **classrun 30s timeout cap (issue #465 Part A, resolved):** `RunClass` used
+  to POST through adtler's short-timeout HTTP client (30 s), capping every
+  classrun regardless of how long the executed ABAP legitimately needed —
+  `RunQuery` already used the long-timeout client for the same reason. Fixed
+  in adtler v0.3.14 (adtler#115): `RunClass` now goes through the long-timeout
+  client with a caller-overridable 5-minute default deadline. The
+  `out->write( data =, name = )` write form (issue #465 Part B) is also now
+  documented in the description above.
 - **Annotations:** `readOnly=false`, `idempotent=false`, `openWorld=true`, and
   **`destructive=true`** — `run_class` can trigger arbitrary side effects
   (COMMIT WORK, deletes). This is the machine-readable hint; the user-facing
@@ -171,9 +182,11 @@ run_class(class_name)
 - **Runtime exception in the class:** per the adtler verification point — HTTP
   error → `errorResult`; 200-with-text → success with the error text in
   `console_output`, caller interprets. No exception-specific branch here.
-- **Large output / long run:** bounded by adtler's HTTP client timeout (30 s);
-  console output returned in full (no client-side truncation). Noted, not
-  specially handled.
+- **Large output / long run:** bounded by adtler's long-timeout HTTP client's
+  caller-overridable 5-minute default deadline (issue #465 Part A, resolved
+  via adtler v0.3.14 — see the resolved bullet above; was a hard 30 s cap
+  before the bump); console output returned in full (no client-side
+  truncation). Noted, not specially handled.
 
 ## Structured-content guardrail
 
