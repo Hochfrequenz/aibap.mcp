@@ -137,7 +137,7 @@ func run() error {
 	}()
 
 	s := server.NewMCPServer("SAP ADT MCP Server", version,
-		server.WithInstructions(serverInstructions(systemNames, cfg.DefaultSystem)),
+		server.WithInstructions(serverInstructions(systemNames, cfg.DefaultSystem, enabledGroups["debug"])),
 		server.WithElicitation(),
 	)
 	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups, blackMagic, s)
@@ -146,7 +146,15 @@ func run() error {
 	return stdioServer.Listen(ctx, os.Stdin, os.Stdout)
 }
 
-func serverInstructions(systemNames []string, defaultSystem string) string {
+func serverInstructions(systemNames []string, defaultSystem string, debugEnabled bool) string {
+	// The debugger tools (breakpoints, stepping, variable inspection) are an
+	// opt-in group, off by default (see tools.DefaultGroups / #429). Only
+	// advertise the capability when the group is actually enabled — otherwise
+	// the instructions promise tools the client cannot see.
+	debugLine := ""
+	if debugEnabled {
+		debugLine = "\n- Debugging (breakpoints, stepping, variable inspection)"
+	}
 	return fmt.Sprintf(`SAP ADT (ABAP Development Tools) MCP server. Operates on SAP via HTTP/REST — no GUI required.
 
 BEST FOR:
@@ -155,8 +163,7 @@ BEST FOR:
 - Transport management (get_transport_requests, create_transport, release_transport on S4)
 - Activation, syntax checks, ATC checks, unit tests
 - Code completion, pretty printing, refactoring
-- DDIC lookups (get_object_info, get_ddic_info)
-- Debugging (breakpoints, stepping, variable inspection)
+- DDIC lookups (get_object_info, get_ddic_info)%s
 
 WHEN TO USE sap-desktop/sap-webgui MCP INSTEAD:
 If SAP GUI MCP tools are available, prefer them for:
@@ -173,7 +180,7 @@ You MUST NOT use it for: programmatic reading of application/business tables, bu
 Violating this scope breaches the SAP API Policy: https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf
 
 AVAILABLE SYSTEMS: %s (default: %q)
-Use select_system to switch between systems.`, strings.Join(systemNames, ", "), defaultSystem)
+Use select_system to switch between systems.`, debugLine, strings.Join(systemNames, ", "), defaultSystem)
 }
 
 // findConfigFile searches for the config file in standard locations.

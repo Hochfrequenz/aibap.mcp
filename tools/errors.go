@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -25,6 +26,15 @@ const (
 	// both possibilities (adt.ClassifyError collapses both to
 	// ErrorMethodNotAllowed). See mcp-server-abap #406.
 	methodNotAllowedHint = "Method not allowed (405) — either the operation is not supported for this resource, or (on ECC) the object already exists. Check with `object_exists` / `search_objects`."
+	// noDeleteHandlerHint: some resources have no DELETE handler and reject it
+	// with 405 "... does not support method DELETE" — notably SAP Gateway VIT
+	// objects (IWSG/IWOM/OA2S). ADT cannot delete these at all; the correct 406
+	// Accept header (adtler#73) gets past the ETag fetch, but the DELETE itself
+	// is unsupported over ADT REST. Point the user at a GUI/black-magic path.
+	// Matched on localised message text (see matchHint), so it misses on
+	// non-English systems and degrades to methodNotAllowedHint there.
+	// See #404 (local) and adtler#73 (the 406 Accept-header fix).
+	noDeleteHandlerHint = "This object cannot be deleted via ADT — the resource has no DELETE handler (e.g. SAP Gateway VIT objects: IWSG/IWOM/OA2S). Delete it from a GUI (SE80 / SEGW) via the `sapwebgui` MCP, or use a BlackMagic-backed path."
 	// creationFailedHint: object-creation endpoints report a name collision as
 	// ExceptionResourceCreationFailure (HTTP 500), not as
 	// ExceptionResourceAlreadyExists — so name that likely cause first rather
@@ -36,6 +46,15 @@ const (
 	serverErrorHint    = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
 	transportHint      = "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."
 	inactiveHint       = "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."
+	// objectLockedInTransportHint names the blocking request (parsed by adtler
+	// from the 409 message — see adt.ADTError.LockingTransport) so the caller
+	// can act on it directly. The %[1]s verb is the request ID, reused twice.
+	// This is a CTS object-directory registration, a different lock domain from
+	// the runtime ENQUEUE, so unlock_object/force_unlock/SM12 do NOT clear it —
+	// the fix is to write to the request the object is already registered in.
+	// The request may belong to another user (as in #442's own repro), so we do
+	// not auto-retry; we surface it for the caller to decide. See #442.
+	objectLockedInTransportHint = "The object is already registered in open transport request `%[1]s` — a CTS registration, distinct from the runtime lock, so `unlock_object`/`force_unlock`/SM12 will not clear it. Retry the write with `transport=%[1]s`. If `%[1]s` is not yours to use, coordinate with its owner or reassign the object via SE09/SE10."
 )
 
 // hintByKind maps an adt.ErrorKind to the MCP-flavored recovery hint. Kinds
@@ -93,19 +112,46 @@ func errorResult(err error) *mcp.CallToolResult {
 // matchHint returns an actionable recovery hint for an error, or "" if none
 // applies. It classifies the error via adt.ClassifyError (which prefers the
 // SAP-stable exception Type over the HTTP status code) and looks up the hint
-// wording by kind, with two consumer-side refinements that adtler's
+// wording by kind, with several consumer-side refinements that adtler's
 // protocol-level classification intentionally does not cover:
 //
+//   - An object locked in another open CTS request (ErrorObjectLockedInTransport)
+//     gets a hint naming that request (dynamic, so not in the static map).
+//   - A 405 "… does not support method DELETE" (e.g. Gateway VIT objects) gets
+//     the no-delete-handler hint instead of the generic method-not-allowed one.
 //   - A 400 that mentions a transport gets the more specific transport hint
 //     instead of the generic bad-request hint.
 //   - Errors that carry no ADT Type or status — plain Go errors such as the
 //     ReleaseTransport "… is inactive" failure, or our own English
 //     "already exists" messages — are matched on localised text as a last
-//     resort. This tier is language-fragile (it silently misses on German
-//     systems) and is kept only for conditions with no clean Type (#406).
+//     resort.
+//
+// The last two bullets (and the 405 refinement) match on localised message
+// text, so they are language-fragile: they silently miss on non-English
+// systems and degrade to the kind-based hint. That tradeoff is accepted for
+// conditions with no clean Type (#406, #404).
 func matchHint(err error) string {
 	kind := adt.ClassifyError(err)
 	errText := strings.ToLower(err.Error())
+
+	// Object registered in another open CTS request: name that request so the
+	// caller can retarget the write at it. Dynamic (embeds the parsed request
+	// ID), so it cannot live in the static hintByKind map.
+	if kind == adt.ErrorObjectLockedInTransport {
+		if tr, ok := lockingTransportOf(err); ok {
+			return fmt.Sprintf(objectLockedInTransportHint, tr)
+		}
+		// adtler only assigns this kind when a request ID was parsed, so this is
+		// effectively unreachable; fall back to the generic conflict hint.
+		return lockConflictHint
+	}
+
+	// A resource with no DELETE handler (405 "... does not support method
+	// DELETE" — e.g. SAP Gateway VIT objects) gets the actionable no-delete
+	// hint instead of the generic method-not-allowed one. See #404.
+	if kind == adt.ErrorMethodNotAllowed && strings.Contains(errText, "does not support method delete") {
+		return noDeleteHandlerHint
+	}
 
 	// Transport-specific 400 beats the generic bad-request hint.
 	if kind == adt.ErrorBadRequest && strings.Contains(errText, "transport") {
@@ -123,4 +169,15 @@ func matchHint(err error) string {
 		return inactiveHint
 	}
 	return ""
+}
+
+// lockingTransportOf extracts the CTS request named in a "locked in request
+// <TR>" conflict, unwrapping to the underlying *adt.ADTError. The parse itself
+// lives in adtler (adt.ADTError.LockingTransport).
+func lockingTransportOf(err error) (string, bool) {
+	var adtErr *adt.ADTError
+	if errors.As(err, &adtErr) {
+		return adtErr.LockingTransport()
+	}
+	return "", false
 }

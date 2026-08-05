@@ -154,7 +154,10 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),
 		mcp.WithOutputSchema[ReleaseTransportResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		transport := req.GetString("transport", "")
+		transport, errRes := requireString(req, "transport")
+		if errRes != nil {
+			return errRes, nil
+		}
 		proceed, reason := ConfirmDestructive(ctx, elicitor,
 			"Confirm release of transport "+transport+". Once released it cannot be edited.")
 		if !proceed {
@@ -202,7 +205,10 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to delete")),
 		mcp.WithOutputSchema[DeleteTransportResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		transport := req.GetString("transport", "")
+		transport, errRes := requireString(req, "transport")
+		if errRes != nil {
+			return errRes, nil
+		}
 		proceed, reason := ConfirmDestructive(ctx, elicitor,
 			"Confirm deletion of transport "+transport+". This is irreversible.")
 		if !proceed {
@@ -266,7 +272,10 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number")),
 		mcp.WithOutputSchema[TransportObjectsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		transport := req.GetString("transport", "")
+		transport, errRes := requireString(req, "transport")
+		if errRes != nil {
+			return errRes, nil
+		}
 		objects, err := client.GetTransportObjects(ctx, transport)
 		if err != nil {
 			return errorResult(err), nil
