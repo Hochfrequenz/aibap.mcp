@@ -32,8 +32,11 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 				"Class requirements: it must be a global, instantiable class "+
 				"(CREATE PUBLIC), implement the interface IF_OO_ADT_CLASSRUN, and put "+
 				"its logic in the method 'if_oo_adt_classrun~main'. Only what that "+
-				"method writes to the 'out' handler (out->write( ... ) or "+
-				"out->write_text( ... )) is captured and returned as console_output.",
+				"method writes to the 'out' handler is captured and returned as "+
+				"console_output: out->write( ... ), out->write_text( ... ), or "+
+				"out->write( data = lt_result name = 'RESULT' ) - passing an internal "+
+				"table or structure plus a label - for a formatted dump. This last form "+
+				"is the practical way to return a result set from a classrun.",
 		),
 		mcp.WithString("class_name", mcp.Required(),
 			mcp.Description("Name of the global class to execute, e.g. 'ZCL_MY_RUNNER'")),
