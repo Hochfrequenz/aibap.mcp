@@ -33,7 +33,7 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 
 ## Issue & PR Comments
 
-- **Write for a cold reader.** Every comment on an issue or PR must stand on its own: clear to someone who has never worked on it and isn't in this conversation. State what you did and why, spell out issue/object/tool references instead of pronouns like "it" or "the fix", and link the relevant commit, PR, or adtler change. Be concise — no filler, no restating the obvious, no narrating your own process.
+- **Write for a cold reader.** Every comment on an issue and issue bodies in general or PR descriptions and code changes must stand on its own: clear to someone who has never worked on it and isn't in this conversation. State what you did and why, spell out issue/object/tool references instead of pronouns like "it" or "the fix", and link the relevant commit, PR, or adtler change. Be concise — no filler, no restating the obvious, no narrating your own process.
 - **Independent review before substantive comments.** Before posting an issue analysis, PR description, review summary, or closing rationale, hand the draft to an independent subagent (one with no stake in the work) to check the claims are accurate, the reasoning sound, and it reads clearly cold. Post only after that pass. Trivial acknowledgements and one-line status updates are exempt.
 
 ## Cross-Repo Issue Tracking (adtler)
