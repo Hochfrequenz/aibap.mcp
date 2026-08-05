@@ -31,6 +31,29 @@ Go project using `mcp-go` for the MCP protocol and `stdio` transport.
 - Only pick up **unassigned** issues. Assign yourself before starting work.
 - Run `gofmt`, `go vet ./...`, and `go test ./...` before committing.
 
+## Versioning
+
+Releases are tagged `vX.Y.Z`. While the project is pre-1.0, the **minor** position is the
+compatibility axis: bump it whenever a consumer could notice the change without reading the
+code. For an MCP server that means the **tool surface** — the tool list and each tool's
+declared inputs and outputs — not internal structure.
+
+| Change | Bump |
+|---|---|
+| Tool added or removed | **minor** (`0.X.0`) |
+| Parameter added as required, renamed, or removed | **minor** |
+| `outputSchema` / returned shape changed | **minor** |
+| Tool semantics changed — same call, materially different behavior | **minor** |
+| Bug fix, better error message, internal refactor, docs | **patch** (`0.x.Y`) |
+| Tool description text reworded, no behavior change | **patch** |
+| adtler bump | **patch**, unless it changes a tool's behavior or surface — then **minor** |
+
+The adtler row is the one that gets missed. A bump that only removes a workaround is a patch
+(v0.7.7); a bump that makes a previously failing call succeed is a minor.
+
+Do not retag a published version to correct a past bump. Note the correction in that release's
+notes instead — the tag is an identifier, the release notes are the record.
+
 ## Issue & PR Comments
 
 - **Write for a cold reader.** Every comment on an issue and issue bodies in general or PR descriptions and code changes must stand on its own: clear to someone who has never worked on it and isn't in this conversation. State what you did and why, spell out issue/object/tool references instead of pronouns like "it" or "the fix", and link the relevant commit, PR, or adtler change. Be concise — no filler, no restating the obvious, no narrating your own process.
