@@ -41,10 +41,10 @@ declared inputs and outputs — not internal structure.
 | Tool added or removed | **minor** (`0.X.0`) |
 | Parameter added as required, renamed, or removed | **minor** |
 | `outputSchema` / returned shape changed | **minor** |
-| Tool semantics changed — same call, materially different behaviour | **minor** |
+| Tool semantics changed — same call, materially different behavior | **minor** |
 | Bug fix, better error message, internal refactor, docs | **patch** (`0.x.Y`) |
-| Tool description text reworded, no behaviour change | **patch** |
-| adtler bump | **patch**, unless it changes a tool's behaviour or surface — then **minor** |
+| Tool description text reworded, no behavior change | **patch** |
+| adtler bump | **patch**, unless it changes a tool's behavior or surface — then **minor** |
 
 The adtler row is the one that gets missed. A bump that only removes a workaround is a patch
 (v0.7.7); a bump that makes a previously failing call succeed is a minor.
