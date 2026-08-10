@@ -18,9 +18,6 @@ When using this MCP server, make sure to obey the [SAP API Policy](https://help.
 > [!TIP]
 > **Your agent can run the ABAP it just wrote — `run_class`!** 🚀 This server does not stop at writing and activating code, it closes the loop: `create_object` → `set_source_from_file` → `activate_object` → **`run_class`**, which invokes ADT's classrun (*Run as ABAP Application*) on any global, active class implementing `IF_OO_ADT_CLASSRUN` and hands the console output back to the agent. So the agent can check what its code actually printed instead of asserting that it works — the runtime-only defects a syntax check never sees. Nothing to install on the SAP side. See [Available tools](#available-tools-72).
 
-> [!WARNING]
-> **`run_class` executes arbitrary ABAP** under the configured user, including `COMMIT WORK`, data changes, and deletions. It is annotated `destructive`, and on MCP clients that support elicitation (Claude Desktop and Claude Code do) it asks for explicit confirmation before every run. **Clients without elicitation support get no prompt and the class runs unconditionally** — the same behaviour as every other destructive tool here. Review the class before approving it, and point this at development systems.
-
 ## How it works
 
 The server connects to your SAP system via the **SAP ADT (ABAP Development Tools) REST API** — the same HTTP API that ABAP Development Tools for Eclipse uses under the hood. For the vast majority of operations, that's all you need: no SAP GUI, no RFC, no additional middleware.
