@@ -281,7 +281,7 @@ Create `~/.config/sap-mcp/systems.json` (shared with [sapgui.mcp](https://github
 ```
 
 > [!TIP]
-> **Keep the password out of the file.** Any string field may reference an environment variable with `${env:VAR}`:
+> **Keep the password out of the file.** A system's string fields — `connection_name`, `host`, `client`, `user`, `password`, `language`, `oauth2_client_id` — and the top-level `default_system` may reference an environment variable with `${env:VAR}`:
 >
 > ```json
 > "user": "${env:SAP_DEV_USER}",
@@ -289,6 +289,8 @@ Create `~/.config/sap-mcp/systems.json` (shared with [sapgui.mcp](https://github
 > ```
 >
 > The file then carries only structure — which systems exist, their hosts and clients — so it can be committed and shared, while credentials come from your environment or CI secret store. This is especially useful for the Docker setup below, where the config is mounted but the secrets can be passed with `-e`. A referenced variable that is unset or empty is a startup error naming the variable, never a silently empty credential.
+>
+> Placeholders are **not** resolved in the `tools` list or in system names — those are read by this server rather than by the shared config layer. Text that only looks like a placeholder, such as `${SAP_PASSWORD}` without the `env:` prefix, is used verbatim.
 >
 > See [sap-mcp-config](https://github.com/Hochfrequenz/sap-mcp-config#keeping-secrets-out-of-the-config-file) for the exact rules, including which text is and is not treated as a placeholder.
 
