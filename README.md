@@ -15,6 +15,9 @@ When using this MCP server, make sure to obey the [SAP API Policy](https://help.
 
 ---
 
+> [!TIP]
+> **Your agent can run the ABAP it just wrote — `run_class`!** 🚀 This server does not stop at writing and activating code, it closes the loop: `create_object` → `set_source_from_file` → `activate_object` → **`run_class`**, which invokes ADT's classrun (*Run as ABAP Application*) on any global, active class implementing `IF_OO_ADT_CLASSRUN` and hands the console output back to the agent. So the agent can check what its code actually printed instead of asserting that it works — the runtime-only defects a syntax check never sees. Nothing to install on the SAP side. See [Available tools](#available-tools-72).
+
 ## How it works
 
 The server connects to your SAP system via the **SAP ADT (ABAP Development Tools) REST API** — the same HTTP API that ABAP Development Tools for Eclipse uses under the hood. For the vast majority of operations, that's all you need: no SAP GUI, no RFC, no additional middleware.
@@ -276,6 +279,20 @@ Create `~/.config/sap-mcp/systems.json` (shared with [sapgui.mcp](https://github
   }
 }
 ```
+
+> [!TIP]
+> **Keep the password out of the file.** A system's string fields — `connection_name`, `host`, `client`, `user`, `password`, `language`, `oauth2_client_id` — and the top-level `default_system` may reference an environment variable with `${env:VAR}`:
+>
+> ```json
+> "user": "${env:SAP_DEV_USER}",
+> "password": "${env:SAP_DEV_PASSWORD}"
+> ```
+>
+> The file then carries only structure — which systems exist, their hosts and clients — so it can be committed and shared, while credentials come from your environment or CI secret store. This is especially useful for the Docker setup below, where the config is mounted but the secrets can be passed with `-e`. A referenced variable that is unset or empty is a startup error naming the variable, never a silently empty credential.
+>
+> Placeholders are **not** resolved in the `tools` list or in system names — those are read by this server rather than by the shared config layer. Text that only looks like a placeholder, such as `${SAP_PASSWORD}` without the `env:` prefix, is used verbatim.
+>
+> See [sap-mcp-config](https://github.com/Hochfrequenz/sap-mcp-config#keeping-secrets-out-of-the-config-file) for the exact rules, including which text is and is not treated as a placeholder.
 
 ### 3. Connect to Claude
 
