@@ -36,7 +36,13 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 				"console_output: out->write( ... ), out->write_text( ... ), or "+
 				"out->write( data = lt_result name = 'RESULT' ) - passing an internal "+
 				"table or structure plus a label - for a formatted dump. This last form "+
-				"is the practical way to return a result set from a classrun.",
+				"is the practical way to return a result set from a classrun.\n\n"+
+				"SAP API Policy: this tool is intended for development tooling only. "+
+				"Do not use it to read or export business data - a SELECT inside the "+
+				"executed ABAP is subject to the same policy as run_query, which the "+
+				"class runner would otherwise bypass. The restriction follows the data "+
+				"being touched, not the tool used to touch it "+
+				"(https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf).",
 		),
 		mcp.WithString("class_name", mcp.Required(),
 			mcp.Description("Name of the global class to execute, e.g. 'ZCL_MY_RUNNER'")),

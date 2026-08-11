@@ -162,6 +162,7 @@ BEST FOR:
 - Creating ABAP objects (create_object: PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA)
 - Transport management (get_transport_requests, create_transport, release_transport on S4)
 - Activation, syntax checks, ATC checks, unit tests
+- Executing ABAP (run_class: runs a global, active class implementing IF_OO_ADT_CLASSRUN and returns its console output — use it to verify generated code produces the expected result. Runs arbitrary ABAP with real side effects and asks the user to confirm first.)
 - Code completion, pretty printing, refactoring
 - DDIC lookups (get_object_info, get_ddic_info)%s
 
@@ -177,6 +178,7 @@ If SAP GUI MCP tools are available, prefer them for:
 SAP API POLICY — MANDATORY:
 This server uses the SAP ADT API which is scoped to development tooling only.
 You MUST NOT use it for: programmatic reading of application/business tables, business data export or integration, SQL queries on production data, agentic workflows operating on business data, or as a substitute for SAP business APIs (OData, BAPI, RFC).
+This covers any ABAP or SQL you execute through this server, run_class included: the restriction follows the data being touched, not the tool used to touch it.
 Violating this scope breaches the SAP API Policy: https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf
 
 AVAILABLE SYSTEMS: %s (default: %q)
