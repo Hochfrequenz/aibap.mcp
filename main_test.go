@@ -35,7 +35,13 @@ func TestServerInstructions_AlwaysPresentContent(t *testing.T) {
 			"BEST FOR:",
 			"get_source, patch_source",
 			"DDIC lookups (get_object_info, get_ddic_info)",
+			// run_class is in the default-on "system" group, so unlike the
+			// debugger bullet this one is unconditional (#473).
+			"run_class: runs a global, active class implementing IF_OO_ADT_CLASSRUN",
 			"SAP API POLICY",
+			// The policy must stay tool-agnostic: run_class can reach business
+			// data by SELECTing inside ABAP, bypassing run_query's purpose gate.
+			"the restriction follows the data being touched, not the tool used to touch it",
 			"AVAILABLE SYSTEMS: SYS_A, SYS_B (default: \"SYS_A\")",
 			"Use select_system to switch between systems.",
 		} {
