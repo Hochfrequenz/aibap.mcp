@@ -165,11 +165,13 @@ func newSessionServer(
 // the request is sent anyway, because nothing between ConfirmDestructive and
 // the session checks GetClientCapabilities().Elicitation.
 //
-// The assertion is deliberately on the request being *sent*, not on the tool
-// outcome: the outcome depends on what the particular client answers (a
-// decline blocks, a JSON-RPC error blocks, silence hangs), whereas sending
-// the request at all is the server-side defect. When a capability gate lands,
-// this test is the one that has to change, and its failure message says so.
+// The load-bearing assertion is that the request was sent. The outcome
+// assertions below it are secondary, because the outcome depends on what the
+// particular client answers (this one declines, another returns a JSON-RPC
+// error, a third never replies and the call hangs) — whereas sending the
+// request at all is the server-side defect regardless of the answer. When a
+// capability gate lands, this test is the one that has to change, and its
+// failure message says so.
 func TestElicitation_ClientWithoutDeclaredCapability_IsStillAsked(t *testing.T) {
 	sess := newRecordingSession(mcp.ClientCapabilities{}, declineReply())
 	s, ctx := newSessionServer(&mockClient{}, nil, sess)
