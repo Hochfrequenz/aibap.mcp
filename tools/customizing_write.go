@@ -58,7 +58,7 @@ func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient, elici
 				"to be configured. Without it, this tool will return an error with guidance "+
 				"to use SAP GUI (SM30) directly. "+
 				"Each entry has an optional \"op\" field: \"upsert\" (default) inserts or updates; \"delete\" removes the row matching keys."+
-				DestructiveConfirmationNote,
+				confirmationNote(elicitor),
 		),
 		mcp.WithString("table", mcp.Required(), mcp.Description("Customizing table or view name (e.g. V_T077D, T001W)")),
 		mcp.WithArray("entries", mcp.Required(),

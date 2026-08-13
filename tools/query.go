@@ -51,11 +51,10 @@ func registerQueryTools(s toolAdder, client adt.QueryClient, elicitor Elicitor) 
 				"Valid values: "+validPurposesInline+". "+
 				"Queries outside these categories may violate the SAP API Policy "+
 				"(https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf). "+
-				"A missing or unrecognised 'purpose' is the one case this tool confirms: "+
-				"it asks rather than rejecting the query outright."+
-				DestructiveConfirmationNote,
+				missingPurposeClause(elicitor)+
+				confirmationNote(elicitor),
 		),
-		withQueryPurposeParam(),
+		withQueryPurposeParam(elicitor),
 		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL SELECT statement, e.g. 'SELECT BUKRS, BUTXT FROM T001'")),
 		mcp.WithNumber("max_rows", mcp.Description("Maximum number of rows to return (default: 100)")),
 		mcp.WithOutputSchema[adt.QueryResult](),
@@ -88,14 +87,38 @@ func registerQueryTools(s toolAdder, client adt.QueryClient, elicitor Elicitor) 
 	})
 }
 
+// missingPurposeClause states what run_query does when 'purpose' is missing or
+// unrecognised. That is the tool's only guarded branch, and which way it goes
+// depends on the wiring: with an Elicitor the handler asks, without one it
+// rejects locally (see the handler above). Both descriptions have to be true
+// of the build that emits them — see confirmationNote.
+func missingPurposeClause(el Elicitor) string {
+	if el == nil {
+		return "A missing or unrecognised 'purpose' causes the query to be rejected without reaching SAP. "
+	}
+	return "A missing or unrecognised 'purpose' is the one case this tool confirms: " +
+		"it asks rather than rejecting the query outright."
+}
+
 // withQueryPurposeParam adds the optional "purpose" parameter to the run_query
 // tool definition. The parameter is intentionally NOT required and carries no
 // enum constraint in the JSON Schema: a schema-level required+enum would cause
 // conforming MCP clients to reject calls with a missing or unrecognised value
 // before they reach the handler, making it impossible for the Elicitor to ask
-// the user for confirmation. Enforcement and human-in-the-loop confirmation are
-// handled exclusively in the handler.
-func withQueryPurposeParam() mcp.ToolOption {
+// for confirmation. Enforcement and confirmation are handled exclusively in
+// the handler.
+//
+// The parameter description carries the same wiring-dependent statement as
+// missingPurposeClause, and for the same reason: an embedder with no Elicitor
+// gets a rejection, not a prompt. It also avoids claiming a human sees the
+// confirmation — the client may decline on its own (#475).
+func withQueryPurposeParam(el Elicitor) mcp.ToolOption {
+	outcome := "Omitting it or using a different value causes the query to be rejected."
+	if el != nil {
+		outcome = "Omitting it or using a different value makes this tool request a confirmation from " +
+			"the MCP client instead of running the query; that confirmation can be declined without " +
+			"anyone being prompted."
+	}
 	return func(t *mcp.Tool) {
 		t.InputSchema.Properties["purpose"] = map[string]any{
 			"type": "string",
@@ -104,7 +127,7 @@ func withQueryPurposeParam() mcp.ToolOption {
 				"customizing_review (Customizing tables: T001, TVARVC, …), " +
 				"transport_tracking (transport catalog tables: E070, E071, …), " +
 				"development_metadata (development object catalog: TRDIR, TADIR, PROGDIR, …). " +
-				"Omitting or using a different value triggers human confirmation.",
+				outcome,
 		}
 	}
 }

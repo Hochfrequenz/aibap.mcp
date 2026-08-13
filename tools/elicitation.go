@@ -16,11 +16,12 @@ type Elicitor interface {
 	RequestElicitation(ctx context.Context, req mcp.ElicitationRequest) (*mcp.ElicitationResult, error)
 }
 
-// DestructiveConfirmationNote is appended to the description of every tool
-// that routes through ConfirmDestructive, so a caller reading tools/list can
-// see that a confirmation is requested and that its outcome is the client's.
-// Guarded by TestGuardedToolDescriptionsCarryTheConfirmationNote, which keeps
-// the set of tools carrying it identical to the set that actually confirms.
+// DestructiveConfirmationNote is appended — via confirmationNote below — to
+// the description of every tool that routes through ConfirmDestructive, so a
+// caller reading tools/list can see that a confirmation is requested and that
+// its outcome is the client's. Guarded by
+// TestGuardedToolDescriptionsCarryTheConfirmationNote, which keeps the set of
+// tools carrying it identical to the set that actually confirms.
 //
 // The second sentence is not padding: on this server's stdio transport the
 // request goes out regardless of what the client declared during initialize
@@ -30,6 +31,24 @@ type Elicitor interface {
 const DestructiveConfirmationNote = "\n\nConfirmation: the MCP client is asked to confirm before this runs. " +
 	"Clients that support elicitation prompt the user; clients that do not answer on their " +
 	"own, usually refusing — so an abort here does not necessarily mean a person declined."
+
+// confirmationNote returns DestructiveConfirmationNote for a build that can
+// actually confirm, and "" for one that cannot.
+//
+// The note has to follow the wiring, not just the tool. RegisterAll passes a
+// nil Elicitor and RegisterAllWithLockMap accepts one, so an embedder can
+// register these tools with nothing to elicit through — ConfirmDestructive
+// then returns (true, "") without sending anything. Appending the note
+// unconditionally would promise those callers a confirmation that cannot
+// happen, which is the same class of untrue documentation issue #475 set out
+// to fix. The shipped main.go always wires the server itself, so the note is
+// present in every released binary.
+func confirmationNote(el Elicitor) string {
+	if el == nil {
+		return ""
+	}
+	return DestructiveConfirmationNote
+}
 
 // ConfirmDestructive asks the client to confirm a destructive operation via
 // MCP elicitation. Returns (true, "") when the operation should proceed, or

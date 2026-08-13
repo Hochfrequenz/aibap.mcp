@@ -18,7 +18,7 @@ func registerRefactoringTools(s toolAdder, client adt.RefactoringClient, elicito
 			"Rename an ABAP variable, method, or other symbol. Automatically finds and updates all references. "+
 				"Pass the source URI with position of the symbol to rename "+
 				"(e.g. /sap/bc/adt/programs/programs/z_report/source/main#start=5,7)."+
-				DestructiveConfirmationNote,
+				confirmationNote(elicitor),
 		),
 		mcp.WithString("source_uri", mcp.Required(), mcp.Description("Source URI with position of the symbol (#start=line,col)")),
 		mcp.WithString("new_name", mcp.Required(), mcp.Description("New name for the symbol")),
