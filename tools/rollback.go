@@ -19,7 +19,8 @@ func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
 			"Restore all source objects in a transport to their version before the transport. "+
 				"For each PROG/CLAS/INTF/FUGR: reads version history, finds the pre-transport version, "+
 				"and restores the source. Non-source objects (TABL, DTEL, etc.) are skipped. "+
-				"This is destructive — it overwrites current source with historical versions.",
+				"This is destructive — it overwrites current source with historical versions."+
+				confirmationNote(elicitor),
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number to roll back")),
 		mcp.WithOutputSchema[adt.RollbackResult](),

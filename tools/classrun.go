@@ -42,7 +42,8 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 				"executed ABAP is subject to the same policy as run_query, which the "+
 				"class runner would otherwise bypass. The restriction follows the data "+
 				"being touched, not the tool used to touch it "+
-				"(https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf).",
+				"(https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf)."+
+				confirmationNote(elicitor),
 		),
 		mcp.WithString("class_name", mcp.Required(),
 			mcp.Description("Name of the global class to execute, e.g. 'ZCL_MY_RUNNER'")),

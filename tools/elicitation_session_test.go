@@ -396,6 +396,125 @@ func TestGuardedToolsAskForConfirmation(t *testing.T) {
 	}
 }
 
+// TestGuardedToolDescriptionsCarryTheConfirmationNote pins the documentation
+// half of #475: the fact that a confirmation is requested — and that its
+// outcome depends on the client, not necessarily on a person — has to travel
+// with the tool, because a caller reading tools/list sees nothing else.
+//
+// Both directions again: a guarded tool without the note is a tool whose
+// caller cannot know it confirms, and an unguarded tool carrying the note
+// promises a prompt that never comes. guardedTools is the shared source of
+// truth, so a new destructive tool trips this test and
+// TestGuardedToolsAskForConfirmation together.
+func TestGuardedToolDescriptionsCarryTheConfirmationNote(t *testing.T) {
+	probe, _ := newSessionServer(&mockClient{}, &confirmProbeFallback{}, newRecordingSession(mcp.ClientCapabilities{}, nil))
+
+	for _, tool := range listRegisteredTools(t, probe) {
+		_, wantNote := guardedTools[tool.Name]
+		hasNote := strings.Contains(tool.Description, tools.DestructiveConfirmationNote)
+		switch {
+		case wantNote && !hasNote:
+			t.Errorf(
+				"%s routes through ConfirmDestructive but its description does not carry "+
+					"tools.DestructiveConfirmationNote — append it (see #475).",
+				tool.Name,
+			)
+		case !wantNote && hasNote:
+			t.Errorf(
+				"%s carries the confirmation note but is not in guardedTools — either it does "+
+					"not actually confirm (drop the note) or the guard is missing (add the entry).",
+				tool.Name,
+			)
+		}
+	}
+}
+
+// TestNilElicitorBuildPromisesNoConfirmation is the other half of the same
+// honesty rule. RegisterAll passes a nil Elicitor and RegisterAllWithLockMap
+// accepts one, so an embedder can register these tools with nothing to elicit
+// through — ConfirmDestructive then returns "proceed" without sending
+// anything. A description claiming a confirmation would be exactly as wrong as
+// the silence #475 set out to fix, in the opposite direction.
+func TestNilElicitorBuildPromisesNoConfirmation(t *testing.T) {
+	unwired := newTestServerWithFallback(&mockClient{}, &confirmProbeFallback{})
+
+	for _, tool := range listRegisteredTools(t, unwired) {
+		if strings.Contains(tool.Description, tools.DestructiveConfirmationNote) {
+			t.Errorf(
+				"%s promises a confirmation in a build wired with a nil Elicitor, where "+
+					"ConfirmDestructive proceeds without asking — gate the note on the elicitor "+
+					"(tools.confirmationNote).",
+				tool.Name,
+			)
+		}
+	}
+}
+
+// TestRunQueryPurposeDescriptionFollowsTheWiring pins the run_query 'purpose'
+// parameter description, which is the second place the confirmation is
+// described and the one a caller reads while composing the call. Its wording
+// must not promise a human prompt (the client can decline on its own) and must
+// track the wiring, because a nil-Elicitor build rejects an unrecognised
+// purpose outright instead of asking (tools/query.go).
+func TestRunQueryPurposeDescriptionFollowsTheWiring(t *testing.T) {
+	wired, _ := newSessionServer(&mockClient{}, &confirmProbeFallback{}, newRecordingSession(mcp.ClientCapabilities{}, nil))
+	unwired := newTestServerWithFallback(&mockClient{}, &confirmProbeFallback{})
+
+	for _, tc := range []struct {
+		name       string
+		server     *server.MCPServer
+		want       string
+		unexpected string
+	}{
+		{
+			name:       "with_elicitor",
+			server:     wired,
+			want:       "request a confirmation from the MCP client",
+			unexpected: "human confirmation",
+		},
+		{
+			name:       "nil_elicitor",
+			server:     unwired,
+			want:       "causes the query to be rejected",
+			unexpected: "confirmation",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			desc := purposeParamDescription(t, tc.server)
+			if !strings.Contains(desc, tc.want) {
+				t.Errorf("purpose description should contain %q, got: %s", tc.want, desc)
+			}
+			if strings.Contains(desc, tc.unexpected) {
+				t.Errorf("purpose description should not contain %q, got: %s", tc.unexpected, desc)
+			}
+		})
+	}
+}
+
+// purposeParamDescription digs the run_query 'purpose' property description
+// out of tools/list, so the assertion reads the wire representation a client
+// sees rather than the Go string that produced it.
+func purposeParamDescription(t *testing.T, s *server.MCPServer) string {
+	t.Helper()
+	for _, tool := range listRegisteredTools(t, s) {
+		if tool.Name != "run_query" {
+			continue
+		}
+		props, ok := tool.InputSchema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("run_query inputSchema has no properties object: %#v", tool.InputSchema)
+		}
+		purpose, ok := props["purpose"].(map[string]any)
+		if !ok {
+			t.Fatal("run_query has no 'purpose' property")
+		}
+		desc, _ := purpose["description"].(string)
+		return desc
+	}
+	t.Fatal("run_query is not registered")
+	return ""
+}
+
 // confirmProbeFallback is a no-op BlackMagicClient. update_customizing
 // refuses outright when no fallback is configured, which would hide whether
 // it confirms; every method succeeds silently so the handler reaches its
@@ -422,6 +541,7 @@ func (c *confirmProbeFallback) CreateObjectFallback(
 // listedTool is the slice of a tools/list entry the reflective tests need.
 type listedTool struct {
 	Name         string         `json:"name"`
+	Description  string         `json:"description"`
 	InputSchema  map[string]any `json:"inputSchema"`
 	OutputSchema map[string]any `json:"outputSchema,omitempty"`
 }

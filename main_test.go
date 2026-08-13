@@ -38,6 +38,11 @@ func TestServerInstructions_AlwaysPresentContent(t *testing.T) {
 			// run_class is in the default-on "system" group, so unlike the
 			// debugger bullet this one is unconditional (#473).
 			"run_class: runs a global, active class implementing IF_OO_ADT_CLASSRUN",
+			// The confirmation on destructive tools is conditional on how the
+			// client answers the elicitation request, so the instructions must
+			// not let a client-side refusal be read as a human decision (#475).
+			"CONFIRMATIONS:",
+			"does not necessarily mean a person declined",
 			"SAP API POLICY",
 			// The policy must stay tool-agnostic: run_class can reach business
 			// data by SELECTing inside ABAP, bypassing run_query's purpose gate.

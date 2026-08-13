@@ -16,14 +16,58 @@ type Elicitor interface {
 	RequestElicitation(ctx context.Context, req mcp.ElicitationRequest) (*mcp.ElicitationResult, error)
 }
 
+// DestructiveConfirmationNote is appended — via confirmationNote below — to
+// the description of every tool that routes through ConfirmDestructive, so a
+// caller reading tools/list can see that a confirmation is requested and that
+// its outcome is the client's. Guarded by
+// TestGuardedToolDescriptionsCarryTheConfirmationNote, which keeps the set of
+// tools carrying it identical to the set that actually confirms.
+//
+// The second sentence is not padding: on this server's stdio transport the
+// request goes out regardless of what the client declared during initialize
+// (see ConfirmDestructive below), and a client with no elicitation support
+// commonly answers with a decline no human ever saw. Promising a prompt
+// unconditionally would be wrong in exactly that case — see issue #475.
+const DestructiveConfirmationNote = "\n\nConfirmation: the MCP client is asked to confirm before this runs. " +
+	"Clients that support elicitation prompt the user; clients that do not answer on their " +
+	"own, usually refusing — so an abort here does not necessarily mean a person declined."
+
+// confirmationNote returns DestructiveConfirmationNote for a build that can
+// actually confirm, and "" for one that cannot.
+//
+// The note has to follow the wiring, not just the tool. RegisterAll passes a
+// nil Elicitor and RegisterAllWithLockMap accepts one, so an embedder can
+// register these tools with nothing to elicit through — ConfirmDestructive
+// then returns (true, "") without sending anything. Appending the note
+// unconditionally would promise those callers a confirmation that cannot
+// happen, which is the same class of untrue documentation issue #475 set out
+// to fix. The shipped main.go always wires the server itself, so the note is
+// present in every released binary.
+func confirmationNote(el Elicitor) string {
+	if el == nil {
+		return ""
+	}
+	return DestructiveConfirmationNote
+}
+
 // ConfirmDestructive asks the client to confirm a destructive operation via
 // MCP elicitation. Returns (true, "") when the operation should proceed, or
-// (false, reason) when the user declined/cancelled.
+// (false, reason) when the confirmation was declined/cancelled.
 //
-// When the client does not support elicitation (ErrElicitationNotSupported),
-// no session is active (ErrNoActiveSession), or the elicitor is nil, the
-// helper returns (true, "") so behaviour matches today's stock binary
-// (destructive tools proceed unconditionally).
+// The elicitation request is sent to any client with an active session,
+// whether or not that client declared the elicitation capability during
+// initialize: (*server.MCPServer).RequestElicitation only type-asserts the
+// session to server.SessionWithElicitation, and mcp-go's stdioSession
+// satisfies that unconditionally. A client without elicitation support
+// therefore does not land in the ErrElicitationNotSupported branch below —
+// whatever it answers decides the outcome, and an observed answer is a
+// well-formed decline that blocks the operation with no prompt shown
+// (issue #475).
+//
+// The helper returns (true, "") — proceed, no confirmation — only when the
+// elicitor is nil (RegisterAll; the shipped main.go wires the server itself),
+// no session is active (ErrNoActiveSession), or the elicitation-unsupported
+// error does arrive on some future transport that checks the capability.
 func ConfirmDestructive(ctx context.Context, el Elicitor, message string) (bool, string) {
 	if el == nil {
 		return true, ""
