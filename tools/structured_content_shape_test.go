@@ -64,30 +64,10 @@ var knownOptOuts = map[string]string{
 func TestStructuredContentIsObject(t *testing.T) {
 	s := newTestServer(&mockClient{})
 
-	listResp := s.HandleMessage(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
-	listBytes, err := json.Marshal(listResp)
-	if err != nil {
-		t.Fatalf("marshal tools/list response: %v", err)
-	}
+	registered := listRegisteredTools(t, s)
 
-	var listEnvelope struct {
-		Result struct {
-			Tools []struct {
-				Name         string         `json:"name"`
-				InputSchema  map[string]any `json:"inputSchema"`
-				OutputSchema map[string]any `json:"outputSchema,omitempty"`
-			} `json:"tools"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(listBytes, &listEnvelope); err != nil {
-		t.Fatalf("unmarshal tools/list: %v\nraw: %s", err, string(listBytes))
-	}
-	if len(listEnvelope.Result.Tools) == 0 {
-		t.Fatal("tools/list returned zero tools — test server misconfigured")
-	}
-
-	enumerated := make(map[string]bool, len(listEnvelope.Result.Tools))
-	for _, tool := range listEnvelope.Result.Tools {
+	enumerated := make(map[string]bool, len(registered))
+	for _, tool := range registered {
 		enumerated[tool.Name] = true
 	}
 
@@ -99,7 +79,7 @@ func TestStructuredContentIsObject(t *testing.T) {
 		}
 	}
 
-	for _, tool := range listEnvelope.Result.Tools {
+	for _, tool := range registered {
 		tool := tool
 		if reason, ok := knownOptOuts[tool.Name]; ok {
 			t.Run(tool.Name+"_opted_out", func(t *testing.T) {

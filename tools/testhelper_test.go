@@ -15,6 +15,15 @@ import (
 // errors, inspect result.IsError. Shared by unit and integration tests.
 func callTool(t *testing.T, s *server.MCPServer, toolName string, args map[string]interface{}) *mcp.CallToolResult {
 	t.Helper()
+	return callToolCtx(context.Background(), t, s, toolName, args)
+}
+
+// callToolCtx is callTool with a caller-supplied context. Tests that need a
+// client session in scope — anything exercising elicitation, which resolves
+// the session via server.ClientSessionFromContext — pass a context built with
+// (*server.MCPServer).WithContext. Everything else should use callTool.
+func callToolCtx(ctx context.Context, t *testing.T, s *server.MCPServer, toolName string, args map[string]interface{}) *mcp.CallToolResult {
+	t.Helper()
 
 	argsJSON, err := json.Marshal(args)
 	if err != nil {
@@ -24,7 +33,7 @@ func callTool(t *testing.T, s *server.MCPServer, toolName string, args map[strin
 	msg := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":%q,"arguments":%s}}`,
 		toolName, string(argsJSON))
 
-	resp := s.HandleMessage(context.Background(), []byte(msg))
+	resp := s.HandleMessage(ctx, []byte(msg))
 
 	respBytes, err := json.Marshal(resp)
 	if err != nil {
