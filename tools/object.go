@@ -134,7 +134,8 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, sc adt.SearchClie
 				"For objects in non-local packages, pass the transport number that locks the object. "+
 				"If the object is locked in another user's transport, use that transport's number directly — "+
 				"SAP will automatically record the deletion under your user. "+
-				"Use get_transport_requests to find the locking transport if needed.",
+				"Use get_transport_requests to find the locking transport if needed."+
+				DestructiveConfirmationNote,
 		),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),

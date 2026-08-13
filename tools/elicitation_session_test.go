@@ -396,6 +396,39 @@ func TestGuardedToolsAskForConfirmation(t *testing.T) {
 	}
 }
 
+// TestGuardedToolDescriptionsCarryTheConfirmationNote pins the documentation
+// half of #475: the fact that a confirmation is requested — and that its
+// outcome depends on the client, not necessarily on a person — has to travel
+// with the tool, because a caller reading tools/list sees nothing else.
+//
+// Both directions again: a guarded tool without the note is a tool whose
+// caller cannot know it confirms, and an unguarded tool carrying the note
+// promises a prompt that never comes. guardedTools is the shared source of
+// truth, so a new destructive tool trips this test and
+// TestGuardedToolsAskForConfirmation together.
+func TestGuardedToolDescriptionsCarryTheConfirmationNote(t *testing.T) {
+	probe, _ := newSessionServer(&mockClient{}, &confirmProbeFallback{}, newRecordingSession(mcp.ClientCapabilities{}, nil))
+
+	for _, tool := range listRegisteredTools(t, probe) {
+		_, wantNote := guardedTools[tool.Name]
+		hasNote := strings.Contains(tool.Description, tools.DestructiveConfirmationNote)
+		switch {
+		case wantNote && !hasNote:
+			t.Errorf(
+				"%s routes through ConfirmDestructive but its description does not carry "+
+					"tools.DestructiveConfirmationNote — append it (see #475).",
+				tool.Name,
+			)
+		case !wantNote && hasNote:
+			t.Errorf(
+				"%s carries the confirmation note but is not in guardedTools — either it does "+
+					"not actually confirm (drop the note) or the guard is missing (add the entry).",
+				tool.Name,
+			)
+		}
+	}
+}
+
 // confirmProbeFallback is a no-op BlackMagicClient. update_customizing
 // refuses outright when no fallback is configured, which would hide whether
 // it confirms; every method succeeds silently so the handler reaches its
@@ -422,6 +455,7 @@ func (c *confirmProbeFallback) CreateObjectFallback(
 // listedTool is the slice of a tools/list entry the reflective tests need.
 type listedTool struct {
 	Name         string         `json:"name"`
+	Description  string         `json:"description"`
 	InputSchema  map[string]any `json:"inputSchema"`
 	OutputSchema map[string]any `json:"outputSchema,omitempty"`
 }

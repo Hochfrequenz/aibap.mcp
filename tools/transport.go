@@ -148,7 +148,8 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"NOTE: On ECC systems, release via ADT may silently fail (returns 200 but status stays modifiable). "+
 				"This tool detects the silent fail via a follow-up status check; when a fallback is "+
 				"configured it routes the release through that path automatically. Without a fallback, "+
-				"use the sap-desktop MCP server to release via SE09 instead.",
+				"use the sap-desktop MCP server to release via SE09 instead."+
+				DestructiveConfirmationNote,
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to release")),
 		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),
@@ -200,7 +201,8 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithDescription(
 			"Delete a transport request or task. Works for both requests and tasks. "+
 				"The transport must be modifiable (not released). "+
-				"Deleting a request with tasks deletes all tasks too.",
+				"Deleting a request with tasks deletes all tasks too."+
+				DestructiveConfirmationNote,
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to delete")),
 		mcp.WithOutputSchema[DeleteTransportResult](),
@@ -230,7 +232,8 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 			"Remove an object entry from a transport task. Use get_transport_objects to find the "+
 				"pgmid, type, name, wb_type, and position of the object to remove. "+
 				"The task_number is the task that holds the object (use get_transport_objects on the parent "+
-				"transport to find which task owns it). The parent_transport is the request number.",
+				"transport to find which task owns it). The parent_transport is the request number."+
+				DestructiveConfirmationNote,
 		),
 		mcp.WithString("task_number", mcp.Required(), mcp.Description("Task number that holds the object, e.g. S4UK902001")),
 		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. S4UK902000")),

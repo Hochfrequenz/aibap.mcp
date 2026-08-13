@@ -162,9 +162,12 @@ BEST FOR:
 - Creating ABAP objects (create_object: PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA)
 - Transport management (get_transport_requests, create_transport, release_transport on S4)
 - Activation, syntax checks, ATC checks, unit tests
-- Executing ABAP (run_class: runs a global, active class implementing IF_OO_ADT_CLASSRUN and returns its console output — use it to verify generated code produces the expected result. Runs arbitrary ABAP with real side effects and asks the user to confirm first.)
+- Executing ABAP (run_class: runs a global, active class implementing IF_OO_ADT_CLASSRUN and returns its console output — use it to verify generated code produces the expected result. Runs arbitrary ABAP with real side effects and requests a confirmation first — see CONFIRMATIONS below.)
 - Code completion, pretty printing, refactoring
 - DDIC lookups (get_object_info, get_ddic_info)%s
+
+CONFIRMATIONS:
+Tools that destroy or overwrite something — object and transport deletion, transport release and rollback, removing an object from a transport, rename, run_class, update_customizing, and run_query without a valid 'purpose' — request a confirmation from the MCP client before they act. Each of those tool descriptions says so. Clients that support MCP elicitation show the user a prompt; clients that do not answer on their own, usually refusing. An abort that reports a declined confirmation therefore does not necessarily mean a person declined: the operation itself never reached SAP, and repeating the call unchanged will not help.
 
 WHEN TO USE sap-desktop/sap-webgui MCP INSTEAD:
 If SAP GUI MCP tools are available, prefer them for:

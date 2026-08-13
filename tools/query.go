@@ -50,7 +50,10 @@ func registerQueryTools(s toolAdder, client adt.QueryClient, elicitor Elicitor) 
 				"You MUST declare the purpose of the query via the 'purpose' parameter. "+
 				"Valid values: "+validPurposesInline+". "+
 				"Queries outside these categories may violate the SAP API Policy "+
-				"(https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf).",
+				"(https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf). "+
+				"A missing or unrecognised 'purpose' is the one case this tool confirms: "+
+				"it asks rather than rejecting the query outright."+
+				DestructiveConfirmationNote,
 		),
 		withQueryPurposeParam(),
 		mcp.WithString("sql", mcp.Required(), mcp.Description("SQL SELECT statement, e.g. 'SELECT BUKRS, BUTXT FROM T001'")),
