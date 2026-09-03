@@ -162,7 +162,7 @@ BEST FOR:
 - Creating ABAP objects (create_object: PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA)
 - Transport management (get_transport_requests, create_transport, release_transport on S4)
 - Activation, syntax checks, ATC checks, unit tests
-- Executing ABAP (run_class: runs a global, active class implementing IF_OO_ADT_CLASSRUN and returns its console output — use it to verify generated code produces the expected result. Runs arbitrary ABAP with real side effects and requests a confirmation first — see CONFIRMATIONS below.)
+- Executing ABAP (run_class: runs a global, active class implementing IF_OO_ADT_CLASSRUN and returns its console output — use it to verify generated code produces the expected result. General-purpose, not just for classes that already exist for their own sake: wrap any ABAP logic, e.g. a report's SUBMIT, in a throwaway classrun class to run it when no dedicated tool exists. Runs arbitrary ABAP with real side effects and requests a confirmation first — see CONFIRMATIONS below.)
 - Code completion, pretty printing, refactoring
 - DDIC lookups (get_object_info, get_ddic_info)%s
 

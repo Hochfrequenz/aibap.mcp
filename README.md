@@ -16,7 +16,7 @@ When using this MCP server, make sure to obey the [SAP API Policy](https://help.
 ---
 
 > [!TIP]
-> **Your agent can run the ABAP it just wrote — `run_class`!** 🚀 This server does not stop at writing and activating code, it closes the loop: `create_object` → `set_source_from_file` → `activate_object` → **`run_class`**, which invokes ADT's classrun (*Run as ABAP Application*) on any global, active class implementing `IF_OO_ADT_CLASSRUN` and hands the console output back to the agent. So the agent can check what its code actually printed instead of asserting that it works — the runtime-only defects a syntax check never sees. Nothing to install on the SAP side. See [Available tools](#available-tools-72).
+> **Your agent can run the ABAP it just wrote — `run_class`!** 🚀 This server does not stop at writing and activating code, it closes the loop: `create_object` → `set_source_from_file` → `activate_object` → **`run_class`**, which invokes ADT's classrun (*Run as ABAP Application*) on any global, active class implementing `IF_OO_ADT_CLASSRUN` and hands the console output back to the agent. So the agent can check what its code actually printed instead of asserting that it works — the runtime-only defects a syntax check never sees. Nothing to install on the SAP side. `run_class` isn't limited to classes that already exist for their own sake, either — wrap any ABAP logic (a report's `SUBMIT`, a function module call, an ad-hoc expression) in a throwaway classrun class to run it, so it's the tool to reach for whenever you need to execute ABAP that has no dedicated tool of its own. See [Available tools](#available-tools-72).
 
 ## How it works
 
@@ -219,7 +219,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 |------|-------------|
 | `select_system` | Switch the active SAP system (multi-system config) |
 | `run_query` | Execute a SELECT query on SAP database tables (read-only) |
-| `run_class` | Execute an ABAP class implementing `IF_OO_ADT_CLASSRUN` and return its console output |
+| `run_class` | Execute an ABAP class implementing `IF_OO_ADT_CLASSRUN` and return its console output — general-purpose ABAP execution: wrap any logic (e.g. a report's `SUBMIT`) in a throwaway classrun class to run it |
 
 </details>
 
