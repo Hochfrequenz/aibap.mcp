@@ -37,6 +37,14 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 				"out->write( data = lt_result name = 'RESULT' ) - passing an internal "+
 				"table or structure plus a label - for a formatted dump. This last form "+
 				"is the practical way to return a result set from a classrun.\n\n"+
+				"General-purpose ABAP execution: the class doesn't need a standalone "+
+				"purpose - write a small throwaway classrun class around any ABAP logic "+
+				"(e.g. SUBMIT a report and capture its list output via SUBMIT ... "+
+				"EXPORTING LIST TO MEMORY AND RETURN plus LIST_FROM_MEMORY/LIST_TO_ASCI, "+
+				"call a function module, or evaluate an ad-hoc expression and out->write "+
+				"the result) and run it this way. This is the tool to reach for whenever "+
+				"you need to run ABAP that has no dedicated tool of its own, not only "+
+				"pre-existing classrun classes.\n\n"+
 				"SAP API Policy: this tool is intended for development tooling only. "+
 				"Do not use it to read or export business data - a SELECT inside the "+
 				"executed ABAP is subject to the same policy as run_query, which the "+
