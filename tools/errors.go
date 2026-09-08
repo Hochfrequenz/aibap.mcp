@@ -24,7 +24,7 @@ const (
 	// methodNotAllowedHint covers both genuine method-not-allowed (S/4) and the
 	// bare-405 case where ECC reports an existing object as a 405, so it names
 	// both possibilities (adt.ClassifyError collapses both to
-	// ErrorMethodNotAllowed). See mcp-server-abap #406.
+	// ErrorMethodNotAllowed). See #406.
 	methodNotAllowedHint = "Method not allowed (405) — either the operation is not supported for this resource, or (on ECC) the object already exists. Check with `object_exists` / `search_objects`."
 	// noDeleteHandlerHint: some resources have no DELETE handler and reject it
 	// with 405 "... does not support method DELETE" — notably SAP Gateway VIT
@@ -64,7 +64,7 @@ const (
 // adt.ErrorInvalidLockHandle maps to lockedHint for now: a stale/invalid lock
 // handle still points the user at unlock_object / get_transport_requests, which
 // preserves the pre-adt.ClassifyError behavior (a 423 fell through to the
-// locked hint via the status code). mcp-server-abap #378 will give it a
+// locked hint via the status code). #378 will give it a
 // dedicated hint.
 var hintByKind = map[adt.ErrorKind]string{
 	adt.ErrorLocked:            lockedHint,
