@@ -291,12 +291,17 @@ type ObjectExistsBatchEntry struct {
 	Exists    bool   `json:"exists"`
 	Name      string `json:"name,omitempty"`
 	Type      string `json:"type,omitempty"`
+	// Error is set when the existence check itself failed (e.g. 500, timeout,
+	// permission error) — as opposed to a confirmed-absent 404. Missing counts
+	// only confirmed-absent objects; Failed counts these.
+	Error string `json:"error,omitempty"`
 }
 
 type ObjectExistsBatchResult struct {
 	Total   int                      `json:"total"`
 	Found   int                      `json:"found"`
 	Missing int                      `json:"missing"`
+	Failed  int                      `json:"failed"`
 	Results []ObjectExistsBatchEntry `json:"results"`
 }
 
