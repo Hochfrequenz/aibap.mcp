@@ -94,8 +94,10 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Check whether one or more ABAP objects exist. "+
-				"Pass a single URI string to get {exists, object_uri, name, type, description}. "+
-				"Pass an array of URIs for batch mode (up to 10 concurrent): returns {total, found, missing, results:[{object_uri, exists, name, type}]}. "+
+				"Pass a single URI string to get {exists, object_uri, name, type, description}; a non-404 error (timeout, 500, permission) "+
+				"is returned as a tool error rather than a false exists:false. "+
+				"Pass an array of URIs for batch mode (up to 10 concurrent): returns {total, found, missing, failed, results:[{object_uri, exists, name, type, error}]}. "+
+				"missing counts confirmed-absent (404) objects; failed counts objects whose existence check itself errored — see each entry's error field. "+
 				"Use this to verify object names before reading source or navigating, avoiding hallucinated references.",
 		),
 		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
@@ -105,7 +107,10 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 		if multi == nil {
 			info, err := client.GetObjectInfo(ctx, single)
 			if err != nil {
-				return mcp.NewToolResultJSON(ObjectExistsResult{ObjectURI: single, Exists: false})
+				if adt.ClassifyError(err) == adt.ErrorNotFound {
+					return mcp.NewToolResultJSON(ObjectExistsResult{ObjectURI: single, Exists: false})
+				}
+				return errorResult(err), nil
 			}
 			return mcp.NewToolResultJSON(ObjectExistsResult{
 				Exists:      true,
@@ -126,26 +131,33 @@ func registerRepositoryTools(s toolAdder, client adt.SearchClient) {
 				sem <- struct{}{}
 				defer func() { <-sem }()
 				info, err := client.GetObjectInfo(ctx, u)
-				if err != nil {
-					results[idx] = ObjectExistsBatchEntry{ObjectURI: u, Exists: false}
-				} else {
+				switch {
+				case err == nil:
 					results[idx] = ObjectExistsBatchEntry{ObjectURI: u, Exists: true, Name: info.Name, Type: info.Type}
+				case adt.ClassifyError(err) == adt.ErrorNotFound:
+					results[idx] = ObjectExistsBatchEntry{ObjectURI: u, Exists: false}
+				default:
+					results[idx] = ObjectExistsBatchEntry{ObjectURI: u, Exists: false, Error: err.Error()}
 				}
 			}(i, uri)
 		}
 		wg.Wait()
 
-		found := 0
+		found, failed := 0, 0
 		for _, r := range results {
-			if r.Exists {
+			switch {
+			case r.Exists:
 				found++
+			case r.Error != "":
+				failed++
 			}
 		}
 
 		return mcp.NewToolResultJSON(ObjectExistsBatchResult{
 			Total:   len(multi),
 			Found:   found,
-			Missing: len(multi) - found,
+			Missing: len(multi) - found - failed,
+			Failed:  failed,
 			Results: results,
 		})
 	})

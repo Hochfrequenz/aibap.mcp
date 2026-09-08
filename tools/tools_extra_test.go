@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Hochfrequenz/adtler/adt"
+	"github.com/Hochfrequenz/aibap.mcp/tools"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -886,6 +887,127 @@ func TestBatchGetObjectInfoEmptyURIs(t *testing.T) {
 	})
 	if result.IsError {
 		t.Errorf("unexpected error for empty array: %s", firstText(result))
+	}
+}
+
+// --- object_exists ---
+
+func TestObjectExistsTool_Found(t *testing.T) {
+	mock := &mockClient{
+		getObjectFn: func(ctx context.Context, uri string) (*adt.ObjectInfo, error) {
+			return &adt.ObjectInfo{Name: "ZTEST", Type: "PROG/P", Description: "desc"}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "object_exists", map[string]interface{}{
+		"object_uri": testObjectURI,
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error result: %s", firstText(result))
+	}
+	var out tools.ObjectExistsResult
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !out.Exists {
+		t.Error("expected exists=true")
+	}
+}
+
+func TestObjectExistsTool_NotFound(t *testing.T) {
+	mock := &mockClient{
+		getObjectFn: func(ctx context.Context, uri string) (*adt.ObjectInfo, error) {
+			return nil, &adt.ADTError{StatusCode: 404, Message: "not found"}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "object_exists", map[string]interface{}{
+		"object_uri": testObjectURI,
+	})
+	if result.IsError {
+		t.Fatalf("404 should report exists:false, not a tool error: %s", firstText(result))
+	}
+	var out tools.ObjectExistsResult
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Exists {
+		t.Error("expected exists=false for 404")
+	}
+}
+
+// TestObjectExistsTool_CheckFailed pins the fix for #488: a non-404 error
+// (500, timeout, permission) must surface as a tool error, not a silent
+// false-negative exists:false.
+func TestObjectExistsTool_CheckFailed(t *testing.T) {
+	mock := &mockClient{
+		getObjectFn: func(ctx context.Context, uri string) (*adt.ObjectInfo, error) {
+			return nil, &adt.ADTError{StatusCode: 500, Message: "backend hiccup"}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "object_exists", map[string]interface{}{
+		"object_uri": testObjectURI,
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true for a check failure that is not a 404")
+	}
+}
+
+func TestBatchObjectExistsTool(t *testing.T) {
+	const uriFound = "/sap/bc/adt/programs/programs/ZFOUND"
+	const uriMissing = "/sap/bc/adt/programs/programs/ZMISSING"
+	const uriFailed = "/sap/bc/adt/programs/programs/ZFAILED"
+	mock := &mockClient{
+		getObjectFn: func(ctx context.Context, uri string) (*adt.ObjectInfo, error) {
+			switch uri {
+			case uriMissing:
+				return nil, &adt.ADTError{StatusCode: 404, Message: "not found"}
+			case uriFailed:
+				return nil, &adt.ADTError{StatusCode: 500, Message: "backend hiccup"}
+			default:
+				return &adt.ObjectInfo{Name: "ZFOUND", Type: "PROG/P"}, nil
+			}
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "object_exists", map[string]interface{}{
+		"object_uri": []string{uriFound, uriMissing, uriFailed},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected tool-level error: %s", firstText(result))
+	}
+	var out tools.ObjectExistsBatchResult
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Total != 3 {
+		t.Errorf("total: got %d, want 3", out.Total)
+	}
+	if out.Found != 1 {
+		t.Errorf("found: got %d, want 1", out.Found)
+	}
+	if out.Missing != 1 {
+		t.Errorf("missing: got %d, want 1", out.Missing)
+	}
+	if out.Failed != 1 {
+		t.Errorf("failed: got %d, want 1", out.Failed)
+	}
+	for _, r := range out.Results {
+		switch r.ObjectURI {
+		case uriFound:
+			if !r.Exists || r.Error != "" {
+				t.Errorf("uriFound entry: got %+v", r)
+			}
+		case uriMissing:
+			if r.Exists || r.Error != "" {
+				t.Errorf("uriMissing entry: got %+v", r)
+			}
+		case uriFailed:
+			if r.Exists || r.Error == "" {
+				t.Errorf("uriFailed entry should carry Error, got %+v", r)
+			}
+		}
 	}
 }
 
