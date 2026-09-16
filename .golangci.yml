@@ -1,0 +1,21 @@
+version: "2"
+
+# Keep CI and local runs aligned, and allow per-linter tuning that the action
+# args cannot express.
+linters:
+  enable:
+    - dupl
+    - goconst
+    - gocyclo
+  settings:
+    goconst:
+      # Most newly surfaced findings are repeated literals inside test fixtures
+      # and request/header composite literals. Excluding CompositeLit keeps
+      # goconst focused on duplicated magic strings in executable code.
+      exclude-types:
+        - Call
+        - CompositeLit
+
+formatters:
+  enable:
+    - gofmt
