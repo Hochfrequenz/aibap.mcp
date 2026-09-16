@@ -227,7 +227,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 
 - SAP NetWeaver 7.40+ with ADT services active (transaction SICF: `/sap/bc/adt`)
 - A user with developer authorizations (`S_ADT_RES`, `S_DEVELOP`) — or OAuth2 SSO (see below)
-- Go 1.26+ (to build from source)
+- Go 1.27+ (to build from source)
 
 ## Getting started
 
@@ -307,7 +307,7 @@ docker run -i -v ./config.json:/config.json -e SAP_CONFIG_FILE=/config.json ghcr
 
 ### Alternative: Build from source
 
-Requires Go 1.26+. Either clone and build:
+Requires Go 1.27+. Either clone and build:
 
 ```bash
 git clone https://github.com/Hochfrequenz/aibap.mcp.git

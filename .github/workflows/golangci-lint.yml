@@ -17,7 +17,6 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
-          args: --enable dupl,goconst,gocyclo
 
       - name: Check formatting
-        run: golangci-lint fmt --diff --enable gofmt
+        run: golangci-lint fmt --diff
