@@ -50,7 +50,7 @@ jobs:
             issue_num=$(grep -oE '#[0-9]+' <<<"$line" | head -n1)
             checkbox=$(grep -oE '^- \[.\]' <<<"$line")
             summary=$(sed -E 's/^- \[[^]]\] #[0-9]+( — )?//; s/ \(adtler: [^)]+\)$//' <<<"$line")
-            summary=$(SUMMARY="$summary" python -c 'import os,re; summary=" ".join(os.environ["SUMMARY"].split()); summary=re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b","<redacted>",summary); summary=re.sub(r"\b[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+){1,}(?::\d+)?\b","<redacted>",summary); summary=re.sub(r"\b[A-Z0-9]{3}K9\d+\b","<redacted>",summary); summary=re.sub(r"/[A-Z0-9_]+/[A-Z0-9_/-]+\b","<redacted>",summary); summary=summary.replace("@","@ "); print(summary)')
+            summary=$(SUMMARY="$summary" python -c 'import os,re; summary=" ".join(os.environ["SUMMARY"].split()); summary=re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b","<redacted>",summary); summary=re.sub(r"\b[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z][A-Za-z-]*(?::\d+)?\b","<redacted>",summary); summary=re.sub(r"\b[A-Z0-9]{3}K9\d+\b","<redacted>",summary); summary=re.sub(r"/[A-Z0-9_]+/[A-Z0-9_/-]+\b","<redacted>",summary); summary=summary.replace("@","@ "); print(summary)')
             adtler_ref=$(sed -nE 's/^.*\(adtler: ([^)]+)\)$/\1/p' <<<"$line")
             if [ -n "$summary" ] && [ -n "$adtler_ref" ]; then
               printf '%s %s — %s (adtler: %s)\n' \
