@@ -42,12 +42,27 @@ jobs:
           fi
 
           track_num=$(jq -r '.number' <<<"$tracking")
-          track_checklist=$(jq -r '.body' <<<"$tracking" \
-            | grep -oE '^- \[.\] #[0-9]+' || true)
+          raw_checklist=$(jq -r '.body' <<<"$tracking" \
+            | grep -E '^- \[.\] #[0-9]+' || true)
+          sanitized_checklist_file=$(mktemp)
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            issue_num=$(grep -oE '#[0-9]+' <<<"$line" | head -n1)
+            checkbox=$(grep -oE '^- \[.\]' <<<"$line")
+            issue_title=$(gh issue view "${issue_num#\#}" --repo "$REPO" \
+              --json title --jq '.title')
+            adtler_ref=$(sed -nE 's/^.*\(adtler: ([[:alnum:]#._/-]+)\)$/\1/p' <<<"$line")
+            if [ -n "$adtler_ref" ]; then
+              printf '%s %s — %s (adtler: %s)\n' \
+                "$checkbox" "$issue_num" "$issue_title" "$adtler_ref"
+            else
+              printf '%s %s — %s\n' "$checkbox" "$issue_num" "$issue_title"
+            fi
+          done <<<"$raw_checklist" > "$sanitized_checklist_file"
 
           # Match `- [ ] #N` and `- [x] #N` bullets. Surface all of them as
           # Closes candidates — the reviewer prunes based on reproducer results.
-          blocked_closes=$(grep -oE '^- \[.\] #[0-9]+' <<<"$track_checklist" \
+          blocked_closes=$(grep -oE '^- \[.\] #[0-9]+' "$sanitized_checklist_file" \
             | grep -oE '#[0-9]+' | sort -u | sed 's/^/Closes /' || true)
 
           body_file=$(mktemp)
@@ -66,8 +81,8 @@ jobs:
           {
             echo "### Tracking issue checklist (copied from #$track_num)"
             echo
-            if [ -n "$track_checklist" ]; then
-              echo "$track_checklist"
+            if [ -s "$sanitized_checklist_file" ]; then
+              cat "$sanitized_checklist_file"
             else
               echo "(No `- [ ] #<n>` checklist items found in #$track_num.)"
             fi
