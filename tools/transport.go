@@ -61,7 +61,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"Note: for deleting or modifying objects already locked in a transport, you do NOT need to create a task first — "+
 				"pass the parent transport number directly to delete_object or set_source and SAP records the change automatically.",
 		),
-		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. S4UK902339")),
+		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. DEVK900123")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("Short description for the task")),
 		mcp.WithString("owner", mcp.Description("SAP username for the task owner. Defaults to the authenticated user if omitted. Use this to create tasks for other team members.")),
 		mcp.WithOutputSchema[CreateTransportTaskResult](),
@@ -200,8 +200,13 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Delete a transport request or task. Works for both requests and tasks. "+
-				"The transport must be modifiable (not released). "+
-				"Deleting a request with tasks deletes all tasks too."+
+				"Two preconditions: the transport must be modifiable (not released), and it must "+
+				"hold no object entries — SAP rejects one that still has them with "+
+				"ADT_TM_COMMON_EXCEPTION \"... contains locked objects\". Note that deleting a "+
+				"repository object does not remove its transport entry: to empty a transport, "+
+				"remove every entry get_transport_objects reports using remove_from_transport. The current "+
+				"get_transport_objects result does not expose the owning task number required for that call. "+
+				"Deleting a request also deletes its tasks, provided they are empty."+
 				confirmationNote(elicitor),
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to delete")),
@@ -232,11 +237,14 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 			"Remove an object entry from a transport task. Use get_transport_objects to find the "+
 				"pgmid, type, name, wb_type, and position of the object to remove. "+
 				"The task_number is the task that holds the object (use get_transport_objects on the parent "+
-				"transport to find which task owns it). The parent_transport is the request number."+
+				"transport to find which task owns it). The parent_transport is the request number. "+
+				"Requires AS ABAP 7.53 SP00 (ABAP Platform 1809) or later: older systems, including "+
+				"ECC on SAP_BASIS 7.50, have no remove-object operation in ADT at all, and this tool "+
+				"cannot work there — remove the entry in SE09 via the sapgui.mcp server instead."+
 				confirmationNote(elicitor),
 		),
-		mcp.WithString("task_number", mcp.Required(), mcp.Description("Task number that holds the object, e.g. S4UK902001")),
-		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. S4UK902000")),
+		mcp.WithString("task_number", mcp.Required(), mcp.Description("Task number that holds the object, e.g. DEVK900124")),
+		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. DEVK900123")),
 		mcp.WithString("pgmid", mcp.Required(), mcp.Description("Program ID, typically R3TR")),
 		mcp.WithString("object_type", mcp.Required(), mcp.Description("Object type, e.g. PROG, CLAS, TABL")),
 		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_PROGRAM")),
