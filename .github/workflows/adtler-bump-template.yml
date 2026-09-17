@@ -49,14 +49,12 @@ jobs:
             [ -z "$line" ] && continue
             issue_num=$(grep -oE '#[0-9]+' <<<"$line" | head -n1)
             checkbox=$(grep -oE '^- \[.\]' <<<"$line")
-            issue_title=$(gh issue view "${issue_num#\#}" --repo "$REPO" \
-              --json title --jq '.title')
             adtler_ref=$(sed -nE 's/^.*\(adtler: ([^)]+)\)$/\1/p' <<<"$line")
             if [ -n "$adtler_ref" ]; then
-              printf '%s %s — %s (adtler: %s)\n' \
-                "$checkbox" "$issue_num" "$issue_title" "$adtler_ref"
+              printf '%s %s (adtler: %s)\n' \
+                "$checkbox" "$issue_num" "$adtler_ref"
             else
-              printf '%s %s — %s\n' "$checkbox" "$issue_num" "$issue_title"
+              printf '%s %s\n' "$checkbox" "$issue_num"
             fi
           done <<<"$raw_checklist" > "$sanitized_checklist_file"
 
