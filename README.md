@@ -378,6 +378,72 @@ aibap.mcp --tools=source,objects,transport,debug
 
 Available groups: `source`, `code-intelligence`, `objects`, `version`, `locking`, `testing`, `messages`, `shortdumps`, `transport`, `enhancements`, `debug`, `export`, `system`.
 
+### Consent for the irreversible tools
+
+This server never asks you to confirm anything itself. Approving a call is the MCP
+client's job, and the client decides what to ask. The problem that creates: in Claude Code
+the first call to a destructive tool offers "Yes, and don't ask again", and accepting it
+writes an allow rule that auto-approves every later call to that tool — on every system,
+with every argument, for as long as the rule stays in the settings file. The rule cannot be
+narrowed to one system or package: Claude Code skips any `mcp__` rule containing
+parentheses, and these tools take no system argument to match on.
+
+Six tools do something this server cannot undo:
+
+- **delete_object** — the object is gone. SAP has no undo, and the source is not under
+  version control on the server side.
+- **delete_transport** — the request cannot be recreated with its original number.
+- **release_transport** — a released request cannot be un-released; the change is on its
+  way to the next system.
+- **rollback_transport** — restores an earlier state by overwriting the current one, so a
+  wrong call destroys work the same way a delete does.
+- **run_class** — executes arbitrary ABAP under the configured user. What it does is not
+  part of the call.
+- **update_customizing** — an entry with `"op": "delete"` removes a customizing row.
+  Customizing tables have no version database, so the row cannot be reconstructed.
+
+The `--consent` flag decides how the client's permission system treats those six:
+
+```bash
+aibap.mcp --consent=strict   # default
+aibap.mcp --consent=prompt
+```
+
+- **`strict`** (default) marks the six with `_meta["anthropic/requiresUserInteraction"]`.
+  Per the [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp) the
+  permission prompt then appears on every call — including in `acceptEdits`, `auto` and
+  `bypassPermissions` modes — and an allow rule that already matches the tool does not skip
+  it. In `dontAsk` mode, and for an `allow` answer from a `--permission-prompt-tool` in
+  headless mode, the call is **denied** instead.
+- **`prompt`** marks nothing. All tools stay on the client's normal permission flow, so a
+  prompt can be answered once with "Yes, and don't ask again". Intended for callers who
+  bring their own safety net — a working copy under abapGit, a throwaway sandbox system —
+  and would rather answer fewer dialogs, and for unattended callers that `strict` would
+  otherwise deny.
+
+Before choosing `strict`, three things are worth knowing:
+
+- **It cannot be scoped.** A delete in a sandbox package costs the same prompt as one in
+  production, and no allow rule reverses the marking. `--consent=prompt` at launch is the
+  way back.
+- **Client version matters.** The key requires Claude Code v2.1.199 or later; earlier
+  versions ignore it entirely. Between v2.1.199 and v2.1.245 the prompt still displayed a
+  "Yes, and don't ask again" option whose allow rule was then ignored — the prompt kept
+  reappearing, but the option was misleading. It is no longer offered from v2.1.246.
+  Other MCP clients may treat the key differently or not at all, and there the two modes
+  are indistinguishable.
+- **Unattended is not uniformly broken.** A headless run behind `--permission-prompt-tool`
+  is denied, but an Agent SDK host is not: its `canUseTool` callback still receives these
+  calls and may approve them, because such a host is expected to put the question to a
+  person.
+
+The tools left unmarked are unmarked on the merits. `run_query` runs SELECT statements
+only and changes nothing — its `purpose` parameter is a scope check under the SAP API
+Policy, not an approval step, and an unrecognised value is rejected locally in both modes.
+`rename` rewrites source the SAP version database still holds, and a second rename puts
+the old name back. `remove_from_transport` changes an object's link to a transport rather
+than the object, and `add_to_transport` restores the link.
+
 ### OAuth2 / SSO
 
 For systems with SAML SSO, omit `user` and `password` to use OAuth2:
