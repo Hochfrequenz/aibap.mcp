@@ -42,11 +42,12 @@ jobs:
           fi
 
           track_num=$(jq -r '.number' <<<"$tracking")
-          track_body=$(jq -r '.body' <<<"$tracking")
+          track_checklist=$(jq -r '.body' <<<"$tracking" \
+            | grep -oE '^- \[.\] #[0-9]+' || true)
 
           # Match `- [ ] #N` and `- [x] #N` bullets. Surface all of them as
           # Closes candidates — the reviewer prunes based on reproducer results.
-          blocked_closes=$(grep -oE '^- \[.\] #[0-9]+' <<<"$track_body" \
+          blocked_closes=$(grep -oE '^- \[.\] #[0-9]+' <<<"$track_checklist" \
             | grep -oE '#[0-9]+' | sort -u | sed 's/^/Closes /' || true)
 
           body_file=$(mktemp)
@@ -65,7 +66,11 @@ jobs:
           {
             echo "### Tracking issue checklist (copied from #$track_num)"
             echo
-            echo "$track_body"
+            if [ -n "$track_checklist" ]; then
+              echo "$track_checklist"
+            else
+              echo "(No `- [ ] #<n>` checklist items found in #$track_num.)"
+            fi
             echo
             echo "### Auto-close candidates — prune after verification"
             echo
