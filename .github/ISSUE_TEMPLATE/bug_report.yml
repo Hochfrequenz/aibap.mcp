@@ -16,8 +16,8 @@ body:
   - type: input
     id: sap_version
     attributes:
-      label: SAP release / support package
-      placeholder: "e.g. ECC 6.0 EHP8 SP20 or S/4 2023 FPS02"
+      label: SAP release level
+      placeholder: "e.g. SAP ERP 6.0 EHP8 (SAP_BASIS 750, SAP_APPL 618) or SAP S/4HANA 2025, on-premise (SAP_BASIS 816, S4CORE 109)"
 
   - type: input
     id: server_version
@@ -37,7 +37,7 @@ body:
         Arguments:
         {
           "objectUri": "/sap/bc/adt/programs/programs/zmyprogram",
-          "system": "hfq"
+          "system": "<system>"
         }
     validations:
       required: true
