@@ -204,7 +204,8 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"hold no object entries — SAP rejects one that still has them with "+
 				"ADT_TM_COMMON_EXCEPTION \"... contains locked objects\". Note that deleting a "+
 				"repository object does not remove its transport entry: to empty a transport, "+
-				"remove every entry get_transport_objects reports using remove_from_transport. "+
+				"remove every entry get_transport_objects reports using remove_from_transport. The current "+
+				"get_transport_objects result does not expose the owning task number required for that call. "+
 				"Deleting a request also deletes its tasks, provided they are empty."+
 				confirmationNote(elicitor),
 		),
