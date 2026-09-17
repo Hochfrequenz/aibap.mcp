@@ -249,7 +249,14 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithString("object_type", mcp.Required(), mcp.Description("Object type, e.g. PROG, CLAS, TABL")),
 		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_PROGRAM")),
 		mcp.WithString("wb_type", mcp.Required(), mcp.Description("Workbench type, e.g. PROG/P, CLAS/OC")),
-		mcp.WithString("position", mcp.Required(), mcp.Description("Object position in transport (from get_transport_objects), e.g. 000001")),
+		mcp.WithString("position", mcp.Required(), mcp.Description(
+			"Object position in transport (from get_transport_objects), e.g. 000001. Required, and must be "+
+				"current: on systems that support removal, SAP's own handler selects the entry to delete by "+
+				"pgmid/type/name/position alone — it does not also check which transport the entry belongs to. "+
+				"A wrong or stale position can match and remove an unrelated entry in a different request, or "+
+				"match nothing and report success while removing nothing. Always take the value from a "+
+				"get_transport_objects call made just before this one, not a cached one.",
+		)),
 		mcp.WithOutputSchema[RemoveFromTransportResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		taskNr := req.GetString("task_number", "")
