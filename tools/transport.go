@@ -239,7 +239,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"transport to find which task owns it). The parent_transport is the request number. "+
 				"Requires AS ABAP 7.53 SP00 (ABAP Platform 1809) or later: older systems, including "+
 				"ECC on SAP_BASIS 7.50, have no remove-object operation in ADT at all, and this tool "+
-				"cannot work there — remove the entry in SE09 via the sap-desktop / sap-webgui MCP instead."+
+				"cannot work there — remove the entry in SE09 via the sapgui.mcp server instead."+
 				confirmationNote(elicitor),
 		),
 		mcp.WithString("task_number", mcp.Required(), mcp.Description("Task number that holds the object, e.g. DEVK900124")),
