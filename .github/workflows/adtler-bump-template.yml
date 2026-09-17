@@ -42,11 +42,28 @@ jobs:
           fi
 
           track_num=$(jq -r '.number' <<<"$tracking")
-          track_body=$(jq -r '.body' <<<"$tracking")
+          raw_checklist=$(jq -r '.body' <<<"$tracking" \
+            | grep -E '^- \[.\] #[0-9]+' || true)
+          sanitized_checklist_file=$(mktemp)
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            IFS=$'\t' read -r checkbox issue_num summary adtler_ref <<<"$(LINE="$line" python -c 'import os,re; line=os.environ["LINE"]; match=re.match(r"- \[(?P<mark>.)\] (?P<issue>#[0-9]+)(?: — )?(?P<rest>.*)$", line); rest=(match.group("rest") or "").strip(); adtler_match=re.search(r"\(adtler: ([^)]+)\)", rest); adtler=adtler_match.group(1) if adtler_match else ""; summary=re.sub(r"\s*\(adtler: [^)]+\)", "", rest).strip(); summary=" ".join(summary.split()); summary=re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b","<redacted>",summary); host_token=re.compile(r"\b[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::\d+)?\b"); summary=host_token.sub(lambda m: m.group(0) if re.fullmatch(r"v?\d+(?:\.\d+)+", m.group(0).split(":",1)[0]) else "<redacted>", summary); summary=re.sub(r"\b[A-Z0-9]{3}K9\d+\b","<redacted>",summary); summary=re.sub(r"/[A-Za-z0-9_]+/[A-Za-z0-9_/-]+\b","<redacted>",summary); summary=summary.replace("@","@ "); print("- [{}]\t{}\t{}\t{}".format(match.group("mark"), match.group("issue"), summary, adtler))')"
+            if [ -n "$summary" ] && [ -n "$adtler_ref" ]; then
+              printf '%s %s — %s (adtler: %s)\n' \
+                "$checkbox" "$issue_num" "$summary" "$adtler_ref"
+            elif [ -n "$summary" ]; then
+              printf '%s %s — %s\n' "$checkbox" "$issue_num" "$summary"
+            elif [ -n "$adtler_ref" ]; then
+              printf '%s %s (adtler: %s)\n' \
+                "$checkbox" "$issue_num" "$adtler_ref"
+            else
+              printf '%s %s\n' "$checkbox" "$issue_num"
+            fi
+          done <<<"$raw_checklist" > "$sanitized_checklist_file"
 
           # Match `- [ ] #N` and `- [x] #N` bullets. Surface all of them as
           # Closes candidates — the reviewer prunes based on reproducer results.
-          blocked_closes=$(grep -oE '^- \[.\] #[0-9]+' <<<"$track_body" \
+          blocked_closes=$(grep -oE '^- \[.\] #[0-9]+' "$sanitized_checklist_file" \
             | grep -oE '#[0-9]+' | sort -u | sed 's/^/Closes /' || true)
 
           body_file=$(mktemp)
@@ -56,7 +73,7 @@ jobs:
           Dependabot opened this bump. It is **not** ready to merge as-is.
 
           ### Required before merge
-          1. Run each linked issue's reproducer against the relevant system(s) (`hfq` R/3, `s4u` S/4).
+          1. Run each linked issue's reproducer against the relevant system(s) named on that issue.
           2. Keep a `Closes #n` line only for issues whose reproducer now passes.
           3. Delete the `Closes` lines for any issue still failing — they stay on the next tracking issue.
           4. Remove the `needs-reproducer-verify` label once every linked reproducer has been run.
@@ -65,7 +82,11 @@ jobs:
           {
             echo "### Tracking issue checklist (copied from #$track_num)"
             echo
-            echo "$track_body"
+            if [ -s "$sanitized_checklist_file" ]; then
+              cat "$sanitized_checklist_file"
+            else
+              echo "(No `- [ ] #<n>` checklist items found in #$track_num.)"
+            fi
             echo
             echo "### Auto-close candidates — prune after verification"
             echo
