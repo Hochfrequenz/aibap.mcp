@@ -51,7 +51,7 @@ jobs:
             checkbox=$(grep -oE '^- \[.\]' <<<"$line")
             issue_title=$(gh issue view "${issue_num#\#}" --repo "$REPO" \
               --json title --jq '.title')
-            adtler_ref=$(sed -nE 's/^.*\(adtler: ([[:alnum:]#._/-]+)\)$/\1/p' <<<"$line")
+            adtler_ref=$(sed -nE 's/^.*\(adtler: ([^)]+)\)$/\1/p' <<<"$line")
             if [ -n "$adtler_ref" ]; then
               printf '%s %s — %s (adtler: %s)\n' \
                 "$checkbox" "$issue_num" "$issue_title" "$adtler_ref"
