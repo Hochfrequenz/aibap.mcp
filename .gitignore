@@ -1,5 +1,6 @@
 .env
 .claude/
+.mcp.json
 config.json
 config.yaml
 sapadt-mcp

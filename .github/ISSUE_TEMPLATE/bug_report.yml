@@ -37,7 +37,7 @@ body:
         Arguments:
         {
           "objectUri": "/sap/bc/adt/programs/programs/zmyprogram",
-          "system": "hfq"
+          "system": "<system>"
         }
     validations:
       required: true

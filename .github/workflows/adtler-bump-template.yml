@@ -56,7 +56,7 @@ jobs:
           Dependabot opened this bump. It is **not** ready to merge as-is.
 
           ### Required before merge
-          1. Run each linked issue's reproducer against the relevant system(s) (`hfq` R/3, `s4u` S/4).
+          1. Run each linked issue's reproducer against the relevant system(s) named on that issue.
           2. Keep a `Closes #n` line only for issues whose reproducer now passes.
           3. Delete the `Closes` lines for any issue still failing — they stay on the next tracking issue.
           4. Remove the `needs-reproducer-verify` label once every linked reproducer has been run.

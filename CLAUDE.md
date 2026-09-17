@@ -59,13 +59,75 @@ notes instead — the tag is an identifier, the release notes are the record.
 - **Write for a cold reader.** Every comment on an issue and issue bodies in general or PR descriptions and code changes must stand on its own: clear to someone who has never worked on it and isn't in this conversation. State what you did and why, spell out issue/object/tool references instead of pronouns like "it" or "the fix", and link the relevant commit, PR, or adtler change. Be concise — no filler, no restating the obvious, no narrating your own process.
 - **Independent review before substantive comments.** Before posting an issue analysis, PR description, review summary, or closing rationale, hand the draft to an independent subagent (one with no stake in the work) to check the claims are accurate, the reasoning sound, and it reads clearly cold. Post only after that pass. Trivial acknowledgements and one-line status updates are exempt.
 
+## Public Repository — No Internal Data
+
+This repository and its issue tracker are **public**. Nothing that identifies our internal
+environment may land there — that covers commits, source, docs, test fixtures, issue titles and
+bodies, issue comments, PR descriptions, and anything a workflow writes on our behalf.
+
+Never publish:
+
+- Hostnames, FQDNs, IP addresses, or ports of internal systems — SAP or otherwise, including
+  auth and identity infrastructure
+- The internal system aliases defined in `systems.json`, including per-client and proxy
+  variants, when used to name a system in prose
+- Anything that embeds a system ID: transport and task numbers (`<SID>K9…`), lock keys, or log
+  lines carrying a host. Write `<request>` / `<task>` instead — an outside reader cannot run a
+  reproducer against our request numbers anyway
+- Object names in our own or a partner's registered SAP namespace (`/XXX/…`). The namespace
+  identifies its owner, the object name usually identifies the business domain, and a partner
+  namespace additionally discloses which add-ons we run. Use a neutral placeholder such as
+  `/ABC/CL_EXAMPLE`
+- An inventory of our landscape: client numbers, which industry or partner add-ons are
+  installed, or references to internal wikis and ticket systems. Saying that a finding was
+  reproduced "on both systems" is fine; enumerating the landscape is not
+- Credentials or tokens of any kind, and client numbers tied to a named system
+- Local filesystem paths containing a user name, and SAP logon IDs
+- Customer, project, or other company-internal identifiers
+
+Name a SAP system by **type and release level** instead, which is also more useful to an outside
+reader than an alias:
+
+- `SAP S/4HANA 2025, on-premise (SAP_BASIS 816, S4CORE 109)`
+- `SAP ERP 6.0 EHP8 (SAP_BASIS 750, SAP_APPL 618)`
+
+Read the levels from the system rather than guessing: component levels from `CVERS`
+(`SELECT COMPONENT, RELEASE, EXTRELEASE FROM CVERS WHERE COMPONENT IN ('SAP_BASIS', 'SAP_APPL',
+'S4CORE')` — note that `LIKE 'SAP%'` silently misses `S4CORE`), and the marketing release from
+`PRDVERS` (`SELECT NAME, VERSION, INSTSTATUS, DESCRIPT FROM PRDVERS`, where `INSTSTATUS = '+'`
+marks the active version). Both are basis metadata, not business data, and stay inside the scope
+guardrail. Publish the release level only — never the support-package level (the `EXTRELEASE`
+column, e.g. `SP 0034`), which maps directly onto published SAP Security Notes and so states
+which fixes are not yet applied. Where several systems appear in one document, introduce the type/release form once and
+refer back to it ("the ECC system", "on both systems").
+
+The one allowed exception is a literal config value a reader has to type or the code has to hold:
+the `MCP_INTEGRATION_SYSTEMS` default set where it is documented (`README.md`, this file) or
+defined (`tools/integration_test.go`), and integration-test branches that key off one system's
+real behaviour. The prose, comments and commit messages *around* that value are not covered —
+write "the ECC system", not the alias. Unit-test fixture strings are not covered either; use
+`sysA` / `sysB`. This section is bound by the same rule: where an example is needed, write
+`<alias>`.
+
+`.mcp.json` is **not** an exception. It is git-ignored and may hold credentials; it must never
+be committed at all.
+
+Before pushing, grep the diff for the shapes that matter — an internal domain suffix, a
+`<SID>K9…` transport number, a `/XXX/` namespace prefix — rather than for the alias names, so the
+guard itself does not leak them.
+
+When you find internal data already published, redact it in place (edit the issue body, or open a
+PR) rather than only noting it. For a hostname, credential or logon ID, assume the value is
+already disclosed regardless: editing a body does not remove it from the edit history or from the
+notification e-mails that already went out, so rotate or renumber it instead of trusting the edit.
+
 ## Cross-Repo Issue Tracking (adtler)
 
 Since most fixes now live in [adtler](https://github.com/Hochfrequenz/adtler), issues here often can't be closed until the next adtler release is consumed via `go get`. To keep this visible:
 
 1. **Label proactively**: Whenever you (or an agent) conclude that an aibap.mcp issue can't be resolved without an adtler change, immediately add the `blocked-by-adtler` label and append it to the tracking issue. Same rule when you spot a new adtler commit/release that resolves an existing open issue here: label it, add a checklist bullet, link the adtler commit or PR. Query open blockers with `gh issue list --label blocked-by-adtler`.
 2. **Tracking issue**: A single open issue titled `Next adtler release: bump to vX.Y.Z` collects all blocked issues as a checklist, each bullet `- [ ] #<n> — short description (adtler: <commit-or-PR>)`. There should only ever be one such tracking issue open at a time.
-3. **Reproducer snippet on every `blocked-by-adtler` issue**: each such issue must include a copy-pastable MCP tool call (tool name + arguments JSON) or equivalent Go snippet, the target system (`hfq` R/3 / `s4u` S/4), any session preconditions (e.g. "fresh MCP session, no preceding `get_atc_customizing` — see adtler#44"), the "fixed" expected output, and the "broken" current output. This snippet is what the bump PR's reproducer-verify step runs. Without it, false negatives like aibap.mcp#306 are easy to ship. Example: aibap.mcp#288.
+3. **Reproducer snippet on every `blocked-by-adtler` issue**: each such issue must include a copy-pastable MCP tool call (tool name + arguments JSON) or equivalent Go snippet, the target system **named by type and release level** (see "Public Repository — No Internal Data"; write `{"system": "<system>"}` in the arguments and `<request>` / `<task>` for transport numbers), any session preconditions (e.g. "fresh MCP session, no preceding `get_atc_customizing` — see adtler#44"), the "fixed" expected output, and the "broken" current output. This snippet is what the bump PR's reproducer-verify step runs. Without it, false negatives like aibap.mcp#306 are easy to ship. Example: aibap.mcp#288.
 4. **When bumping adtler**:
    - **Automated path (preferred)**: dependabot opens the bump PR automatically on a new adtler release. `.github/workflows/adtler-bump-template.yml` rewrites the PR body with the tracking issue's checklist + pre-populated `Closes #` lines, and adds the `needs-reproducer-verify` label. Walk each linked issue, run its reproducer against the relevant system(s), prune `Closes` lines for anything still failing, and remove the label before merging.
    - **Manual path**: open a branch `chore/bump-adtler-vX.Y.Z`, run `go get github.com/Hochfrequenz/adtler@vX.Y.Z && go mod tidy`, verify `go test ./...` passes, and replicate the same PR-body checklist and reproducer verification by hand.
@@ -133,7 +195,7 @@ When you need to understand how an ADT endpoint works or debug unexpected behavi
 4. **Write throwaway integration tests** to probe endpoint behavior (paths, headers, response formats). Delete them once the investigation is done.
 5. **Debug handler code** by setting breakpoints in the relevant adtler package (cloned alongside this repo) and running the relevant unit test — see `docs/debugger-investigation.md` for the proven debug flow.
 6. **Check ADT discovery** — the server caches `/sap/bc/adt/discovery` XML which lists available endpoints and their accepted content types per system.
-7. **Test against both systems** (`hfq` = ECC, `s4u` = S4) — endpoint behavior often differs.
+7. **Test against both systems** (the ECC 6.0 EHP8 system and the S/4HANA on-premise system — see "Public Repository — No Internal Data") — endpoint behavior often differs.
 8. **Other implementations are inspiration, not truth** — code targeting BTP/Steampunk may not work on S4 on-prem. Always verify against the real system.
 
 ## ADT Discovery & Content-Type Negotiation
