@@ -1,6 +1,6 @@
 module github.com/Hochfrequenz/aibap.mcp
 
-go 1.26
+go 1.27
 
 require (
 	github.com/Hochfrequenz/adtler v0.3.14
