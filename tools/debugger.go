@@ -257,7 +257,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	s.AddTool(mcp.NewTool("debug_step",
 		mcp.WithTitleAnnotation("Debug Step"),
 		mcp.WithReadOnlyHintAnnotation(false),
-		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process and detachDebugger abandons the suspended session without waiting for the next breakpoint — both release it without a step-by-step resume. Requires an active debug session via debug_start + debug_attach. terminateDebuggee specifically asks the MCP client to confirm before it runs, since it kills a live process — a client that supports elicitation prompts the user; one that does not answer on its own, usually declining."),
 		mcp.WithString("action",
