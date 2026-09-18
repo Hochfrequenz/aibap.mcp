@@ -122,12 +122,13 @@ func registerSearchTools(s toolAdder, client searchDepsClient) {
 				"(transaction, Web Dynpro application, WebClient UI target or SAPUI5 app)\n"+
 				"For PROG/FUGR/FUNC/CLAS/INTF, D010TAB is populated flat by the ABAP activator — no client-side recursion needed. "+
 				"For TABL/DTEL/DOMA/TTYP, the DDIC type chain is traversed iteratively up to max_depth levels. "+
+				"For UIAC/UIAD, a single flat query against SUI_TM_MM_APP resolves the entries — no recursion. "+
 				"Useful for transport completeness checks.",
 		),
 		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, FUGR, FUNC, CLAS, INTF, TABL, DTEL, DOMA, TTYP, UIAC, UIAD")),
 		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_REPORT (PROG), Z_MY_FGRP (FUGR), Z_MY_FM (FUNC), ZCL_MY_CLASS (CLAS), ZIF_MY_INTF (INTF), ZORDERS (TABL), S_CARR_ID (DTEL), S_LAND1 (DOMA), SAP_TC_FIN_CO_BE_APPS (UIAC)")),
 		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
-		mcp.WithNumber("max_depth", mcp.Description("Maximum BFS depth for TABL/DTEL/DOMA/TTYP traversal (default: 3, min: 1, max: 10; ignored for PROG/FUGR/FUNC/CLAS/INTF)")),
+		mcp.WithNumber("max_depth", mcp.Description("Maximum BFS depth for TABL/DTEL/DOMA/TTYP traversal (default: 3, min: 1, max: 10; ignored for PROG/FUGR/FUNC/CLAS/INTF/UIAC/UIAD)")),
 		mcp.WithOutputSchema[adt.DependencyResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		objType := req.GetString("object_type", "")

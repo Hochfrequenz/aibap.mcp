@@ -64,7 +64,10 @@ func TestGetObjectDependenciesTool_Error(t *testing.T) {
 
 // TestGetObjectDependenciesAdvertisesUITypes guards the tool surface: callers
 // pick object types out of tools/list, so UIAC and UIAD have to be named both
-// in the tool description and in the object_type parameter description.
+// in the tool description and in the object_type parameter description. They
+// also have to be named among the types max_depth is ignored for, since both
+// are resolved by a single non-recursive query and max_depth has no effect on
+// them.
 func TestGetObjectDependenciesAdvertisesUITypes(t *testing.T) {
 	s := newTestServer(&mockClient{})
 	var tool listedTool
@@ -80,12 +83,17 @@ func TestGetObjectDependenciesAdvertisesUITypes(t *testing.T) {
 	props, _ := tool.InputSchema["properties"].(map[string]any)
 	objType, _ := props["object_type"].(map[string]any)
 	paramDesc, _ := objType["description"].(string)
+	maxDepth, _ := props["max_depth"].(map[string]any)
+	maxDepthDesc, _ := maxDepth["description"].(string)
 	for _, want := range []string{"UIAC", "UIAD"} {
 		if !strings.Contains(tool.Description, want) {
 			t.Errorf("tool description does not mention %s", want)
 		}
 		if !strings.Contains(paramDesc, want) {
 			t.Errorf("object_type description does not mention %s: %q", want, paramDesc)
+		}
+		if !strings.Contains(maxDepthDesc, want) {
+			t.Errorf("max_depth description does not name %s as one of the types it's ignored for: %q", want, maxDepthDesc)
 		}
 	}
 }
