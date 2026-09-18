@@ -3,12 +3,33 @@ package tools
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// validDebugStepActions is the single source of truth for debug_step's
+// action enum: the mcp.Enum() declaration and the handler's own validation
+// both derive from it, so they can't drift apart. The handler validates
+// independently of the declared JSON Schema because this server does not
+// call mcp-go's server.WithInputSchemaValidation — an unrecognised action
+// string reaches the handler as-is, and without this check would either
+// round-trip to SAP for a confusing "Unknown method" error or, worse, land
+// on the exact-string terminateDebuggee confirmation gate below by literal
+// match only, with no guarantee an unrecognised variant (different casing,
+// trailing junk, etc.) that a lenient SAP kernel happened to still accept
+// as terminateDebuggee would have been caught first.
+var validDebugStepActions = []string{"stepInto", "stepOver", "stepReturn", "stepContinue", "terminateDebuggee", "detachDebugger"}
+
+var validDebugStepActionSet = func() map[string]bool {
+	m := make(map[string]bool, len(validDebugStepActions))
+	for _, a := range validDebugStepActions {
+		m[a] = true
+	}
+	return m
+}()
 
 // buildDebugSessionsResult converts the raw GetDebuggeeSessions response into a
 // typed result. The body is SAP ASX XML (not JSON), and it is empty when there
@@ -23,14 +44,60 @@ func buildDebugSessionsResult(data []byte) DebugSessionsResult {
 	return DebugSessionsResult{HasSessions: true, Raw: string(data)}
 }
 
-// debugRawJSON wraps a JSON byte payload from the adtler debugger API so it
-// round-trips through NewToolResultJSON without being base64-encoded.
-// The adtler debugger helpers return pre-marshalled JSON; these endpoints do
-// not expose typed Go structs yet, so we forward the raw JSON as-is. No
-// WithOutputSchema is declared for the corresponding tools — their shape is
-// determined by the SAP debugger and not yet captured in a Go type.
+// buildDebugStepResult, buildDebugVariableResult, buildDebugStackResult, and
+// buildDebugWatchpointResult wrap the non-JSON bodies returned by the ADT
+// debugger endpoints (application/xml for step/stack/watchpoint,
+// text/plain for variable reads) in a typed struct. Forwarding these bytes
+// as json.RawMessage to NewToolResultJSON fails JSON validation — the same
+// bug class already fixed for debug_get_sessions in #433. See issue #501.
 
-func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector) {
+func buildDebugStepResult(data []byte) DebugStepResult {
+	return DebugStepResult{Raw: string(data)}
+}
+
+func buildDebugVariableResult(name string, data []byte) DebugVariableResult {
+	return DebugVariableResult{VariableName: name, Value: string(data)}
+}
+
+func buildDebugStackResult(data []byte) DebugStackResult {
+	return DebugStackResult{Raw: string(data)}
+}
+
+func buildDebugWatchpointResult(data []byte) DebugWatchpointResult {
+	return DebugWatchpointResult{Raw: string(data)}
+}
+
+// buildTerminateDebuggeeMessage is the ConfirmDestructive prompt for
+// debug_step's terminateDebuggee action. Unlike stepInto/stepOver/
+// stepReturn/stepContinue/detachDebugger — which either single-step or
+// hand control back without disturbing whatever the debuggee was doing —
+// terminateDebuggee kills the debuggee's ABAP work process outright,
+// which can discard unsaved state in whatever session hit the breakpoint.
+func buildTerminateDebuggeeMessage(user string) string {
+	return fmt.Sprintf(
+		"debug_step(terminateDebuggee) is about to kill the running debuggee process for user %s. "+
+			"This aborts whatever that session was doing — any unsaved state in it is lost. Approve termination?",
+		user,
+	)
+}
+
+// debugStepTerminateConfirmationClause describes, accurately for the actual
+// wiring, what happens when action=="terminateDebuggee". Must not promise a
+// confirmation unconditionally: RegisterAll passes a nil Elicitor (embedders
+// with nothing to elicit through), and ConfirmDestructive then returns
+// (true, "") without ever asking — see confirmationNote's doc comment for
+// the same rule applied to the shared DestructiveConfirmationNote. A
+// nil-gated sentence here does the same job for debug_step's own prose,
+// which can't use the shared constant/guardedTools mechanism (see the
+// comment above the terminateDebuggee branch in the handler below).
+func debugStepTerminateConfirmationClause(elicitor Elicitor) string {
+	if elicitor == nil {
+		return " In this build, no Elicitor is wired in, so terminateDebuggee proceeds without asking for confirmation."
+	}
+	return " terminateDebuggee specifically asks the MCP client to confirm before it runs, since it kills a live process — a client that supports elicitation prompts the user; one that does not answer on its own, usually declining."
+}
+
+func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector, elicitor Elicitor) {
 	// Shared debug session — created lazily on first use.
 	var dbg *adt.DebugSession
 
@@ -230,24 +297,42 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Execute a debug step action (stepInto, stepOver, stepReturn, or continue). Requires an active debug session via debug_start + debug_attach."),
+		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process outright, while detachDebugger stops debugging and lets the debuggee continue running to completion normally (the standard meaning of \"detach\" in any debugger — unlike terminateDebuggee, nothing is killed). Requires an active debug session via debug_start + debug_attach."+debugStepTerminateConfirmationClause(elicitor)),
 		mcp.WithString("action",
 			mcp.Required(),
-			mcp.Description("Step action: stepInto, stepOver, stepReturn, or continue"),
-			mcp.Enum("stepInto", "stepOver", "stepReturn", "continue"),
+			mcp.Description("Step action: stepInto, stepOver, stepReturn, stepContinue, terminateDebuggee, or detachDebugger"),
+			mcp.Enum(validDebugStepActions...),
 		),
 		mcp.WithString("user",
 			mcp.Required(),
 			mcp.Description("SAP username for the debug session"),
 		),
+		mcp.WithOutputSchema[DebugStepResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		action := req.GetString("action", "")
 		user := req.GetString("user", "")
+		if !validDebugStepActionSet[action] {
+			return errorResult(fmt.Errorf(
+				"debug_step: unrecognised action %q — must be one of: %s",
+				action, strings.Join(validDebugStepActions, ", "),
+			)), nil
+		}
+		if action == "terminateDebuggee" {
+			// Confirm before touching adtler: getSession constructs an
+			// adt.DebugSession unconditionally, which panics against any
+			// Client that isn't *httpClient/*ClientRegistry (see adtler's
+			// resolveHTTPClient) — placing the gate first also keeps a
+			// decline unit-testable against this package's mockClient.
+			proceed, reason := ConfirmDestructive(ctx, elicitor, buildTerminateDebuggeeMessage(user))
+			if !proceed {
+				return errorResult(fmt.Errorf("debug_step(terminateDebuggee) aborted: %s", reason)), nil
+			}
+		}
 		data, err := getSession(user).Step(ctx, action)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultJSON(json.RawMessage(data))
+		return mcp.NewToolResultJSON(buildDebugStepResult(data))
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_variable",
@@ -265,6 +350,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 			mcp.Required(),
 			mcp.Description("SAP username for the debug session"),
 		),
+		mcp.WithOutputSchema[DebugVariableResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("variable_name", "")
 		user := req.GetString("user", "")
@@ -272,7 +358,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultJSON(json.RawMessage(data))
+		return mcp.NewToolResultJSON(buildDebugVariableResult(name, data))
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_stack",
@@ -286,13 +372,14 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 			mcp.Required(),
 			mcp.Description("SAP username for the debug session"),
 		),
+		mcp.WithOutputSchema[DebugStackResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
 		data, err := getSession(user).GetStack(ctx)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultJSON(json.RawMessage(data))
+		return mcp.NewToolResultJSON(buildDebugStackResult(data))
 	})
 
 	s.AddTool(mcp.NewTool("debug_set_watchpoint",
@@ -312,6 +399,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 			mcp.Required(),
 			mcp.Description("SAP username for the debug session"),
 		),
+		mcp.WithOutputSchema[DebugWatchpointResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		variableName := req.GetString("variable_name", "")
 		condition := req.GetString("condition", "")
@@ -320,6 +408,6 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultJSON(json.RawMessage(data))
+		return mcp.NewToolResultJSON(buildDebugWatchpointResult(data))
 	})
 }

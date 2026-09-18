@@ -167,7 +167,7 @@ BEST FOR:
 - DDIC lookups (get_object_info, get_ddic_info)%s
 
 CONFIRMATIONS:
-Tools that destroy or overwrite something — object and transport deletion, transport release and rollback, removing an object from a transport, rename, run_class, update_customizing, and run_query without a valid 'purpose' — request a confirmation from the MCP client before they act. Each of those tool descriptions says so. Clients that support MCP elicitation show the user a prompt; clients that do not answer on their own, usually refusing. An abort that reports a declined confirmation therefore does not necessarily mean a person declined: the operation itself never reached SAP, and repeating the call unchanged will not help.
+Tools that destroy or overwrite something — object and transport deletion, transport release and rollback, removing an object from a transport, rename, run_class, update_customizing, run_query without a valid 'purpose', and debug_step with action=terminateDebuggee — request a confirmation from the MCP client before they act. Each of those tool descriptions says so. Clients that support MCP elicitation show the user a prompt; clients that do not answer on their own, usually refusing. An abort that reports a declined confirmation therefore does not necessarily mean a person declined: the operation itself never reached SAP, and repeating the call unchanged will not help.
 
 WHEN TO USE sap-desktop/sap-webgui MCP INSTEAD:
 If SAP GUI MCP tools are available, prefer them for:

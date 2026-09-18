@@ -180,6 +180,36 @@ type DebugSessionsResult struct {
 	Raw         string `json:"raw,omitempty"`
 }
 
+// DebugStepResult reports the outcome of a debug step action. The ADT
+// debugger endpoint (POST /debugger?method=...) returns application/xml,
+// not JSON, so the payload is forwarded as Raw rather than parsed. See
+// issue #501.
+type DebugStepResult struct {
+	Raw string `json:"raw"`
+}
+
+// DebugVariableResult reports a variable value read from an active debug
+// session. GetVariable requests Accept: text/plain, so the value is
+// forwarded as-is rather than parsed. See issue #501.
+type DebugVariableResult struct {
+	VariableName string `json:"variable_name"`
+	Value        string `json:"value"`
+}
+
+// DebugStackResult reports the call stack of an active debug session.
+// GetStack returns application/xml (the dbg:stack payload), not JSON, so
+// the payload is forwarded as Raw rather than parsed. See issue #501.
+type DebugStackResult struct {
+	Raw string `json:"raw"`
+}
+
+// DebugWatchpointResult reports the outcome of setting a watchpoint.
+// SetWatchpoint returns application/xml, not JSON, so the payload is
+// forwarded as Raw rather than parsed. See issue #501.
+type DebugWatchpointResult struct {
+	Raw string `json:"raw"`
+}
+
 type UpdateCustomizingResult struct {
 	Status string `json:"status"`
 	Table  string `json:"table"`
