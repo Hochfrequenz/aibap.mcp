@@ -4,10 +4,32 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// validDebugStepActions is the single source of truth for debug_step's
+// action enum: the mcp.Enum() declaration and the handler's own validation
+// both derive from it, so they can't drift apart. The handler validates
+// independently of the declared JSON Schema because this server does not
+// call mcp-go's server.WithInputSchemaValidation — an unrecognised action
+// string reaches the handler as-is, and without this check would either
+// round-trip to SAP for a confusing "Unknown method" error or, worse, land
+// on the exact-string terminateDebuggee confirmation gate below by literal
+// match only, with no guarantee an unrecognised variant (different casing,
+// trailing junk, etc.) that a lenient SAP kernel happened to still accept
+// as terminateDebuggee would have been caught first.
+var validDebugStepActions = []string{"stepInto", "stepOver", "stepReturn", "stepContinue", "terminateDebuggee", "detachDebugger"}
+
+var validDebugStepActionSet = func() map[string]bool {
+	m := make(map[string]bool, len(validDebugStepActions))
+	for _, a := range validDebugStepActions {
+		m[a] = true
+	}
+	return m
+}()
 
 // buildDebugSessionsResult converts the raw GetDebuggeeSessions response into a
 // typed result. The body is SAP ASX XML (not JSON), and it is empty when there
@@ -57,6 +79,22 @@ func buildTerminateDebuggeeMessage(user string) string {
 			"This aborts whatever that session was doing — any unsaved state in it is lost. Approve termination?",
 		user,
 	)
+}
+
+// debugStepTerminateConfirmationClause describes, accurately for the actual
+// wiring, what happens when action=="terminateDebuggee". Must not promise a
+// confirmation unconditionally: RegisterAll passes a nil Elicitor (embedders
+// with nothing to elicit through), and ConfirmDestructive then returns
+// (true, "") without ever asking — see confirmationNote's doc comment for
+// the same rule applied to the shared DestructiveConfirmationNote. A
+// nil-gated sentence here does the same job for debug_step's own prose,
+// which can't use the shared constant/guardedTools mechanism (see the
+// comment above the terminateDebuggee branch in the handler below).
+func debugStepTerminateConfirmationClause(elicitor Elicitor) string {
+	if elicitor == nil {
+		return " In this build, no Elicitor is wired in, so terminateDebuggee proceeds without asking for confirmation."
+	}
+	return " terminateDebuggee specifically asks the MCP client to confirm before it runs, since it kills a live process — a client that supports elicitation prompts the user; one that does not answer on its own, usually declining."
 }
 
 func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector, elicitor Elicitor) {
@@ -259,11 +297,11 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process and detachDebugger abandons the suspended session without waiting for the next breakpoint — both release it without a step-by-step resume. Requires an active debug session via debug_start + debug_attach. terminateDebuggee specifically asks the MCP client to confirm before it runs, since it kills a live process — a client that supports elicitation prompts the user; one that does not answer on its own, usually declining."),
+		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process outright, while detachDebugger stops debugging and lets the debuggee continue running to completion normally (the standard meaning of \"detach\" in any debugger — unlike terminateDebuggee, nothing is killed). Requires an active debug session via debug_start + debug_attach."+debugStepTerminateConfirmationClause(elicitor)),
 		mcp.WithString("action",
 			mcp.Required(),
 			mcp.Description("Step action: stepInto, stepOver, stepReturn, stepContinue, terminateDebuggee, or detachDebugger"),
-			mcp.Enum("stepInto", "stepOver", "stepReturn", "stepContinue", "terminateDebuggee", "detachDebugger"),
+			mcp.Enum(validDebugStepActions...),
 		),
 		mcp.WithString("user",
 			mcp.Required(),
@@ -273,6 +311,12 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		action := req.GetString("action", "")
 		user := req.GetString("user", "")
+		if !validDebugStepActionSet[action] {
+			return errorResult(fmt.Errorf(
+				"debug_step: unrecognised action %q — must be one of: %s",
+				action, strings.Join(validDebugStepActions, ", "),
+			)), nil
+		}
 		if action == "terminateDebuggee" {
 			// Confirm before touching adtler: getSession constructs an
 			// adt.DebugSession unconditionally, which panics against any

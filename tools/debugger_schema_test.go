@@ -4,6 +4,9 @@ import (
 	"testing"
 )
 
+// debugStepToolName is shared across this file and debugger_confirmation_test.go.
+const debugStepToolName = "debug_step"
+
 // TestDebugStepActionEnum pins issue #501 Bug 2's actual tool-surface change
 // (the only user-visible change in that fix): "continue" — the ADT method
 // name that never worked, rejected with ExceptionInvalidData: Unknown
@@ -20,7 +23,7 @@ func TestDebugStepActionEnum(t *testing.T) {
 
 	var step *listedTool
 	for i := range tools {
-		if tools[i].Name == "debug_step" {
+		if tools[i].Name == debugStepToolName {
 			step = &tools[i]
 			break
 		}
@@ -56,13 +59,20 @@ func TestDebugStepActionEnum(t *testing.T) {
 }
 
 // TestDebugToolsDeclareOutputSchema pins that the four handlers fixed by
-// issue #501 (previously wrapping non-JSON ADT bodies in json.RawMessage,
-// which always failed NewToolResultJSON's marshal step) each declare a
-// typed WithOutputSchema. It does not — and cannot, without a live SAP
-// debuggee — assert that the handler actually returns a value matching
-// that schema; see tools/debugger_test.go for the builder-level coverage
-// of that, and the 2026-09-18 live verification linked from issue #501's
-// PR for the real end-to-end proof.
+// issue #501 (previously wrapping non-JSON ADT bodies in json.RawMessage
+// and passing them to NewToolResultJSON) each declare a typed
+// WithOutputSchema. The old behavior wasn't a uniform failure mode: XML/
+// most text bodies aren't valid JSON at all and failed json.Marshal
+// outright, but a text/plain variable value that happened to look like a
+// bare JSON scalar (e.g. "42", "true") would marshal successfully and
+// produce a scalar structuredContent instead — the #351 bug class, not a
+// marshal error; see issue #501's own "single digit" / "structuredContent
+// expected record" symptom. Either way the typed structs fix it. This test
+// does not — and cannot, without a live SAP debuggee — assert that the
+// handler actually returns a value matching the declared schema; see
+// tools/debugger_test.go for the builder-level coverage of that, and the
+// 2026-09-18 live verification linked from issue #501's PR for the real
+// end-to-end proof.
 func TestDebugToolsDeclareOutputSchema(t *testing.T) {
 	s := newTestServer(&mockClient{})
 	tools := listRegisteredTools(t, s)
@@ -72,7 +82,7 @@ func TestDebugToolsDeclareOutputSchema(t *testing.T) {
 		byName[tl.Name] = tl
 	}
 
-	for _, name := range []string{"debug_step", "debug_get_variable", "debug_get_stack", "debug_set_watchpoint"} {
+	for _, name := range []string{debugStepToolName, "debug_get_variable", "debug_get_stack", "debug_set_watchpoint"} {
 		tl, ok := byName[name]
 		if !ok {
 			t.Errorf("%s not registered", name)
