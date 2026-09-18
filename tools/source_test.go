@@ -372,6 +372,9 @@ func (m *mockClient) Logout(ctx context.Context) error {
 	}
 	return nil
 }
+func (m *mockClient) SystemFlavor(context.Context) (adt.SystemFlavor, error) {
+	return adt.SystemFlavorUnknown, nil
+}
 func (m *mockClient) RunClass(ctx context.Context, className string) (*adt.ClassRunResult, error) {
 	if m.runClassFn != nil {
 		return m.runClassFn(ctx, className)
