@@ -117,12 +117,15 @@ func registerSearchTools(s toolAdder, client searchDepsClient) {
 				"  DTEL — data element: BFS over DD04L (domain)\n"+
 				"  DOMA — domain: BFS over DD01L (entity table)\n"+
 				"  TTYP — table type: BFS over DD40L (row type)\n"+
+				"  UIAC — Fiori catalog: queries SUI_TM_MM_APP (CAT_ID) for the UIAD app entries it contains\n"+
+				"  UIAD — Fiori catalog app entry: queries SUI_TM_MM_APP (APP_ID) for its launch target "+
+				"(transaction, Web Dynpro application, WebClient UI target or SAPUI5 app)\n"+
 				"For PROG/FUGR/FUNC/CLAS/INTF, D010TAB is populated flat by the ABAP activator — no client-side recursion needed. "+
 				"For TABL/DTEL/DOMA/TTYP, the DDIC type chain is traversed iteratively up to max_depth levels. "+
 				"Useful for transport completeness checks.",
 		),
-		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, FUGR, FUNC, CLAS, INTF, TABL, DTEL, DOMA, TTYP")),
-		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_REPORT (PROG), Z_MY_FGRP (FUGR), Z_MY_FM (FUNC), ZCL_MY_CLASS (CLAS), ZIF_MY_INTF (INTF), ZORDERS (TABL), S_CARR_ID (DTEL), S_LAND1 (DOMA)")),
+		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, FUGR, FUNC, CLAS, INTF, TABL, DTEL, DOMA, TTYP, UIAC, UIAD")),
+		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_REPORT (PROG), Z_MY_FGRP (FUGR), Z_MY_FM (FUNC), ZCL_MY_CLASS (CLAS), ZIF_MY_INTF (INTF), ZORDERS (TABL), S_CARR_ID (DTEL), S_LAND1 (DOMA), SAP_MM_BC_PUR_PO_PROC (UIAC)")),
 		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
 		mcp.WithNumber("max_depth", mcp.Description("Maximum BFS depth for TABL/DTEL/DOMA/TTYP traversal (default: 3, min: 1, max: 10; ignored for PROG/FUGR/FUNC/CLAS/INTF)")),
 		mcp.WithOutputSchema[adt.DependencyResult](),

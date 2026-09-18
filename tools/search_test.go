@@ -3,6 +3,7 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -58,5 +59,33 @@ func TestGetObjectDependenciesTool_Error(t *testing.T) {
 	})
 	if !result.IsError {
 		t.Fatal("expected error result")
+	}
+}
+
+// TestGetObjectDependenciesAdvertisesUITypes guards the tool surface: callers
+// pick object types out of tools/list, so UIAC and UIAD have to be named both
+// in the tool description and in the object_type parameter description.
+func TestGetObjectDependenciesAdvertisesUITypes(t *testing.T) {
+	s := newTestServer(&mockClient{})
+	var tool listedTool
+	for _, lt := range listRegisteredTools(t, s) {
+		if lt.Name == "get_object_dependencies" {
+			tool = lt
+			break
+		}
+	}
+	if tool.Name == "" {
+		t.Fatal("get_object_dependencies is not registered")
+	}
+	props, _ := tool.InputSchema["properties"].(map[string]any)
+	objType, _ := props["object_type"].(map[string]any)
+	paramDesc, _ := objType["description"].(string)
+	for _, want := range []string{"UIAC", "UIAD"} {
+		if !strings.Contains(tool.Description, want) {
+			t.Errorf("tool description does not mention %s", want)
+		}
+		if !strings.Contains(paramDesc, want) {
+			t.Errorf("object_type description does not mention %s: %q", want, paramDesc)
+		}
 	}
 }
