@@ -54,12 +54,24 @@ func TestDebugSessionsResultMarshalsToObject(t *testing.T) {
 }
 
 // TestDebugStepGetVariableGetStackSetWatchpointBuildersHandleNonJSONBody
-// guards the regression from issue #501: debug_step, debug_get_variable,
-// debug_get_stack, and debug_set_watchpoint forwarded the ADT debugger
-// endpoints' XML/text bodies as json.RawMessage to NewToolResultJSON, which
-// fails JSON validation for any body that isn't valid JSON (which none of
-// these ever are) — the same bug class as #433. The builders below wrap the
-// raw bytes in a typed struct instead, so json.Marshal always succeeds.
+// exercises the builder functions issue #501 introduced (debug_step,
+// debug_get_variable, debug_get_stack, and debug_set_watchpoint used to
+// forward the ADT debugger endpoints' XML/text bodies as json.RawMessage to
+// NewToolResultJSON, which fails JSON validation for any body that isn't
+// valid JSON — none of these ever are — the same bug class as #433). The
+// builders wrap the raw bytes in a typed struct instead, so json.Marshal
+// always succeeds.
+//
+// This test calls the builders directly, not the registered debug_* tool
+// handlers — adtler's DebugSession panics against the mockClient used
+// elsewhere in this package's tests (see TestStructuredContentIsObject's
+// knownOptOuts comment), so there is no unit-test-level way to pin that a
+// handler actually calls the right builder with the right bytes. That
+// wiring is proven live instead — see issue #501's linked 2026-09-18
+// end-to-end verification. TestDebugStepActionEnum and
+// TestDebugToolsDeclareOutputSchema (debugger_schema_test.go) cover what
+// unit tests safely can: the declared tool schema, without invoking a
+// handler.
 func TestDebugStepGetVariableGetStackSetWatchpointBuildersHandleNonJSONBody(t *testing.T) {
 	stepXML := `<PROGATTR><DEBUGGEE_STATE/></PROGATTR>`
 	if got := buildDebugStepResult([]byte(stepXML)); got.Raw != stepXML {
@@ -81,13 +93,16 @@ func TestDebugStepGetVariableGetStackSetWatchpointBuildersHandleNonJSONBody(t *t
 	}
 }
 
-// TestDebugStepGetVariableGetStackSetWatchpointResultsMarshalToObject closes
-// the loop the reflective structured_content_shape_test guardrail can't
-// reach (these tools are all in knownOptOuts, same reason as
-// debug_get_sessions): the value each handler feeds to NewToolResultJSON
-// must round-trip to a JSON object, per the MCP 2025-06-18 structuredContent
-// requirement. A raw XML/text body forwarded via json.RawMessage would fail
-// this (that's the #501 bug); the typed wrapper always succeeds.
+// TestDebugStepGetVariableGetStackSetWatchpointResultsMarshalToObject checks
+// that each of the four #501 result types round-trips to a JSON object
+// through NewToolResultJSON, per the MCP 2025-06-18 structuredContent
+// requirement — a raw XML/text body forwarded via json.RawMessage (the
+// #501 bug) would fail this. Like the test above, this exercises the
+// result types directly, not the registered handlers (see that test's
+// comment for why); a named Go struct always marshals to a JSON object,
+// so this specifically guards against a future field type change breaking
+// that shape (e.g. an added field whose type can't marshal), not against
+// the handler-wiring class of regression #501 was.
 func TestDebugStepGetVariableGetStackSetWatchpointResultsMarshalToObject(t *testing.T) {
 	results := []any{
 		buildDebugStepResult([]byte(`<x/>`)),
