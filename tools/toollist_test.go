@@ -3,11 +3,9 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/aibap.mcp/tools"
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -78,17 +76,4 @@ func listRegisteredTools(t *testing.T, s *server.MCPServer) []listedTool {
 		t.Fatal("tools/list returned zero tools — test server misconfigured")
 	}
 	return envelope.Result.Tools
-}
-
-// toolResultText concatenates the text content of a tool result, so assertions
-// do not depend on how many content blocks a handler emitted.
-func toolResultText(t *testing.T, result *mcp.CallToolResult) string {
-	t.Helper()
-	var b strings.Builder
-	for _, c := range result.Content {
-		if tc, ok := c.(mcp.TextContent); ok {
-			b.WriteString(tc.Text)
-		}
-	}
-	return b.String()
 }

@@ -400,7 +400,11 @@ Six tools do something this server cannot undo:
 - **run_class** — executes arbitrary ABAP under the configured user. What it does is not
   part of the call.
 - **update_customizing** — an entry with `"op": "delete"` removes a customizing row.
-  Customizing tables have no version database, so the row cannot be reconstructed.
+  Customizing tables have no version database, so the row cannot be reconstructed. Note
+  that on the stock binary this tool always fails with "configure a BlackMagic fallback",
+  and under `strict` the client asks for approval *before* the handler runs — so you answer
+  a prompt for a call that cannot succeed. That is the price of marking it for the builds
+  where it does work.
 
 The `--consent` flag decides how the client's permission system treats those six:
 
@@ -435,14 +439,25 @@ Before choosing `strict`, three things are worth knowing:
 - **Unattended is not uniformly broken.** A headless run behind `--permission-prompt-tool`
   is denied, but an Agent SDK host is not: its `canUseTool` callback still receives these
   calls and may approve them, because such a host is expected to put the question to a
-  person.
+  person. On surfaces that normally offer one-tap approval — Remote Control, and Agent SDK
+  applications — Claude Code withholds the one-tap action for a marked tool and shows the
+  full permission prompt instead, so the answer comes from the terminal dialog.
 
-The tools left unmarked are unmarked on the merits. `run_query` runs SELECT statements
-only and changes nothing — its `purpose` parameter is a scope check under the SAP API
-Policy, not an approval step, and an unrecognised value is rejected locally in both modes.
-`rename` rewrites source the SAP version database still holds, and a second rename puts
-the old name back. `remove_from_transport` changes an object's link to a transport rather
-than the object, and `add_to_transport` restores the link.
+The tools left unmarked are unmarked on the merits:
+
+- `run_query` runs SELECT statements only and changes nothing. Its `purpose` parameter is
+  a scope check under the SAP API Policy, not an approval step, and a missing or
+  unrecognised value is rejected locally in both modes.
+- `rename` rewrites source, and a second rename puts the old name back. The version
+  database usually holds the previous state too — though not for an object that has never
+  been versioned, such as one in `$TMP` or one whose transport is still open.
+- `remove_from_transport` changes an object's link to a transport rather than the object,
+  and `add_to_transport` restores the link. This is the weakest of the exclusions: the
+  tool's own description warns that a stale `position` can remove the wrong entry, and
+  restoring it means knowing which one vanished.
+- `force_unlock` terminates this server's own SAP session to drop the locks it holds. It
+  cannot reach another user's or another session's enqueues, so the worst case is losing
+  unsaved work this same process was holding.
 
 ### OAuth2 / SSO
 

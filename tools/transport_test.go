@@ -139,9 +139,11 @@ func TestCreateTransport_CategoryK_UsesADT(t *testing.T) {
 
 func TestDeleteTransport_DeletesWithoutAskingTheClient(t *testing.T) {
 	called := false
+	var gotTransport string
 	mock := &mockClient{
-		deleteTransportFn: func(_ context.Context, _ string) error {
+		deleteTransportFn: func(_ context.Context, transport string) error {
 			called = true
+			gotTransport = transport
 			return nil
 		},
 	}
@@ -150,18 +152,23 @@ func TestDeleteTransport_DeletesWithoutAskingTheClient(t *testing.T) {
 		"transport": testTransportNum,
 	})
 	if result.IsError {
-		t.Fatalf("expected success with nil elicitor (backwards compat), got error: %v", result.Content)
+		t.Fatalf("expected success, got error: %v", result.Content)
 	}
 	if !called {
-		t.Fatal("expected deleteTransportFn to be called with nil elicitor (backwards compat)")
+		t.Fatal("expected deleteTransportFn to be called")
+	}
+	if gotTransport != testTransportNum {
+		t.Errorf("transport reached the client as %q, want %q", gotTransport, testTransportNum)
 	}
 }
 
 func TestReleaseTransport_ReleasesWithoutAskingTheClient(t *testing.T) {
 	called := false
+	var gotTransport string
 	mock := &mockClient{
-		releaseTransportFn: func(_ context.Context, _ string) error {
+		releaseTransportFn: func(_ context.Context, transport string) error {
 			called = true
+			gotTransport = transport
 			return nil
 		},
 	}
@@ -170,10 +177,13 @@ func TestReleaseTransport_ReleasesWithoutAskingTheClient(t *testing.T) {
 		"transport": testTransportNum,
 	})
 	if result.IsError {
-		t.Fatalf("expected success with nil elicitor (backwards compat), got error: %v", result.Content)
+		t.Fatalf("expected success, got error: %v", result.Content)
 	}
 	if !called {
-		t.Fatal("expected releaseTransportFn to be called with nil elicitor (backwards compat)")
+		t.Fatal("expected releaseTransportFn to be called")
+	}
+	if gotTransport != testTransportNum {
+		t.Errorf("transport reached the client as %q, want %q", gotTransport, testTransportNum)
 	}
 }
 
@@ -334,9 +344,9 @@ func TestRemoveFromTransport_RemovesWithoutAskingTheClient(t *testing.T) {
 	s := newTestServerWithFallback(mock, nil)
 	result := callTool(t, s, "remove_from_transport", removeFromTransportArgs())
 	if result.IsError {
-		t.Fatalf("expected success with nil elicitor, got error: %v", result.Content)
+		t.Fatalf("expected success, got error: %v", result.Content)
 	}
 	if !called {
-		t.Fatal("expected removeFromTransportFn to be called with nil elicitor (backwards compat)")
+		t.Fatal("expected removeFromTransportFn to be called")
 	}
 }

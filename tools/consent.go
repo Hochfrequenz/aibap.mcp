@@ -87,17 +87,27 @@ const MetaRequiresUserInteraction = "anthropic/requiresUserInteraction"
 //     row through SAP GUI automation. Customizing tables have no version
 //     database, so a removed row cannot be reconstructed from this server.
 //
-// The three guarded-looking tools left out are left out on the merits, not by
-// oversight:
+// The tools left out are left out on the merits, not by oversight. Eight tools
+// declare destructiveHint true and six of them are here, so a reader comparing
+// the two sets will find remove_from_transport and force_unlock missing and
+// deserves the reason. run_query and rename are listed too because they were
+// part of the elicitation-era guarded set:
 //
-//   - run_query runs SELECT statements only; it changes nothing. Its purpose
-//     gate is a scope check under the SAP API Policy, not a consent step.
-//   - rename rewrites source, which the SAP version database still holds; a
-//     second rename puts the old name back.
+//   - run_query runs SELECT statements only; it changes nothing, and declares
+//     readOnlyHint true. Its purpose gate is a scope check under the SAP API
+//     Policy, not a consent step.
+//   - rename rewrites source and a second rename puts the old name back. The
+//     version database usually holds the previous state as well, though not
+//     for an object that has never been versioned — one in $TMP, or one whose
+//     transport is still open.
 //   - remove_from_transport changes an object's link to a transport, not the
 //     object, and add_to_transport restores the link. Its own description
-//     warns that a stale position can remove the wrong entry, which is a
-//     correctness problem in that tool rather than an irreversible one.
+//     warns that a stale position can remove the wrong entry; that is a
+//     correctness problem in that tool (see #493, #506) rather than an
+//     irreversible one, but it is the weakest exclusion here.
+//   - force_unlock terminates this server's own SAP session to drop the locks
+//     it holds. It cannot reach another user's or another session's enqueues,
+//     so the worst case is losing unsaved work this same process was holding.
 //
 // TestStrictConsentAnnotatesTheIrreversibleTools pins this set from the wire
 // side.

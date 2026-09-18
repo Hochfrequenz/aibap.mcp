@@ -123,9 +123,14 @@ type loggingServer struct {
 }
 
 // AddTool annotates the tool before registering it. Doing this here rather
-// than at the four affected registration sites keeps the annotated set in one
-// place (tools.irreversibleTools) and means a tool renamed in its own file
-// cannot silently lose the annotation without the guard test noticing.
+// than at the six affected registration sites keeps the annotated set in one
+// place (tools.irreversibleTools).
+//
+// The trade-off is worth stating: it moves the "remember this tool" problem
+// from six call sites to one map that sits next to none of them, and a tool
+// renamed in its own file would silently drop out of the set. What prevents
+// that is TestStrictConsentAnnotatesTheIrreversibleTools, which pins the
+// annotated names from the wire — not the centralisation itself.
 func (ls *loggingServer) AddTool(tool mcp.Tool, handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	ls.consent.annotate(&tool)
 	ls.inner.AddTool(tool, withLogging(tool.Name, ls.selector, handler))
@@ -184,6 +189,15 @@ func getStringOrSlice(args map[string]any, key string) (string, []string) {
 func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient, opts ...RegisterOption) {
 	settings := registerSettings{consent: ConsentStrict}
 	for _, opt := range opts {
+		// A nil option is skipped rather than called. This parameter replaced
+		// an Elicitor that callers passed as a literal nil, and such a call
+		// still compiles against the variadic — untyped nil is a valid
+		// RegisterOption. Panicking on it would turn a silent source
+		// compatibility into a runtime crash on the first registration. See
+		// TestNilRegisterOptionIsIgnored.
+		if opt == nil {
+			continue
+		}
 		opt(&settings)
 	}
 	ls := &loggingServer{inner: s, selector: selector, consent: settings.consent}

@@ -107,7 +107,7 @@ func TestParseConsentMode(t *testing.T) {
 
 // TestStrictConsentAnnotatesTheIrreversibleTools pins the default. The
 // annotation is what stops one "Yes, and don't ask again" click from granting
-// consent for every later call to these four tools (issue #507).
+// consent for every later call to these six tools (issue #507).
 func TestStrictConsentAnnotatesTheIrreversibleTools(t *testing.T) {
 	got := interactionRequiredTools(t, newConsentTestServer(t))
 
@@ -119,6 +119,31 @@ func TestStrictConsentAnnotatesTheIrreversibleTools(t *testing.T) {
 				"annotated set needs the same edit in wantInteractionRequired and in the README",
 			got, want,
 		)
+	}
+}
+
+// TestNilRegisterOptionIsIgnored covers a source-compatible trap. Before this
+// change RegisterAllWithLockMap's seventh parameter was an Elicitor, and every
+// caller that wanted none passed a literal nil. That call still compiles
+// against the variadic ...RegisterOption — untyped nil is a valid option — so
+// a downstream fork (CLAUDE.md describes one that compiles in its own
+// BlackMagicClient) rebasing onto this change would build clean and then panic
+// on the first registration.
+func TestNilRegisterOptionIsIgnored(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("a nil RegisterOption panicked: %v — skip nil options instead", r)
+		}
+	}()
+
+	s := server.NewMCPServer("test", "0.0.1")
+	tools.RegisterAllWithLockMap(
+		s, &mockClient{}, &mockSelector{}, adt.NewLockMap(),
+		tools.ParseToolGroups([]string{"all"}), &confirmProbeFallback{}, nil,
+	)
+
+	if got := interactionRequiredTools(t, s); len(got) != len(wantInteractionRequired) {
+		t.Errorf("nil option changed the default: annotated %v", got)
 	}
 }
 

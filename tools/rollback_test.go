@@ -8,8 +8,8 @@ import (
 )
 
 // rollbackGateMock records whether `rollback_transport` reached the
-// adt.RollbackTransport call — enough to exercise the elicitation gate without
-// driving the (now adtler-side) rollback pipeline.
+// adt.RollbackTransport call — enough to tell a handler-side rejection from a
+// completed call, without driving the (now adtler-side) rollback pipeline.
 func rollbackGateMock(calledGate *bool) *mockClient {
 	return &mockClient{
 		rollbackTransportFn: func(_ context.Context, _ string) (*adt.RollbackResult, error) {
@@ -29,9 +29,9 @@ func TestRollbackTransport_RollsBackWithoutAskingTheClient(t *testing.T) {
 		"transport": testTransportNum,
 	})
 	if result.IsError {
-		t.Fatalf("expected success with nil elicitor, got error: %v", result.Content)
+		t.Fatalf("expected success, got error: %v", result.Content)
 	}
 	if !called {
-		t.Fatal("expected rollbackTransportFn to be called with nil elicitor (backwards compat)")
+		t.Fatal("expected rollbackTransportFn to be called")
 	}
 }

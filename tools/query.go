@@ -80,13 +80,21 @@ func registerQueryTools(s toolAdder, client adt.QueryClient) {
 // of the caller's client and is unaffected by the --consent mode.
 const missingPurposeClause = "A missing or unrecognised 'purpose' causes the query to be rejected without reaching SAP. "
 
-// withQueryPurposeParam adds the optional "purpose" parameter to the run_query
-// tool definition. The parameter is intentionally NOT required and carries no
-// enum constraint in the JSON Schema: a schema-level required+enum would let a
-// conforming MCP client reject the call generically before it reaches the
-// handler, so the caller would never see which values this server accepts or
-// why. Enforcement lives exclusively in the handler, which rejects with the
-// list of valid purposes.
+// withQueryPurposeParam adds the "purpose" parameter to the run_query tool
+// definition. It is deliberately not marked required and carries no enum
+// constraint in the JSON Schema, so enforcement lives exclusively in the
+// handler.
+//
+// The reason is the error the caller gets. A schema-level required+enum lets a
+// conforming client reject the call generically — "purpose: invalid value" —
+// and that message says nothing about the SAP API Policy or why this server
+// restricts the query. The handler's rejection names the policy and the
+// accepted categories, which is the part a caller has to read to decide
+// whether the query belongs here at all. The schema still lists the categories
+// in the parameter description, so nothing about the accepted values is hidden.
+//
+// This shape predates the --consent work and is unchanged by it; the gate was
+// never a consent step.
 func withQueryPurposeParam() mcp.ToolOption {
 	const outcome = "Omitting it or using a different value causes the query to be rejected."
 	return func(t *mcp.Tool) {

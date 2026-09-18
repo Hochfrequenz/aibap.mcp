@@ -32,22 +32,41 @@ func TestRunQuery_ValidPurpose_CallsRunQuery(t *testing.T) {
 	}
 }
 
-func TestRunQuery_MissingPurpose_IsRejectedLocally(t *testing.T) {
-	called := false
-	mock := &mockClient{
-		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
-			called = true
-			return &adt.QueryResult{}, nil
+// TestRunQuery_PurposeGateRejectsLocally covers both halves of the gate. The
+// "present but unrecognised" case matters on its own: it is the only thing
+// standing between a caller and a SELECT on a business table, and a handler
+// narrowed to `purpose == ""` would still pass the missing-purpose case while
+// letting every made-up value straight through.
+func TestRunQuery_PurposeGateRejectsLocally(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args map[string]interface{}
+	}{
+		{
+			name: "missing",
+			args: map[string]interface{}{"sql": "SELECT * FROM VBAK"},
 		},
-	}
-	s := newTestServerWithFallback(mock, nil)
-	result := callTool(t, s, "run_query", map[string]interface{}{
-		"sql": "SELECT * FROM VBAK",
-	})
-	if !result.IsError {
-		t.Fatal("expected a local rejection when purpose is missing")
-	}
-	if called {
-		t.Fatal("RunQuery must not be called on hard block")
+		{
+			name: "unrecognised",
+			args: map[string]interface{}{"sql": "SELECT * FROM VBAK", "purpose": "reporting"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			called := false
+			mock := &mockClient{
+				runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+					called = true
+					return &adt.QueryResult{}, nil
+				},
+			}
+			s := newTestServerWithFallback(mock, nil)
+			result := callTool(t, s, "run_query", tc.args)
+			if !result.IsError {
+				t.Fatalf("expected a local rejection for a %s purpose", tc.name)
+			}
+			if called {
+				t.Fatalf("RunQuery reached SAP with a %s purpose", tc.name)
+			}
+		})
 	}
 }
