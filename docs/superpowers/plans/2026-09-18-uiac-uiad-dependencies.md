@@ -526,7 +526,7 @@ Read `adt/integration_helpers_test.go` for `eachSystem(t)` and the `integrationS
 - Discover the fixture at runtime — select a `CAT_ID` from `SUI_TM_MM_APP` through the client's own query path and use what comes back. **Never hardcode a catalog or app name**; real names here are internal data and must not enter a public repository.
 - `t.Skip` when the system has no rows to work with, rather than failing (Verified Fact 9).
 - Call `GetObjectDependencies(ctx, "UIAC", <discovered catalog>, …)`; assert no error and that every dependency carries `UseTypeUIApp`.
-- Take one app id from that result, call `GetObjectDependencies(ctx, "UIAD", <that app id>, …)`; assert no error and that each dependency's use type is one of the five new constants — or, when the list is empty, that a warning explains why.
+- Take one app id from that result, call `GetObjectDependencies(ctx, "UIAD", <that app id>, …)`; assert no error and that each dependency's use type is one of the four launch-target constants — never `UseTypeUIApp`, which only a UIAC lookup returns — or, when the list is empty, that a warning explains why.
 - Log counts, never object names, so CI logs carry no internal identifiers.
 
 - [ ] **Step 2: Verify it builds and vets under the integration tag**
