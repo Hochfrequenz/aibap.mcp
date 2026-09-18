@@ -18,9 +18,8 @@ func callTool(t *testing.T, s *server.MCPServer, toolName string, args map[strin
 	return callToolCtx(context.Background(), t, s, toolName, args)
 }
 
-// callToolCtx is callTool with a caller-supplied context. Tests that need a
-// client session in scope — anything exercising elicitation, which resolves
-// the session via server.ClientSessionFromContext — pass a context built with
+// callToolCtx is callTool with a caller-supplied context, for a test that
+// needs a client session in scope: pass a context built with
 // (*server.MCPServer).WithContext. Everything else should use callTool.
 func callToolCtx(ctx context.Context, t *testing.T, s *server.MCPServer, toolName string, args map[string]interface{}) *mcp.CallToolResult {
 	t.Helper()
