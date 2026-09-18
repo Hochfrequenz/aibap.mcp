@@ -125,7 +125,7 @@ func registerSearchTools(s toolAdder, client searchDepsClient) {
 				"Useful for transport completeness checks.",
 		),
 		mcp.WithString("object_type", mcp.Required(), mcp.Description("ABAP object type: PROG, FUGR, FUNC, CLAS, INTF, TABL, DTEL, DOMA, TTYP, UIAC, UIAD")),
-		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_REPORT (PROG), Z_MY_FGRP (FUGR), Z_MY_FM (FUNC), ZCL_MY_CLASS (CLAS), ZIF_MY_INTF (INTF), ZORDERS (TABL), S_CARR_ID (DTEL), S_LAND1 (DOMA), SAP_MM_BC_PUR_PO_PROC (UIAC)")),
+		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name, e.g. Z_MY_REPORT (PROG), Z_MY_FGRP (FUGR), Z_MY_FM (FUNC), ZCL_MY_CLASS (CLAS), ZIF_MY_INTF (INTF), ZORDERS (TABL), S_CARR_ID (DTEL), S_LAND1 (DOMA), SAP_TC_FIN_CO_BE_APPS (UIAC)")),
 		mcp.WithNumber("max_results", mcp.Description("Maximum number of results to return (default: 200)")),
 		mcp.WithNumber("max_depth", mcp.Description("Maximum BFS depth for TABL/DTEL/DOMA/TTYP traversal (default: 3, min: 1, max: 10; ignored for PROG/FUGR/FUNC/CLAS/INTF)")),
 		mcp.WithOutputSchema[adt.DependencyResult](),
