@@ -210,6 +210,10 @@ func TestServerInstructions_AlwaysPresentContent(t *testing.T) {
 			"APPROVAL:",
 			"This server does not ask for confirmation itself",
 			"refused by the client, not by SAP",
+			// The marking only asks; clients may ignore it, and older ones
+			// do. Stating it as enforcement would be the same class of
+			// untrue documentation #475 set out to remove.
+			"The marking is a request, not a guarantee",
 			// run_query's purpose gate is a scope check, not an approval step,
 			// and must not be described as one (#507).
 			"run_query is not part of that set",

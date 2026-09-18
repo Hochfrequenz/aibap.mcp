@@ -78,7 +78,7 @@ func run() error {
 	var toolsFlag string
 	flag.StringVar(&toolsFlag, "tools", "", "Comma-separated tool groups to enable (default: all except debug; 'all' for everything)")
 	var consentFlag string
-	flag.StringVar(&consentFlag, "consent", "", "Consent for the irreversible tools: 'strict' (default) requires approval on every call, 'prompt' allows the client to remember the answer")
+	flag.StringVar(&consentFlag, "consent", "", "Consent for the irreversible tools: 'strict' (default) asks the client to require approval on every call, 'prompt' leaves them on the client's normal permission flow. The server only marks the tools — a client that does not support the marking ignores it")
 	flag.Parse()
 
 	consent, err := tools.ParseConsentMode(consentFlag)
@@ -202,7 +202,7 @@ BEST FOR:
 - DDIC lookups (get_object_info, get_ddic_info)%s
 
 APPROVAL:
-This server does not ask for confirmation itself. Approving a call is the MCP client's job, and what the client asks depends on its own permission settings. Six tools are marked as requiring approval on every call because nothing here can undo them: delete_object, delete_transport, release_transport, rollback_transport, run_class and update_customizing. A call that never reaches SAP was refused by the client, not by SAP — repeating it unchanged will not help.
+This server does not ask for confirmation itself. Approving a call is the MCP client's job, and what the client asks depends on its own permission settings. Six tools carry a marking that asks the client to require approval on every call, because nothing here can undo them: delete_object, delete_transport, release_transport, rollback_transport, run_class and update_customizing. The marking is a request, not a guarantee — whether a client honours it, and some do not, is outside this server's control. A call that never reaches SAP was refused by the client, not by SAP — repeating it unchanged will not help.
 
 run_query is not part of that set. It rejects a missing or unrecognised 'purpose' locally, before reaching SAP; that is a scope check under the SAP API Policy below, not an approval step.
 
