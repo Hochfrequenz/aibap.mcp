@@ -45,7 +45,21 @@ func buildDebugWatchpointResult(data []byte) DebugWatchpointResult {
 	return DebugWatchpointResult{Raw: string(data)}
 }
 
-func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector) {
+// buildTerminateDebuggeeMessage is the ConfirmDestructive prompt for
+// debug_step's terminateDebuggee action. Unlike stepInto/stepOver/
+// stepReturn/stepContinue/detachDebugger — which either single-step or
+// hand control back without disturbing whatever the debuggee was doing —
+// terminateDebuggee kills the debuggee's ABAP work process outright,
+// which can discard unsaved state in whatever session hit the breakpoint.
+func buildTerminateDebuggeeMessage(user string) string {
+	return fmt.Sprintf(
+		"debug_step(terminateDebuggee) is about to kill the running debuggee process for user %s. "+
+			"This aborts whatever that session was doing — any unsaved state in it is lost. Approve termination?",
+		user,
+	)
+}
+
+func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector, elicitor Elicitor) {
 	// Shared debug session — created lazily on first use.
 	var dbg *adt.DebugSession
 
@@ -245,7 +259,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process and detachDebugger abandons the suspended session without waiting for the next breakpoint — both release it without a step-by-step resume. Requires an active debug session via debug_start + debug_attach."),
+		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process and detachDebugger abandons the suspended session without waiting for the next breakpoint — both release it without a step-by-step resume. Requires an active debug session via debug_start + debug_attach. terminateDebuggee specifically asks the MCP client to confirm before it runs, since it kills a live process — a client that supports elicitation prompts the user; one that does not answer on its own, usually declining."),
 		mcp.WithString("action",
 			mcp.Required(),
 			mcp.Description("Step action: stepInto, stepOver, stepReturn, stepContinue, terminateDebuggee, or detachDebugger"),
@@ -259,6 +273,17 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		action := req.GetString("action", "")
 		user := req.GetString("user", "")
+		if action == "terminateDebuggee" {
+			// Confirm before touching adtler: getSession constructs an
+			// adt.DebugSession unconditionally, which panics against any
+			// Client that isn't *httpClient/*ClientRegistry (see adtler's
+			// resolveHTTPClient) — placing the gate first also keeps a
+			// decline unit-testable against this package's mockClient.
+			proceed, reason := ConfirmDestructive(ctx, elicitor, buildTerminateDebuggeeMessage(user))
+			if !proceed {
+				return errorResult(fmt.Errorf("debug_step(terminateDebuggee) aborted: %s", reason)), nil
+			}
+		}
 		data, err := getSession(user).Step(ctx, action)
 		if err != nil {
 			return errorResult(err), nil
