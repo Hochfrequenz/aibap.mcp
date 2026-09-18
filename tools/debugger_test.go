@@ -52,3 +52,60 @@ func TestDebugSessionsResultMarshalsToObject(t *testing.T) {
 		}
 	}
 }
+
+// TestDebugStepGetVariableGetStackSetWatchpointBuildersHandleNonJSONBody
+// guards the regression from issue #501: debug_step, debug_get_variable,
+// debug_get_stack, and debug_set_watchpoint forwarded the ADT debugger
+// endpoints' XML/text bodies as json.RawMessage to NewToolResultJSON, which
+// fails JSON validation for any body that isn't valid JSON (which none of
+// these ever are) — the same bug class as #433. The builders below wrap the
+// raw bytes in a typed struct instead, so json.Marshal always succeeds.
+func TestDebugStepGetVariableGetStackSetWatchpointBuildersHandleNonJSONBody(t *testing.T) {
+	stepXML := `<PROGATTR><DEBUGGEE_STATE/></PROGATTR>`
+	if got := buildDebugStepResult([]byte(stepXML)); got.Raw != stepXML {
+		t.Errorf("buildDebugStepResult: got %+v, want Raw=%q", got, stepXML)
+	}
+
+	if got := buildDebugVariableResult("LV_FLAG", []byte("X")); got.VariableName != "LV_FLAG" || got.Value != "X" {
+		t.Errorf("buildDebugVariableResult: got %+v, want {VariableName:LV_FLAG Value:X}", got)
+	}
+
+	stackXML := `<dbg:stack xmlns:dbg="..."><stackEntry/></dbg:stack>`
+	if got := buildDebugStackResult([]byte(stackXML)); got.Raw != stackXML {
+		t.Errorf("buildDebugStackResult: got %+v, want Raw=%q", got, stackXML)
+	}
+
+	watchpointXML := `<watchpoint id="1"/>`
+	if got := buildDebugWatchpointResult([]byte(watchpointXML)); got.Raw != watchpointXML {
+		t.Errorf("buildDebugWatchpointResult: got %+v, want Raw=%q", got, watchpointXML)
+	}
+}
+
+// TestDebugStepGetVariableGetStackSetWatchpointResultsMarshalToObject closes
+// the loop the reflective structured_content_shape_test guardrail can't
+// reach (these tools are all in knownOptOuts, same reason as
+// debug_get_sessions): the value each handler feeds to NewToolResultJSON
+// must round-trip to a JSON object, per the MCP 2025-06-18 structuredContent
+// requirement. A raw XML/text body forwarded via json.RawMessage would fail
+// this (that's the #501 bug); the typed wrapper always succeeds.
+func TestDebugStepGetVariableGetStackSetWatchpointResultsMarshalToObject(t *testing.T) {
+	results := []any{
+		buildDebugStepResult([]byte(`<x/>`)),
+		buildDebugVariableResult("LV_FLAG", []byte("X")),
+		buildDebugStackResult([]byte(`<dbg:stack/>`)),
+		buildDebugWatchpointResult([]byte(`<watchpoint/>`)),
+	}
+	for _, r := range results {
+		res, err := mcp.NewToolResultJSON(r)
+		if err != nil {
+			t.Fatalf("%T: NewToolResultJSON returned error: %v", r, err)
+		}
+		out, err := json.Marshal(res.StructuredContent)
+		if err != nil {
+			t.Fatalf("%T: marshal StructuredContent: %v", r, err)
+		}
+		if !strings.HasPrefix(string(out), "{") {
+			t.Errorf("%T: StructuredContent is not a JSON object: %s", r, out)
+		}
+	}
+}
