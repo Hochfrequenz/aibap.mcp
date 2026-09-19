@@ -170,7 +170,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 	}
 	groups := []group{
 		{"source", func() {
-			registerSourceTools(ls, client, lockMap, selector)
+			registerSourceTools(ls, client, lockMap, tracker, selector)
 			registerPatchTools(ls, client, lockMap, tracker, selector)
 			registerFileSourceTools(ls, client, lockMap, tracker, selector)
 			registerPrettyPrinterTools(ls, client)
