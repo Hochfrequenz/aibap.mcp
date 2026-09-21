@@ -18,6 +18,9 @@ func registerRollbackTools(s toolAdder, client adt.Client) {
 			"Restore all source objects in a transport to their version before the transport. "+
 				"For each PROG/CLAS/INTF/FUGR: reads version history, finds the pre-transport version, "+
 				"and restores the source. Non-source objects (TABL, DTEL, etc.) are skipped. "+
+				"An object counts as restored only if the restored source also activates: the activation is verified "+
+				"against the inactive-objects list, so an object that SAP accepts but silently does not activate is "+
+				"reported as failed instead of restored. "+
 				"This is destructive — it overwrites current source with historical versions.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number to roll back")),
