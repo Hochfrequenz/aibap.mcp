@@ -1,6 +1,7 @@
 package tools_test
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -91,5 +92,102 @@ func TestDebugToolsDeclareOutputSchema(t *testing.T) {
 		if len(tl.OutputSchema) == 0 {
 			t.Errorf("%s does not declare an outputSchema", name)
 		}
+	}
+}
+
+// TestDebugToolsRejectEmptyRequiredStrings pins the handler-side validation for
+// required debugger string parameters. The server does not enable
+// WithInputSchemaValidation, so missing/empty strings would otherwise reach
+// adtler (and from there SAP) or panic in NewDebugSession before the request is
+// rejected locally.
+func TestDebugToolsRejectEmptyRequiredStrings(t *testing.T) {
+	s := newTestServer(&mockClient{})
+	cases := []struct {
+		name       string
+		tool       string
+		args       map[string]interface{}
+		wantSubstr string
+	}{
+		{
+			name: "set breakpoint missing user",
+			tool: "debug_set_breakpoint",
+			args: map[string]interface{}{
+				"object_uri":  testObjectURI,
+				"line":        1,
+				"object_type": "PROG/P",
+				"object_name": "ZTEST",
+				"user":        "",
+			},
+			wantSubstr: `"user" is required`,
+		},
+		{
+			name: "start missing object name",
+			tool: "debug_start",
+			args: map[string]interface{}{
+				"object_uri":  testObjectURI,
+				"line":        1,
+				"object_type": "PROG/P",
+				"object_name": "",
+				"user":        "TESTUSER",
+			},
+			wantSubstr: `"object_name" is required`,
+		},
+		{
+			name: "attach missing debuggee id",
+			tool: "debug_attach",
+			args: map[string]interface{}{
+				"debuggee_id": "",
+				"user":        "TESTUSER",
+			},
+			wantSubstr: `"debuggee_id" is required`,
+		},
+		{
+			name: "step missing user",
+			tool: debugStepToolName,
+			args: map[string]interface{}{
+				"action": "stepInto",
+				"user":   "",
+			},
+			wantSubstr: `"user" is required`,
+		},
+		{
+			name: "get variable missing variable name",
+			tool: "debug_get_variable",
+			args: map[string]interface{}{
+				"variable_name": "",
+				"user":          "TESTUSER",
+			},
+			wantSubstr: `"variable_name" is required`,
+		},
+		{
+			name: "get stack missing user",
+			tool: "debug_get_stack",
+			args: map[string]interface{}{
+				"user": "",
+			},
+			wantSubstr: `"user" is required`,
+		},
+		{
+			name: "set watchpoint missing variable name",
+			tool: "debug_set_watchpoint",
+			args: map[string]interface{}{
+				"variable_name": "",
+				"condition":     "",
+				"user":          "TESTUSER",
+			},
+			wantSubstr: `"variable_name" is required`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := callTool(t, s, tc.tool, tc.args)
+			if !result.IsError {
+				t.Fatalf("expected IsError=true, got success: %s", firstText(result))
+			}
+			if got := firstText(result); !strings.Contains(got, tc.wantSubstr) {
+				t.Fatalf("error %q does not contain %q", got, tc.wantSubstr)
+			}
+		})
 	}
 }

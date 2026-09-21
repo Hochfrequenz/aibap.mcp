@@ -9,7 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient, elicitor Elicitor) {
+func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient) {
 	s.AddTool(mcp.NewTool("get_transport_requests",
 		mcp.WithTitleAnnotation("Get Transport Requests"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -148,8 +148,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"NOTE: On ECC systems, release via ADT may silently fail (returns 200 but status stays modifiable). "+
 				"This tool detects the silent fail via a follow-up status check; when a fallback is "+
 				"configured it routes the release through that path automatically. Without a fallback, "+
-				"use the sap-desktop MCP server to release via SE09 instead."+
-				confirmationNote(elicitor),
+				"use the sap-desktop MCP server to release via SE09 instead.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to release")),
 		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),
@@ -158,11 +157,6 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		transport, errRes := requireString(req, "transport")
 		if errRes != nil {
 			return errRes, nil
-		}
-		proceed, reason := ConfirmDestructive(ctx, elicitor,
-			"Confirm release of transport "+transport+". Once released it cannot be edited.")
-		if !proceed {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "release_transport aborted: " + reason}), nil
 		}
 		includeTasks := req.GetBool("include_tasks", false)
 
@@ -206,8 +200,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"repository object does not remove its transport entry: to empty a transport, "+
 				"remove every entry get_transport_objects reports using remove_from_transport. The current "+
 				"get_transport_objects result does not expose the owning task number required for that call. "+
-				"Deleting a request also deletes its tasks, provided they are empty."+
-				confirmationNote(elicitor),
+				"Deleting a request also deletes its tasks, provided they are empty.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to delete")),
 		mcp.WithOutputSchema[DeleteTransportResult](),
@@ -215,11 +208,6 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		transport, errRes := requireString(req, "transport")
 		if errRes != nil {
 			return errRes, nil
-		}
-		proceed, reason := ConfirmDestructive(ctx, elicitor,
-			"Confirm deletion of transport "+transport+". This is irreversible.")
-		if !proceed {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "delete_transport aborted: " + reason}), nil
 		}
 		if err := client.DeleteTransport(ctx, transport); err != nil {
 			return errorResult(err), nil
@@ -240,8 +228,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"transport to find which task owns it). The parent_transport is the request number. "+
 				"Requires AS ABAP 7.53 SP00 (ABAP Platform 1809) or later: older systems, including "+
 				"ECC on SAP_BASIS 7.50, have no remove-object operation in ADT at all, and this tool "+
-				"cannot work there — remove the entry in SE09 via the sapgui.mcp server instead."+
-				confirmationNote(elicitor),
+				"cannot work there — remove the entry in SE09 via the sapgui.mcp server instead.",
 		),
 		mcp.WithString("task_number", mcp.Required(), mcp.Description("Task number that holds the object, e.g. DEVK900124")),
 		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. DEVK900123")),
@@ -266,11 +253,6 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		objName := req.GetString("object_name", "")
 		wbType := req.GetString("wb_type", "")
 		position := req.GetString("position", "")
-		proceed, reason := ConfirmDestructive(ctx, elicitor,
-			fmt.Sprintf("Confirm removing %s %s from transport task %s (parent %s). The object itself is not changed — only its link to the transport.", objType, objName, taskNr, parentTr))
-		if !proceed {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "remove_from_transport aborted: " + reason}), nil
-		}
 		if err := client.RemoveFromTransport(ctx, taskNr, parentTr, pgmid, objType, objName, wbType, position); err != nil {
 			return errorResult(err), nil
 		}

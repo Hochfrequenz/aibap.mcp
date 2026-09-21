@@ -120,7 +120,7 @@ func registerPatchTools(s toolAdder, client interface {
 		// Resolve lock handle: explicit param > lock map > auto-lock. On ECC,
 		// the cached handle is never trusted (#377) — see resolveWriteLockHandle.
 		key := adt.LockKey(selector.ActiveName(), uri)
-		lockHandle, autoLocked, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, true)
+		lockHandle, autoLocked, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, true)
 		if err != nil {
 			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
 		}
@@ -128,7 +128,7 @@ func registerPatchTools(s toolAdder, client interface {
 		// Get current source.
 		srcResult, err := client.GetSource(ctx, uri)
 		if err != nil {
-			if autoLocked {
+			if releaseOnFailure {
 				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
 			}
 			return errorResult(err), nil
@@ -139,7 +139,7 @@ func registerPatchTools(s toolAdder, client interface {
 		oldSource := srcResult.Source
 		newSource, err := adt.ApplyPatchOps(oldSource, ops)
 		if err != nil {
-			if autoLocked {
+			if releaseOnFailure {
 				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
 			}
 			return errorResult(fmt.Errorf("patch failed: %w", err)), nil
@@ -148,7 +148,7 @@ func registerPatchTools(s toolAdder, client interface {
 		// Write patched source back.
 		newETag, err := client.SetSource(ctx, uri, newSource, lockHandle, transport, etag)
 		if err != nil {
-			if autoLocked {
+			if releaseOnFailure {
 				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
 			}
 			return errorResult(err), nil
