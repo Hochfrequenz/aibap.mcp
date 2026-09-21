@@ -76,7 +76,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> — <code>objects</code> (10 tools)</summary>
+<summary><strong>Objects and packages</strong> — <code>objects</code> (11 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
