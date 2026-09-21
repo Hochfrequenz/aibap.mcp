@@ -39,10 +39,9 @@ import (
 var bumpReqRe = regexp.MustCompile("[A-Z][A-Z0-9]{2}K[0-9]{6}")
 
 // mkBumpTransport creates a workbench transport for Z_ADT_MCP_TEST and
-// returns its number, skipping the subtest if creation is unavailable.
-// Deliberately named differently from mkTransport in
-// write_reproducers_integration_test.go, which is compiled under a different
-// build-tag combination.
+// returns its number, skipping the subtest if creation is unavailable. It
+// duplicates mkTransport from write_reproducers_integration_test.go, which
+// carries the extra `transport` build tag and so is not compiled here.
 func mkBumpTransport(t *testing.T, desc string) string {
 	t.Helper()
 	res := callTool(t, sharedServer, "create_transport", map[string]interface{}{
@@ -364,6 +363,13 @@ func TestBumpVerify_409_FioriCatalogDependencies(t *testing.T) {
 				t.Fatalf("#409 NOT fixed on %s: get_object_dependencies(UIAC) errored: %s", sys, raw)
 			}
 			t.Logf("UIAC on %s: count=%d warnings=%v", sys, catRes.Count, catRes.Warnings)
+			// #409 acceptance criterion: each app entry of a catalog carries
+			// use type UI_APP.
+			for _, d := range catRes.Dependencies {
+				if d.UseType != "UI_APP" {
+					t.Errorf("UIAC app entry on %s has use_type %q, want UI_APP", sys, d.UseType)
+				}
+			}
 
 			// Pick a UIAD: an app entry of the catalog if there is one,
 			// otherwise any UIAD in TADIR (the ECC system has those).
@@ -393,6 +399,12 @@ func TestBumpVerify_409_FioriCatalogDependencies(t *testing.T) {
 			for _, d := range appRes.Dependencies {
 				t.Logf("  launch target: use_type=%s", d.UseType)
 			}
+			// #409 acceptance criterion: an app entry with no launch target
+			// (app type R, a URL app) answers with an empty list plus a
+			// warning, not an error. The error case is already covered above.
+			if appRes.Count == 0 && len(appRes.Warnings) == 0 {
+				t.Errorf("UIAD on %s resolved to nothing and said nothing — expected a warning", sys)
+			}
 		})
 	}
 }
@@ -401,7 +413,7 @@ func TestBumpVerify_409_FioriCatalogDependencies(t *testing.T) {
 // TestBumpVerify_500_ActivationTellsTheTruth. Run it explicitly when the
 // #500 test aborts before its own cleanup:
 //
-//	BUMP_CLEANUP_TRANSPORT=<request> go test -tags integration -v -count=1 //	  -run TestBumpVerify_ZZCleanup ./tools/...
+//	BUMP_CLEANUP_TRANSPORT=<request> go test -tags integration -v -count=1 -run TestBumpVerify_ZZCleanup ./tools/...
 func TestBumpVerify_ZZCleanup(t *testing.T) {
 	const name = "ZCL_ADT_MCP_BUMP551"
 	const uri = "/sap/bc/adt/oo/classes/zcl_adt_mcp_bump551"
