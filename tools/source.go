@@ -176,7 +176,7 @@ func registerSourceTools(s toolAdder, client interface {
 		// a cache miss is a caller error (allowAutoLock=false): reject early
 		// rather than letting SAP return an opaque error.
 		key := adt.LockKey(selector.ActiveName(), uri)
-		lh, autoLocked, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, false)
+		lh, _, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, false)
 		if err != nil {
 			return errorResult(err), nil
 		}
@@ -186,8 +186,8 @@ func registerSourceTools(s toolAdder, client interface {
 		if err != nil {
 			// #383: only ever release a lock THIS call acquired — on ECC that's
 			// the fresh relock resolveWriteLockHandle just took; on S/4 a cache
-			// miss is rejected above, so autoLocked is always false here.
-			if autoLocked {
+			// miss is rejected above, so releaseOnFailure is false here.
+			if releaseOnFailure {
 				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lh)
 			}
 			return errorResult(err), nil

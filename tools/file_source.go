@@ -53,9 +53,10 @@ func registerFileSourceTools(s toolAdder, client interface {
 
 		// Resolve lock handle: explicit param > lock map > auto-lock. On ECC,
 		// the cached handle is never trusted (#377) — see resolveWriteLockHandle.
-		// Track whether WE auto-acquire the lock this call so we can roll it
-		// back if the write fails (#383) — never release a caller-owned lock.
-		lockHandle, autoLocked, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, true)
+		// Track whether this call acquired the concrete SAP lock handle it is
+		// about to use, so a later failure can roll back only that handle (#383)
+		// — never release a caller-owned or merely reused cached lock.
+		lockHandle, _, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, true)
 		if err != nil {
 			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
 		}
@@ -63,7 +64,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		// Get ETag if not in lock map.
 		etag, err := lockMap.ResolveETag(ctx, client, key, uri)
 		if err != nil {
-			if autoLocked {
+			if releaseOnFailure {
 				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
 			}
 			return errorResult(err), nil
@@ -72,7 +73,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		// Write source
 		newETag, err := client.SetSource(ctx, uri, source, lockHandle, transport, etag)
 		if err != nil {
-			if autoLocked {
+			if releaseOnFailure {
 				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
 			}
 			return errorResult(err), nil
