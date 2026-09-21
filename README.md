@@ -85,7 +85,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 | `get_object_info` | Get object metadata: type, package, description (supports batch) |
 | `object_exists` | Check if an ABAP object exists (true/false + metadata, supports batch) |
 | `where_used` | Find all objects that reference a given object (supports batch) |
-| `get_object_dependencies` | Find all objects that a given object references — forward direction counterpart to where_used (queries WBCROSSGT) |
+| `get_object_dependencies` | Find all objects that a given object references — forward direction counterpart to where_used (queries D010TAB, DD03L/DD04L/DD01L/DD40L, SEOMETAREL; also resolves Fiori catalogs and their app entries via UIAC/UIAD) |
 | `get_table_fields` | Get DDIC table/structure field definitions (DD03L) |
 | `create_object` | Create a new ABAP object (PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA) |
 | `delete_object` | Delete an ABAP object (uses optimistic locking) |
@@ -190,7 +190,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 | `debug_start` | Set a breakpoint and wait for it to be hit |
 | `debug_stop` | Stop the debug listener and clean up breakpoints |
 | `debug_attach` | Attach to an active debuggee session |
-| `debug_step` | Step into / over / out / continue |
+| `debug_step` | Step into / over / out / continue, or terminate / detach the debuggee |
 | `debug_get_variable` | Read a variable value in the current scope |
 | `debug_get_stack` | Get the current call stack |
 | `debug_get_sessions` | List active debuggee sessions |
