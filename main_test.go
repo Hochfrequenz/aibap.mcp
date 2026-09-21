@@ -180,12 +180,12 @@ func TestServerInstructions_DebugLineIsConditional(t *testing.T) {
 	// bullet onto the DDIC line) is caught rather than passing on the bare claim.
 	const debugBullet = "\n- " + debugClaim
 
-	withDebug := serverInstructions([]string{"HF S/4"}, "HF S/4", true)
+	withDebug := serverInstructions([]string{"SYS_A"}, "SYS_A", true)
 	if !strings.Contains(withDebug, debugBullet) {
 		t.Errorf("debug enabled: instructions should advertise debugging as its own bullet, got:\n%s", withDebug)
 	}
 
-	withoutDebug := serverInstructions([]string{"HF S/4"}, "HF S/4", false)
+	withoutDebug := serverInstructions([]string{"SYS_A"}, "SYS_A", false)
 	if strings.Contains(withoutDebug, debugClaim) {
 		t.Errorf("debug disabled: instructions must NOT advertise debugging, got:\n%s", withoutDebug)
 	}

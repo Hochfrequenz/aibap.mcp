@@ -8,7 +8,7 @@
 // gated behind the extra `transport` build tag and NEVER run in the normal
 // integration suite. Run explicitly:
 //
-//	MCP_INTEGRATION_SYSTEMS="HF S/4 Mandant 100" \
+//	MCP_INTEGRATION_SYSTEMS="<alias>" \
 //	  go test -tags 'integration transport' -run TestIntegration_Reproduce ./tools/...
 //
 // They reuse the shared harness in integration_test.go (sharedServer,
