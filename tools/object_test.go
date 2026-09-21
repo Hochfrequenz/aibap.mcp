@@ -334,3 +334,121 @@ func TestDeleteObject_ElicitationShowsTypeAndPackageWhenTADIRQueryFails(t *testi
 		t.Error("message should not contain author when TADIR query fails")
 	}
 }
+
+// createPackageArgs records what reached adtler's CreatePackage, so the tests
+// can assert the tool passes parameters through rather than reshaping them.
+type createPackageArgs struct {
+	name, desc, responsible, softwareComponent, transportLayer, transport string
+}
+
+func recordingPackageClient(got *createPackageArgs) *mockClient {
+	return &mockClient{
+		createPackageFn: func(_ context.Context, name, desc, responsible, sc, tl, transport string) error {
+			*got = createPackageArgs{name, desc, responsible, sc, tl, transport}
+			return nil
+		},
+	}
+}
+
+func TestCreatePackage_LocalPackagePassesParametersThroughUnchanged(t *testing.T) {
+	// SAP files a '$' package under software component LOCAL on its own, so the
+	// tool sends what the caller gave it and invents nothing.
+	var got createPackageArgs
+	s := newTestServer(recordingPackageClient(&got))
+	result := callTool(t, s, "create_package", map[string]interface{}{
+		"name":        "$ZLOCAL_TEST",
+		"description": "Local test package",
+		"responsible": "DEVELOPER",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %v", result.Content)
+	}
+	want := createPackageArgs{"$ZLOCAL_TEST", "Local test package", "DEVELOPER", "", "", ""}
+	if got != want {
+		t.Errorf("parameters reshaped:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+func TestCreatePackage_TransportablePackagePassesParametersThroughUnchanged(t *testing.T) {
+	var got createPackageArgs
+	s := newTestServer(recordingPackageClient(&got))
+	result := callTool(t, s, "create_package", map[string]interface{}{
+		"name":               "ZTRANSPORTABLE",
+		"description":        "Transportable package",
+		"responsible":        "DEVELOPER",
+		"software_component": "HOME",
+		"transport_layer":    "ZDEV",
+		"transport":          "EXAMPLE_REQUEST",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %v", result.Content)
+	}
+	want := createPackageArgs{"ZTRANSPORTABLE", "Transportable package", "DEVELOPER", "HOME", "ZDEV", "EXAMPLE_REQUEST"}
+	if got != want {
+		t.Errorf("parameters reshaped:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+func TestCreatePackage_ResponsibleIsRequired(t *testing.T) {
+	// Measured on S/4 (SAP_BASIS 816, S4CORE 109): a package POST with an empty
+	// adtcore:responsible is rejected with 400 ExceptionInvalidData, so the
+	// parameter is declared required rather than left to fail at the server.
+	called := false
+	client := &mockClient{
+		createPackageFn: func(_ context.Context, _, _, _, _, _, _ string) error {
+			called = true
+			return nil
+		},
+	}
+	s := newTestServer(client)
+	result := callTool(t, s, "create_package", map[string]interface{}{
+		"name":        "$ZLOCAL_TEST",
+		"description": "Local test package",
+	})
+	if !result.IsError {
+		t.Fatal("expected a missing responsible to be rejected")
+	}
+	if called {
+		t.Error("the call should not have reached adtler")
+	}
+}
+
+func TestCreatePackage_ResultReportsTheUpperCasedName(t *testing.T) {
+	client := &mockClient{
+		createPackageFn: func(_ context.Context, _, _, _, _, _, _ string) error { return nil },
+	}
+	s := newTestServer(client)
+	result := callTool(t, s, "create_package", map[string]interface{}{
+		"name":        "$zlocal_test",
+		"description": "Local test package",
+		"responsible": "DEVELOPER",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %v", result.Content)
+	}
+	// adtler upper-cases the name before sending it; the result must say what
+	// SAP actually holds, not what the caller typed.
+	if text := textOfTE(result); !strings.Contains(text, "$ZLOCAL_TEST") {
+		t.Errorf("result should report the upper-cased name, got: %s", text)
+	}
+}
+
+func TestCreatePackage_SurfacesClientError(t *testing.T) {
+	client := &mockClient{
+		createPackageFn: func(_ context.Context, _, _, _, _, _, _ string) error {
+			return fmt.Errorf("CreatePackage: the /sap/bc/adt/packages endpoint is not available on this SAP system")
+		},
+	}
+	s := newTestServer(client)
+	result := callTool(t, s, "create_package", map[string]interface{}{
+		"name":        "$ZLOCAL_TEST",
+		"description": "Local test package",
+		"responsible": "DEVELOPER",
+	})
+	if !result.IsError {
+		t.Fatal("expected the adtler error to be surfaced")
+	}
+	if text := textOfTE(result); !strings.Contains(text, "not available on this SAP system") {
+		t.Errorf("error text should be preserved, got: %s", text)
+	}
+}
