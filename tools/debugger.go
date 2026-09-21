@@ -31,6 +31,13 @@ var validDebugStepActionSet = func() map[string]bool {
 	return m
 }()
 
+func requireDebuggerStringParam(toolName, paramName, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%s: %q is required", toolName, paramName)
+	}
+	return nil
+}
+
 // buildDebugSessionsResult converts the raw GetDebuggeeSessions response into a
 // typed result. The body is SAP ASX XML (not JSON), and it is empty when there
 // are no active debuggee sessions. Forwarding these bytes as json.RawMessage to
@@ -67,37 +74,7 @@ func buildDebugWatchpointResult(data []byte) DebugWatchpointResult {
 	return DebugWatchpointResult{Raw: string(data)}
 }
 
-// buildTerminateDebuggeeMessage is the ConfirmDestructive prompt for
-// debug_step's terminateDebuggee action. Unlike stepInto/stepOver/
-// stepReturn/stepContinue/detachDebugger — which either single-step or
-// hand control back without disturbing whatever the debuggee was doing —
-// terminateDebuggee kills the debuggee's ABAP work process outright,
-// which can discard unsaved state in whatever session hit the breakpoint.
-func buildTerminateDebuggeeMessage(user string) string {
-	return fmt.Sprintf(
-		"debug_step(terminateDebuggee) is about to kill the running debuggee process for user %s. "+
-			"This aborts whatever that session was doing — any unsaved state in it is lost. Approve termination?",
-		user,
-	)
-}
-
-// debugStepTerminateConfirmationClause describes, accurately for the actual
-// wiring, what happens when action=="terminateDebuggee". Must not promise a
-// confirmation unconditionally: RegisterAll passes a nil Elicitor (embedders
-// with nothing to elicit through), and ConfirmDestructive then returns
-// (true, "") without ever asking — see confirmationNote's doc comment for
-// the same rule applied to the shared DestructiveConfirmationNote. A
-// nil-gated sentence here does the same job for debug_step's own prose,
-// which can't use the shared constant/guardedTools mechanism (see the
-// comment above the terminateDebuggee branch in the handler below).
-func debugStepTerminateConfirmationClause(elicitor Elicitor) string {
-	if elicitor == nil {
-		return " In this build, no Elicitor is wired in, so terminateDebuggee proceeds without asking for confirmation."
-	}
-	return " terminateDebuggee specifically asks the MCP client to confirm before it runs, since it kills a live process — a client that supports elicitation prompts the user; one that does not answer on its own, usually declining."
-}
-
-func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector, elicitor Elicitor) {
+func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 	// Shared debug session — created lazily on first use.
 	var dbg *adt.DebugSession
 
@@ -140,6 +117,19 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		objectType := req.GetString("object_type", "")
 		objectName := req.GetString("object_name", "")
 		user := req.GetString("user", "")
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{paramObjectURI, uri},
+			{"object_type", objectType},
+			{"object_name", objectName},
+			{"user", user},
+		} {
+			if err := requireDebuggerStringParam("debug_set_breakpoint", field.name, field.value); err != nil {
+				return errorResult(err), nil
+			}
+		}
 
 		bp, err := getSession(user).SetBreakpoint(ctx, uri, line, objectType, objectName)
 		if err != nil {
@@ -205,6 +195,19 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		objectName := req.GetString("object_name", "")
 		user := req.GetString("user", "")
 		timeout := req.GetInt("timeout_seconds", 60)
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{paramObjectURI, uri},
+			{"object_type", objectType},
+			{"object_name", objectName},
+			{"user", user},
+		} {
+			if err := requireDebuggerStringParam("debug_start", field.name, field.value); err != nil {
+				return errorResult(err), nil
+			}
+		}
 
 		session := getSession(user)
 
@@ -241,6 +244,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		mcp.WithOutputSchema[DebugListenerStopResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
+		if err := requireDebuggerStringParam("debug_stop", "user", user); err != nil {
+			return errorResult(err), nil
+		}
 		if err := getSession(user).StopListener(ctx); err != nil {
 			return errorResult(err), nil
 		}
@@ -261,6 +267,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		mcp.WithOutputSchema[DebugSessionsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
+		if err := requireDebuggerStringParam("debug_get_sessions", "user", user); err != nil {
+			return errorResult(err), nil
+		}
 		data, err := getSession(user).GetDebuggeeSessions(ctx)
 		if err != nil {
 			return errorResult(err), nil
@@ -286,6 +295,17 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		debuggeeID := req.GetString("debuggee_id", "")
 		user := req.GetString("user", "")
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{"debuggee_id", debuggeeID},
+			{"user", user},
+		} {
+			if err := requireDebuggerStringParam("debug_attach", field.name, field.value); err != nil {
+				return errorResult(err), nil
+			}
+		}
 		if err := getSession(user).Attach(ctx, debuggeeID); err != nil {
 			return errorResult(err), nil
 		}
@@ -297,7 +317,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process outright, while detachDebugger stops debugging and lets the debuggee continue running to completion normally (the standard meaning of \"detach\" in any debugger — unlike terminateDebuggee, nothing is killed). Requires an active debug session via debug_start + debug_attach."+debugStepTerminateConfirmationClause(elicitor)),
+		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process outright, while detachDebugger stops debugging and lets the debuggee continue running to completion normally (the standard meaning of \"detach\" in any debugger — unlike terminateDebuggee, nothing is killed). Requires an active debug session via debug_start + debug_attach."),
 		mcp.WithString("action",
 			mcp.Required(),
 			mcp.Description("Step action: stepInto, stepOver, stepReturn, stepContinue, terminateDebuggee, or detachDebugger"),
@@ -311,22 +331,14 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		action := req.GetString("action", "")
 		user := req.GetString("user", "")
+		if err := requireDebuggerStringParam("debug_step", "user", user); err != nil {
+			return errorResult(err), nil
+		}
 		if !validDebugStepActionSet[action] {
 			return errorResult(fmt.Errorf(
 				"debug_step: unrecognised action %q — must be one of: %s",
 				action, strings.Join(validDebugStepActions, ", "),
 			)), nil
-		}
-		if action == "terminateDebuggee" {
-			// Confirm before touching adtler: getSession constructs an
-			// adt.DebugSession unconditionally, which panics against any
-			// Client that isn't *httpClient/*ClientRegistry (see adtler's
-			// resolveHTTPClient) — placing the gate first also keeps a
-			// decline unit-testable against this package's mockClient.
-			proceed, reason := ConfirmDestructive(ctx, elicitor, buildTerminateDebuggeeMessage(user))
-			if !proceed {
-				return errorResult(fmt.Errorf("debug_step(terminateDebuggee) aborted: %s", reason)), nil
-			}
 		}
 		data, err := getSession(user).Step(ctx, action)
 		if err != nil {
@@ -354,6 +366,17 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("variable_name", "")
 		user := req.GetString("user", "")
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{"variable_name", name},
+			{"user", user},
+		} {
+			if err := requireDebuggerStringParam("debug_get_variable", field.name, field.value); err != nil {
+				return errorResult(err), nil
+			}
+		}
 		data, err := getSession(user).GetVariable(ctx, name)
 		if err != nil {
 			return errorResult(err), nil
@@ -375,6 +398,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		mcp.WithOutputSchema[DebugStackResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
+		if err := requireDebuggerStringParam("debug_get_stack", "user", user); err != nil {
+			return errorResult(err), nil
+		}
 		data, err := getSession(user).GetStack(ctx)
 		if err != nil {
 			return errorResult(err), nil
@@ -404,6 +430,17 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 		variableName := req.GetString("variable_name", "")
 		condition := req.GetString("condition", "")
 		user := req.GetString("user", "")
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{"variable_name", variableName},
+			{"user", user},
+		} {
+			if err := requireDebuggerStringParam("debug_set_watchpoint", field.name, field.value); err != nil {
+				return errorResult(err), nil
+			}
+		}
 		data, err := getSession(user).SetWatchpoint(ctx, variableName, condition)
 		if err != nil {
 			return errorResult(err), nil

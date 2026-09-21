@@ -88,9 +88,25 @@ func ParseToolGroups(names []string) map[string]bool {
 	return groups
 }
 
+// RegisterOption tunes registration without growing
+// RegisterAllWithLockMap's parameter list further. Options are optional by
+// construction: a caller that passes none gets the documented defaults.
+type RegisterOption func(*registerSettings)
+
+// registerSettings holds the resolved options.
+type registerSettings struct {
+	consent ConsentMode
+}
+
+// WithConsentMode selects how the client's permission system is asked to treat
+// the irreversible tools. The default is ConsentStrict; see ConsentMode.
+func WithConsentMode(m ConsentMode) RegisterOption {
+	return func(rs *registerSettings) { rs.consent = m }
+}
+
 // RegisterAll registers all SAP ADT MCP tools on the given server.
 func RegisterAll(s *server.MCPServer, client adt.Client, selector SystemSelector) {
-	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), DefaultGroups(), nil, nil)
+	RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), DefaultGroups(), nil)
 }
 
 // toolAdder is the subset of server.MCPServer used by register functions.
@@ -98,13 +114,25 @@ type toolAdder interface {
 	AddTool(tool mcp.Tool, handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error))
 }
 
-// loggingServer wraps MCPServer.AddTool to inject logging middleware.
+// loggingServer wraps MCPServer.AddTool to inject logging middleware and the
+// consent annotation.
 type loggingServer struct {
 	inner    *server.MCPServer
 	selector SystemSelector
+	consent  ConsentMode
 }
 
+// AddTool annotates the tool before registering it. Doing this here rather
+// than at the six affected registration sites keeps the annotated set in one
+// place (tools.irreversibleTools).
+//
+// The trade-off is worth stating: it moves the "remember this tool" problem
+// from six call sites to one map that sits next to none of them, and a tool
+// renamed in its own file would silently drop out of the set. What prevents
+// that is TestStrictConsentAnnotatesTheIrreversibleTools, which pins the
+// annotated names from the wire — not the centralisation itself.
 func (ls *loggingServer) AddTool(tool mcp.Tool, handler func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	ls.consent.annotate(&tool)
 	ls.inner.AddTool(tool, withLogging(tool.Name, ls.selector, handler))
 }
 
@@ -154,10 +182,25 @@ func getStringOrSlice(args map[string]any, key string) (string, []string) {
 // RegisterAllWithLockMap registers SAP ADT MCP tools using a provided lock map
 // and an enabledGroups map controlling which tool groups are active.
 // The fallback parameter is optional (nil = no fallback for unsupported operations).
-// The elicitor parameter is optional (nil = destructive tools proceed without
-// confirmation, matching pre-elicitation behaviour).
-func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient, elicitor Elicitor) {
-	ls := &loggingServer{inner: s, selector: selector}
+//
+// Consent for the tools this server cannot undo belongs to the MCP client and
+// is expressed through the annotation ConsentMode applies; this server no
+// longer asks a second time of its own accord. See ConsentMode and #507.
+func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient, opts ...RegisterOption) {
+	settings := registerSettings{consent: ConsentStrict}
+	for _, opt := range opts {
+		// A nil option is skipped rather than called. This parameter replaced
+		// an Elicitor that callers passed as a literal nil, and such a call
+		// still compiles against the variadic — untyped nil is a valid
+		// RegisterOption. Panicking on it would turn a silent source
+		// compatibility into a runtime crash on the first registration. See
+		// TestNilRegisterOptionIsIgnored.
+		if opt == nil {
+			continue
+		}
+		opt(&settings)
+	}
+	ls := &loggingServer{inner: s, selector: selector, consent: settings.consent}
 
 	// tracker records lock-map keys so force_unlock can clear the active
 	// system's cached handles after a session drop (adt.LockMap is not
@@ -184,8 +227,8 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		{"objects", func() {
 			registerSearchTools(ls, client)
 			registerRepositoryTools(ls, client)
-			registerObjectTools(ls, client, client, client, fallback, elicitor)
-			registerRefactoringTools(ls, client, elicitor)
+			registerObjectTools(ls, client, fallback)
+			registerRefactoringTools(ls, client)
 			registerDDICTools(ls, client)
 		}},
 		{"version", func() { registerVersionTools(ls, client) }},
@@ -206,20 +249,20 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		}},
 		{"shortdumps", func() { registerShortDumpTools(ls, client) }},
 		{"transport", func() {
-			registerTransportTools(ls, client, fallback, elicitor)
-			registerRollbackTools(ls, client, elicitor)
+			registerTransportTools(ls, client, fallback)
+			registerRollbackTools(ls, client)
 		}},
 		{"enhancements", func() { registerEnhancementTools(ls, client) }},
-		{"debug", func() { registerDebuggerTools(ls, client, selector, elicitor) }},
+		{"debug", func() { registerDebuggerTools(ls, client, selector) }},
 		{"export", func() {
 			registerExportTools(ls, client)
 			registerCustomizingTools(ls, client)
-			registerCustomizingWriteTools(ls, fallback, elicitor)
+			registerCustomizingWriteTools(ls, fallback)
 		}},
 		{"system", func() {
 			registerSystemTools(ls, selector)
-			registerQueryTools(ls, client, elicitor)
-			registerClassRunTools(ls, client, elicitor)
+			registerQueryTools(ls, client)
+			registerClassRunTools(ls, client)
 		}},
 	}
 

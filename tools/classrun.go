@@ -17,7 +17,7 @@ type classRunClient interface {
 	adt.ClassRunClient
 }
 
-func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor) {
+func registerClassRunTools(s toolAdder, client classRunClient) {
 	s.AddTool(mcp.NewTool("run_class",
 		mcp.WithTitleAnnotation("Run ABAP Class"),
 		mcp.WithReadOnlyHintAnnotation(false),
@@ -50,8 +50,7 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 				"executed ABAP is subject to the same policy as run_query, which the "+
 				"class runner would otherwise bypass. The restriction follows the data "+
 				"being touched, not the tool used to touch it "+
-				"(https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf)."+
-				confirmationNote(elicitor),
+				"(https://help.sap.com/doc/sap-api-policy/latest/en-US/API_Policy_latest.pdf).",
 		),
 		mcp.WithString("class_name", mcp.Required(),
 			mcp.Description("Name of the global class to execute, e.g. 'ZCL_MY_RUNNER'")),
@@ -78,28 +77,10 @@ func registerClassRunTools(s toolAdder, client classRunClient, elicitor Elicitor
 			return errorResult(fmt.Errorf("class %s does not exist: %w", className, err)), nil
 		}
 
-		// Confirm AFTER the existence check so a missing class fails cheaply.
-		proceed, reason := ConfirmDestructive(ctx, elicitor, buildRunClassMessage(className))
-		if !proceed {
-			return errorResult(fmt.Errorf("run_class aborted: %s", reason)), nil
-		}
-
 		result, err := client.RunClass(ctx, className)
 		if err != nil {
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultJSON(result)
 	})
-}
-
-// buildRunClassMessage produces the class-specific risk prompt shown to the
-// user before execution. Static single-arg helper - unlike buildDeleteMessage
-// it needs no ctx/client (no metadata enrichment).
-func buildRunClassMessage(className string) string {
-	return fmt.Sprintf(
-		"Class %s is about to be executed via ADT classrun. It runs arbitrary ABAP "+
-			"under the configured user and may cause side effects: COMMIT WORK, data "+
-			"changes, or deletions. Approve execution?",
-		className,
-	)
 }
