@@ -31,6 +31,13 @@ var validDebugStepActionSet = func() map[string]bool {
 	return m
 }()
 
+func requireDebuggerStringParam(toolName, paramName, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%s: %q is required", toolName, paramName)
+	}
+	return nil
+}
+
 // buildDebugSessionsResult converts the raw GetDebuggeeSessions response into a
 // typed result. The body is SAP ASX XML (not JSON), and it is empty when there
 // are no active debuggee sessions. Forwarding these bytes as json.RawMessage to
@@ -110,6 +117,19 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		objectType := req.GetString("object_type", "")
 		objectName := req.GetString("object_name", "")
 		user := req.GetString("user", "")
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{paramObjectURI, uri},
+			{"object_type", objectType},
+			{"object_name", objectName},
+			{"user", user},
+		} {
+			if err := requireDebuggerStringParam("debug_set_breakpoint", field.name, field.value); err != nil {
+				return errorResult(err), nil
+			}
+		}
 
 		bp, err := getSession(user).SetBreakpoint(ctx, uri, line, objectType, objectName)
 		if err != nil {
@@ -175,6 +195,19 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		objectName := req.GetString("object_name", "")
 		user := req.GetString("user", "")
 		timeout := req.GetInt("timeout_seconds", 60)
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{paramObjectURI, uri},
+			{"object_type", objectType},
+			{"object_name", objectName},
+			{"user", user},
+		} {
+			if err := requireDebuggerStringParam("debug_start", field.name, field.value); err != nil {
+				return errorResult(err), nil
+			}
+		}
 
 		session := getSession(user)
 
@@ -211,6 +244,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		mcp.WithOutputSchema[DebugListenerStopResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
+		if err := requireDebuggerStringParam("debug_stop", "user", user); err != nil {
+			return errorResult(err), nil
+		}
 		if err := getSession(user).StopListener(ctx); err != nil {
 			return errorResult(err), nil
 		}
@@ -231,6 +267,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		mcp.WithOutputSchema[DebugSessionsResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
+		if err := requireDebuggerStringParam("debug_get_sessions", "user", user); err != nil {
+			return errorResult(err), nil
+		}
 		data, err := getSession(user).GetDebuggeeSessions(ctx)
 		if err != nil {
 			return errorResult(err), nil
@@ -256,6 +295,17 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		debuggeeID := req.GetString("debuggee_id", "")
 		user := req.GetString("user", "")
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{"debuggee_id", debuggeeID},
+			{"user", user},
+		} {
+			if err := requireDebuggerStringParam("debug_attach", field.name, field.value); err != nil {
+				return errorResult(err), nil
+			}
+		}
 		if err := getSession(user).Attach(ctx, debuggeeID); err != nil {
 			return errorResult(err), nil
 		}
@@ -281,6 +331,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		action := req.GetString("action", "")
 		user := req.GetString("user", "")
+		if err := requireDebuggerStringParam("debug_step", "user", user); err != nil {
+			return errorResult(err), nil
+		}
 		if !validDebugStepActionSet[action] {
 			return errorResult(fmt.Errorf(
 				"debug_step: unrecognised action %q — must be one of: %s",
@@ -313,6 +366,17 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name := req.GetString("variable_name", "")
 		user := req.GetString("user", "")
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{"variable_name", name},
+			{"user", user},
+		} {
+			if err := requireDebuggerStringParam("debug_get_variable", field.name, field.value); err != nil {
+				return errorResult(err), nil
+			}
+		}
 		data, err := getSession(user).GetVariable(ctx, name)
 		if err != nil {
 			return errorResult(err), nil
@@ -334,6 +398,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		mcp.WithOutputSchema[DebugStackResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		user := req.GetString("user", "")
+		if err := requireDebuggerStringParam("debug_get_stack", "user", user); err != nil {
+			return errorResult(err), nil
+		}
 		data, err := getSession(user).GetStack(ctx)
 		if err != nil {
 			return errorResult(err), nil
@@ -363,6 +430,17 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		variableName := req.GetString("variable_name", "")
 		condition := req.GetString("condition", "")
 		user := req.GetString("user", "")
+		for _, field := range []struct {
+			name  string
+			value string
+		}{
+			{"variable_name", variableName},
+			{"user", user},
+		} {
+			if err := requireDebuggerStringParam("debug_set_watchpoint", field.name, field.value); err != nil {
+				return errorResult(err), nil
+			}
+		}
 		data, err := getSession(user).SetWatchpoint(ctx, variableName, condition)
 		if err != nil {
 			return errorResult(err), nil
