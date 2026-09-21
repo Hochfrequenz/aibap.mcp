@@ -72,6 +72,62 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 		return mcp.NewToolResultJSON(ObjectCreateResult{Name: name, Created: true})
 	})
 
+	s.AddTool(mcp.NewTool("create_package",
+		mcp.WithTitleAnnotation("Create ABAP Package"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDescription("Create an ABAP package (DEVC). Use this instead of create_object, which does not support packages. "+
+			"A name starting with '$' creates a local package: SAP files it under software component LOCAL and it needs no transport. "+
+			"A transportable package needs software_component (e.g. HOME), transport_layer and a transport request. "+
+			"Packages are always created top-level; creating one inside another (superPackage) is not supported. "+
+			"Requires S/4HANA or a recent ABAP Platform version — older ECC systems have no ADT package endpoint, so create the package in SE80 or SE21 there."),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Package name, e.g. $ZLOCAL_TEST for a local package or ZPACKAGE for a transportable one. Lower case is accepted; SAP stores the name upper-cased"),
+		),
+		mcp.WithString("description",
+			mcp.Required(),
+			mcp.Description("Short description of the package"),
+		),
+		mcp.WithString("responsible",
+			mcp.Required(),
+			mcp.Description("SAP user the package is filed under, e.g. the logged-on user. SAP rejects the creation with 400 ExceptionInvalidData when this is empty"),
+		),
+		mcp.WithString("software_component",
+			mcp.Description("Software component, e.g. HOME for a transportable package. Leave empty for a local one: SAP files a '$' package under LOCAL whatever is sent"),
+		),
+		mcp.WithString("transport_layer",
+			mcp.Description("Transport layer for a transportable package; leave empty for a local one"),
+		),
+		mcp.WithString("transport",
+			mcp.Description("Transport request number; required for a transportable package"),
+		),
+		mcp.WithOutputSchema[ObjectCreateResult](),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		name, errRes := requireString(req, "name")
+		if errRes != nil {
+			return errRes, nil
+		}
+		desc, errRes := requireString(req, "description")
+		if errRes != nil {
+			return errRes, nil
+		}
+		responsible, errRes := requireString(req, "responsible")
+		if errRes != nil {
+			return errRes, nil
+		}
+		softwareComponent := req.GetString("software_component", "")
+		transportLayer := req.GetString("transport_layer", "")
+		transport := req.GetString("transport", "")
+
+		if err := client.CreatePackage(ctx, name, desc, responsible, softwareComponent, transportLayer, transport); err != nil {
+			return errorResult(err), nil
+		}
+		// adtler upper-cases the name before sending it, so report what SAP holds.
+		return mcp.NewToolResultJSON(ObjectCreateResult{Name: strings.ToUpper(name), Created: true})
+	})
+
 	s.AddTool(mcp.NewTool("delete_object",
 		mcp.WithTitleAnnotation("Delete ABAP Object"),
 		mcp.WithReadOnlyHintAnnotation(false),

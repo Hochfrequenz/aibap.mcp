@@ -16,7 +16,7 @@ When using this MCP server, make sure to obey the [SAP API Policy](https://help.
 ---
 
 > [!TIP]
-> **Your agent can run the ABAP it just wrote — `run_class`!** 🚀 This server does not stop at writing and activating code, it closes the loop: `create_object` → `set_source_from_file` → `activate_object` → **`run_class`**, which invokes ADT's classrun (*Run as ABAP Application*) on any global, active class implementing `IF_OO_ADT_CLASSRUN` and hands the console output back to the agent. So the agent can check what its code actually printed instead of asserting that it works — the runtime-only defects a syntax check never sees. Nothing to install on the SAP side. `run_class` isn't limited to classes that already exist for their own sake, either — wrap any ABAP logic (a report's `SUBMIT`, a function module call, an ad-hoc expression) in a throwaway classrun class to run it, so it's the tool to reach for whenever you need to execute ABAP that has no dedicated tool of its own. See [Available tools](#available-tools-72).
+> **Your agent can run the ABAP it just wrote — `run_class`!** 🚀 This server does not stop at writing and activating code, it closes the loop: `create_object` → `set_source_from_file` → `activate_object` → **`run_class`**, which invokes ADT's classrun (*Run as ABAP Application*) on any global, active class implementing `IF_OO_ADT_CLASSRUN` and hands the console output back to the agent. So the agent can check what its code actually printed instead of asserting that it works — the runtime-only defects a syntax check never sees. Nothing to install on the SAP side. `run_class` isn't limited to classes that already exist for their own sake, either — wrap any ABAP logic (a report's `SUBMIT`, a function module call, an ad-hoc expression) in a throwaway classrun class to run it, so it's the tool to reach for whenever you need to execute ABAP that has no dedicated tool of its own. See [Available tools](#available-tools-73).
 
 ## How it works
 
@@ -43,7 +43,7 @@ If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP W
 
 Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
 
-## Available tools (72)
+## Available tools (73)
 
 Tools are organized into groups. By default, all groups except `debug` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
@@ -76,7 +76,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> — <code>objects</code> (10 tools)</summary>
+<summary><strong>Objects and packages</strong> — <code>objects</code> (11 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -88,6 +88,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 | `get_object_dependencies` | Find all objects that a given object references — forward direction counterpart to where_used (queries D010TAB, DD03L/DD04L/DD01L/DD40L, SEOMETAREL; also resolves Fiori catalogs and their app entries via UIAC/UIAD) |
 | `get_table_fields` | Get DDIC table/structure field definitions (DD03L) |
 | `create_object` | Create a new ABAP object (PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA) |
+| `create_package` | Create an ABAP package (DEVC); `$`-prefixed names create a local package |
 | `delete_object` | Delete an ABAP object (uses optimistic locking) |
 | `rename` | Rename a symbol and update all references automatically |
 
