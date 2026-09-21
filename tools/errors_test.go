@@ -159,7 +159,7 @@ func TestMatchHint_PlainError(t *testing.T) {
 // TestMatchHint_ObjectLockedInTransport pins the #442 hint: a CTS "locked in
 // request <TR>" 409 must produce a hint that names the blocking request and
 // tells the caller to retry against it. The messages are captured verbatim
-// from live S/4 (HF S/4 Mandant 100) — the classification lives in adtler
+// from a live S/4 system — the classification lives in adtler
 // (adt.ErrorObjectLockedInTransport + LockingTransport); this asserts the
 // wrapper turns it into an actionable, transport-named hint.
 func TestMatchHint_ObjectLockedInTransport(t *testing.T) {
