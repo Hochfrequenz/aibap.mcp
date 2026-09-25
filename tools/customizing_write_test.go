@@ -38,13 +38,7 @@ func (m *mockBlackMagicCust) UpdateCustomizing(ctx context.Context, table string
 
 func newTestServerWithCustFallback(client adt.Client, fallback tools.BlackMagicClient) *server.MCPServer {
 	s := server.NewMCPServer("test", "0.0.1")
-	tools.RegisterAllWithLockMap(s, client, &mockSelector{}, adt.NewLockMap(), tools.ParseToolGroups([]string{"all"}), fallback, nil)
-	return s
-}
-
-func newTestServerWithCustFallbackElicitor(client adt.Client, fallback tools.BlackMagicClient, elicitor tools.Elicitor) *server.MCPServer {
-	s := server.NewMCPServer("test", "0.0.1")
-	tools.RegisterAllWithLockMap(s, client, &mockSelector{}, adt.NewLockMap(), tools.ParseToolGroups([]string{"all"}), fallback, elicitor)
+	tools.RegisterAllWithLockMap(s, client, &mockSelector{}, adt.NewLockMap(), tools.ParseToolGroups([]string{"all"}), fallback)
 	return s
 }
 
@@ -57,7 +51,7 @@ func customizingArgs() map[string]interface{} {
 	}
 }
 
-func TestUpdateCustomizing_ElicitationAccepted(t *testing.T) {
+func TestUpdateCustomizing_ReachesFallbackWithoutAskingTheClient(t *testing.T) {
 	called := false
 	fb := &mockBlackMagicCust{
 		updateCustomizingFn: func(_ context.Context, _ string, _ []tools.CustomizingEntry, _ string) error {
@@ -65,65 +59,13 @@ func TestUpdateCustomizing_ElicitationAccepted(t *testing.T) {
 			return nil
 		},
 	}
-	el := &stubElicitor{result: &mcp.ElicitationResult{
-		ElicitationResponse: mcp.ElicitationResponse{
-			Action:  mcp.ElicitationResponseActionAccept,
-			Content: map[string]any{"confirm": true},
-		},
-	}}
-	s := newTestServerWithCustFallbackElicitor(&mockClient{}, fb, el)
+	s := newTestServerWithCustFallback(&mockClient{}, fb)
 	result := callTool(t, s, "update_customizing", customizingArgs())
 	if result.IsError {
 		t.Fatalf("expected success, got error: %v", result.Content)
 	}
 	if !called {
-		t.Fatal("expected updateCustomizingFn to be called after accept")
-	}
-	if el.called != 1 {
-		t.Errorf("expected 1 elicitation call, got %d", el.called)
-	}
-}
-
-func TestUpdateCustomizing_ElicitationDeclined(t *testing.T) {
-	called := false
-	fb := &mockBlackMagicCust{
-		updateCustomizingFn: func(_ context.Context, _ string, _ []tools.CustomizingEntry, _ string) error {
-			called = true
-			return nil
-		},
-	}
-	el := &stubElicitor{result: &mcp.ElicitationResult{
-		ElicitationResponse: mcp.ElicitationResponse{Action: mcp.ElicitationResponseActionDecline},
-	}}
-	s := newTestServerWithCustFallbackElicitor(&mockClient{}, fb, el)
-	result := callTool(t, s, "update_customizing", customizingArgs())
-	if !result.IsError {
-		t.Fatal("expected error result on decline")
-	}
-	if called {
-		t.Fatal("updateCustomizingFn should NOT have been called on decline")
-	}
-	text := result.Content[0].(mcp.TextContent).Text
-	if !strings.Contains(text, "update_customizing aborted") {
-		t.Errorf("expected abort message, got: %s", text)
-	}
-}
-
-func TestUpdateCustomizing_NilElicitorProceedsForBackwardsCompat(t *testing.T) {
-	called := false
-	fb := &mockBlackMagicCust{
-		updateCustomizingFn: func(_ context.Context, _ string, _ []tools.CustomizingEntry, _ string) error {
-			called = true
-			return nil
-		},
-	}
-	s := newTestServerWithCustFallbackElicitor(&mockClient{}, fb, nil)
-	result := callTool(t, s, "update_customizing", customizingArgs())
-	if result.IsError {
-		t.Fatalf("expected success with nil elicitor, got error: %v", result.Content)
-	}
-	if !called {
-		t.Fatal("expected updateCustomizingFn to be called with nil elicitor (backwards compat)")
+		t.Fatal("expected updateCustomizingFn to be called: this server no longer gates the call itself")
 	}
 }
 

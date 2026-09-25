@@ -73,6 +73,7 @@ var patchOpItemsSchema = map[string]any{
 func registerPatchTools(s toolAdder, client interface {
 	adt.SourceClient
 	adt.LockClient
+	adt.SystemClient
 }, lockMap *adt.LockMap, tracker *sessionLockTracker, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("patch_source",
 		mcp.WithTitleAnnotation("Patch Source Code"),
@@ -116,19 +117,18 @@ func registerPatchTools(s toolAdder, client interface {
 			return errorResult(fmt.Errorf("parse operations: %w", err)), nil
 		}
 
-		// Resolve lock handle: explicit param > lock map > auto-lock.
+		// Resolve lock handle: explicit param > lock map > auto-lock. On ECC,
+		// the cached handle is never trusted (#377) — see resolveWriteLockHandle.
 		key := adt.LockKey(selector.ActiveName(), uri)
-		autoLocked := !lockPreExisted(lockMap, key, explicitHandle)
-		lockHandle, err := lockMap.ResolveLock(ctx, client, key, uri, explicitHandle)
+		lockHandle, autoLocked, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, true)
 		if err != nil {
 			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
 		}
-		tracker.track(key)
 
 		// Get current source.
 		srcResult, err := client.GetSource(ctx, uri)
 		if err != nil {
-			if autoLocked {
+			if releaseOnFailure {
 				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
 			}
 			return errorResult(err), nil
@@ -139,7 +139,7 @@ func registerPatchTools(s toolAdder, client interface {
 		oldSource := srcResult.Source
 		newSource, err := adt.ApplyPatchOps(oldSource, ops)
 		if err != nil {
-			if autoLocked {
+			if releaseOnFailure {
 				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
 			}
 			return errorResult(fmt.Errorf("patch failed: %w", err)), nil
@@ -148,7 +148,7 @@ func registerPatchTools(s toolAdder, client interface {
 		// Write patched source back.
 		newETag, err := client.SetSource(ctx, uri, newSource, lockHandle, transport, etag)
 		if err != nil {
-			if autoLocked {
+			if releaseOnFailure {
 				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
 			}
 			return errorResult(err), nil

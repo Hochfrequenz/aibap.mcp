@@ -51,10 +51,8 @@ func main() {
 
 	// Handle login subcommand
 	if len(os.Args) >= 2 && os.Args[1] == "login" {
-		configPath := os.Getenv("SAP_CONFIG_FILE")
-		if configPath == "" {
-			configPath = findConfigFile()
-		}
+		configPath, configSource := resolveConfigPath()
+		slog.Info("config file resolved", "path", configPath, "source", configSource)
 		systemName := ""
 		if len(os.Args) >= 3 {
 			systemName = os.Args[2]
@@ -77,12 +75,17 @@ func run() error {
 
 	var toolsFlag string
 	flag.StringVar(&toolsFlag, "tools", "", "Comma-separated tool groups to enable (default: all except debug; 'all' for everything)")
+	var consentFlag string
+	flag.StringVar(&consentFlag, "consent", "", "Consent for the irreversible tools: 'strict' (default) asks the client to require approval on every call, 'prompt' leaves them on the client's normal permission flow. The server only marks the tools — a client that does not support the marking ignores it")
 	flag.Parse()
 
-	configPath := os.Getenv("SAP_CONFIG_FILE")
-	if configPath == "" {
-		configPath = findConfigFile()
+	consent, err := tools.ParseConsentMode(consentFlag)
+	if err != nil {
+		return err
 	}
+
+	configPath, configSource := resolveConfigPath()
+	slog.Info("config file resolved", "path", configPath, "source", configSource)
 
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -120,10 +123,16 @@ func run() error {
 			activeGroups = append(activeGroups, g)
 		}
 	}
+	// consent is logged alongside the tool groups so the mode a session ran
+	// under stays recoverable afterwards. Its effect is otherwise visible only
+	// in the moment a permission prompt does or does not offer to remember the
+	// answer, and the flag that set it lives in a client-side config file
+	// rather than in this repository.
 	slog.Info("server started",
 		"systems", systemNames,
 		"default_system", cfg.DefaultSystem,
 		"tool_groups", activeGroups,
+		"consent", string(consent),
 	)
 
 	// Ensure SAP sessions are closed on shutdown to release ENQUEUE locks.
@@ -136,14 +145,36 @@ func run() error {
 		}
 	}()
 
-	s := server.NewMCPServer("SAP ADT MCP Server", version,
-		server.WithInstructions(serverInstructions(systemNames, cfg.DefaultSystem, enabledGroups["debug"])),
-		server.WithElicitation(),
+	s := buildServer(
+		registry, registry, enabledGroups, blackMagic, consent,
+		serverInstructions(systemNames, cfg.DefaultSystem, enabledGroups["debug"]),
 	)
-	tools.RegisterAllWithLockMap(s, registry, registry, adt.NewLockMap(), enabledGroups, blackMagic, s)
 
 	stdioServer := server.NewStdioServer(s)
 	return stdioServer.Listen(ctx, os.Stdin, os.Stdout)
+}
+
+// buildServer assembles the MCP server that run() then serves over stdio.
+//
+// It exists as its own function so a test can assemble the same server run()
+// does. The consent mode is the reason: it travels from a flag all the way to
+// a `_meta` key in tools/list, and an option dropped from the registration
+// call here would leave every package's tests green while --consent=prompt
+// silently stopped having any effect (see TestConsentFlagReachesTheToolList).
+func buildServer(
+	client adt.Client,
+	selector tools.SystemSelector,
+	enabledGroups map[string]bool,
+	fallback tools.BlackMagicClient,
+	consent tools.ConsentMode,
+	instructions string,
+) *server.MCPServer {
+	s := server.NewMCPServer("SAP ADT MCP Server", version,
+		server.WithInstructions(instructions),
+	)
+	tools.RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), enabledGroups, fallback,
+		tools.WithConsentMode(consent))
+	return s
 }
 
 func serverInstructions(systemNames []string, defaultSystem string, debugEnabled bool) string {
@@ -162,12 +193,14 @@ BEST FOR:
 - Creating ABAP objects (create_object: PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA)
 - Transport management (get_transport_requests, create_transport, release_transport on S4)
 - Activation, syntax checks, ATC checks, unit tests
-- Executing ABAP (run_class: runs a global, active class implementing IF_OO_ADT_CLASSRUN and returns its console output — use it to verify generated code produces the expected result. General-purpose, not just for classes that already exist for their own sake: wrap any ABAP logic, e.g. a report's SUBMIT, in a throwaway classrun class to run it when no dedicated tool exists. Runs arbitrary ABAP with real side effects and requests a confirmation first — see CONFIRMATIONS below.)
+- Executing ABAP (run_class: runs a global, active class implementing IF_OO_ADT_CLASSRUN and returns its console output — use it to verify generated code produces the expected result. General-purpose, not just for classes that already exist for their own sake: wrap any ABAP logic, e.g. a report's SUBMIT, in a throwaway classrun class to run it when no dedicated tool exists. Runs arbitrary ABAP with real side effects — see APPROVAL below.)
 - Code completion, pretty printing, refactoring
 - DDIC lookups (get_object_info, get_ddic_info)%s
 
-CONFIRMATIONS:
-Tools that destroy or overwrite something — object and transport deletion, transport release and rollback, removing an object from a transport, rename, run_class, update_customizing, run_query without a valid 'purpose', and debug_step with action=terminateDebuggee — request a confirmation from the MCP client before they act. Each of those tool descriptions says so. Clients that support MCP elicitation show the user a prompt; clients that do not answer on their own, usually refusing. An abort that reports a declined confirmation therefore does not necessarily mean a person declined: the operation itself never reached SAP, and repeating the call unchanged will not help.
+APPROVAL:
+This server does not ask for confirmation itself. Approving a call is the MCP client's job, and what the client asks depends on its own permission settings. Six tools carry a marking that asks the client to require approval on every call, because nothing here can undo them: delete_object, delete_transport, release_transport, rollback_transport, run_class and update_customizing. The marking is a request, not a guarantee — whether a client honours it, and some do not, is outside this server's control. A call that never reaches SAP was refused by the client, not by SAP — repeating it unchanged will not help.
+
+run_query is not part of that set. It rejects a missing or unrecognised 'purpose' locally, before reaching SAP; that is a scope check under the SAP API Policy below, not an approval step.
 
 WHEN TO USE sap-desktop/sap-webgui MCP INSTEAD:
 If SAP GUI MCP tools are available, prefer them for:
@@ -188,16 +221,47 @@ AVAILABLE SYSTEMS: %s (default: %q)
 Use select_system to switch between systems.`, debugLine, strings.Join(systemNames, ", "), defaultSystem)
 }
 
-// findConfigFile searches for the config file in standard locations.
-func findConfigFile() string {
-	candidates := []string{"config.json"}
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, home+"/.config/sap-mcp/systems.json")
+// resolveConfigPath is the single source of truth for where the config file
+// comes from, shared by the login subcommand and the server startup path so
+// neither can silently diverge from the other (#528). source is
+// "SAP_CONFIG_FILE" when the env var was set explicitly, "auto-discovered"
+// otherwise.
+func resolveConfigPath() (path, source string) {
+	if configPath := os.Getenv("SAP_CONFIG_FILE"); configPath != "" {
+		return configPath, "SAP_CONFIG_FILE"
 	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c
+	return findConfigFile(), "auto-discovered"
+}
+
+// findConfigFile searches for the config file in standard locations. The
+// documented default (~/.config/sap-mcp/systems.json) wins whenever it
+// exists, so a stale cwd-relative config.json left over in the server's
+// working directory can no longer silently shadow it (#528). A cwd-relative
+// config.json is still honoured, but only as a fallback for local
+// development when the documented default is absent.
+func findConfigFile() string {
+	documented, documentedErr := documentedConfigPath()
+	if documentedErr != nil {
+		slog.Warn("could not resolve documented config default, falling back to cwd config.json", "error", documentedErr)
+	}
+	if documentedErr == nil {
+		if _, err := os.Stat(documented); err == nil {
+			return documented
 		}
 	}
-	return "config.json" // will produce a clear error in Load()
+	if _, err := os.Stat("config.json"); err == nil {
+		return "config.json"
+	}
+	if documentedErr == nil {
+		return documented // will produce a clear error in Load()
+	}
+	return "config.json"
+}
+
+func documentedConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config", "sap-mcp", "systems.json"), nil
 }

@@ -16,7 +16,7 @@ When using this MCP server, make sure to obey the [SAP API Policy](https://help.
 ---
 
 > [!TIP]
-> **Your agent can run the ABAP it just wrote — `run_class`!** 🚀 This server does not stop at writing and activating code, it closes the loop: `create_object` → `set_source_from_file` → `activate_object` → **`run_class`**, which invokes ADT's classrun (*Run as ABAP Application*) on any global, active class implementing `IF_OO_ADT_CLASSRUN` and hands the console output back to the agent. So the agent can check what its code actually printed instead of asserting that it works — the runtime-only defects a syntax check never sees. Nothing to install on the SAP side. `run_class` isn't limited to classes that already exist for their own sake, either — wrap any ABAP logic (a report's `SUBMIT`, a function module call, an ad-hoc expression) in a throwaway classrun class to run it, so it's the tool to reach for whenever you need to execute ABAP that has no dedicated tool of its own. See [Available tools](#available-tools-72).
+> **Your agent can run the ABAP it just wrote — `run_class`!** 🚀 This server does not stop at writing and activating code, it closes the loop: `create_object` → `set_source_from_file` → `activate_object` → **`run_class`**, which invokes ADT's classrun (*Run as ABAP Application*) on any global, active class implementing `IF_OO_ADT_CLASSRUN` and hands the console output back to the agent. So the agent can check what its code actually printed instead of asserting that it works — the runtime-only defects a syntax check never sees. Nothing to install on the SAP side. `run_class` isn't limited to classes that already exist for their own sake, either — wrap any ABAP logic (a report's `SUBMIT`, a function module call, an ad-hoc expression) in a throwaway classrun class to run it, so it's the tool to reach for whenever you need to execute ABAP that has no dedicated tool of its own. See [Available tools](#available-tools-73).
 
 ## How it works
 
@@ -43,7 +43,7 @@ If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP W
 
 Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
 
-## Available tools (72)
+## Available tools (73)
 
 Tools are organized into groups. By default, all groups except `debug` are enabled. Tools that accept an `object_uri` parameter also accept an array of URIs for batch operations with parallel execution.
 
@@ -76,7 +76,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 </details>
 
 <details>
-<summary><strong>Objects and packages</strong> — <code>objects</code> (10 tools)</summary>
+<summary><strong>Objects and packages</strong> — <code>objects</code> (11 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -88,6 +88,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 | `get_object_dependencies` | Find all objects that a given object references — forward direction counterpart to where_used (queries D010TAB, DD03L/DD04L/DD01L/DD40L, SEOMETAREL; also resolves Fiori catalogs and their app entries via UIAC/UIAD) |
 | `get_table_fields` | Get DDIC table/structure field definitions (DD03L) |
 | `create_object` | Create a new ABAP object (PROG, CLAS, INTF, FUGR, MSAG, DDLS, TABL, DTEL, DOMA) |
+| `create_package` | Create an ABAP package (DEVC); `$`-prefixed names create a local package |
 | `delete_object` | Delete an ABAP object (uses optimistic locking) |
 | `rename` | Rename a symbol and update all references automatically |
 
@@ -331,6 +332,13 @@ Copy the example config and fill in your SAP system details:
 cp config.json.example config.json
 ```
 
+> [!NOTE]
+> `~/.config/sap-mcp/systems.json` (see [step 2](#2-create-systemsjson)) is the documented
+> default and wins whenever it exists, so a local `config.json` here is only picked up
+> automatically if that default is absent. If you already have one and still want to use this
+> local file (e.g. for a quick throwaway test), point at it explicitly:
+> `SAP_CONFIG_FILE=config.json aibap.mcp` — see [`SAP_CONFIG_FILE`](#oauth2--sso) below.
+
 ```json
 {
   "default_system": "dev",
@@ -377,6 +385,87 @@ aibap.mcp --tools=source,objects,transport,debug
 - No config and no flag — default set (everything except `debug`)
 
 Available groups: `source`, `code-intelligence`, `objects`, `version`, `locking`, `testing`, `messages`, `shortdumps`, `transport`, `enhancements`, `debug`, `export`, `system`.
+
+### Consent for the irreversible tools
+
+This server never asks you to confirm anything itself. Approving a call is the MCP
+client's job, and the client decides what to ask. The problem that creates: in Claude Code
+the first call to a destructive tool offers "Yes, and don't ask again", and accepting it
+writes an allow rule that auto-approves every later call to that tool — on every system,
+with every argument, for as long as the rule stays in the settings file. The rule cannot be
+narrowed to one system or package: Claude Code skips any `mcp__` rule containing
+parentheses, and these tools take no system argument to match on.
+
+Six tools do something this server cannot undo:
+
+- **delete_object** — the object is gone. SAP has no undo, and the source is not under
+  version control on the server side.
+- **delete_transport** — the request cannot be recreated with its original number.
+- **release_transport** — a released request cannot be un-released; the change is on its
+  way to the next system.
+- **rollback_transport** — restores an earlier state by overwriting the current one, so a
+  wrong call destroys work the same way a delete does.
+- **run_class** — executes arbitrary ABAP under the configured user. What it does is not
+  part of the call.
+- **update_customizing** — an entry with `"op": "delete"` removes a customizing row.
+  Customizing tables have no version database, so the row cannot be reconstructed. Note
+  that on the stock binary this tool always fails with "configure a BlackMagic fallback",
+  and under `strict` the client asks for approval *before* the handler runs — so you answer
+  a prompt for a call that cannot succeed. That is the price of marking it for the builds
+  where it does work.
+
+The `--consent` flag decides how the client's permission system treats those six:
+
+```bash
+aibap.mcp --consent=strict   # default
+aibap.mcp --consent=prompt
+```
+
+- **`strict`** (default) marks the six with `_meta["anthropic/requiresUserInteraction"]`.
+  Per the [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp) the
+  permission prompt then appears on every call — including in `acceptEdits`, `auto` and
+  `bypassPermissions` modes — and an allow rule that already matches the tool does not skip
+  it. In `dontAsk` mode, and for an `allow` answer from a `--permission-prompt-tool` in
+  headless mode, the call is **denied** instead.
+- **`prompt`** marks nothing. All tools stay on the client's normal permission flow, so a
+  prompt can be answered once with "Yes, and don't ask again". Intended for callers who
+  bring their own safety net — a working copy under abapGit, a throwaway sandbox system —
+  and would rather answer fewer dialogs, and for unattended callers that `strict` would
+  otherwise deny.
+
+Before choosing `strict`, three things are worth knowing:
+
+- **It cannot be scoped.** A delete in a sandbox package costs the same prompt as one in
+  production, and no allow rule reverses the marking. `--consent=prompt` at launch is the
+  way back.
+- **Client version matters.** The key requires Claude Code v2.1.199 or later; earlier
+  versions ignore it entirely. Between v2.1.199 and v2.1.245 the prompt still displayed a
+  "Yes, and don't ask again" option whose allow rule was then ignored — the prompt kept
+  reappearing, but the option was misleading. It is no longer offered from v2.1.246.
+  Other MCP clients may treat the key differently or not at all, and there the two modes
+  are indistinguishable.
+- **Unattended is not uniformly broken.** A headless run behind `--permission-prompt-tool`
+  is denied, but an Agent SDK host is not: its `canUseTool` callback still receives these
+  calls and may approve them, because such a host is expected to put the question to a
+  person. On surfaces that normally offer one-tap approval — Remote Control, and Agent SDK
+  applications — Claude Code withholds the one-tap action for a marked tool and shows the
+  full permission prompt instead, so the answer comes from the terminal dialog.
+
+The tools left unmarked are unmarked on the merits:
+
+- `run_query` runs SELECT statements only and changes nothing. Its `purpose` parameter is
+  a scope check under the SAP API Policy, not an approval step, and a missing or
+  unrecognised value is rejected locally in both modes.
+- `rename` rewrites source, and a second rename puts the old name back. The version
+  database usually holds the previous state too — though not for an object that has never
+  been versioned, such as one in `$TMP` or one whose transport is still open.
+- `remove_from_transport` changes an object's link to a transport rather than the object,
+  and `add_to_transport` restores the link. This is the weakest of the exclusions: the
+  tool's own description warns that a stale `position` can remove the wrong entry, and
+  restoring it means knowing which one vanished.
+- `force_unlock` terminates this server's own SAP session to drop the locks it holds. It
+  cannot reach another user's or another session's enqueues, so the worst case is losing
+  unsaved work this same process was holding.
 
 ### OAuth2 / SSO
 

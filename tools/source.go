@@ -13,7 +13,11 @@ import (
 
 var errMissingIncludeParam = errors.New("required parameter 'include' is missing or empty — must be one of: testclasses, definitions, implementations, macros")
 
-func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.LockMap, selector SystemSelector) {
+func registerSourceTools(s toolAdder, client interface {
+	adt.SourceClient
+	adt.LockClient
+	adt.SystemClient
+}, lockMap *adt.LockMap, tracker *sessionLockTracker, selector SystemSelector) {
 	s.AddTool(mcp.NewTool("get_source",
 		mcp.WithTitleAnnotation("Get ABAP Source Code"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -158,25 +162,34 @@ func registerSourceTools(s toolAdder, client adt.SourceClient, lockMap *adt.Lock
 			return errorResult(errMissingIncludeParam), nil
 		}
 		source := req.GetString("source", "")
-		lh := req.GetString("lock_handle", "")
+		explicitHandle := req.GetString("lock_handle", "")
 		// Resolve the lock handle from the session lock map when the caller did
 		// not pass one explicitly — the tool description promises this, and
 		// create_test_include does the same (#401). It is also load-bearing for
 		// the #436 fix: adtler's SetIncludeSource only omits the broken If-Match
 		// precondition when a lock handle is present, so a missing handle here
-		// would resurrect the 412. Reject early when no lock is tracked rather
-		// than letting SAP return an opaque error.
-		if lh == "" {
-			state, tracked := lockMap.Get(adt.LockKey(selector.ActiveName(), uri))
-			if !tracked || state.LockHandle == "" {
-				return errorResult(fmt.Errorf("no lock tracked for %s in this session — call lock_object first", uri)), nil
-			}
-			lh = state.LockHandle
+		// would resurrect the 412.
+		//
+		// On ECC the cached handle is never trusted (#377): resolveWriteLockHandle
+		// forces a fresh LockObject call instead, regardless of whether a lock
+		// was tracked already. On S/4 the pre-existing behavior is unchanged —
+		// a cache miss is a caller error (allowAutoLock=false): reject early
+		// rather than letting SAP return an opaque error.
+		key := adt.LockKey(selector.ActiveName(), uri)
+		lh, _, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, false)
+		if err != nil {
+			return errorResult(err), nil
 		}
 		transport := req.GetString("transport", "")
 		etag := req.GetString("etag", "")
 		newETag, err := client.SetIncludeSource(ctx, uri, include, source, lh, transport, etag)
 		if err != nil {
+			// #383: only ever release a lock THIS call acquired — on ECC that's
+			// the fresh relock resolveWriteLockHandle just took; on S/4 a cache
+			// miss is rejected above, so releaseOnFailure is false here.
+			if releaseOnFailure {
+				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lh)
+			}
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultJSON(SetIncludeSourceResult{

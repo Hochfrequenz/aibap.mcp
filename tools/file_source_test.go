@@ -140,3 +140,49 @@ func TestSetSourceFromFileToolAutoLock(t *testing.T) {
 		t.Errorf("lock_handle in map: got %q, want %q", state.LockHandle, "auto-lock-handle")
 	}
 }
+
+// TestSetSourceFromFileToolECCForcesFreshLock guards #377: on ECC a stale
+// cached handle would be silently accepted by SAP with no error, so
+// set_source_from_file must ignore the cache and relock fresh.
+func TestSetSourceFromFileToolECCForcesFreshLock(t *testing.T) {
+	const fileContent = "REPORT ZTEST."
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "ztest.abap")
+	if err := os.WriteFile(filePath, []byte(fileContent), 0o644); err != nil {
+		t.Fatalf("writing temp file: %v", err)
+	}
+
+	lockMap := adt.NewLockMap()
+	lockMap.Set("dev:"+testObjectURI, "stale-cached-handle", `"etag-pre"`)
+
+	var lockObjectCalls int
+	var gotHandle string
+	mock := &mockClient{
+		systemFlavorFn: func(ctx context.Context) (adt.SystemFlavor, error) {
+			return adt.SystemFlavorECC, nil
+		},
+		lockObjectFn: func(ctx context.Context, uri string) (string, error) {
+			lockObjectCalls++
+			return testECCFreshHandle, nil
+		},
+		setSourceFn: func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error) {
+			gotHandle = lockHandle
+			return testETagAfter, nil
+		},
+	}
+
+	s := newTestServerWithLockMap(mock, lockMap)
+	result := callTool(t, s, "set_source_from_file", map[string]interface{}{
+		"object_uri": testObjectURI,
+		"file_path":  filePath,
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error result: %s", firstText(result))
+	}
+	if lockObjectCalls != 1 {
+		t.Errorf("expected LockObject to be called once on ECC despite a cached handle, got %d calls", lockObjectCalls)
+	}
+	if gotHandle != testECCFreshHandle {
+		t.Errorf("SetSource lock handle: got %q, want the freshly-acquired handle, not the stale cached one", gotHandle)
+	}
+}

@@ -26,6 +26,7 @@ const (
 	testTransportNum   = "DEVK900123"
 	testExplicitHandle = "explicit-handle"
 	testNewETag        = "new-etag"
+	testECCFreshHandle = "fresh-ecc-handle"
 )
 
 // mockClient is a test double for adt.Client.
@@ -47,6 +48,7 @@ type mockClient struct {
 	unlockObjectFn        func(ctx context.Context, uri, lockHandle string) error
 	prettyPrintFn         func(ctx context.Context, source string) (string, error)
 	createObjectFn        func(ctx context.Context, objectType, name, pkg, desc, transport string) error
+	createPackageFn       func(ctx context.Context, name, desc, responsible, softwareComponent, transportLayer, transport string) error
 	deleteObjectFn        func(ctx context.Context, uri, lockHandle, transport string) error
 	getCompletionsFn      func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
 	createTransportFn     func(ctx context.Context, category, target, description, devClass string) (string, error)
@@ -63,6 +65,7 @@ type mockClient struct {
 	setIncludeSourceFn    func(ctx context.Context, uri, include, source, lockHandle, transport, etag string) (string, error)
 	runClassFn            func(ctx context.Context, className string) (*adt.ClassRunResult, error)
 	logoutFn              func(ctx context.Context) error
+	systemFlavorFn        func(ctx context.Context) (adt.SystemFlavor, error)
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -245,7 +248,10 @@ func (m *mockClient) CreateObject(ctx context.Context, objectType, name, pkg, de
 func (m *mockClient) CreateFunctionModule(context.Context, string, string, string, string, string) error {
 	return nil
 }
-func (m *mockClient) CreatePackage(context.Context, string, string, string, string, string, string) error {
+func (m *mockClient) CreatePackage(ctx context.Context, name, desc, responsible, softwareComponent, transportLayer, transport string) error {
+	if m.createPackageFn != nil {
+		return m.createPackageFn(ctx, name, desc, responsible, softwareComponent, transportLayer, transport)
+	}
 	return nil
 }
 func (m *mockClient) DeleteObject(ctx context.Context, uri, lockHandle, transport string) error {
@@ -372,7 +378,10 @@ func (m *mockClient) Logout(ctx context.Context) error {
 	}
 	return nil
 }
-func (m *mockClient) SystemFlavor(context.Context) (adt.SystemFlavor, error) {
+func (m *mockClient) SystemFlavor(ctx context.Context) (adt.SystemFlavor, error) {
+	if m.systemFlavorFn != nil {
+		return m.systemFlavorFn(ctx)
+	}
 	return adt.SystemFlavorUnknown, nil
 }
 func (m *mockClient) RunClass(ctx context.Context, className string) (*adt.ClassRunResult, error) {
@@ -388,7 +397,7 @@ func newTestServer(client adt.Client) *server.MCPServer {
 
 func newTestServerWithSelector(client adt.Client, selector tools.SystemSelector, lockMap *adt.LockMap) *server.MCPServer {
 	s := server.NewMCPServer("test", "0.0.1")
-	tools.RegisterAllWithLockMap(s, client, selector, lockMap, tools.ParseToolGroups([]string{"all"}), nil, nil)
+	tools.RegisterAllWithLockMap(s, client, selector, lockMap, tools.ParseToolGroups([]string{"all"}), nil)
 	return s
 }
 
@@ -1050,6 +1059,51 @@ func TestSetIncludeSourceToolRejectsWhenNoLockTracked(t *testing.T) {
 	text := firstText(result)
 	if !strings.Contains(text, "lock_object") {
 		t.Errorf("error message should hint at lock_object; got: %s", text)
+	}
+}
+
+// TestSetIncludeSourceToolECCForcesFreshLock guards #377: on ECC, a stale or
+// even a merely-tracked cached handle is never trusted for a write — every
+// call forces a fresh LockObject, regardless of what (if anything) the
+// session lock map already holds for the include's owning class URI.
+func TestSetIncludeSourceToolECCForcesFreshLock(t *testing.T) {
+	const classURI = "/sap/bc/adt/oo/classes/ZCL_TEST"
+	lockMap := adt.NewLockMap()
+	lockMap.Set(adt.LockKey("dev", classURI), "stale-cached-handle", "")
+
+	var lockObjectCalls int
+	var gotLH string
+	mock := &mockClient{
+		systemFlavorFn: func(ctx context.Context) (adt.SystemFlavor, error) {
+			return adt.SystemFlavorECC, nil
+		},
+		lockObjectFn: func(ctx context.Context, uri string) (string, error) {
+			lockObjectCalls++
+			return testECCFreshHandle, nil
+		},
+		setIncludeSourceFn: func(_ context.Context, _, _, _, lh, _, _ string) (string, error) {
+			gotLH = lh
+			return testNewETag, nil
+		},
+	}
+	s := newTestServerWithLockMap(mock, lockMap)
+
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri": classURI,
+		"include":    "testclasses",
+		"source":     "* hello",
+		"etag":       "etag-1",
+		// no lock_handle — a cached one exists, but ECC must not trust it
+	})
+
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	if lockObjectCalls != 1 {
+		t.Errorf("expected LockObject to be called once on ECC despite a cached handle, got %d calls", lockObjectCalls)
+	}
+	if gotLH != testECCFreshHandle {
+		t.Errorf("SetIncludeSource lock handle: got %q, want the freshly-acquired handle, not the stale cached one", gotLH)
 	}
 }
 

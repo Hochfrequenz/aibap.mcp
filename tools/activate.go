@@ -32,7 +32,9 @@ func registerActivateTools(s toolAdder, client interface {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Activate one or more ABAP objects in SAP. Returns activation result with per-object messages (E=error, W=warning, I=info)."),
+		mcp.WithDescription("Activate one or more ABAP objects in SAP. Returns activation result with per-object messages (E=error, W=warning, I=info). "+
+			"An apparent success is verified against the inactive-objects list: if an object is still listed as inactive afterwards, "+
+			"the result reports failure instead of success, because some systems accept the activation request and silently do not activate."),
 		mcp.WithArray("object_uris",
 			mcp.Required(),
 			mcp.Description("List of ADT object URIs to activate"),
@@ -75,7 +77,9 @@ func registerActivateTools(s toolAdder, client interface {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Activate a single ABAP object."),
+		mcp.WithDescription("Activate a single ABAP object. "+
+			"An apparent success is verified against the inactive-objects list: if the object is still listed as inactive afterwards, "+
+			"the result reports failure instead of success, because some systems accept the activation request and silently do not activate."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
 			mcp.Description(descADTObjectURI),

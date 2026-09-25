@@ -2,13 +2,12 @@ package tools
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
+func registerRollbackTools(s toolAdder, client adt.Client) {
 	s.AddTool(mcp.NewTool("rollback_transport",
 		mcp.WithTitleAnnotation("Rollback Transport"),
 		mcp.WithReadOnlyHintAnnotation(false),
@@ -19,8 +18,10 @@ func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
 			"Restore all source objects in a transport to their version before the transport. "+
 				"For each PROG/CLAS/INTF/FUGR: reads version history, finds the pre-transport version, "+
 				"and restores the source. Non-source objects (TABL, DTEL, etc.) are skipped. "+
-				"This is destructive — it overwrites current source with historical versions."+
-				confirmationNote(elicitor),
+				"An object counts as restored only if the restored source also activates: the activation is verified "+
+				"against the inactive-objects list, so an object that SAP accepts but silently does not activate is "+
+				"reported as failed instead of restored. "+
+				"This is destructive — it overwrites current source with historical versions.",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number to roll back")),
 		mcp.WithOutputSchema[adt.RollbackResult](),
@@ -28,11 +29,6 @@ func registerRollbackTools(s toolAdder, client adt.Client, elicitor Elicitor) {
 		transport, errRes := requireString(req, "transport")
 		if errRes != nil {
 			return errRes, nil
-		}
-		proceed, reason := ConfirmDestructive(ctx, elicitor,
-			fmt.Sprintf("Confirm rollback of transport %s. All source objects in it will be restored to their pre-transport version.", transport))
-		if !proceed {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "rollback_transport aborted: " + reason}), nil
 		}
 		result, err := client.RollbackTransport(ctx, transport)
 		if err != nil {

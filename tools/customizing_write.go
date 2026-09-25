@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -44,7 +43,7 @@ var customizingEntryItemsSchema = map[string]any{
 	"additionalProperties": false,
 }
 
-func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient, elicitor Elicitor) {
+func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient) {
 	s.AddTool(mcp.NewTool("update_customizing",
 		mcp.WithTitleAnnotation("Update Customizing"),
 		mcp.WithReadOnlyHintAnnotation(false),
@@ -57,8 +56,7 @@ func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient, elici
 				"customizing writes through ADT. Requires a BlackMagic fallback (SAP GUI automation) "+
 				"to be configured. Without it, this tool will return an error with guidance "+
 				"to use SAP GUI (SM30) directly. "+
-				"Each entry has an optional \"op\" field: \"upsert\" (default) inserts or updates; \"delete\" removes the row matching keys."+
-				confirmationNote(elicitor),
+				"Each entry has an optional \"op\" field: \"upsert\" (default) inserts or updates; \"delete\" removes the row matching keys.",
 		),
 		mcp.WithString("table", mcp.Required(), mcp.Description("Customizing table or view name (e.g. V_T077D, T001W)")),
 		mcp.WithArray("entries", mcp.Required(),
@@ -89,12 +87,6 @@ func registerCustomizingWriteTools(s toolAdder, fallback BlackMagicClient, elici
 					"SAP does not expose SM30/SM34 functionality through REST endpoints. "+
 					"Configure a BlackMagic fallback (SAP GUI automation) or make the change "+
 					"manually in SAP GUI (SM30 → table %s)", table)), nil
-		}
-
-		proceed, reason := ConfirmDestructive(ctx, elicitor,
-			fmt.Sprintf("Confirm update to customizing table %s (%d entries). Customizing changes are difficult to reverse without an explicit before-image.", table, len(entries)))
-		if !proceed {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "update_customizing aborted: " + reason}), nil
 		}
 
 		// Validate per-entry op semantics: upsert requires values; delete forbids them.
