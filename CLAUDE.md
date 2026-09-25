@@ -54,6 +54,14 @@ The adtler row is the one that gets missed. A bump that only removes a workaroun
 Do not retag a published version to correct a past bump. Note the correction in that release's
 notes instead — the tag is an identifier, the release notes are the record.
 
+**Merge is not release.** A fix or feature that needs a minor or patch bump is not done when its
+PR merges to `main` — it's done when the version is tagged. Do not use `Closes #N` / `Fixes #N`
+in that PR's body; GitHub auto-closes on merge, before the bump exists, and the issue then reads
+as resolved to anyone watching it while the fix sits unreleased. Reference the issue instead
+(`Refs #N`, `Part of #N`), leave it open, and close it manually with a link to the release tag
+once one is actually cut. This matters most for issues carrying `blocked-by-adtler` — see
+"Cross-Repo Issue Tracking" below, where it is the default case rather than the exception.
+
 ## Issue & PR Comments
 
 - **Write for a cold reader.** Every comment on an issue and issue bodies in general or PR descriptions and code changes must stand on its own: clear to someone who has never worked on it and isn't in this conversation. State what you did and why, spell out issue/object/tool references instead of pronouns like "it" or "the fix", and link the relevant commit, PR, or adtler change. Be concise — no filler, no restating the obvious, no narrating your own process.
@@ -126,6 +134,7 @@ notification e-mails that already went out, so rotate or renumber it instead of 
 Since most fixes now live in [adtler](https://github.com/Hochfrequenz/adtler), issues here often can't be closed until the next adtler release is consumed via `go get`. To keep this visible:
 
 1. **Label proactively**: Whenever you (or an agent) conclude that an aibap.mcp issue can't be resolved without an adtler change, immediately add the `blocked-by-adtler` label and append it to the tracking issue. Same rule when you spot a new adtler commit/release that resolves an existing open issue here: label it, add a checklist bullet, link the adtler commit or PR. Query open blockers with `gh issue list --label blocked-by-adtler`.
+   Consuming the adtler release (the `go.mod` bump) is rarely the whole fix — most `blocked-by-adtler` issues also need an aibap.mcp-side consumer PR (new branching logic, a wired-up client method, a new tool argument) once the upstream piece lands. That consumer PR is an ordinary fix PR, not the bump PR itself, and it must **not** `Closes #N` the issue (see "Merge is not release" under Versioning) — merging it only means the fix exists on `main`, not that any user has it. Keep the `blocked-by-adtler` label and the tracking-issue bullet in place, referencing the consumer PR, until the version that ships it is tagged.
 2. **Tracking issue**: A single open issue titled `Next adtler release: bump to vX.Y.Z` collects all blocked issues as a checklist, each bullet `- [ ] #<n> — short description (adtler: <commit-or-PR>)`. There should only ever be one such tracking issue open at a time.
 3. **Reproducer snippet on every `blocked-by-adtler` issue**: each such issue must include a copy-pastable MCP tool call (tool name + arguments JSON) or equivalent Go snippet, the target system **named by type and release level** in prose (see "Public Repository — No Internal Data"; the MCP arguments still use the local configured alias, so write `{"system": "<alias>"}` and `<request>` / `<task>` for transport numbers), any session preconditions (e.g. "fresh MCP session, no preceding `get_atc_customizing` — see adtler#44"), the "fixed" expected output, and the "broken" current output. This snippet is what the bump PR's reproducer-verify step runs. Without it, false negatives like aibap.mcp#306 are easy to ship. Example: aibap.mcp#288.
 4. **When bumping adtler**:
