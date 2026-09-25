@@ -21,6 +21,49 @@ func setHomeDir(t *testing.T, dir string) {
 	t.Setenv("USERPROFILE", dir)
 }
 
+// TestResolveConfigPath covers the SAP_CONFIG_FILE bypass: an explicit env
+// var must win over findConfigFile() entirely (not merely rank higher among
+// its candidates), and the reported source must reflect which branch fired.
+func TestResolveConfigPath(t *testing.T) {
+	t.Run("SAP_CONFIG_FILE set wins outright", func(t *testing.T) {
+		t.Setenv("SAP_CONFIG_FILE", "/explicit/path.json")
+		// A documented default that exists must still lose to the env var.
+		home := t.TempDir()
+		setHomeDir(t, home)
+		documented := filepath.Join(home, ".config", "sap-mcp", "systems.json")
+		if err := os.MkdirAll(filepath.Dir(documented), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(documented, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		path, source := resolveConfigPath()
+		if path != "/explicit/path.json" || source != "SAP_CONFIG_FILE" {
+			t.Errorf("resolveConfigPath() = (%q, %q), want (%q, %q)", path, source, "/explicit/path.json", "SAP_CONFIG_FILE")
+		}
+	})
+
+	t.Run("SAP_CONFIG_FILE unset falls through to findConfigFile", func(t *testing.T) {
+		t.Setenv("SAP_CONFIG_FILE", "")
+		home := t.TempDir()
+		setHomeDir(t, home)
+		documented := filepath.Join(home, ".config", "sap-mcp", "systems.json")
+		if err := os.MkdirAll(filepath.Dir(documented), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(documented, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(t.TempDir())
+
+		path, source := resolveConfigPath()
+		if path != documented || source != "auto-discovered" {
+			t.Errorf("resolveConfigPath() = (%q, %q), want (%q, %q)", path, source, documented, "auto-discovered")
+		}
+	})
+}
+
 // TestFindConfigFile covers #528: a stale cwd-relative config.json must not
 // silently shadow the documented ~/.config/sap-mcp/systems.json default.
 func TestFindConfigFile(t *testing.T) {

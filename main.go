@@ -51,10 +51,8 @@ func main() {
 
 	// Handle login subcommand
 	if len(os.Args) >= 2 && os.Args[1] == "login" {
-		configPath := os.Getenv("SAP_CONFIG_FILE")
-		if configPath == "" {
-			configPath = findConfigFile()
-		}
+		configPath, configSource := resolveConfigPath()
+		slog.Info("config file resolved", "path", configPath, "source", configSource)
 		systemName := ""
 		if len(os.Args) >= 3 {
 			systemName = os.Args[2]
@@ -86,12 +84,7 @@ func run() error {
 		return err
 	}
 
-	configPath := os.Getenv("SAP_CONFIG_FILE")
-	configSource := "SAP_CONFIG_FILE"
-	if configPath == "" {
-		configPath = findConfigFile()
-		configSource = "auto-discovered"
-	}
+	configPath, configSource := resolveConfigPath()
 	slog.Info("config file resolved", "path", configPath, "source", configSource)
 
 	cfg, err := config.Load(configPath)
@@ -228,6 +221,18 @@ AVAILABLE SYSTEMS: %s (default: %q)
 Use select_system to switch between systems.`, debugLine, strings.Join(systemNames, ", "), defaultSystem)
 }
 
+// resolveConfigPath is the single source of truth for where the config file
+// comes from, shared by the login subcommand and the server startup path so
+// neither can silently diverge from the other (#528). source is
+// "SAP_CONFIG_FILE" when the env var was set explicitly, "auto-discovered"
+// otherwise.
+func resolveConfigPath() (path, source string) {
+	if configPath := os.Getenv("SAP_CONFIG_FILE"); configPath != "" {
+		return configPath, "SAP_CONFIG_FILE"
+	}
+	return findConfigFile(), "auto-discovered"
+}
+
 // findConfigFile searches for the config file in standard locations. The
 // documented default (~/.config/sap-mcp/systems.json) wins whenever it
 // exists, so a stale cwd-relative config.json left over in the server's
@@ -236,6 +241,9 @@ Use select_system to switch between systems.`, debugLine, strings.Join(systemNam
 // development when the documented default is absent.
 func findConfigFile() string {
 	documented, documentedErr := documentedConfigPath()
+	if documentedErr != nil {
+		slog.Warn("could not resolve documented config default, falling back to cwd config.json", "error", documentedErr)
+	}
 	if documentedErr == nil {
 		if _, err := os.Stat(documented); err == nil {
 			return documented
