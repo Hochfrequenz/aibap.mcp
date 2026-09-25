@@ -332,6 +332,13 @@ Copy the example config and fill in your SAP system details:
 cp config.json.example config.json
 ```
 
+> [!NOTE]
+> `~/.config/sap-mcp/systems.json` (see [step 2](#2-create-systemsjson)) is the documented
+> default and wins whenever it exists, so a local `config.json` here is only picked up
+> automatically if that default is absent. If you already have one and still want to use this
+> local file (e.g. for a quick throwaway test), point at it explicitly:
+> `SAP_CONFIG_FILE=config.json aibap.mcp` — see [`SAP_CONFIG_FILE`](#oauth2--sso) below.
+
 ```json
 {
   "default_system": "dev",
