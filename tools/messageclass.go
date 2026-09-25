@@ -24,9 +24,9 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 		mcp.WithString("message_class", mcp.Required(), mcp.Description("Message class name, e.g. '00', 'ZFOO'")),
 		mcp.WithOutputSchema[adt.MessageClassInfo](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		name := req.GetString("message_class", "")
-		if name == "" {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "message_class is required"}), nil
+		name, errRes := requireString(req, "message_class")
+		if errRes != nil {
+			return errRes, nil
 		}
 		result, err := client.GetMessageClass(ctx, name)
 		if err != nil {
@@ -51,9 +51,9 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 		mcp.WithString("max_results", mcp.Description("Maximum results (default 50)")),
 		mcp.WithOutputSchema[SearchMessagesResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		query := req.GetString("query", "")
-		if query == "" {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "query is required"}), nil
+		query, errRes := requireString(req, "query")
+		if errRes != nil {
+			return errRes, nil
 		}
 		maxResults := 50
 		if s := req.GetString("max_results", ""); s != "" {
@@ -85,13 +85,13 @@ func registerMessageClassTools(s toolAdder, client adt.Client) {
 		)),
 		mcp.WithOutputSchema[SetMessagesResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		name := req.GetString("message_class", "")
-		if name == "" {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "message_class is required"}), nil
+		name, errRes := requireString(req, "message_class")
+		if errRes != nil {
+			return errRes, nil
 		}
-		msgsJSON := req.GetString("messages", "")
-		if msgsJSON == "" {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "messages is required"}), nil
+		msgsJSON, errRes := requireString(req, "messages")
+		if errRes != nil {
+			return errRes, nil
 		}
 		var messages []adt.Message
 		if err := json.Unmarshal([]byte(msgsJSON), &messages); err != nil {

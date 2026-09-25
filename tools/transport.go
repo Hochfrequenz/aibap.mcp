@@ -101,8 +101,14 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithBoolean("force", mcp.Description("Force ADT request even for unsupported categories. By default, category W (customizing) is intercepted because ADT cannot create customizing transports.")),
 		mcp.WithOutputSchema[CreateTransportResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		cat := req.GetString("category", "")
-		desc := req.GetString("description", "")
+		cat, errRes := requireString(req, "category")
+		if errRes != nil {
+			return errRes, nil
+		}
+		desc, errRes := requireString(req, "description")
+		if errRes != nil {
+			return errRes, nil
+		}
 		target := req.GetString("target", "")
 		pkg := req.GetString("package", "")
 		force := req.GetBool("force", false)
