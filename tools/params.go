@@ -29,15 +29,31 @@ import (
 //		return errRes, nil
 //	}
 func requireString(req mcp.CallToolRequest, name string) (string, *mcp.CallToolResult) {
+	val, errRes := requireRawString(req, name)
+	if errRes != nil {
+		return "", errRes
+	}
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return "", errorResult(fmt.Errorf("required parameter %q must not be empty", name))
+	}
+	return val, nil
+}
+
+// requireRawString reads a required string parameter from req without
+// trimming or an empty-after-trim check — only presence and type are
+// enforced. Use this instead of requireString for a parameter where
+// surrounding whitespace is significant (e.g. ABAP source code), while still
+// rejecting a missing/absent value: emptiness there still needs its own
+// explicit check (untrimmed, so e.g. "  " is not silently accepted), because
+// forwarding "" to adtler is exactly the foot-gun this file exists to close.
+func requireRawString(req mcp.CallToolRequest, name string) (string, *mcp.CallToolResult) {
 	val, err := req.RequireString(name)
 	if err != nil {
 		// Absent or wrong type: mcp-go's message ("required argument ... not
 		// found" / "... is not a string") is preserved via %w and already
 		// distinguishes the two, so the prefix here stays neutral.
 		return "", errorResult(fmt.Errorf("invalid required parameter %q: %w", name, err))
-	}
-	if val = strings.TrimSpace(val); val == "" {
-		return "", errorResult(fmt.Errorf("required parameter %q must not be empty", name))
 	}
 	return val, nil
 }

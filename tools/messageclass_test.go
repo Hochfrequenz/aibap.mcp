@@ -2,6 +2,7 @@ package tools_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -28,7 +29,7 @@ func TestGetMessageClass_MissingName(t *testing.T) {
 	}
 }
 
-func TestGetMessageClass_ReadsWithoutAskingTheClient(t *testing.T) {
+func TestGetMessageClass_ReadsThroughToTheClient(t *testing.T) {
 	called := false
 	var gotName string
 	mock := &mockClient{
@@ -104,6 +105,12 @@ func TestSetMessages_MissingRequiredParams(t *testing.T) {
 			}
 			if called {
 				t.Errorf("the call should not have reached adtler with %q missing", missing)
+			}
+			// "messages" omitted also fails json.Unmarshal("") on its own, so
+			// assert the guard's own wording to prove *this* check is what
+			// fired, not an unrelated downstream error.
+			if text := textOfTE(result); !strings.Contains(text, missing) {
+				t.Errorf("error text should name the missing parameter %q, got: %s", missing, text)
 			}
 		})
 	}

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -36,10 +37,14 @@ func registerNavigationTools(s toolAdder, client adt.NavigationClient) {
 		// "source" carries ABAP source code, where leading/trailing whitespace
 		// can be significant (and source_uri's #start=line,col fragment refers
 		// to positions within it) — requireString's trimming would corrupt
-		// that, so this only checks presence via mcp-go directly.
-		source, err := req.RequireString("source")
-		if err != nil {
-			return errorResult(fmt.Errorf("invalid required parameter %q: %w", "source", err)), nil
+		// what's forwarded, so this uses requireRawString and checks
+		// emptiness on a trimmed copy without altering the forwarded value.
+		source, errRes := requireRawString(req, "source")
+		if errRes != nil {
+			return errRes, nil
+		}
+		if strings.TrimSpace(source) == "" {
+			return errorResult(fmt.Errorf("required parameter %q must not be empty", "source")), nil
 		}
 		targetURI, err := client.NavigateToDefinition(ctx, uri, source)
 		if err != nil {
