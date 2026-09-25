@@ -39,6 +39,27 @@ func TestSelectSystemSuccess(t *testing.T) {
 	}
 }
 
+// TestSelectSystemMissingName verifies that an omitted "system" is rejected
+// locally with a clear message instead of forwarding an empty string to the
+// selector. See #386.
+func TestSelectSystemMissingName(t *testing.T) {
+	called := false
+	selector := &mockSelector{
+		selectFn: func(name string) (string, error) {
+			called = true
+			return "Active system: " + name, nil
+		},
+	}
+	s := newTestServerWithSelector(&mockClient{}, selector, adt.NewLockMap())
+	result := callTool(t, s, "select_system", map[string]any{})
+	if !result.IsError {
+		t.Fatal("expected a missing system to be rejected")
+	}
+	if called {
+		t.Error("the call should not have reached the selector with system missing")
+	}
+}
+
 func TestSelectSystemUnknown(t *testing.T) {
 	selector := &mockSelector{
 		selectFn: func(name string) (string, error) {

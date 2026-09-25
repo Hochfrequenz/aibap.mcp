@@ -64,7 +64,10 @@ func registerQueryTools(s toolAdder, client adt.QueryClient) {
 			)), nil
 		}
 
-		sql := req.GetString("sql", "")
+		sql, errRes := requireString(req, "sql")
+		if errRes != nil {
+			return errRes, nil
+		}
 		maxRows := int(req.GetFloat("max_rows", 100))
 		result, err := client.RunQuery(ctx, sql, maxRows)
 		if err != nil {

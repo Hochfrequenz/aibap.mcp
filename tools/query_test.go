@@ -32,6 +32,29 @@ func TestRunQuery_ValidPurpose_CallsRunQuery(t *testing.T) {
 	}
 }
 
+// TestRunQuery_MissingSQL_RejectsLocally verifies that an omitted "sql" is
+// rejected locally with a clear message instead of forwarding an empty
+// string to adtler. See #386.
+func TestRunQuery_MissingSQL_RejectsLocally(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		runQueryFn: func(_ context.Context, _ string, _ int) (*adt.QueryResult, error) {
+			called = true
+			return &adt.QueryResult{}, nil
+		},
+	}
+	s := newTestServerWithFallback(mock, nil)
+	result := callTool(t, s, "run_query", map[string]interface{}{
+		"purpose": "ddic_inspection",
+	})
+	if !result.IsError {
+		t.Fatal("expected a missing sql to be rejected")
+	}
+	if called {
+		t.Fatal("RunQuery should not have been called with sql missing")
+	}
+}
+
 // TestRunQuery_PurposeGateRejectsLocally covers both halves of the gate. The
 // "present but unrecognised" case matters on its own: it is the only thing
 // standing between a caller and a SELECT on a business table, and a handler

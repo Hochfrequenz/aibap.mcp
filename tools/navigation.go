@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -28,11 +29,18 @@ func registerNavigationTools(s toolAdder, client adt.NavigationClient) {
 		mcp.WithString("source", mcp.Required(), mcp.Description("Current ABAP source code at source_uri")),
 		mcp.WithOutputSchema[NavigationResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString("source_uri", "")
-		if uri == "" {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "source_uri must not be empty"}), nil
+		uri, errRes := requireString(req, "source_uri")
+		if errRes != nil {
+			return errRes, nil
 		}
-		source := req.GetString("source", "")
+		// "source" carries ABAP source code, where leading/trailing whitespace
+		// can be significant (and source_uri's #start=line,col fragment refers
+		// to positions within it) — requireString's trimming would corrupt
+		// that, so this only checks presence via mcp-go directly.
+		source, err := req.RequireString("source")
+		if err != nil {
+			return errorResult(fmt.Errorf("invalid required parameter %q: %w", "source", err)), nil
+		}
 		targetURI, err := client.NavigateToDefinition(ctx, uri, source)
 		if err != nil {
 			return errorResult(err), nil

@@ -45,10 +45,23 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 		),
 		mcp.WithOutputSchema[ObjectCreateResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		objectType := strings.ToUpper(req.GetString("object_type", ""))
-		name := req.GetString("name", "")
-		pkg := req.GetString("package", "")
-		desc := req.GetString("description", "")
+		objectTypeRaw, errRes := requireString(req, "object_type")
+		if errRes != nil {
+			return errRes, nil
+		}
+		objectType := strings.ToUpper(objectTypeRaw)
+		name, errRes := requireString(req, "name")
+		if errRes != nil {
+			return errRes, nil
+		}
+		pkg, errRes := requireString(req, "package")
+		if errRes != nil {
+			return errRes, nil
+		}
+		desc, errRes := requireString(req, "description")
+		if errRes != nil {
+			return errRes, nil
+		}
 		transport := req.GetString("transport", "")
 
 		err := client.CreateObject(ctx, objectType, name, pkg, desc, transport)
