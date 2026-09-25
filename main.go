@@ -87,9 +87,12 @@ func run() error {
 	}
 
 	configPath := os.Getenv("SAP_CONFIG_FILE")
+	configSource := "SAP_CONFIG_FILE"
 	if configPath == "" {
 		configPath = findConfigFile()
+		configSource = "auto-discovered"
 	}
+	slog.Info("config file resolved", "path", configPath, "source", configSource)
 
 	cfg, err := config.Load(configPath)
 	if err != nil {
@@ -225,16 +228,32 @@ AVAILABLE SYSTEMS: %s (default: %q)
 Use select_system to switch between systems.`, debugLine, strings.Join(systemNames, ", "), defaultSystem)
 }
 
-// findConfigFile searches for the config file in standard locations.
+// findConfigFile searches for the config file in standard locations. The
+// documented default (~/.config/sap-mcp/systems.json) wins whenever it
+// exists, so a stale cwd-relative config.json left over in the server's
+// working directory can no longer silently shadow it (#528). A cwd-relative
+// config.json is still honoured, but only as a fallback for local
+// development when the documented default is absent.
 func findConfigFile() string {
-	candidates := []string{"config.json"}
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, home+"/.config/sap-mcp/systems.json")
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c
+	documented, documentedErr := documentedConfigPath()
+	if documentedErr == nil {
+		if _, err := os.Stat(documented); err == nil {
+			return documented
 		}
 	}
-	return "config.json" // will produce a clear error in Load()
+	if _, err := os.Stat("config.json"); err == nil {
+		return "config.json"
+	}
+	if documentedErr == nil {
+		return documented // will produce a clear error in Load()
+	}
+	return "config.json"
+}
+
+func documentedConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".config", "sap-mcp", "systems.json"), nil
 }

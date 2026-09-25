@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -10,6 +12,65 @@ import (
 	"github.com/Hochfrequenz/aibap.mcp/tools"
 	"github.com/mark3labs/mcp-go/server"
 )
+
+// setHomeDir points os.UserHomeDir() at dir for the duration of the test,
+// regardless of platform (Windows reads USERPROFILE, everything else HOME).
+func setHomeDir(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+}
+
+// TestFindConfigFile covers #528: a stale cwd-relative config.json must not
+// silently shadow the documented ~/.config/sap-mcp/systems.json default.
+func TestFindConfigFile(t *testing.T) {
+	t.Run("documented default wins when both exist", func(t *testing.T) {
+		home := t.TempDir()
+		setHomeDir(t, home)
+		documented := filepath.Join(home, ".config", "sap-mcp", "systems.json")
+		if err := os.MkdirAll(filepath.Dir(documented), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(documented, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		cwd := t.TempDir()
+		t.Chdir(cwd)
+		if err := os.WriteFile(filepath.Join(cwd, "config.json"), []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		if got := findConfigFile(); got != documented {
+			t.Errorf("findConfigFile() = %q, want documented default %q", got, documented)
+		}
+	})
+
+	t.Run("falls back to cwd config.json when documented default is absent", func(t *testing.T) {
+		setHomeDir(t, t.TempDir()) // no ~/.config/sap-mcp/systems.json created
+
+		cwd := t.TempDir()
+		t.Chdir(cwd)
+		if err := os.WriteFile(filepath.Join(cwd, "config.json"), []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		if got := findConfigFile(); got != "config.json" {
+			t.Errorf("findConfigFile() = %q, want %q", got, "config.json")
+		}
+	})
+
+	t.Run("neither exists: points at the documented default for a clear error", func(t *testing.T) {
+		home := t.TempDir()
+		setHomeDir(t, home)
+		t.Chdir(t.TempDir())
+
+		want := filepath.Join(home, ".config", "sap-mcp", "systems.json")
+		if got := findConfigFile(); got != want {
+			t.Errorf("findConfigFile() = %q, want %q", got, want)
+		}
+	})
+}
 
 // TestConsentFlagReachesTheToolList covers the step from a parsed consent mode
 // to the annotation a client actually receives. The tools-package tests build
