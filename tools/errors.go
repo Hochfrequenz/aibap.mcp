@@ -42,10 +42,16 @@ const (
 	creationFailedHint = "Object creation failed. The most common cause is that an object with that name already exists — check with `object_exists` or `search_objects`, or choose a different name. Otherwise verify the name, package, and that this object type is supported on this system."
 	notFoundHint       = "Object not found. Check the URI spelling or use `search_objects` to find it."
 	forbiddenHint      = "Authorization error. Check that the ADT user has the required S_DEVELOP authorizations."
-	badRequestHint     = "Bad request — the server rejected the request. Check the syntax, required parameters, or the CSRF token."
-	serverErrorHint    = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
-	transportHint      = "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."
-	inactiveHint       = "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."
+	// systemNotModifiableHint: a 403 ExceptionResourceNoAccess whose message
+	// says the system change option is "not modifiable" is a system-wide
+	// configuration state, not an authorization problem — no role or profile
+	// change fixes it. Matched on message text (see matchHint), so it misses
+	// on non-English systems and degrades to forbiddenHint there. See #490.
+	systemNotModifiableHint = "The SAP system is closed for changes (system change option is 'not modifiable'). This is a system-wide setting, not an authorization or lock problem: writes to repository objects will fail until an administrator reopens it in SE06 -> System Change Option. Read-only tools are unaffected."
+	badRequestHint          = "Bad request — the server rejected the request. Check the syntax, required parameters, or the CSRF token."
+	serverErrorHint         = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
+	transportHint           = "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."
+	inactiveHint            = "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."
 	// objectLockedInTransportHint names the blocking request (parsed by adtler
 	// from the 409 message — see adt.ADTError.LockingTransport) so the caller
 	// can act on it directly. The %[1]s verb is the request ID, reused twice.
@@ -156,6 +162,12 @@ func matchHint(err error) string {
 	// Transport-specific 400 beats the generic bad-request hint.
 	if kind == adt.ErrorBadRequest && strings.Contains(errText, "transport") {
 		return transportHint
+	}
+
+	// System change option closed beats the generic forbidden/authorization
+	// hint — no auth change fixes it. See #490.
+	if kind == adt.ErrorForbidden && strings.Contains(errText, "not modifiable") {
+		return systemNotModifiableHint
 	}
 	if hint, ok := hintByKind[kind]; ok {
 		return hint

@@ -230,6 +230,31 @@ func TestMatchHint_NoDeleteHandler(t *testing.T) {
 	}
 }
 
+// TestMatchHint_SystemNotModifiable pins the #490 hint: a 403 ExceptionResourceNoAccess
+// whose message says the system change option is "not modifiable" is a system-wide
+// configuration state, not an authorization problem. It must NOT get the generic
+// S_DEVELOP authorization hint, and a generic 403 must still get that hint.
+func TestMatchHint_SystemNotModifiable(t *testing.T) {
+	notModifiable := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "SAP system has status 'not modifiable'"}
+	hint := matchHint(notModifiable)
+	if !strings.Contains(hint, "not modifiable") {
+		t.Errorf("should explain the system change option, got: %s", hint)
+	}
+	if !strings.Contains(hint, "SE06") {
+		t.Errorf("should point at SE06 System Change Option, got: %s", hint)
+	}
+	if strings.Contains(hint, "S_DEVELOP") {
+		t.Errorf("should NOT get the authorization hint, got: %s", hint)
+	}
+
+	// A generic 403 (e.g. the "currently editing" case, or genuinely missing
+	// authorizations) must keep the existing S_DEVELOP hint.
+	generic := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "User SMITH is currently editing Z_REPORT"}
+	if got := matchHint(generic); !strings.Contains(got, "S_DEVELOP") {
+		t.Errorf("generic 403 should keep the authorization hint, got: %s", got)
+	}
+}
+
 func TestErrorResult_WithHint(t *testing.T) {
 	err := &adt.ADTError{StatusCode: 423, Message: "User SMITH is editing Z_REPORT"}
 	result := errorResult(err)
