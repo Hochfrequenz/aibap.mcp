@@ -230,6 +230,50 @@ func TestMatchHint_NoDeleteHandler(t *testing.T) {
 	}
 }
 
+// TestMatchHint_SystemNotModifiable pins the #490 hint: a 403 ExceptionResourceNoAccess
+// whose message says the system change option is "not modifiable" is a system-wide
+// configuration state, not an authorization problem. It must NOT get the generic
+// S_DEVELOP authorization hint, and a generic 403 must still get that hint.
+func TestMatchHint_SystemNotModifiable(t *testing.T) {
+	notModifiable := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "SAP system has status 'not modifiable'"}
+	if got := matchHint(notModifiable); got != systemNotModifiableHint {
+		t.Errorf("got: %s, want: %s", got, systemNotModifiableHint)
+	}
+
+	// Wrapped and bare-403 (no Type) variants must match the same way.
+	wrapped := fmt.Errorf("lock_object: %w", notModifiable)
+	if got := matchHint(wrapped); got != systemNotModifiableHint {
+		t.Errorf("wrapped error: got: %s, want: %s", got, systemNotModifiableHint)
+	}
+	bareNoType := &adt.ADTError{StatusCode: 403, Message: "SAP system has status 'not modifiable'"}
+	if got := matchHint(bareNoType); got != systemNotModifiableHint {
+		t.Errorf("no-Type 403: got: %s, want: %s", got, systemNotModifiableHint)
+	}
+
+	// A generic 403 (e.g. the "currently editing" case, or genuinely missing
+	// authorizations) must keep the existing S_DEVELOP hint.
+	generic := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "User SMITH is currently editing Z_REPORT"}
+	if got := matchHint(generic); got != forbiddenHint {
+		t.Errorf("generic 403: got: %s, want: %s", got, forbiddenHint)
+	}
+
+	// "not modifiable" alone, without "system has status", must NOT match —
+	// SE06 can close a single software component or namespace, whose message
+	// wording is unconfirmed; the narrower match avoids mislabeling that case
+	// as system-wide (see #490 review discussion).
+	componentClosed := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "Software component ZFOO has status 'not modifiable'"}
+	if got := matchHint(componentClosed); got != forbiddenHint {
+		t.Errorf("component-level not-modifiable: got: %s, want: %s (falls back to generic until wording confirmed)", got, forbiddenHint)
+	}
+
+	// A non-403 error mentioning "not modifiable" must not match the branch
+	// at all (the kind==ErrorForbidden guard).
+	non403 := &adt.ADTError{StatusCode: 500, Message: "system has status 'not modifiable'"}
+	if got := matchHint(non403); got == systemNotModifiableHint {
+		t.Errorf("non-403 must not get the not-modifiable hint, got: %s", got)
+	}
+}
+
 func TestErrorResult_WithHint(t *testing.T) {
 	err := &adt.ADTError{StatusCode: 423, Message: "User SMITH is editing Z_REPORT"}
 	result := errorResult(err)

@@ -42,10 +42,16 @@ const (
 	creationFailedHint = "Object creation failed. The most common cause is that an object with that name already exists — check with `object_exists` or `search_objects`, or choose a different name. Otherwise verify the name, package, and that this object type is supported on this system."
 	notFoundHint       = "Object not found. Check the URI spelling or use `search_objects` to find it."
 	forbiddenHint      = "Authorization error. Check that the ADT user has the required S_DEVELOP authorizations."
-	badRequestHint     = "Bad request — the server rejected the request. Check the syntax, required parameters, or the CSRF token."
-	serverErrorHint    = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
-	transportHint      = "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."
-	inactiveHint       = "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."
+	// systemNotModifiableHint: a 403 ExceptionResourceNoAccess whose message
+	// says the system change option is "not modifiable" is a system-wide
+	// configuration state, not an authorization problem — no role or profile
+	// change fixes it. Matched on message text (see matchHint), so it misses
+	// on non-English systems and degrades to forbiddenHint there. See #490.
+	systemNotModifiableHint = "The SAP system is closed for changes (system change option is 'not modifiable'). This is a system-wide setting, not an authorization or lock problem: writes to repository objects will fail until an administrator reopens it in SE06 -> System Change Option. Read-only tools are unaffected."
+	badRequestHint          = "Bad request — the server rejected the request. Check the syntax, required parameters, or the CSRF token."
+	serverErrorHint         = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
+	transportHint           = "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."
+	inactiveHint            = "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."
 	// objectLockedInTransportHint names the blocking request (parsed by adtler
 	// from the 409 message — see adt.ADTError.LockingTransport) so the caller
 	// can act on it directly. The %[1]s verb is the request ID, reused twice.
@@ -121,15 +127,20 @@ func errorResult(err error) *mcp.CallToolResult {
 //     the no-delete-handler hint instead of the generic method-not-allowed one.
 //   - A 400 that mentions a transport gets the more specific transport hint
 //     instead of the generic bad-request hint.
+//   - A 403 whose message says the system change option is closed ("not
+//     modifiable") gets a hint naming SE06 instead of the generic
+//     authorization hint — SAP reports this with the same
+//     ExceptionResourceNoAccess Type as a genuine auth error, so Type alone
+//     cannot distinguish them (#490).
 //   - Errors that carry no ADT Type or status — plain Go errors such as the
 //     ReleaseTransport "… is inactive" failure, or our own English
 //     "already exists" messages — are matched on localised text as a last
 //     resort.
 //
-// The last two bullets (and the 405 refinement) match on localised message
+// The last three bullets (and the 405 refinement) match on localised message
 // text, so they are language-fragile: they silently miss on non-English
 // systems and degrade to the kind-based hint. That tradeoff is accepted for
-// conditions with no clean Type (#406, #404).
+// conditions with no clean Type (#406, #404, #490).
 func matchHint(err error) string {
 	kind := adt.ClassifyError(err)
 	errText := strings.ToLower(err.Error())
@@ -157,6 +168,18 @@ func matchHint(err error) string {
 	if kind == adt.ErrorBadRequest && strings.Contains(errText, "transport") {
 		return transportHint
 	}
+
+	// System change option closed beats the generic forbidden/authorization
+	// hint — no auth change fixes it. Matched narrowly on "system has status"
+	// + "not modifiable" together, not "not modifiable" alone: SE06 can also
+	// close a single software component or namespace for changes, and that
+	// 403 likely uses different wording naming the component/namespace
+	// instead of "system" — text unconfirmed without a live repro, so the
+	// narrower match avoids mislabeling that case as system-wide. See #490.
+	if kind == adt.ErrorForbidden && strings.Contains(errText, "system has status") && strings.Contains(errText, "not modifiable") {
+		return systemNotModifiableHint
+	}
+
 	if hint, ok := hintByKind[kind]; ok {
 		return hint
 	}
