@@ -983,6 +983,115 @@ func TestSetIncludeSourceToolRejectsMissingInclude(t *testing.T) {
 	}
 }
 
+// TestSetIncludeSourceToolRejectsMissingSource is the #540 regression: prior
+// to the fix, a missing "source" was read via GetString("source", "") and
+// silently forwarded to adtler as "".
+func TestSetIncludeSourceToolRejectsMissingSource(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		setIncludeSourceFn: func(context.Context, string, string, string, string, string, string) (string, error) {
+			called = true
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri": testObjectURI,
+		"include":    "testclasses",
+		"etag":       "etag-1",
+		// 'source' deliberately omitted
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true when 'source' is missing")
+	}
+	if called {
+		t.Error("the call should not have reached adtler with source missing")
+	}
+}
+
+// TestSetIncludeSourceToolRejectsEmptySource covers empty and whitespace-only
+// "source" — the same foot-gun #386 targets, just without the trimming
+// requireString does for other parameters (ABAP source whitespace matters).
+func TestSetIncludeSourceToolRejectsEmptySource(t *testing.T) {
+	for _, source := range []string{"", "   "} {
+		t.Run("q_"+source, func(t *testing.T) {
+			called := false
+			mock := &mockClient{
+				setIncludeSourceFn: func(context.Context, string, string, string, string, string, string) (string, error) {
+					called = true
+					return testNewETag, nil
+				},
+			}
+			s := newTestServer(mock)
+			result := callTool(t, s, "set_include_source", map[string]interface{}{
+				"object_uri": testObjectURI,
+				"include":    "testclasses",
+				"source":     source,
+				"etag":       "etag-1",
+			})
+			if !result.IsError {
+				t.Fatalf("expected an empty source %q to be rejected", source)
+			}
+			if called {
+				t.Errorf("the call should not have reached adtler with source %q", source)
+			}
+		})
+	}
+}
+
+// TestSetIncludeSourceToolSourceReachesClientUntrimmed guards against a
+// regression to requireString (which trims): leading/trailing whitespace in
+// ABAP source is significant and must survive unchanged to the client call.
+func TestSetIncludeSourceToolSourceReachesClientUntrimmed(t *testing.T) {
+	const padded = "  * hello  "
+	var gotSource string
+	mock := &mockClient{
+		setIncludeSourceFn: func(_ context.Context, _, _, source, _, _, _ string) (string, error) {
+			gotSource = source
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"include":     "testclasses",
+		"source":      padded,
+		"etag":        "etag-1",
+		"lock_handle": testExplicitHandle,
+	})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", firstText(result))
+	}
+	if gotSource != padded {
+		t.Errorf("source reached the client as %q, want the untrimmed %q", gotSource, padded)
+	}
+}
+
+// TestSetIncludeSourceToolRejectsMissingEtag: "etag" is also mcp.Required()
+// but was read via plain GetString with no guard — the same #386/#540 gap.
+func TestSetIncludeSourceToolRejectsMissingEtag(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		setIncludeSourceFn: func(context.Context, string, string, string, string, string, string) (string, error) {
+			called = true
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri": testObjectURI,
+		"include":    "testclasses",
+		"source":     "* hello",
+		// 'etag' deliberately omitted
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true when 'etag' is missing")
+	}
+	if called {
+		t.Error("the call should not have reached adtler with etag missing")
+	}
+}
+
 func TestSetIncludeSourceToolResolvesLockFromMap(t *testing.T) {
 	// #401 / #436: with no explicit lock_handle, the handler must resolve it from
 	// the session lock map and pass it to adtler (a non-empty handle is what lets

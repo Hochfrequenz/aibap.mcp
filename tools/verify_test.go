@@ -55,7 +55,29 @@ func TestVerifySourceTool(t *testing.T) {
 		}
 	})
 
-	t.Run("empty source rejected before adtler call", func(t *testing.T) {
+	t.Run("empty or whitespace-only source rejected before adtler call", func(t *testing.T) {
+		for _, source := range []string{"", "   "} {
+			t.Run("q_"+source, func(t *testing.T) {
+				called := false
+				mock := &mockClient{
+					verifySourceFn: func(_ context.Context, _ string) (bool, []adt.SyntaxMessage, error) {
+						called = true
+						return true, nil, nil
+					},
+				}
+				s := newTestServer(mock)
+				result := callTool(t, s, "verify_source", map[string]interface{}{"source": source})
+				if !result.IsError {
+					t.Fatalf("expected error for source %q", source)
+				}
+				if called {
+					t.Errorf("VerifySource must not be called for source %q", source)
+				}
+			})
+		}
+	})
+
+	t.Run("missing source rejected before adtler call", func(t *testing.T) {
 		called := false
 		mock := &mockClient{
 			verifySourceFn: func(_ context.Context, _ string) (bool, []adt.SyntaxMessage, error) {
@@ -64,12 +86,34 @@ func TestVerifySourceTool(t *testing.T) {
 			},
 		}
 		s := newTestServer(mock)
-		result := callTool(t, s, "verify_source", map[string]interface{}{"source": ""})
+		result := callTool(t, s, "verify_source", map[string]interface{}{})
 		if !result.IsError {
-			t.Fatal("expected error for empty source")
+			t.Fatal("expected error for missing source")
 		}
 		if called {
-			t.Error("VerifySource must not be called for empty source")
+			t.Error("VerifySource must not be called when source is missing")
+		}
+	})
+
+	// TestVerifySourceTool/source_reaches_client_untrimmed guards against a
+	// regression to requireString (which trims): leading/trailing whitespace
+	// in ABAP source is significant and must survive unchanged.
+	t.Run("source reaches client untrimmed", func(t *testing.T) {
+		const padded = "  REPORT zx.  "
+		var gotSource string
+		mock := &mockClient{
+			verifySourceFn: func(_ context.Context, source string) (bool, []adt.SyntaxMessage, error) {
+				gotSource = source
+				return true, nil, nil
+			},
+		}
+		s := newTestServer(mock)
+		result := callTool(t, s, "verify_source", map[string]interface{}{"source": padded})
+		if result.IsError {
+			t.Fatalf("expected success, got error: %v", result.Content)
+		}
+		if gotSource != padded {
+			t.Errorf("source reached the client as %q, want the untrimmed %q", gotSource, padded)
 		}
 	})
 }

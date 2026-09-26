@@ -161,7 +161,21 @@ func registerSourceTools(s toolAdder, client interface {
 		if include == "" {
 			return errorResult(errMissingIncludeParam), nil
 		}
-		source := req.GetString("source", "")
+		// "source" carries ABAP source code, where leading/trailing whitespace
+		// can be significant — requireString's trimming would corrupt what's
+		// forwarded, so this uses requireRawString and checks emptiness on a
+		// trimmed copy without altering the forwarded value (see #540).
+		source, errRes := requireRawString(req, "source")
+		if errRes != nil {
+			return errRes, nil
+		}
+		if strings.TrimSpace(source) == "" {
+			return errorResult(fmt.Errorf("required parameter %q must not be empty", "source")), nil
+		}
+		etag, errRes := requireString(req, "etag")
+		if errRes != nil {
+			return errRes, nil
+		}
 		explicitHandle := req.GetString("lock_handle", "")
 		// Resolve the lock handle from the session lock map when the caller did
 		// not pass one explicitly — the tool description promises this, and
@@ -181,7 +195,6 @@ func registerSourceTools(s toolAdder, client interface {
 			return errorResult(err), nil
 		}
 		transport := req.GetString("transport", "")
-		etag := req.GetString("etag", "")
 		newETag, err := client.SetIncludeSource(ctx, uri, include, source, lh, transport, etag)
 		if err != nil {
 			// #383: only ever release a lock THIS call acquired — on ECC that's
