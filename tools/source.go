@@ -172,7 +172,16 @@ func registerSourceTools(s toolAdder, client interface {
 		if strings.TrimSpace(source) == "" {
 			return errorResult(fmt.Errorf("required parameter %q must not be empty", "source")), nil
 		}
-		etag, errRes := requireString(req, "etag")
+		// Presence-only guard: adtler's SetIncludeSource only sends If-Match
+		// when a lock handle is ABSENT (#436), and this handler always ends up
+		// with a non-empty lock handle (resolveWriteLockHandle below either
+		// resolves one or returns an error first) — so an empty etag is inert,
+		// not invalid, and a caller with none (e.g. right after
+		// create_test_include, whose result has no etag field) must still
+		// work. Only a missing/wrong-type key is a caller error worth
+		// rejecting; requireString's trim+non-empty check would wrongly break
+		// that no-etag flow.
+		etag, errRes := requireRawString(req, "etag")
 		if errRes != nil {
 			return errRes, nil
 		}
