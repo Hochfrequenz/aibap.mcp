@@ -983,6 +983,167 @@ func TestSetIncludeSourceToolRejectsMissingInclude(t *testing.T) {
 	}
 }
 
+// TestSetIncludeSourceToolRejectsMissingSource is the #540 regression: prior
+// to the fix, a missing "source" was read via GetString("source", "") and
+// silently forwarded to adtler as "". An explicit lock_handle is passed so
+// the only thing that can reject the call is the source guard itself — not
+// the unrelated "no lock tracked" error resolveWriteLockHandle would raise
+// with an empty lock map, which would make this test pass regardless of the
+// fix under test.
+func TestSetIncludeSourceToolRejectsMissingSource(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		setIncludeSourceFn: func(context.Context, string, string, string, string, string, string) (string, error) {
+			called = true
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"include":     "testclasses",
+		"etag":        "etag-1",
+		"lock_handle": testExplicitHandle,
+		// 'source' deliberately omitted
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true when 'source' is missing")
+	}
+	if called {
+		t.Error("the call should not have reached adtler with source missing")
+	}
+	if text := firstText(result); !strings.Contains(text, "\"source\"") {
+		t.Errorf("error message should name the missing parameter %q; got: %s", "source", text)
+	}
+}
+
+// TestSetIncludeSourceToolRejectsEmptySource covers empty and whitespace-only
+// "source" — the same foot-gun #386 targets, just without the trimming
+// requireString does for other parameters (ABAP source whitespace matters).
+// See TestSetIncludeSourceToolRejectsMissingSource for why lock_handle is set.
+func TestSetIncludeSourceToolRejectsEmptySource(t *testing.T) {
+	for _, source := range []string{"", "   "} {
+		t.Run("q_"+source, func(t *testing.T) {
+			called := false
+			mock := &mockClient{
+				setIncludeSourceFn: func(context.Context, string, string, string, string, string, string) (string, error) {
+					called = true
+					return testNewETag, nil
+				},
+			}
+			s := newTestServer(mock)
+			result := callTool(t, s, "set_include_source", map[string]interface{}{
+				"object_uri":  testObjectURI,
+				"include":     "testclasses",
+				"source":      source,
+				"etag":        "etag-1",
+				"lock_handle": testExplicitHandle,
+			})
+			if !result.IsError {
+				t.Fatalf("expected an empty source %q to be rejected", source)
+			}
+			if called {
+				t.Errorf("the call should not have reached adtler with source %q", source)
+			}
+		})
+	}
+}
+
+// TestSetIncludeSourceToolSourceReachesClientUntrimmed guards against a
+// regression to requireString (which trims): leading/trailing whitespace in
+// ABAP source is significant and must survive unchanged to the client call.
+func TestSetIncludeSourceToolSourceReachesClientUntrimmed(t *testing.T) {
+	const padded = "  * hello  "
+	var gotSource string
+	mock := &mockClient{
+		setIncludeSourceFn: func(_ context.Context, _, _, source, _, _, _ string) (string, error) {
+			gotSource = source
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"include":     "testclasses",
+		"source":      padded,
+		"etag":        "etag-1",
+		"lock_handle": testExplicitHandle,
+	})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", firstText(result))
+	}
+	if gotSource != padded {
+		t.Errorf("source reached the client as %q, want the untrimmed %q", gotSource, padded)
+	}
+}
+
+// TestSetIncludeSourceToolRejectsMissingEtag: "etag" is also mcp.Required()
+// but was read via plain GetString with no guard — the same #386/#540 gap.
+// An explicit lock_handle rules out the unrelated "no lock tracked" rejection
+// (see TestSetIncludeSourceToolRejectsMissingSource).
+func TestSetIncludeSourceToolRejectsMissingEtag(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		setIncludeSourceFn: func(context.Context, string, string, string, string, string, string) (string, error) {
+			called = true
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"include":     "testclasses",
+		"source":      "* hello",
+		"lock_handle": testExplicitHandle,
+		// 'etag' deliberately omitted
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true when 'etag' is missing")
+	}
+	if called {
+		t.Error("the call should not have reached adtler with etag missing")
+	}
+	if text := firstText(result); !strings.Contains(text, "\"etag\"") {
+		t.Errorf("error message should name the missing parameter %q; got: %s", "etag", text)
+	}
+}
+
+// TestSetIncludeSourceToolAllowsEmptyEtag locks in a deliberate choice: an
+// explicitly empty "etag" is NOT rejected, unlike a missing one. adtler's
+// SetIncludeSource only sends If-Match when the lock handle is absent (#436),
+// and this handler always resolves a non-empty lock handle before reaching
+// adtler — so an empty etag is inert here, and a caller with no ETag to send
+// (e.g. right after create_test_include, whose result has no etag field)
+// must still be able to call this tool.
+func TestSetIncludeSourceToolAllowsEmptyEtag(t *testing.T) {
+	called := false
+	var gotETag string
+	mock := &mockClient{
+		setIncludeSourceFn: func(_ context.Context, _, _, _, _, _, etag string) (string, error) {
+			called = true
+			gotETag = etag
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"include":     "testclasses",
+		"source":      "* hello",
+		"etag":        "",
+		"lock_handle": testExplicitHandle,
+	})
+	if result.IsError {
+		t.Fatalf("expected success with an empty etag, got error: %s", firstText(result))
+	}
+	if !called {
+		t.Fatal("expected the call to reach adtler with an empty etag")
+	}
+	if gotETag != "" {
+		t.Errorf("etag: got %q, want empty", gotETag)
+	}
+}
+
 func TestSetIncludeSourceToolResolvesLockFromMap(t *testing.T) {
 	// #401 / #436: with no explicit lock_handle, the handler must resolve it from
 	// the session lock map and pass it to adtler (a non-empty handle is what lets
