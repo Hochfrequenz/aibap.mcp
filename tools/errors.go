@@ -127,15 +127,20 @@ func errorResult(err error) *mcp.CallToolResult {
 //     the no-delete-handler hint instead of the generic method-not-allowed one.
 //   - A 400 that mentions a transport gets the more specific transport hint
 //     instead of the generic bad-request hint.
+//   - A 403 whose message says the system change option is closed ("not
+//     modifiable") gets a hint naming SE06 instead of the generic
+//     authorization hint — SAP reports this with the same
+//     ExceptionResourceNoAccess Type as a genuine auth error, so Type alone
+//     cannot distinguish them (#490).
 //   - Errors that carry no ADT Type or status — plain Go errors such as the
 //     ReleaseTransport "… is inactive" failure, or our own English
 //     "already exists" messages — are matched on localised text as a last
 //     resort.
 //
-// The last two bullets (and the 405 refinement) match on localised message
+// The last three bullets (and the 405 refinement) match on localised message
 // text, so they are language-fragile: they silently miss on non-English
 // systems and degrade to the kind-based hint. That tradeoff is accepted for
-// conditions with no clean Type (#406, #404).
+// conditions with no clean Type (#406, #404, #490).
 func matchHint(err error) string {
 	kind := adt.ClassifyError(err)
 	errText := strings.ToLower(err.Error())
@@ -165,10 +170,16 @@ func matchHint(err error) string {
 	}
 
 	// System change option closed beats the generic forbidden/authorization
-	// hint — no auth change fixes it. See #490.
-	if kind == adt.ErrorForbidden && strings.Contains(errText, "not modifiable") {
+	// hint — no auth change fixes it. Matched narrowly on "system has status"
+	// + "not modifiable" together, not "not modifiable" alone: SE06 can also
+	// close a single software component or namespace for changes, and that
+	// 403 likely uses different wording naming the component/namespace
+	// instead of "system" — text unconfirmed without a live repro, so the
+	// narrower match avoids mislabeling that case as system-wide. See #490.
+	if kind == adt.ErrorForbidden && strings.Contains(errText, "system has status") && strings.Contains(errText, "not modifiable") {
 		return systemNotModifiableHint
 	}
+
 	if hint, ok := hintByKind[kind]; ok {
 		return hint
 	}
