@@ -31,41 +31,45 @@ const (
 
 // mockClient is a test double for adt.Client.
 type mockClient struct {
-	getSourceFn           func(ctx context.Context, uri string) (*adt.SourceResult, error)
-	setSourceFn           func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
-	activateObjectsFn     func(ctx context.Context, uris []string) (*adt.ActivationResult, error)
-	searchFn              func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
-	whereUsedFn           func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
-	browsePackageFn       func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
-	getObjectFn           func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
-	syntaxCheckFn         func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
-	verifySourceFn        func(ctx context.Context, source string) (bool, []adt.SyntaxMessage, error)
-	getObjectDepsFn       func(ctx context.Context, objType, objName string, maxResults, maxDepth int) (*adt.DependencyResult, error)
-	runTestsFn            func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
-	getTransportFn        func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
-	addTransportFn        func(ctx context.Context, uri, transport string) error
-	lockObjectFn          func(ctx context.Context, uri string) (string, error)
-	unlockObjectFn        func(ctx context.Context, uri, lockHandle string) error
-	prettyPrintFn         func(ctx context.Context, source string) (string, error)
-	createObjectFn        func(ctx context.Context, objectType, name, pkg, desc, transport string) error
-	createPackageFn       func(ctx context.Context, name, desc, responsible, softwareComponent, transportLayer, transport string) error
-	deleteObjectFn        func(ctx context.Context, uri, lockHandle, transport string) error
-	getCompletionsFn      func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
-	createTransportFn     func(ctx context.Context, category, target, description, devClass string) (string, error)
-	deleteTransportFn     func(ctx context.Context, transport string) error
-	releaseTransportFn    func(ctx context.Context, transport string) error
-	renameFn              func(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error)
-	removeFromTransportFn func(ctx context.Context, taskNr, parentTr, pgmid, objType, objName, wbType, position string) error
-	getTransportObjectsFn func(ctx context.Context, transport string) ([]adt.TransportObject, error)
-	getTransportInfoFn    func(ctx context.Context, transport string) (*adt.TransportRequest, error)
-	rollbackTransportFn   func(ctx context.Context, transport string) (*adt.RollbackResult, error)
-	runQueryFn            func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
-	setTextElementsFn     func(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error
-	createTestIncludeFn   func(ctx context.Context, uri, lockHandle, transport string) error
-	setIncludeSourceFn    func(ctx context.Context, uri, include, source, lockHandle, transport, etag string) (string, error)
-	runClassFn            func(ctx context.Context, className string) (*adt.ClassRunResult, error)
-	logoutFn              func(ctx context.Context) error
-	systemFlavorFn        func(ctx context.Context) (adt.SystemFlavor, error)
+	getSourceFn            func(ctx context.Context, uri string) (*adt.SourceResult, error)
+	setSourceFn            func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
+	activateObjectsFn      func(ctx context.Context, uris []string) (*adt.ActivationResult, error)
+	searchFn               func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
+	whereUsedFn            func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
+	browsePackageFn        func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
+	getObjectFn            func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
+	syntaxCheckFn          func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
+	verifySourceFn         func(ctx context.Context, source string) (bool, []adt.SyntaxMessage, error)
+	getObjectDepsFn        func(ctx context.Context, objType, objName string, maxResults, maxDepth int) (*adt.DependencyResult, error)
+	runTestsFn             func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
+	getTransportFn         func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
+	addTransportFn         func(ctx context.Context, uri, transport string) error
+	lockObjectFn           func(ctx context.Context, uri string) (string, error)
+	unlockObjectFn         func(ctx context.Context, uri, lockHandle string) error
+	prettyPrintFn          func(ctx context.Context, source string) (string, error)
+	createObjectFn         func(ctx context.Context, objectType, name, pkg, desc, transport string) error
+	createPackageFn        func(ctx context.Context, name, desc, responsible, softwareComponent, transportLayer, transport string) error
+	deleteObjectFn         func(ctx context.Context, uri, lockHandle, transport string) error
+	getCompletionsFn       func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
+	createTransportFn      func(ctx context.Context, category, target, description, devClass string) (string, error)
+	deleteTransportFn      func(ctx context.Context, transport string) error
+	releaseTransportFn     func(ctx context.Context, transport string) error
+	renameFn               func(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error)
+	removeFromTransportFn  func(ctx context.Context, taskNr, parentTr, pgmid, objType, objName, wbType, position string) error
+	getTransportObjectsFn  func(ctx context.Context, transport string) ([]adt.TransportObject, error)
+	getTransportInfoFn     func(ctx context.Context, transport string) (*adt.TransportRequest, error)
+	rollbackTransportFn    func(ctx context.Context, transport string) (*adt.RollbackResult, error)
+	runQueryFn             func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
+	setTextElementsFn      func(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error
+	createTestIncludeFn    func(ctx context.Context, uri, lockHandle, transport string) error
+	setIncludeSourceFn     func(ctx context.Context, uri, include, source, lockHandle, transport, etag string) (string, error)
+	runClassFn             func(ctx context.Context, className string) (*adt.ClassRunResult, error)
+	logoutFn               func(ctx context.Context) error
+	systemFlavorFn         func(ctx context.Context) (adt.SystemFlavor, error)
+	getMessageClassFn      func(ctx context.Context, name string) (*adt.MessageClassInfo, error)
+	searchMessagesFn       func(ctx context.Context, query string, maxResults int) ([]adt.MessageSearchResult, error)
+	setMessagesFn          func(ctx context.Context, name, etag string, messages []adt.Message) error
+	navigateToDefinitionFn func(ctx context.Context, uri, source string) (string, error)
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -328,14 +332,28 @@ func (m *mockClient) SetTextElements(ctx context.Context, uri string, symbols []
 	}
 	return nil
 }
-func (m *mockClient) GetMessageClass(context.Context, string) (*adt.MessageClassInfo, error) {
+func (m *mockClient) GetMessageClass(ctx context.Context, name string) (*adt.MessageClassInfo, error) {
+	if m.getMessageClassFn != nil {
+		return m.getMessageClassFn(ctx, name)
+	}
 	return &adt.MessageClassInfo{}, nil
 }
-func (m *mockClient) SearchMessages(context.Context, string, int) ([]adt.MessageSearchResult, error) {
+func (m *mockClient) SearchMessages(ctx context.Context, query string, maxResults int) ([]adt.MessageSearchResult, error) {
+	if m.searchMessagesFn != nil {
+		return m.searchMessagesFn(ctx, query, maxResults)
+	}
 	return nil, nil
 }
-func (m *mockClient) SetMessages(context.Context, string, string, []adt.Message) error { return nil }
-func (m *mockClient) NavigateToDefinition(context.Context, string, string) (string, error) {
+func (m *mockClient) SetMessages(ctx context.Context, name, etag string, messages []adt.Message) error {
+	if m.setMessagesFn != nil {
+		return m.setMessagesFn(ctx, name, etag, messages)
+	}
+	return nil
+}
+func (m *mockClient) NavigateToDefinition(ctx context.Context, uri, source string) (string, error) {
+	if m.navigateToDefinitionFn != nil {
+		return m.navigateToDefinitionFn(ctx, uri, source)
+	}
 	return "", nil
 }
 func (m *mockClient) Rename(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error) {
@@ -962,6 +980,167 @@ func TestSetIncludeSourceToolRejectsMissingInclude(t *testing.T) {
 	text := firstText(result)
 	if !strings.Contains(text, "'include'") {
 		t.Errorf("error message should name the missing parameter 'include'; got: %s", text)
+	}
+}
+
+// TestSetIncludeSourceToolRejectsMissingSource is the #540 regression: prior
+// to the fix, a missing "source" was read via GetString("source", "") and
+// silently forwarded to adtler as "". An explicit lock_handle is passed so
+// the only thing that can reject the call is the source guard itself — not
+// the unrelated "no lock tracked" error resolveWriteLockHandle would raise
+// with an empty lock map, which would make this test pass regardless of the
+// fix under test.
+func TestSetIncludeSourceToolRejectsMissingSource(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		setIncludeSourceFn: func(context.Context, string, string, string, string, string, string) (string, error) {
+			called = true
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"include":     "testclasses",
+		"etag":        "etag-1",
+		"lock_handle": testExplicitHandle,
+		// 'source' deliberately omitted
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true when 'source' is missing")
+	}
+	if called {
+		t.Error("the call should not have reached adtler with source missing")
+	}
+	if text := firstText(result); !strings.Contains(text, "\"source\"") {
+		t.Errorf("error message should name the missing parameter %q; got: %s", "source", text)
+	}
+}
+
+// TestSetIncludeSourceToolRejectsEmptySource covers empty and whitespace-only
+// "source" — the same foot-gun #386 targets, just without the trimming
+// requireString does for other parameters (ABAP source whitespace matters).
+// See TestSetIncludeSourceToolRejectsMissingSource for why lock_handle is set.
+func TestSetIncludeSourceToolRejectsEmptySource(t *testing.T) {
+	for _, source := range []string{"", "   "} {
+		t.Run("q_"+source, func(t *testing.T) {
+			called := false
+			mock := &mockClient{
+				setIncludeSourceFn: func(context.Context, string, string, string, string, string, string) (string, error) {
+					called = true
+					return testNewETag, nil
+				},
+			}
+			s := newTestServer(mock)
+			result := callTool(t, s, "set_include_source", map[string]interface{}{
+				"object_uri":  testObjectURI,
+				"include":     "testclasses",
+				"source":      source,
+				"etag":        "etag-1",
+				"lock_handle": testExplicitHandle,
+			})
+			if !result.IsError {
+				t.Fatalf("expected an empty source %q to be rejected", source)
+			}
+			if called {
+				t.Errorf("the call should not have reached adtler with source %q", source)
+			}
+		})
+	}
+}
+
+// TestSetIncludeSourceToolSourceReachesClientUntrimmed guards against a
+// regression to requireString (which trims): leading/trailing whitespace in
+// ABAP source is significant and must survive unchanged to the client call.
+func TestSetIncludeSourceToolSourceReachesClientUntrimmed(t *testing.T) {
+	const padded = "  * hello  "
+	var gotSource string
+	mock := &mockClient{
+		setIncludeSourceFn: func(_ context.Context, _, _, source, _, _, _ string) (string, error) {
+			gotSource = source
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"include":     "testclasses",
+		"source":      padded,
+		"etag":        "etag-1",
+		"lock_handle": testExplicitHandle,
+	})
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", firstText(result))
+	}
+	if gotSource != padded {
+		t.Errorf("source reached the client as %q, want the untrimmed %q", gotSource, padded)
+	}
+}
+
+// TestSetIncludeSourceToolRejectsMissingEtag: "etag" is also mcp.Required()
+// but was read via plain GetString with no guard — the same #386/#540 gap.
+// An explicit lock_handle rules out the unrelated "no lock tracked" rejection
+// (see TestSetIncludeSourceToolRejectsMissingSource).
+func TestSetIncludeSourceToolRejectsMissingEtag(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		setIncludeSourceFn: func(context.Context, string, string, string, string, string, string) (string, error) {
+			called = true
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"include":     "testclasses",
+		"source":      "* hello",
+		"lock_handle": testExplicitHandle,
+		// 'etag' deliberately omitted
+	})
+	if !result.IsError {
+		t.Fatal("expected IsError=true when 'etag' is missing")
+	}
+	if called {
+		t.Error("the call should not have reached adtler with etag missing")
+	}
+	if text := firstText(result); !strings.Contains(text, "\"etag\"") {
+		t.Errorf("error message should name the missing parameter %q; got: %s", "etag", text)
+	}
+}
+
+// TestSetIncludeSourceToolAllowsEmptyEtag locks in a deliberate choice: an
+// explicitly empty "etag" is NOT rejected, unlike a missing one. adtler's
+// SetIncludeSource only sends If-Match when the lock handle is absent (#436),
+// and this handler always resolves a non-empty lock handle before reaching
+// adtler — so an empty etag is inert here, and a caller with no ETag to send
+// (e.g. right after create_test_include, whose result has no etag field)
+// must still be able to call this tool.
+func TestSetIncludeSourceToolAllowsEmptyEtag(t *testing.T) {
+	called := false
+	var gotETag string
+	mock := &mockClient{
+		setIncludeSourceFn: func(_ context.Context, _, _, _, _, _, etag string) (string, error) {
+			called = true
+			gotETag = etag
+			return testNewETag, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "set_include_source", map[string]interface{}{
+		"object_uri":  testObjectURI,
+		"include":     "testclasses",
+		"source":      "* hello",
+		"etag":        "",
+		"lock_handle": testExplicitHandle,
+	})
+	if result.IsError {
+		t.Fatalf("expected success with an empty etag, got error: %s", firstText(result))
+	}
+	if !called {
+		t.Fatal("expected the call to reach adtler with an empty etag")
+	}
+	if gotETag != "" {
+		t.Errorf("etag: got %q, want empty", gotETag)
 	}
 }
 

@@ -23,12 +23,15 @@ func registerRefactoringTools(s toolAdder, client adt.RefactoringClient) {
 		mcp.WithString("transport", mcp.Description("Transport request number (required for non-local objects)")),
 		mcp.WithOutputSchema[adt.RenameResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString("source_uri", "")
-		newName := req.GetString("new_name", "")
-		transport := req.GetString("transport", "")
-		if uri == "" || newName == "" {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "source_uri and new_name are required"}), nil
+		uri, errRes := requireString(req, "source_uri")
+		if errRes != nil {
+			return errRes, nil
 		}
+		newName, errRes := requireString(req, "new_name")
+		if errRes != nil {
+			return errRes, nil
+		}
+		transport := req.GetString("transport", "")
 		result, err := client.Rename(ctx, uri, newName, transport)
 		if err != nil {
 			return errorResult(err), nil

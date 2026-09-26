@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -28,9 +30,16 @@ func registerVerifyTools(s toolAdder, client adt.Client) {
 		mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code to check")),
 		mcp.WithOutputSchema[VerifyResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		source := req.GetString("source", "")
-		if source == "" {
-			return errorResult(&adt.ADTError{StatusCode: 400, Message: "source must not be empty"}), nil
+		// "source" carries ABAP source code, where leading/trailing whitespace
+		// can be significant — requireString's trimming would corrupt what's
+		// forwarded, so this uses requireRawString and checks emptiness on a
+		// trimmed copy without altering the forwarded value (see #540).
+		source, errRes := requireRawString(req, "source")
+		if errRes != nil {
+			return errRes, nil
+		}
+		if strings.TrimSpace(source) == "" {
+			return errorResult(fmt.Errorf("required parameter %q must not be empty", "source")), nil
 		}
 
 		valid, msgs, err := client.VerifySource(ctx, source)

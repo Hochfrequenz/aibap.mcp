@@ -20,7 +20,10 @@ func registerSystemTools(s toolAdder, selector SystemSelector) {
 		),
 		mcp.WithOutputSchema[SelectSystemResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		name := req.GetString("system", "")
+		name, errRes := requireString(req, "system")
+		if errRes != nil {
+			return errRes, nil
+		}
 		msg, err := selector.Select(name)
 		if err != nil {
 			return errorResult(err), nil

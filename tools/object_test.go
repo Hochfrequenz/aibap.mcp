@@ -12,6 +12,46 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// TestCreateObject_MissingRequiredParams verifies that an omitted required
+// parameter is rejected locally with a clear message instead of forwarding an
+// empty string to adtler. See #386.
+func TestCreateObject_MissingRequiredParams(t *testing.T) {
+	fullArgs := map[string]interface{}{
+		"object_type": "PROG",
+		"name":        "ZTEST_PROG",
+		"package":     "$TMP",
+		"description": "Test",
+	}
+	for _, missing := range []string{"object_type", "name", "package", "description"} {
+		t.Run(missing, func(t *testing.T) {
+			called := false
+			client := &mockClient{
+				createObjectFn: func(_ context.Context, _, _, _, _, _ string) error {
+					called = true
+					return nil
+				},
+			}
+			args := map[string]interface{}{}
+			for k, v := range fullArgs {
+				if k != missing {
+					args[k] = v
+				}
+			}
+			s := newTestServer(client)
+			result := callTool(t, s, "create_object", args)
+			if !result.IsError {
+				t.Fatalf("expected a missing %q to be rejected", missing)
+			}
+			if called {
+				t.Errorf("the call should not have reached adtler with %q missing", missing)
+			}
+			if text := result.Content[0].(mcp.TextContent).Text; !strings.Contains(text, missing) {
+				t.Errorf("error text should name the missing parameter %q, got: %s", missing, text)
+			}
+		})
+	}
+}
+
 func TestCreateObject_DDIC_404_NoFallback_ReturnsError(t *testing.T) {
 	client := &mockClient{
 		createObjectFn: func(_ context.Context, _, _, _, _, _ string) error {

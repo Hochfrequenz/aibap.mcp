@@ -48,6 +48,41 @@ func newTestServerWithFallback(client adt.Client, fallback tools.BlackMagicClien
 	return s
 }
 
+// TestCreateTransport_MissingRequiredParams verifies that an omitted required
+// parameter is rejected locally with a clear message instead of forwarding an
+// empty string to adtler. See #386.
+func TestCreateTransport_MissingRequiredParams(t *testing.T) {
+	fullArgs := map[string]interface{}{
+		"category":    "K",
+		"description": "Test",
+	}
+	for _, missing := range []string{"category", "description"} {
+		t.Run(missing, func(t *testing.T) {
+			called := false
+			client := &mockClient{
+				createTransportFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+					called = true
+					return testTransportNum, nil
+				},
+			}
+			args := map[string]interface{}{}
+			for k, v := range fullArgs {
+				if k != missing {
+					args[k] = v
+				}
+			}
+			s := newTestServer(client)
+			result := callTool(t, s, "create_transport", args)
+			if !result.IsError {
+				t.Fatalf("expected a missing %q to be rejected", missing)
+			}
+			if called {
+				t.Errorf("the call should not have reached adtler with %q missing", missing)
+			}
+		})
+	}
+}
+
 func TestCreateTransport_CategoryW_NoFallback_ReturnsError(t *testing.T) {
 	s := newTestServer(&mockClient{})
 	result := callTool(t, s, "create_transport", map[string]interface{}{
