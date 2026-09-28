@@ -367,6 +367,91 @@ func TestMatchHint_NoDeleteHandler(t *testing.T) {
 	}
 }
 
+// TestMatchHint_SystemNotModifiable pins the #490 hint: a 403 ExceptionResourceNoAccess
+// whose message says the system change option is "not modifiable" is a system-wide
+// configuration state, not an authorization problem. It must NOT get the generic
+// S_DEVELOP authorization hint, and a generic 403 must still get that hint.
+func TestMatchHint_SystemNotModifiable(t *testing.T) {
+	notModifiable := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "SAP system has status 'not modifiable'"}
+	if got := matchHint(notModifiable); got != systemNotModifiableHint {
+		t.Errorf("got: %s, want: %s", got, systemNotModifiableHint)
+	}
+
+	// Wrapped and bare-403 (no Type) variants must match the same way.
+	wrapped := fmt.Errorf("lock_object: %w", notModifiable)
+	if got := matchHint(wrapped); got != systemNotModifiableHint {
+		t.Errorf("wrapped error: got: %s, want: %s", got, systemNotModifiableHint)
+	}
+	bareNoType := &adt.ADTError{StatusCode: 403, Message: "SAP system has status 'not modifiable'"}
+	if got := matchHint(bareNoType); got != systemNotModifiableHint {
+		t.Errorf("no-Type 403: got: %s, want: %s", got, systemNotModifiableHint)
+	}
+
+	// A generic 403 (e.g. the "currently editing" case, or genuinely missing
+	// authorizations) must keep the existing S_DEVELOP hint.
+	generic := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "User SMITH is currently editing Z_REPORT"}
+	if got := matchHint(generic); got != forbiddenHint {
+		t.Errorf("generic 403: got: %s, want: %s", got, forbiddenHint)
+	}
+
+	// "not modifiable" alone, without "system has status", must NOT match —
+	// SE06 can close a single software component or namespace, whose message
+	// wording is unconfirmed; the narrower match avoids mislabeling that case
+	// as system-wide (see #490 review discussion).
+	componentClosed := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "Software component ZFOO has status 'not modifiable'"}
+	if got := matchHint(componentClosed); got != forbiddenHint {
+		t.Errorf("component-level not-modifiable: got: %s, want: %s (falls back to generic until wording confirmed)", got, forbiddenHint)
+	}
+
+	// A non-403 error mentioning "not modifiable" must not match the branch
+	// at all (the kind==ErrorForbidden guard).
+	non403 := &adt.ADTError{StatusCode: 500, Message: "system has status 'not modifiable'"}
+	if got := matchHint(non403); got == systemNotModifiableHint {
+		t.Errorf("non-403 must not get the not-modifiable hint, got: %s", got)
+	}
+
+	// German logon language: the exact text observed in the #490 live repro
+	// against an ECC system (message class TK, number 102), no T100KEY in the
+	// body (ECC's sparser-body pattern, #378).
+	german := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: `SAP-System hat den Status "nicht änderbar"`}
+	if got := matchHint(german); got != systemNotModifiableHint {
+		t.Errorf("German text: got: %s, want: %s", got, systemNotModifiableHint)
+	}
+
+	// Structural T100 key match: fires even when the message text is neither
+	// of the two confirmed languages, as long as the key is present.
+	structural := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "Some other-language rendering", T100KeyID: "TK", T100KeyNo: "102"}
+	if got := matchHint(structural); got != systemNotModifiableHint {
+		t.Errorf("structural T100 key: got: %s, want: %s", got, systemNotModifiableHint)
+	}
+
+	// German component-level negative, mirroring componentClosed above: the
+	// German text fallback must require the "sap-system hat den status"
+	// prefix too, not "nicht änderbar" alone.
+	germanComponentClosed := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: `Softwarekomponente ZFOO hat den Status "nicht änderbar"`}
+	if got := matchHint(germanComponentClosed); got != forbiddenHint {
+		t.Errorf("German component-level not-modifiable: got: %s, want: %s", got, forbiddenHint)
+	}
+
+	// Near-miss T100 key: both halves must match, not just one.
+	nearMissKey := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "Some other-language rendering", T100KeyID: "TK", T100KeyNo: "103"}
+	if got := matchHint(nearMissKey); got != forbiddenHint {
+		t.Errorf("near-miss T100 key: got: %s, want: %s", got, forbiddenHint)
+	}
+
+	// EU/510 must win precedence even if the message text also happens to
+	// contain the not-modifiable wording — the structural EU/510 check in
+	// matchHint runs first.
+	euWithNotModifiableText := &adt.ADTError{
+		StatusCode: 403, Type: "ExceptionResourceNoAccess",
+		Message:   `User SMITH is currently editing Z_REPORT (system has status 'not modifiable')`,
+		T100KeyID: "EU", T100KeyNo: "510", T100Vars: [4]string{"SMITH", "Z_REPORT", "", ""},
+	}
+	if got := matchHint(euWithNotModifiableText); got != fmt.Sprintf(ownAccessConflictHintFmt, "SMITH") {
+		t.Errorf("EU/510 precedence: got: %s, want: %s", got, fmt.Sprintf(ownAccessConflictHintFmt, "SMITH"))
+	}
+}
+
 func TestErrorResult_WithHint(t *testing.T) {
 	err := &adt.ADTError{StatusCode: 423, Message: "User SMITH is editing Z_REPORT"}
 	result := errorResult(err)
