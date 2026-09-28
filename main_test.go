@@ -1,13 +1,18 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Hochfrequenz/aibap.mcp/tools"
 	"github.com/mark3labs/mcp-go/server"
@@ -273,6 +278,127 @@ func listedTools(t *testing.T, s *server.MCPServer) (all, annotated []string) {
 	sort.Strings(all)
 	sort.Strings(annotated)
 	return all, annotated
+}
+
+// TestStdioSurvivesSubscriptionsListen covers #543: mcp-go v1.1.0's stdio
+// transport served every non-tools/call method synchronously on the single
+// stdin read loop, including subscriptions/listen — whose handler is
+// documented to block until the client cancels or disconnects. A modern
+// (2026-07-28) client that opens subscriptions/listen before calling
+// tools/list therefore wedged the whole connection: tools/list never got a
+// turn on the read loop and timed out client-side. v1.1.1 moved every
+// request onto its own goroutine, so the read loop stays free. This test
+// reproduces the client sequence from the issue directly against
+// buildServer() over a real stdio pipe — it must fail (hang past the
+// deadline) on mcp-go v1.1.0 and pass on v1.1.1+.
+func TestStdioSurvivesSubscriptionsListen(t *testing.T) {
+	s := buildServer(nil, nil, tools.DefaultGroups(), nil, tools.ConsentStrict, "")
+	stdioServer := server.NewStdioServer(s)
+	// Silence the "closed pipe" write error logged once cleanup tears the
+	// pipes down — expected noise, not a test failure.
+	stdioServer.SetErrorLogger(log.New(io.Discard, "", 0))
+
+	stdinR, stdinW := io.Pipe()
+	stdoutR, stdoutW := io.Pipe()
+
+	ctx, cancel := context.WithCancel(t.Context())
+
+	done := make(chan error, 1)
+	go func() { done <- stdioServer.Listen(ctx, stdinR, stdoutW) }()
+
+	// stop unblocks the scanner goroutine's channel send below on teardown,
+	// even if it's sitting on a full (or now-unread) lines channel — a Fatalf
+	// from awaitID must not leak that goroutine past the end of the test.
+	stop := make(chan struct{})
+	t.Cleanup(func() {
+		cancel()
+		close(stop)
+		_ = stdinW.Close()
+		_ = stdoutW.Close()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("stdioServer.Listen did not return after cancel")
+		}
+	})
+
+	lines := make(chan map[string]any, 16)
+	go func() {
+		scanner := bufio.NewScanner(stdoutR)
+		scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+		for scanner.Scan() {
+			var msg map[string]any
+			if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
+				continue
+			}
+			select {
+			case lines <- msg:
+			case <-stop:
+				return
+			}
+		}
+		close(lines)
+	}()
+
+	writeRequest := func(id int, method string, params map[string]any) {
+		t.Helper()
+		raw, err := json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      id,
+			"method":  method,
+			"params":  params,
+		})
+		if err != nil {
+			t.Fatalf("marshal %s request: %v", method, err)
+		}
+		if _, err := stdinW.Write(append(raw, '\n')); err != nil {
+			t.Fatalf("write %s request: %v", method, err)
+		}
+	}
+	awaitID := func(wantID float64, timeout time.Duration) map[string]any {
+		t.Helper()
+		deadline := time.After(timeout)
+		for {
+			select {
+			case msg, ok := <-lines:
+				if !ok {
+					t.Fatalf("stdout closed before id=%v arrived", wantID)
+				}
+				if id, ok := msg["id"].(float64); ok && id == wantID {
+					return msg
+				}
+			case <-deadline:
+				t.Fatalf("timed out waiting for id=%v response (subscriptions/listen wedged the read loop, see #543)", wantID)
+			}
+		}
+	}
+
+	// Protocol version 2026-07-28 removed the initialize handshake: every
+	// request carries its own protocol version and client capabilities in
+	// _meta instead (SEP-2575). This is what makes the connection "modern"
+	// and eligible for subscriptions/listen.
+	modernMeta := map[string]any{
+		"io.modelcontextprotocol/protocolVersion":    "2026-07-28",
+		"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+	}
+
+	// Open the long-lived stream first, exactly as the modern-protocol client
+	// in the issue does — its handler blocks until this connection closes.
+	writeRequest(2, "subscriptions/listen", map[string]any{
+		"notifications": map[string]any{"toolsListChanged": true},
+		"_meta":         modernMeta,
+	})
+
+	// tools/list must still get served promptly even though id=2 is still open.
+	writeRequest(3, "tools/list", map[string]any{"_meta": modernMeta})
+	resp := awaitID(3, 5*time.Second)
+	result, ok := resp["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("tools/list response has no result: %v", resp)
+	}
+	if toolsList, ok := result["tools"].([]any); !ok || len(toolsList) == 0 {
+		t.Fatalf("tools/list returned no tools: %v", resp)
+	}
 }
 
 // serverInstructions must only advertise the debugger capability when the
