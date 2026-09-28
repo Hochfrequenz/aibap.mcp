@@ -294,18 +294,33 @@ func listedTools(t *testing.T, s *server.MCPServer) (all, annotated []string) {
 func TestStdioSurvivesSubscriptionsListen(t *testing.T) {
 	s := buildServer(nil, nil, tools.DefaultGroups(), nil, tools.ConsentStrict, "")
 	stdioServer := server.NewStdioServer(s)
-	// Silence the "closed pipe" write error logged once the test tears the
-	// pipes down after cancel() — expected noise, not a test failure.
+	// Silence the "closed pipe" write error logged once cleanup tears the
+	// pipes down — expected noise, not a test failure.
 	stdioServer.SetErrorLogger(log.New(io.Discard, "", 0))
 
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
 
 	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
 
 	done := make(chan error, 1)
 	go func() { done <- stdioServer.Listen(ctx, stdinR, stdoutW) }()
+
+	// stop unblocks the scanner goroutine's channel send below on teardown,
+	// even if it's sitting on a full (or now-unread) lines channel — a Fatalf
+	// from awaitID must not leak that goroutine past the end of the test.
+	stop := make(chan struct{})
+	t.Cleanup(func() {
+		cancel()
+		close(stop)
+		_ = stdinW.Close()
+		_ = stdoutW.Close()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("stdioServer.Listen did not return after cancel")
+		}
+	})
 
 	lines := make(chan map[string]any, 16)
 	go func() {
@@ -313,17 +328,31 @@ func TestStdioSurvivesSubscriptionsListen(t *testing.T) {
 		scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 		for scanner.Scan() {
 			var msg map[string]any
-			if err := json.Unmarshal(scanner.Bytes(), &msg); err == nil {
-				lines <- msg
+			if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
+				continue
+			}
+			select {
+			case lines <- msg:
+			case <-stop:
+				return
 			}
 		}
 		close(lines)
 	}()
 
-	writeLine := func(raw string) {
+	writeRequest := func(id int, method string, params map[string]any) {
 		t.Helper()
-		if _, err := io.WriteString(stdinW, raw+"\n"); err != nil {
-			t.Fatalf("write %s: %v", raw, err)
+		raw, err := json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      id,
+			"method":  method,
+			"params":  params,
+		})
+		if err != nil {
+			t.Fatalf("marshal %s request: %v", method, err)
+		}
+		if _, err := stdinW.Write(append(raw, '\n')); err != nil {
+			t.Fatalf("write %s request: %v", method, err)
 		}
 	}
 	awaitID := func(wantID float64, timeout time.Duration) map[string]any {
@@ -348,14 +377,20 @@ func TestStdioSurvivesSubscriptionsListen(t *testing.T) {
 	// request carries its own protocol version and client capabilities in
 	// _meta instead (SEP-2575). This is what makes the connection "modern"
 	// and eligible for subscriptions/listen.
-	const modernMeta = `"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}`
+	modernMeta := map[string]any{
+		"io.modelcontextprotocol/protocolVersion":    "2026-07-28",
+		"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+	}
 
 	// Open the long-lived stream first, exactly as the modern-protocol client
 	// in the issue does — its handler blocks until this connection closes.
-	writeLine(`{"jsonrpc":"2.0","id":2,"method":"subscriptions/listen","params":{"notifications":{"toolsListChanged":true},` + modernMeta + `}}`)
+	writeRequest(2, "subscriptions/listen", map[string]any{
+		"notifications": map[string]any{"toolsListChanged": true},
+		"_meta":         modernMeta,
+	})
 
 	// tools/list must still get served promptly even though id=2 is still open.
-	writeLine(`{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{` + modernMeta + `}}`)
+	writeRequest(3, "tools/list", map[string]any{"_meta": modernMeta})
 	resp := awaitID(3, 5*time.Second)
 	result, ok := resp["result"].(map[string]any)
 	if !ok {
@@ -363,15 +398,6 @@ func TestStdioSurvivesSubscriptionsListen(t *testing.T) {
 	}
 	if toolsList, ok := result["tools"].([]any); !ok || len(toolsList) == 0 {
 		t.Fatalf("tools/list returned no tools: %v", resp)
-	}
-
-	cancel()
-	_ = stdinW.Close()
-	_ = stdoutW.Close()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("stdioServer.Listen did not return after cancel")
 	}
 }
 
