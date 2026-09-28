@@ -105,24 +105,30 @@ func TestIntegration_Reproduce378_EU510OwnStaleLock(t *testing.T) {
 // finding 3 (423 ExceptionResourceInvalidLockHandle on a bogus lock_handle).
 // Live behavior observed while writing this test is NOT deterministic for a
 // plain PROG source write: across repeated runs against the SAME fixture, a
-// bogus lock_handle has been observed to (a) succeed outright on both s4u
-// (S/4) and hfq (ECC), (b) be correctly rejected with 423
+// bogus lock_handle has been observed to (a) succeed outright on both the
+// S/4 system and the ECC system, (b) be correctly rejected with 423
 // ExceptionResourceInvalidLockHandle on both, and (c) be masked by a 500
 // ExceptionResourceSaveFailure transport conflict (#378 finding 4) when the
 // fixture happens to already be registered in a different transport than the
 // fresh one this run created. This looks state-dependent (e.g. whether the
 // object was JUST created vs. reused from an earlier run) rather than a
 // clean per-system split — #378's own framing ("S/4 validates, ECC doesn't",
-// citing adtler#377) does not fully hold for this endpoint. The test
+// citing adtler#377) does not fully hold for this endpoint. A likely
+// mechanical contributor: adt.(*httpClient).SetSource (adtler source.go)
+// sends the lock handle as a header first and, on 423/403/400, RETRIES via
+// the ?lockHandle= query parameter — so an observed "success" may be the
+// retry's delivery path succeeding where the header path correctly 423'd,
+// rather than genuine non-validation. Not fully root-caused here. The test
 // tolerates all three outcomes and only asserts the hint content when the
-// 423 actually happens; the hint itself is also pinned unconditionally by
-// the unit test in errors_test.go against the literal reproducer body from
-// the issue.
+// 423 actually happens — a "success" outcome is reported via t.Skipf, not a
+// silent pass, since it reproduces the exact condition #377 warns about. The
+// hint itself is also pinned unconditionally by the unit test in
+// errors_test.go against the literal reproducer body from the issue.
 func TestIntegration_Reproduce378_InvalidLockHandle(t *testing.T) {
 	// _V2 suffix: an earlier iteration used Z_ADT_MCP_378_LOCK, then
 	// delete_object'd it in cleanup — which deletes the repository object but
 	// NOT its CTS transport-directory entry (see the doc comment below), and
-	// on hfq additionally left a real orphaned ENQUEUE that not even
+	// on the ECC system additionally left a real orphaned ENQUEUE that not even
 	// force_unlock could clear (foreign to any live session, see #449). That
 	// name is now permanently poisoned on both systems (create_object 403s
 	// "currently editing" even though the object doesn't exist). Using a
@@ -187,8 +193,11 @@ func TestIntegration_Reproduce378_InvalidLockHandle(t *testing.T) {
 				} else {
 					_ = callTool(t, sharedServer, "unlock_object", map[string]interface{}{"object_uri": uri})
 				}
-				t.Logf("patch_source with bogus lock_handle SUCCEEDED on %s this run (observed to be state-dependent, not a stable per-system split — see doc comment); cannot exercise the 423 branch this run", sys)
-				return
+				// A silent t.Logf + return would report this subtest as a plain
+				// PASS even though a bogus lock_handle just got accepted — the
+				// very condition #377 warns about. Skip loudly instead so this
+				// outcome is visible in test output, not swallowed as green.
+				t.Skipf("patch_source with bogus lock_handle SUCCEEDED on %s this run (see doc comment: likely adtler's header->query-param retry on 423/403/400 taking a delivery path this endpoint doesn't validate, not settled per-system behavior) — cannot exercise the 423 branch this run", sys)
 			}
 			// This branch never acquired a real lock (explicit handle bypassed
 			// lockMap entirely) and SAP rejected the write outright, so there is

@@ -81,8 +81,8 @@ const (
 )
 
 // lockOwnerRe matches the trailing "... of user <NAME>" in a CTS lock message
-// (e.g. "Object R3TR PROG Z_FOO is already locked in request S4UK902339 of
-// user KLEINK"). Same message-scraping trade-off as adt.ADTError's
+// (e.g. "Object R3TR PROG Z_FOO is already locked in request ZZZK900001 of
+// user SMITH"). Same message-scraping trade-off as adt.ADTError's
 // ctsRequestRe: SAP gives no structured field for this until adtler#56 lands.
 var lockOwnerRe = regexp.MustCompile(`(?i)of user (\S+)`)
 
@@ -99,6 +99,12 @@ func lockingOwnerOf(err error) (string, bool) {
 	}
 	return m[1], true
 }
+
+// exceptionTypeResourceSaveFailure is SAP's Type id for the #378 finding 4
+// condition. adtler does not export a named constant for it (unlike the
+// adt.ExceptionType* constants used elsewhere in this file), so it is
+// declared locally rather than inline in matchHint.
+const exceptionTypeResourceSaveFailure = "ExceptionResourceSaveFailure"
 
 // transportSaveConflictHint (#378 finding 4): SAP reports a transport
 // ownership conflict on write as a bare 500 ExceptionResourceSaveFailure /
@@ -211,9 +217,12 @@ func matchHint(err error) string {
 	// #378 finding 4: the same "locked in request <TR> of user <owner>"
 	// conflict, but reported as a bare 500 (ExceptionResourceSaveFailure /
 	// CTS_WBO_API-020) instead of 409 — adtler has no ErrorKind for it, so it
-	// classifies as the generic ErrorServerError. Detect it by the same
-	// message shape rather than by Type/status.
-	if kind == adt.ErrorServerError {
+	// classifies as the generic ErrorServerError. Gate on the exception Type,
+	// not just the message shape: an unrelated 500 (e.g. from
+	// release_transport) that happens to name its own request in the message
+	// must NOT get a "retry with transport=X" hint that just points back at
+	// the same request.
+	if kind == adt.ErrorServerError && exceptionTypeOf(err) == exceptionTypeResourceSaveFailure {
 		if tr, ok := lockingTransportOf(err); ok {
 			owner, _ := lockingOwnerOf(err)
 			return transportSaveConflictHint(tr, owner)

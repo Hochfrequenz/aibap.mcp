@@ -198,7 +198,8 @@ func TestMatchHint_ObjectLockedInTransport(t *testing.T) {
 
 // TestMatchHint_378_WriteErrorClasses pins the four write-error classes from
 // issue #378, using the live reproducer bodies captured against
-// Z_ADT_MCP_TEST_REPORT on s4u (S/4).
+// Z_ADT_MCP_TEST_REPORT on an S/4 system (transport/user in the fixtures
+// below are placeholders, not the real values from that capture).
 func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -214,7 +215,7 @@ func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 		},
 		{
 			name:        "403 EU/510 own-stale-lock names unlock_object, not the generic auth hint",
-			err:         &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "User DACHNERM is currently editing Z_ADT_MCP_TEST_REPORT"},
+			err:         &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "User SMITH is currently editing Z_ADT_MCP_TEST_REPORT"},
 			wantHint:    "unlock_object",
 			notWantHint: "S_DEVELOP",
 		},
@@ -226,8 +227,8 @@ func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 		},
 		{
 			name:     "500 transport-conflict names the corrNr and the owner from the message",
-			err:      &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure", Message: "Object R3TR PROG Z_ADT_MCP_TEST_REPORT is already locked in request S4UK902339 of user KLEINK"},
-			wantHint: "transport=S4UK902339",
+			err:      &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure", Message: "Object R3TR PROG Z_ADT_MCP_TEST_REPORT is already locked in request ZZZK900001 of user SMITH"},
+			wantHint: "transport=ZZZK900001",
 		},
 	}
 	for _, tt := range tests {
@@ -244,9 +245,9 @@ func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 
 	// The 500 case must also name the owner, and must not collide with the
 	// unrelated 409 ObjectLockedInTransport hint wording.
-	saveConflict := &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure", Message: "Object R3TR PROG Z_ADT_MCP_TEST_REPORT is already locked in request S4UK902339 of user KLEINK"}
+	saveConflict := &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure", Message: "Object R3TR PROG Z_ADT_MCP_TEST_REPORT is already locked in request ZZZK900001 of user SMITH"}
 	hint := matchHint(saveConflict)
-	if !strings.Contains(hint, "KLEINK") {
+	if !strings.Contains(hint, "SMITH") {
 		t.Errorf("500 transport-conflict hint should name the owner, got: %s", hint)
 	}
 	if !strings.Contains(hint, "500") {
