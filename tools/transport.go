@@ -166,11 +166,20 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		}
 		includeTasks := req.GetBool("include_tasks", false)
 
-		// ReleaseTransportVerified releases and confirms via a post-release
-		// status read: ADT (notably on ECC) can return 200 while leaving the
-		// transport modifiable. Released=false with a nil error is that
-		// "silent failure".
-		res, releaseErr := client.ReleaseTransportVerified(ctx, transport, includeTasks)
+		// ReleaseTransport/ReleaseTransportWithTasks release and confirm via a
+		// post-release status read: ADT (notably on ECC) can return 200 while
+		// leaving the transport modifiable. Released=false with a nil error is
+		// that "silent failure". (adtler v0.5.5 folded the old
+		// ReleaseTransportVerified wrapper directly into these two methods —
+		// see adtler#171 — so this branches on include_tasks instead of
+		// passing it as a parameter.)
+		var res *adt.ReleaseResult
+		var releaseErr error
+		if includeTasks {
+			res, releaseErr = client.ReleaseTransportWithTasks(ctx, transport)
+		} else {
+			res, releaseErr = client.ReleaseTransport(ctx, transport)
+		}
 		silentFail := releaseErr == nil && res != nil && !res.Released
 
 		if (releaseErr != nil || silentFail) && fallback != nil {
