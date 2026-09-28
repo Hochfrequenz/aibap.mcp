@@ -228,15 +228,23 @@ func matchHint(err error) string {
 	// NOT get a "retry with transport=X" hint pointing back at itself).
 	// IsTransportLocked is structural (Type + T100KEY) and covers S/4; ECC's
 	// body carries only a bare "corrNr" property with no T100KEY at all
-	// (confirmed live), so that's checked directly as a second, still-
-	// structural fallback before giving up on the owner name via text.
+	// (confirmed live). The fallback additionally requires T100KeyID=="" —
+	// not just IsTransportLocked returning false — so a save failure that DOES
+	// carry a T100KEY, just not the CTS_WBO_API/020 one, is treated as the
+	// unrelated condition it is rather than matched on corrNr alone. This
+	// doesn't fully eliminate the overload risk IsTransportLocked's doc warns
+	// about (a truly T100KEY-less, unrelated save failure that happens to
+	// carry its own corrNr would still match), but narrows it to bodies
+	// exactly as sparse as ECC's confirmed-live shape.
 	if isADTErr && adtErr.Type == adt.ExceptionTypeResourceSaveFailure {
 		if tr, owner, ok := adtErr.IsTransportLocked(); ok {
 			return transportSaveConflictHint(tr, owner)
 		}
-		if tr, ok := adtErr.Properties["corrNr"]; ok && tr != "" {
-			owner, _ := lockingOwnerOf(err)
-			return transportSaveConflictHint(tr, owner)
+		if adtErr.T100KeyID == "" {
+			if tr, ok := adtErr.Properties["corrNr"]; ok && tr != "" {
+				owner, _ := lockingOwnerOf(err)
+				return transportSaveConflictHint(tr, owner)
+			}
 		}
 	}
 
@@ -255,6 +263,11 @@ func matchHint(err error) string {
 	// can't collide with this.
 	if isADTErr {
 		if user, _, ok := adtErr.IsEnqueueLock(); ok {
+			if user == "" {
+				// T100KEY-V1 unset despite matching EU/510 — not observed live,
+				// but avoid rendering an empty `` in the hint if SAP ever sends it.
+				user = "the named user"
+			}
 			return fmt.Sprintf(ownAccessConflictHintFmt, user)
 		}
 	}
