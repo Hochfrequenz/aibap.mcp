@@ -48,10 +48,11 @@ const (
 	// configuration state, not an authorization problem — no role or profile
 	// change fixes it. Matched structurally when the T100 key is present
 	// (t100KeyIDSystemChange/t100KeyNoSystemNotModifiable below), else on
-	// message text in the languages confirmed live so far (English, German —
-	// see matchHint). ECC's #490 repro carried no T100KEY at all (message-only
-	// body, consistent with #378's ECC-sparser-body finding), so the text
-	// fallback still matters there even with the key known. See #490.
+	// message text: German confirmed live via the #490 ECC repro, English
+	// from the SE91 text of the same T100 key (see matchHint). That repro's
+	// body carried no T100KEY at all (message-only, consistent with #378's
+	// ECC-sparser-body finding), so the text fallback still matters there
+	// even with the key known. See #490.
 	systemNotModifiableHint = "The SAP system is closed for changes (system change option is 'not modifiable'). This is a system-wide setting, not an authorization or lock problem: writes to repository objects will fail until an administrator reopens it in SE06 -> System Change Option. Read-only tools are unaffected."
 	badRequestHint          = "Bad request — the server rejected the request. Check the syntax, required parameters, or the CSRF token."
 	serverErrorHint         = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
@@ -88,15 +89,14 @@ const (
 	ownAccessConflictHintFmt = "Resource access denied (403 `ExceptionResourceNoAccess` / EU-510) — despite the \"currently editing\" wording, `%s` is often your own stale lock from an earlier session, not a real concurrent editor. If that's you, call `unlock_object` to drop the stale lock and retry; otherwise wait, or check SM12 for the lock owner."
 )
 
-// t100KeyIDSystemChange / t100KeyNoSystemNotModifiable identify SAP message
-// class TK, number 102 ("SAP-System hat den Status \"nicht änderbar\"" /
-// "SAP system has status 'not modifiable'") — looked up via SE91/get_message_class,
-// not adtler's IsEnqueueLock/IsTransportLocked pattern (#490 is aibap.mcp-only,
-// no adtler PR yet). Not promoted to a local ADTError-alike predicate: unlike
-// EU/510, it is unconfirmed whether either system actually populates
-// T100KEY-ID/-NO for this specific exception — the #490 ECC repro carried a
-// message-only body (see systemNotModifiableHint), so matchHint checks this
-// structurally when present and falls back to text otherwise.
+// t100KeyIDSystemChange / t100KeyNoSystemNotModifiable = SE91's TK/102, the
+// text of "SAP-System hat den Status \"nicht änderbar\"" / "SAP system has
+// status 'not modifiable'". Whether ADT bodies actually carry this T100KEY is
+// unconfirmed — the #490 ECC repro had none (see systemNotModifiableHint) —
+// hence isSystemNotModifiable's text fallback. Kept local rather than an
+// adtler-side predicate like IsEnqueueLock/IsTransportLocked for now; a
+// follow-up adtler issue for that once the key is confirmed on a live body
+// would fit the existing pattern.
 const (
 	t100KeyIDSystemChange        = "TK"
 	t100KeyNoSystemNotModifiable = "102"
@@ -327,9 +327,11 @@ func matchHint(err error) string {
 	// can also close a single software component or namespace for changes,
 	// and that 403 likely names the component/namespace instead of "system"
 	// — wording unconfirmed live, so the narrower match avoids mislabeling
-	// that case as system-wide. English and German are the two variants
-	// confirmed live so far (#490); other logon languages still fall through
-	// to forbiddenHint until observed.
+	// that case as system-wide. German confirmed live, English from the SE91
+	// text of the same key (#490); other logon languages still fall through
+	// to forbiddenHint until observed. Gated on 403 because that's the only
+	// status this has been observed on (write/lock paths) — a hypothetical
+	// TK/102 on another status (e.g. object creation) wouldn't get this hint.
 	if kind == adt.ErrorForbidden && isSystemNotModifiable(adtErr, isADTErr, errText) {
 		return systemNotModifiableHint
 	}
@@ -371,11 +373,13 @@ func asADTError(err error) (*adt.ADTError, bool) {
 	return nil, false
 }
 
-// isSystemNotModifiable reports whether a 403 ExceptionResourceNoAccess is
-// SAP's system-change-option-closed condition (message class TK, number
-// 102), checked structurally via the T100 key when present, else via message
-// text in the two languages confirmed live so far (English, German). See the
-// matchHint call site for the narrower-than-"not modifiable"-alone rationale.
+// isSystemNotModifiable reports whether an error the caller has already
+// classified as forbidden (403, kind == adt.ErrorForbidden) is SAP's
+// system-change-option-closed condition (message class TK, number 102),
+// checked structurally via the T100 key when present, else via message text:
+// German confirmed live (#490), English from the SE91 text of the same key.
+// See the matchHint call site for the narrower-than-"not modifiable"-alone
+// rationale.
 func isSystemNotModifiable(adtErr *adt.ADTError, isADTErr bool, errText string) bool {
 	if isADTErr && adtErr.T100KeyID == t100KeyIDSystemChange && adtErr.T100KeyNo == t100KeyNoSystemNotModifiable {
 		return true

@@ -424,6 +424,32 @@ func TestMatchHint_SystemNotModifiable(t *testing.T) {
 	if got := matchHint(structural); got != systemNotModifiableHint {
 		t.Errorf("structural T100 key: got: %s, want: %s", got, systemNotModifiableHint)
 	}
+
+	// German component-level negative, mirroring componentClosed above: the
+	// German text fallback must require the "sap-system hat den status"
+	// prefix too, not "nicht änderbar" alone.
+	germanComponentClosed := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: `Softwarekomponente ZFOO hat den Status "nicht änderbar"`}
+	if got := matchHint(germanComponentClosed); got != forbiddenHint {
+		t.Errorf("German component-level not-modifiable: got: %s, want: %s", got, forbiddenHint)
+	}
+
+	// Near-miss T100 key: both halves must match, not just one.
+	nearMissKey := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "Some other-language rendering", T100KeyID: "TK", T100KeyNo: "103"}
+	if got := matchHint(nearMissKey); got != forbiddenHint {
+		t.Errorf("near-miss T100 key: got: %s, want: %s", got, forbiddenHint)
+	}
+
+	// EU/510 must win precedence even if the message text also happens to
+	// contain the not-modifiable wording — the structural EU/510 check in
+	// matchHint runs first.
+	euWithNotModifiableText := &adt.ADTError{
+		StatusCode: 403, Type: "ExceptionResourceNoAccess",
+		Message:   `User SMITH is currently editing Z_REPORT (system has status 'not modifiable')`,
+		T100KeyID: "EU", T100KeyNo: "510", T100Vars: [4]string{"SMITH", "Z_REPORT", "", ""},
+	}
+	if got := matchHint(euWithNotModifiableText); got != fmt.Sprintf(ownAccessConflictHintFmt, "SMITH") {
+		t.Errorf("EU/510 precedence: got: %s, want: %s", got, fmt.Sprintf(ownAccessConflictHintFmt, "SMITH"))
+	}
 }
 
 func TestErrorResult_WithHint(t *testing.T) {
