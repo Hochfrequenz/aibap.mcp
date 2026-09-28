@@ -54,13 +54,15 @@ The adtler row is the one that gets missed. A bump that only removes a workaroun
 Do not retag a published version to correct a past bump. Note the correction in that release's
 notes instead — the tag is an identifier, the release notes are the record.
 
-**Merge is not release.** A fix or feature that needs a minor or patch bump is not done when its
-PR merges to `main` — it's done when the version is tagged. Do not use `Closes #N` / `Fixes #N`
-in that PR's body; GitHub auto-closes on merge, before the bump exists, and the issue then reads
-as resolved to anyone watching it while the fix sits unreleased. Reference the issue instead
-(`Refs #N`, `Part of #N`), leave it open, and close it manually with a link to the release tag
-once one is actually cut. This matters most for issues carrying `blocked-by-adtler` — see
-"Cross-Repo Issue Tracking" below, where it is the default case rather than the exception.
+**Issues close on merge, not on tag** — a tag is a release identifier for the table above, not a
+gate on issue status. An ordinary PR closes its issue on its own merge (`Closes #N`) as usual. A
+`blocked-by-adtler` issue's lifecycle and exact closing point are covered in "Cross-Repo Issue
+Tracking" below.
+
+Closing on merge doesn't ship it, though: cut the patch/minor release per the table above once
+fixes accumulate on `main` — don't let it sit for many merges — and list the closed issues in the
+release notes, so anyone on a tagged version (not building from `main`) can see what they
+actually have.
 
 ## Issue & PR Comments
 
@@ -134,7 +136,11 @@ notification e-mails that already went out, so rotate or renumber it instead of 
 Since most fixes now live in [adtler](https://github.com/Hochfrequenz/adtler), issues here often can't be closed until the next adtler release is consumed via `go get`. To keep this visible:
 
 1. **Label proactively**: Whenever you (or an agent) conclude that an aibap.mcp issue can't be resolved without an adtler change, immediately add the `blocked-by-adtler` label and append it to the tracking issue. Same rule when you spot a new adtler commit/release that resolves an existing open issue here: label it, add a checklist bullet, link the adtler commit or PR. Query open blockers with `gh issue list --label blocked-by-adtler`.
-   Consuming the adtler release (the `go.mod` bump) is rarely the whole fix — most `blocked-by-adtler` issues also need an aibap.mcp-side consumer PR (new branching logic, a wired-up client method, a new tool argument) once the upstream piece lands. That consumer PR is an ordinary fix PR, not the bump PR itself, and it must **not** `Closes #N` the issue (see "Merge is not release" under Versioning) — merging it only means the fix exists on `main`, not that any user has it. Keep the `blocked-by-adtler` label and the tracking-issue bullet in place, referencing the consumer PR, until the version that ships it is tagged.
+   Consuming the adtler release (the `go.mod` bump) is rarely the whole fix — most `blocked-by-adtler` issues also need an aibap.mcp-side consumer PR (new branching logic, a wired-up client method, a new tool argument) once the upstream piece lands. That consumer PR is an ordinary fix PR, not the bump PR itself, and it gets `Closes #N` on its own merge, since that merge is what actually completes the fix.
+
+   Don't try to resolve label/tracker state per-PR — that per-PR bookkeeping is what kept drifting. A bump PR's merge doesn't, by itself, tell you whether a still-failing reproducer means "adtler isn't done" or "adtler's done, only the consumer PR is missing" — leave the label and tracking bullet as they are and let point 5's single sync pass after the bump sort it out.
+
+   Never write `close`/`fix`/`resolve #N` in a PR body — even negated, e.g. "this does **not** close #N" — for an issue that must stay open: GitHub's closing-keyword parser ignores the negation and closes it anyway (this happened to #378 via #545, and had to be reopened). Write `Refs #N` instead. If a PR closes an issue and the fix later turns out incomplete, reopen the original issue rather than filing a new one.
 2. **Tracking issue**: A single open issue titled `Next adtler release: bump to vX.Y.Z` collects all blocked issues as a checklist, each bullet `- [ ] #<n> — short description (adtler: <commit-or-PR>)`. There should only ever be one such tracking issue open at a time.
 3. **Reproducer snippet on every `blocked-by-adtler` issue**: each such issue must include a copy-pastable MCP tool call (tool name + arguments JSON) or equivalent Go snippet, the target system **named by type and release level** in prose (see "Public Repository — No Internal Data"; the MCP arguments still use the local configured alias, so write `{"system": "<alias>"}` and `<request>` / `<task>` for transport numbers), any session preconditions (e.g. "fresh MCP session, no preceding `get_atc_customizing` — see adtler#44"), the "fixed" expected output, and the "broken" current output. This snippet is what the bump PR's reproducer-verify step runs. Without it, false negatives like aibap.mcp#306 are easy to ship. Example: aibap.mcp#288.
 4. **When bumping adtler**:
@@ -142,7 +148,11 @@ Since most fixes now live in [adtler](https://github.com/Hochfrequenz/adtler), i
    - **Manual path**: open a branch `chore/bump-adtler-vX.Y.Z`, run `go get github.com/Hochfrequenz/adtler@vX.Y.Z && go mod tidy`, verify `go test ./...` passes, and replicate the same PR-body checklist and reproducer verification by hand.
    - **Pre-release path (draft release exists, tag not yet pushed)**: to verify reproducers before adtler publishes the tag, open `chore/bump-adtler-vX.Y.Z` and pin to the adtler `main` HEAD via `go get github.com/Hochfrequenz/adtler@<commit-sha>`. This produces a `vX.Y.Z-0.<timestamp>-<sha>` pseudo-version in `go.mod`. Run reproducers as usual, open the PR as `Draft`, and once the real tag publishes push a follow-up commit that re-pins to `@vX.Y.Z` before marking the PR ready. Pseudo-versions must never reach `main`.
    - Either path: every checked item on the tracking issue's checklist needs its own `Closes #` line in the merged PR body.
-5. **After merge**: open a fresh `Next adtler release: bump to vX.Y.Z` tracking issue, and move any blockers whose reproducer still failed onto its checklist. **If no blockers remain (all reproducers passed and there are no open `blocked-by-adtler` issues), defer creation until the first new blocker arrives — the agent labelling that issue creates the tracker as part of point 1.**
+5. **After merge — the one sync point**: right after a bump PR merges, this is the only place `blocked-by-adtler` label/tracker state gets reconciled with reality — not spread across per-PR steps that are easy to skip. Run `gh issue list --label blocked-by-adtler` and go through *every* result, not just what was on the just-merged checklist (older blockers rot here — see #522/#527's drift):
+   - **Adtler's fix is now on `main`, nothing else needed** → it already closed itself via the bump PR's `Closes #N` (point 4). Nothing to do.
+   - **Adtler's fix is now on `main`, but an aibap.mcp consumer PR is still needed** → remove the `blocked-by-adtler` label now (the adtler dependency is gone), leave the issue open, and comment noting the consumer PR is pending. Take it off any tracker checklist.
+   - **Adtler still hasn't fixed it** → keep the label, carry it onto a fresh `Next adtler release: bump to vX.Y.Z` tracking issue (title reflects the version actually being targeted next).
+   Close the just-consumed tracker once every item above is accounted for. **If no blocked-by-adtler issues remain, skip opening a new tracker — the next label event (point 1) creates one.**
 6. **Throwaway reproducer harness**: bump PRs collect every linked issue's reproducer in a single `tools/bump_<version>_verify_integration_test.go` file (build tag `integration`, function names prefixed `TestBumpVerify_`). Issue bodies remain the source of truth for the snippet; this file just makes them tool-callable in one `go test -tags integration -run BumpVerify ./tools/...` invocation. Add a `// Delete after the bump PR merges.` header comment, list the file in the PR's Test Plan as a follow-up deletion item, and remove it in a follow-up commit on the same PR before merge (or in a chore PR immediately after).
 
 ## Adding a New Tool
