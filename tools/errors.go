@@ -66,31 +66,31 @@ const (
 	// naming corrNr specifically means the object is not $TMP-local and a
 	// transport is required. This is one of two unrelated conditions that
 	// share Type=ExceptionParameterNotFound (the other names lockHandle, see
-	// adt.isLockHandleParameterNotFound in adtler) — matched on the literal
-	// parameter name for the same reason adtler does: no structured T100KEY
-	// data yet (adtler#56).
+	// adt.isLockHandleParameterNotFound in adtler).
 	corrNrMissingHint = "Missing `transport` parameter (400 `ExceptionParameterNotFound`, SADT_RESOURCE/017 — this object is not `$TMP`-local). Use `get_transport_requests` to find one, or `create_transport` to make a new one, then retry with `transport=<request>`."
-	// ownAccessConflictHint (#378 finding 2): SAP's ExceptionResourceNoAccess
+	// ownAccessConflictHintFmt (#378 finding 2): SAP's ExceptionResourceNoAccess
 	// (403, EU/510) is worded as "User X is currently editing", but the named
 	// user is frequently the CALLING user's own stale enqueue from an earlier
 	// session, not a real concurrent editor. matchHint has no notion of "the
-	// active user" to compare against, so the hint names both recovery paths
-	// and lets the caller decide by comparing the username in the message
-	// above against themselves.
-	ownAccessConflictHint = "Resource access denied (403 `ExceptionResourceNoAccess` / EU-510) — despite the \"currently editing\" wording, the named user is often your own stale lock from an earlier session, not a real concurrent editor. If that user is you, call `unlock_object` to drop the stale lock and retry; otherwise wait, or check SM12 for the lock owner."
+	// active user" to compare against, so the hint names the user structurally
+	// (via adt.ADTError.IsEnqueueLock) and lets the caller decide by comparing
+	// it against themselves. %s is that user.
+	ownAccessConflictHintFmt = "Resource access denied (403 `ExceptionResourceNoAccess` / EU-510) — despite the \"currently editing\" wording, `%s` is often your own stale lock from an earlier session, not a real concurrent editor. If that's you, call `unlock_object` to drop the stale lock and retry; otherwise wait, or check SM12 for the lock owner."
 )
 
 // lockOwnerRe matches the trailing "... of user <NAME>" in a CTS lock message
 // (e.g. "Object R3TR PROG Z_FOO is already locked in request ZZZK900001 of
-// user SMITH"). Same message-scraping trade-off as adt.ADTError's
-// ctsRequestRe: SAP gives no structured field for this until adtler#56 lands.
+// user SMITH"). ECC's #378-finding-4 body carries only a bare "corrNr"
+// property with no T100KEY at all (confirmed live against Z_ADT_MCP_TEST —
+// unlike S/4, which adt.ADTError.IsTransportLocked covers structurally), so
+// the owner still needs this text fallback there.
 var lockOwnerRe = regexp.MustCompile(`(?i)of user (\S+)`)
 
 // lockingOwnerOf extracts the user named in a "... locked in request <TR> of
 // user <owner>" message, unwrapping to the underlying *adt.ADTError.
 func lockingOwnerOf(err error) (string, bool) {
-	var adtErr *adt.ADTError
-	if !errors.As(err, &adtErr) {
+	adtErr, ok := asADTError(err)
+	if !ok {
 		return "", false
 	}
 	m := lockOwnerRe.FindStringSubmatch(adtErr.Message)
@@ -100,20 +100,11 @@ func lockingOwnerOf(err error) (string, bool) {
 	return m[1], true
 }
 
-// exceptionTypeResourceSaveFailure is SAP's Type id for the #378 finding 4
-// condition. adtler does not export a named constant for it (unlike the
-// adt.ExceptionType* constants used elsewhere in this file), so it is
-// declared locally rather than inline in matchHint.
-const exceptionTypeResourceSaveFailure = "ExceptionResourceSaveFailure"
-
 // transportSaveConflictHint (#378 finding 4): SAP reports a transport
 // ownership conflict on write as a bare 500 ExceptionResourceSaveFailure /
 // CTS_WBO_API-020 — spec-wise this should be 409/423, but it is what SAP
 // actually returns on both S/4 and ECC, and adtler has no named ErrorKind for
-// it (it falls through to the generic ErrorServerError). The message carries
-// the same "locked in request <TR> of user <owner>" shape as the 409 CTS-lock
-// case, so it reuses lockingTransportOf/lockingOwnerOf rather than a new
-// regex.
+// it (it falls through to the generic ErrorServerError).
 func transportSaveConflictHint(tr, owner string) string {
 	hint := fmt.Sprintf("Save failed — the object is already registered in open transport request `%[1]s` (500 `ExceptionResourceSaveFailure` / CTS_WBO_API-020; SAP reports this CTS registration conflict as a 500 instead of 409/423). Retry the write with `transport=%[1]s`.", tr)
 	if owner != "" {
@@ -176,17 +167,28 @@ func errorResult(err error) *mcp.CallToolResult {
 //
 //   - An object locked in another open CTS request (ErrorObjectLockedInTransport)
 //     gets a hint naming that request (dynamic, so not in the static map).
+//     No structural field for this one — still parsed from the message via
+//     adt.ADTError.LockingTransport.
 //   - The same CTS-lock conflict reported as a bare 500 (ExceptionResourceSaveFailure,
 //     #378 finding 4) gets the same treatment, since adtler classifies it as the
-//     generic ErrorServerError rather than a distinct kind.
+//     generic ErrorServerError rather than a distinct kind. Matched
+//     structurally via adt.ADTError.IsTransportLocked (Type + T100KEY), with
+//     a fallback to the bare "corrNr" property for ECC's sparser body (see
+//     that branch's comment).
 //   - A 405 "… does not support method DELETE" (e.g. Gateway VIT objects) gets
 //     the no-delete-handler hint instead of the generic method-not-allowed one.
 //   - ExceptionResourceNoAccess (403, EU/510, #378 finding 2) gets a hint
 //     naming the likely-stale-own-lock cause instead of the generic
-//     authorization hint.
+//     authorization hint. Matched structurally via
+//     adt.ADTError.IsEnqueueLock (Type + T100KEY together, not Type alone).
 //   - ExceptionParameterNotFound naming corrNr (400, #378 finding 1) gets a
 //     hint pointing at create_transport/get_transport_requests instead of the
-//     generic bad-request hint.
+//     generic bad-request hint. On S/4 the T100KEY-V1 placeholder names the
+//     missing parameter structurally; ECC's body carries no T100KEY for this
+//     Type at all (confirmed live), so it falls back to the literal parameter
+//     name in the message, same as adtler's own sibling
+//     isLockHandleParameterNotFound check for the "lockHandle" variant of
+//     this same overloaded Type.
 //   - A 400 that mentions a transport gets the more specific transport hint
 //     instead of the generic bad-request hint.
 //   - Errors that carry no ADT Type or status — plain Go errors such as the
@@ -194,13 +196,15 @@ func errorResult(err error) *mcp.CallToolResult {
 //     "already exists" messages — are matched on localised text as a last
 //     resort.
 //
-// The last two bullets (and the 405 refinement) match on localised message
-// text, so they are language-fragile: they silently miss on non-English
-// systems and degrade to the kind-based hint. That tradeoff is accepted for
-// conditions with no clean Type (#406, #404).
+// The last two bullets, the 405 refinement, and the ECC fallbacks noted above
+// match on localised message text, so they are language-fragile: they
+// silently miss on non-English systems and degrade to the kind-based hint.
+// That tradeoff is accepted for conditions with no clean structural signal
+// (#406, #404) or where SAP's own body is simply sparser (ECC, #378).
 func matchHint(err error) string {
 	kind := adt.ClassifyError(err)
 	errText := strings.ToLower(err.Error())
+	adtErr, isADTErr := asADTError(err)
 
 	// Object registered in another open CTS request: name that request so the
 	// caller can retarget the write at it. Dynamic (embeds the parsed request
@@ -217,13 +221,20 @@ func matchHint(err error) string {
 	// #378 finding 4: the same "locked in request <TR> of user <owner>"
 	// conflict, but reported as a bare 500 (ExceptionResourceSaveFailure /
 	// CTS_WBO_API-020) instead of 409 — adtler has no ErrorKind for it, so it
-	// classifies as the generic ErrorServerError. Gate on the exception Type,
-	// not just the message shape: an unrelated 500 (e.g. from
-	// release_transport) that happens to name its own request in the message
-	// must NOT get a "retry with transport=X" hint that just points back at
-	// the same request.
-	if kind == adt.ErrorServerError && exceptionTypeOf(err) == exceptionTypeResourceSaveFailure {
-		if tr, ok := lockingTransportOf(err); ok {
+	// classifies as the generic ErrorServerError. Gate on the exception Type
+	// first (adtler's own IsTransportLocked doc notes this Type is overloaded
+	// across unrelated save failures, so Type alone is not enough — an
+	// unrelated 500 that happens to name its own request in the message must
+	// NOT get a "retry with transport=X" hint pointing back at itself).
+	// IsTransportLocked is structural (Type + T100KEY) and covers S/4; ECC's
+	// body carries only a bare "corrNr" property with no T100KEY at all
+	// (confirmed live), so that's checked directly as a second, still-
+	// structural fallback before giving up on the owner name via text.
+	if isADTErr && adtErr.Type == adt.ExceptionTypeResourceSaveFailure {
+		if tr, owner, ok := adtErr.IsTransportLocked(); ok {
+			return transportSaveConflictHint(tr, owner)
+		}
+		if tr, ok := adtErr.Properties["corrNr"]; ok && tr != "" {
 			owner, _ := lockingOwnerOf(err)
 			return transportSaveConflictHint(tr, owner)
 		}
@@ -239,16 +250,22 @@ func matchHint(err error) string {
 	// #378 finding 2: ExceptionResourceNoAccess (403, EU/510) is a distinct,
 	// actionable condition — SAP's "currently editing" wording usually means a
 	// stale own-lock, not a real conflict — so it must beat the generic
-	// forbiddenHint that a bare 403 would otherwise get.
-	if kind == adt.ErrorForbidden && exceptionTypeOf(err) == adt.ExceptionTypeResourceNoAccess {
-		return ownAccessConflictHint
+	// forbiddenHint that a bare 403 would otherwise get. IsEnqueueLock checks
+	// Type and T100KEY together, so a differently-keyed ExceptionResourceNoAccess
+	// can't collide with this.
+	if isADTErr {
+		if user, _, ok := adtErr.IsEnqueueLock(); ok {
+			return fmt.Sprintf(ownAccessConflictHintFmt, user)
+		}
 	}
 
 	// #378 finding 1: ExceptionParameterNotFound naming corrNr specifically
 	// beats both the generic transport-mention check below and the
 	// catch-all bad-request hint.
-	if kind == adt.ErrorBadRequest && exceptionTypeOf(err) == adt.ExceptionTypeParameterNotFound && strings.Contains(errText, "corrnr") {
-		return corrNrMissingHint
+	if kind == adt.ErrorBadRequest && isADTErr && adtErr.Type == adt.ExceptionTypeParameterNotFound {
+		if adtErr.T100Vars[0] == "corrNr" || strings.Contains(errText, "corrnr") {
+			return corrNrMissingHint
+		}
 	}
 
 	// Transport-specific 400 beats the generic bad-request hint.
@@ -273,20 +290,21 @@ func matchHint(err error) string {
 // <TR>" conflict, unwrapping to the underlying *adt.ADTError. The parse itself
 // lives in adtler (adt.ADTError.LockingTransport).
 func lockingTransportOf(err error) (string, bool) {
-	var adtErr *adt.ADTError
-	if errors.As(err, &adtErr) {
-		return adtErr.LockingTransport()
+	adtErr, ok := asADTError(err)
+	if !ok {
+		return "", false
 	}
-	return "", false
+	return adtErr.LockingTransport()
 }
 
-// exceptionTypeOf returns the SAP exception Type of the underlying
-// *adt.ADTError, or "" if err wraps none. Used to key on exception Types that
-// adt.ClassifyError does not (yet) assign a distinct ErrorKind — see #378.
-func exceptionTypeOf(err error) string {
+// asADTError unwraps err to the underlying *adt.ADTError, if any. Shared by
+// every structural-matching branch in matchHint (IsTransportLocked,
+// IsEnqueueLock, T100Vars, Properties) and the message-scraping fallbacks
+// that still need one.
+func asADTError(err error) (*adt.ADTError, bool) {
 	var adtErr *adt.ADTError
 	if errors.As(err, &adtErr) {
-		return adtErr.Type
+		return adtErr, true
 	}
-	return ""
+	return nil, false
 }

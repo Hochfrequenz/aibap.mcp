@@ -197,9 +197,11 @@ func TestMatchHint_ObjectLockedInTransport(t *testing.T) {
 }
 
 // TestMatchHint_378_WriteErrorClasses pins the four write-error classes from
-// issue #378, using the live reproducer bodies captured against
-// Z_ADT_MCP_TEST_REPORT on an S/4 system (transport/user in the fixtures
-// below are placeholders, not the real values from that capture).
+// issue #378. Structural fixtures (Properties/T100KeyID/T100KeyNo/T100Vars)
+// use the shape confirmed live against Z_ADT_MCP_TEST_REPORT on an S/4
+// system; sparse fixtures use the shape confirmed live on an ECC system,
+// where the same conditions carry little or no T100KEY data. Transport/user
+// values are placeholders, not the real values from those captures.
 func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -208,16 +210,36 @@ func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 		notWantHint string
 	}{
 		{
-			name:        "400 corrNr missing names create_transport, not just generic bad request",
-			err:         &adt.ADTError{StatusCode: 400, Type: "ExceptionParameterNotFound", Message: "Parameter corrNr could not be found."},
+			name: "400 corrNr missing, S/4 structural (T100Vars[0], no message hint) names create_transport",
+			err: &adt.ADTError{StatusCode: 400, Type: "ExceptionParameterNotFound",
+				Message:    "Parameter X could not be found.", // deliberately doesn't say "corrNr" — proves the structural path, not the text fallback, matched
+				Properties: map[string]string{"T100KEY-ID": "SADT_RESOURCE", "T100KEY-NO": "017", "T100KEY-V1": "corrNr"},
+				T100KeyID:  "SADT_RESOURCE", T100KeyNo: "017", T100Vars: [4]string{"corrNr", "", "", ""},
+			},
 			wantHint:    "create_transport",
 			notWantHint: "Bad request —",
 		},
 		{
-			name:        "403 EU/510 own-stale-lock names unlock_object, not the generic auth hint",
-			err:         &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "User SMITH is currently editing Z_ADT_MCP_TEST_REPORT"},
+			name:        "400 corrNr missing, ECC sparse (no Properties at all) falls back to message text",
+			err:         &adt.ADTError{StatusCode: 400, Type: "ExceptionParameterNotFound", Message: "Parameter corrNr wurde nicht gefunden"},
+			wantHint:    "create_transport",
+			notWantHint: "Bad request —",
+		},
+		{
+			name: "403 EU/510 own-stale-lock, structural (T100Vars), names the user and unlock_object",
+			err: &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess",
+				Message:    "User SMITH is currently editing Z_ADT_MCP_TEST_REPORT",
+				Properties: map[string]string{"T100KEY-ID": "EU", "T100KEY-NO": "510", "T100KEY-V1": "SMITH", "T100KEY-V2": "Z_ADT_MCP_TEST_REPORT"},
+				T100KeyID:  "EU", T100KeyNo: "510", T100Vars: [4]string{"SMITH", "Z_ADT_MCP_TEST_REPORT", "", ""},
+			},
 			wantHint:    "unlock_object",
 			notWantHint: "S_DEVELOP",
+		},
+		{
+			name:        "403 with ExceptionResourceNoAccess Type but no T100KEY falls back to the generic forbidden hint, not a broken EU/510 one",
+			err:         &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "some other 403 with this overloaded Type"},
+			wantHint:    "S_DEVELOP",
+			notWantHint: "unlock_object",
 		},
 		{
 			name:        "423 invalid lock handle points at lock_object, not unlock_object as the fix",
@@ -226,9 +248,27 @@ func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 			notWantHint: "Call `unlock_object`",
 		},
 		{
-			name:     "500 transport-conflict names the corrNr and the owner from the message",
-			err:      &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure", Message: "Object R3TR PROG Z_ADT_MCP_TEST_REPORT is already locked in request ZZZK900001 of user SMITH"},
+			name: "500 transport-conflict, S/4 structural (no transport/owner in message) names both",
+			err: &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure",
+				Message:    "Object is already locked", // deliberately carries neither the request ID nor the owner — proves the structural path, not message scraping
+				Properties: map[string]string{"T100KEY-ID": "CTS_WBO_API", "T100KEY-NO": "020", "T100KEY-V4": "SMITH", "corrNr": "ZZZK900001"},
+				T100KeyID:  "CTS_WBO_API", T100KeyNo: "020", T100Vars: [4]string{"", "", "", "SMITH"},
+			},
 			wantHint: "transport=ZZZK900001",
+		},
+		{
+			name: "500 transport-conflict, ECC sparse (bare corrNr property, no T100KEY) falls back to message text for the owner",
+			err: &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure",
+				Message:    "Objekt ... ist bereits in Auftrag HFQK903104 von Benutzer SMITH gesperrt",
+				Properties: map[string]string{"corrNr": "HFQK903104"},
+			},
+			wantHint: "transport=HFQK903104",
+		},
+		{
+			name:        "500 with ExceptionResourceSaveFailure Type but no corrNr property is an unrelated save failure, not finding 4",
+			err:         &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure", Message: "some other save failure sharing this overloaded Type"},
+			wantHint:    "SM21",
+			notWantHint: "transport=",
 		},
 	}
 	for _, tt := range tests {
@@ -243,9 +283,14 @@ func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 		})
 	}
 
-	// The 500 case must also name the owner, and must not collide with the
-	// unrelated 409 ObjectLockedInTransport hint wording.
-	saveConflict := &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure", Message: "Object R3TR PROG Z_ADT_MCP_TEST_REPORT is already locked in request ZZZK900001 of user SMITH"}
+	// The structural 500 case must also name the owner from T100Vars[3], and
+	// must not collide with the unrelated 409 ObjectLockedInTransport hint
+	// wording.
+	saveConflict := &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure",
+		Message:    "Object is already locked",
+		Properties: map[string]string{"T100KEY-ID": "CTS_WBO_API", "T100KEY-NO": "020", "T100KEY-V4": "SMITH", "corrNr": "ZZZK900001"},
+		T100KeyID:  "CTS_WBO_API", T100KeyNo: "020", T100Vars: [4]string{"", "", "", "SMITH"},
+	}
 	hint := matchHint(saveConflict)
 	if !strings.Contains(hint, "SMITH") {
 		t.Errorf("500 transport-conflict hint should name the owner, got: %s", hint)
