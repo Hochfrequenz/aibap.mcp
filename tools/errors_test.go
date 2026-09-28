@@ -226,9 +226,11 @@ func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 			notWantHint: "Bad request —",
 		},
 		{
-			name: "403 EU/510 own-stale-lock, structural (T100Vars), names the user and unlock_object",
+			// Message deliberately names a DIFFERENT user than T100Vars[0]: proves
+			// the hint's username comes from the structural field, not the message.
+			name: "403 EU/510 own-stale-lock, structural (T100Vars, message names a different user) names the T100Vars user",
 			err: &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess",
-				Message:    "User SMITH is currently editing Z_ADT_MCP_TEST_REPORT",
+				Message:    "User WRONGNAME is currently editing Z_ADT_MCP_TEST_REPORT",
 				Properties: map[string]string{"T100KEY-ID": "EU", "T100KEY-NO": "510", "T100KEY-V1": "SMITH", "T100KEY-V2": "Z_ADT_MCP_TEST_REPORT"},
 				T100KeyID:  "EU", T100KeyNo: "510", T100Vars: [4]string{"SMITH", "Z_ADT_MCP_TEST_REPORT", "", ""},
 			},
@@ -259,14 +261,29 @@ func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 		{
 			name: "500 transport-conflict, ECC sparse (bare corrNr property, no T100KEY) falls back to message text for the owner",
 			err: &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure",
-				Message:    "Objekt ... ist bereits in Auftrag HFQK903104 von Benutzer SMITH gesperrt",
-				Properties: map[string]string{"corrNr": "HFQK903104"},
+				Message:    "Objekt ... ist bereits in Auftrag YYYK900002 von Benutzer SMITH gesperrt",
+				Properties: map[string]string{"corrNr": "YYYK900002"},
 			},
-			wantHint: "transport=HFQK903104",
+			wantHint: "transport=YYYK900002",
 		},
 		{
 			name:        "500 with ExceptionResourceSaveFailure Type but no corrNr property is an unrelated save failure, not finding 4",
 			err:         &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure", Message: "some other save failure sharing this overloaded Type"},
+			wantHint:    "SM21",
+			notWantHint: "transport=",
+		},
+		{
+			// A DIFFERENT, non-empty T100KEY that happens to carry a corrNr
+			// property (SAP echoing the caller's own request back, say) must
+			// NOT be treated as finding 4 — the corrNr fallback requires
+			// T100KeyID=="" (ECC's confirmed-live sparse shape), not just
+			// "IsTransportLocked returned false".
+			name: "500 ExceptionResourceSaveFailure with an UNRELATED T100KEY plus a corrNr property is not finding 4",
+			err: &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure",
+				Message:    "some unrelated save failure that happens to echo a corrNr",
+				Properties: map[string]string{"T100KEY-ID": "SOME_OTHER", "T100KEY-NO": "999", "corrNr": "ZZZK900099"},
+				T100KeyID:  "SOME_OTHER", T100KeyNo: "999",
+			},
 			wantHint:    "SM21",
 			notWantHint: "transport=",
 		},
@@ -297,6 +314,22 @@ func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
 	}
 	if !strings.Contains(hint, "500") {
 		t.Errorf("500 transport-conflict hint should note the surprising status code, got: %s", hint)
+	}
+
+	// The structural EU/510 case must name the user from T100Vars[0], NOT
+	// whatever name happens to appear in the message — proves the hint is
+	// actually sourced from the structural field.
+	enqueueLock := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess",
+		Message:    "User WRONGNAME is currently editing Z_ADT_MCP_TEST_REPORT",
+		Properties: map[string]string{"T100KEY-ID": "EU", "T100KEY-NO": "510", "T100KEY-V1": "SMITH", "T100KEY-V2": "Z_ADT_MCP_TEST_REPORT"},
+		T100KeyID:  "EU", T100KeyNo: "510", T100Vars: [4]string{"SMITH", "Z_ADT_MCP_TEST_REPORT", "", ""},
+	}
+	euHint := matchHint(enqueueLock)
+	if !strings.Contains(euHint, "SMITH") {
+		t.Errorf("EU/510 hint should name the T100Vars[0] user, got: %s", euHint)
+	}
+	if strings.Contains(euHint, "WRONGNAME") {
+		t.Errorf("EU/510 hint should NOT name the message's user — it must be structurally sourced, got: %s", euHint)
 	}
 }
 
