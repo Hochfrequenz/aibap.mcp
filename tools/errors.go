@@ -46,8 +46,12 @@ const (
 	// systemNotModifiableHint: a 403 ExceptionResourceNoAccess whose message
 	// says the system change option is "not modifiable" is a system-wide
 	// configuration state, not an authorization problem — no role or profile
-	// change fixes it. Matched on message text (see matchHint), so it misses
-	// on non-English systems and degrades to forbiddenHint there. See #490.
+	// change fixes it. Matched structurally when the T100 key is present
+	// (t100KeyIDSystemChange/t100KeyNoSystemNotModifiable below), else on
+	// message text in the languages confirmed live so far (English, German —
+	// see matchHint). ECC's #490 repro carried no T100KEY at all (message-only
+	// body, consistent with #378's ECC-sparser-body finding), so the text
+	// fallback still matters there even with the key known. See #490.
 	systemNotModifiableHint = "The SAP system is closed for changes (system change option is 'not modifiable'). This is a system-wide setting, not an authorization or lock problem: writes to repository objects will fail until an administrator reopens it in SE06 -> System Change Option. Read-only tools are unaffected."
 	badRequestHint          = "Bad request — the server rejected the request. Check the syntax, required parameters, or the CSRF token."
 	serverErrorHint         = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
@@ -82,6 +86,20 @@ const (
 	// (via adt.ADTError.IsEnqueueLock) and lets the caller decide by comparing
 	// it against themselves. %s is that user.
 	ownAccessConflictHintFmt = "Resource access denied (403 `ExceptionResourceNoAccess` / EU-510) — despite the \"currently editing\" wording, `%s` is often your own stale lock from an earlier session, not a real concurrent editor. If that's you, call `unlock_object` to drop the stale lock and retry; otherwise wait, or check SM12 for the lock owner."
+)
+
+// t100KeyIDSystemChange / t100KeyNoSystemNotModifiable identify SAP message
+// class TK, number 102 ("SAP-System hat den Status \"nicht änderbar\"" /
+// "SAP system has status 'not modifiable'") — looked up via SE91/get_message_class,
+// not adtler's IsEnqueueLock/IsTransportLocked pattern (#490 is aibap.mcp-only,
+// no adtler PR yet). Not promoted to a local ADTError-alike predicate: unlike
+// EU/510, it is unconfirmed whether either system actually populates
+// T100KEY-ID/-NO for this specific exception — the #490 ECC repro carried a
+// message-only body (see systemNotModifiableHint), so matchHint checks this
+// structurally when present and falls back to text otherwise.
+const (
+	t100KeyIDSystemChange        = "TK"
+	t100KeyNoSystemNotModifiable = "102"
 )
 
 // lockOwnerRe matches the trailing "... of user <NAME>" in a CTS lock message
@@ -198,20 +216,23 @@ func errorResult(err error) *mcp.CallToolResult {
 //   - A 400 that mentions a transport gets the more specific transport hint
 //     instead of the generic bad-request hint.
 //   - A 403 whose message says the system change option is closed ("not
-//     modifiable") gets a hint naming SE06 instead of the generic
-//     authorization hint — SAP reports this with the same
-//     ExceptionResourceNoAccess Type as a genuine auth error, so Type alone
-//     cannot distinguish them (#490).
+//     modifiable", SAP message class TK/102) gets a hint naming SE06
+//     instead of the generic authorization hint — SAP reports this with
+//     the same ExceptionResourceNoAccess Type as a genuine auth error, so
+//     Type alone cannot distinguish them (#490). Matched on the T100 key
+//     when present, else on message text in English and German (the two
+//     variants confirmed live so far).
 //   - Errors that carry no ADT Type or status — plain Go errors such as the
 //     ReleaseTransport "… is inactive" failure, or our own English
 //     "already exists" messages — are matched on localised text as a last
 //     resort.
 //
-// The 405 refinement, the not-modifiable check, and the ECC fallbacks noted
-// above match on localised message text, so they are language-fragile: they
-// silently miss on non-English systems and degrade to the kind-based hint.
-// That tradeoff is accepted for conditions with no clean structural signal
-// (#406, #404, #490) or where SAP's own body is simply sparser (ECC, #378).
+// The 405 refinement, the not-modifiable text fallback, and the ECC
+// fallbacks noted above match on localised message text, so they are
+// language-fragile: they silently miss on a logon language none of the
+// matched variants cover, and degrade to the kind-based hint. That tradeoff
+// is accepted for conditions with no clean structural signal (#406, #404) or
+// where SAP's own body is simply sparser (ECC, #378, #490).
 func matchHint(err error) string {
 	kind := adt.ClassifyError(err)
 	errText := strings.ToLower(err.Error())
@@ -297,14 +318,19 @@ func matchHint(err error) string {
 		return transportHint
 	}
 
-	// System change option closed beats the generic forbidden/authorization
-	// hint — no auth change fixes it. Matched narrowly on "system has status"
-	// + "not modifiable" together, not "not modifiable" alone: SE06 can also
-	// close a single software component or namespace for changes, and that
-	// 403 likely uses different wording naming the component/namespace
-	// instead of "system" — text unconfirmed without a live repro, so the
-	// narrower match avoids mislabeling that case as system-wide. See #490.
-	if kind == adt.ErrorForbidden && strings.Contains(errText, "system has status") && strings.Contains(errText, "not modifiable") {
+	// System change option closed (SAP message class TK, number 102) beats the
+	// generic forbidden/authorization hint — no auth change fixes it. Tries
+	// the structural T100 key first (works regardless of logon language, if
+	// the body carries one — see t100KeyIDSystemChange); falls back to text,
+	// narrowly on "system has status"/"sap-system hat den status" together
+	// with "not modifiable"/"nicht änderbar", not "not modifiable" alone: SE06
+	// can also close a single software component or namespace for changes,
+	// and that 403 likely names the component/namespace instead of "system"
+	// — wording unconfirmed live, so the narrower match avoids mislabeling
+	// that case as system-wide. English and German are the two variants
+	// confirmed live so far (#490); other logon languages still fall through
+	// to forbiddenHint until observed.
+	if kind == adt.ErrorForbidden && isSystemNotModifiable(adtErr, isADTErr, errText) {
 		return systemNotModifiableHint
 	}
 
@@ -343,4 +369,19 @@ func asADTError(err error) (*adt.ADTError, bool) {
 		return adtErr, true
 	}
 	return nil, false
+}
+
+// isSystemNotModifiable reports whether a 403 ExceptionResourceNoAccess is
+// SAP's system-change-option-closed condition (message class TK, number
+// 102), checked structurally via the T100 key when present, else via message
+// text in the two languages confirmed live so far (English, German). See the
+// matchHint call site for the narrower-than-"not modifiable"-alone rationale.
+func isSystemNotModifiable(adtErr *adt.ADTError, isADTErr bool, errText string) bool {
+	if isADTErr && adtErr.T100KeyID == t100KeyIDSystemChange && adtErr.T100KeyNo == t100KeyNoSystemNotModifiable {
+		return true
+	}
+	if strings.Contains(errText, "system has status") && strings.Contains(errText, "not modifiable") {
+		return true
+	}
+	return strings.Contains(errText, "sap-system hat den status") && strings.Contains(errText, "nicht änderbar")
 }

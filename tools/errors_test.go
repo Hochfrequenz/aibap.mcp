@@ -409,6 +409,21 @@ func TestMatchHint_SystemNotModifiable(t *testing.T) {
 	if got := matchHint(non403); got == systemNotModifiableHint {
 		t.Errorf("non-403 must not get the not-modifiable hint, got: %s", got)
 	}
+
+	// German logon language: the exact text observed in the #490 live repro
+	// against an ECC system (message class TK, number 102), no T100KEY in the
+	// body (ECC's sparser-body pattern, #378).
+	german := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: `SAP-System hat den Status "nicht änderbar"`}
+	if got := matchHint(german); got != systemNotModifiableHint {
+		t.Errorf("German text: got: %s, want: %s", got, systemNotModifiableHint)
+	}
+
+	// Structural T100 key match: fires even when the message text is neither
+	// of the two confirmed languages, as long as the key is present.
+	structural := &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "Some other-language rendering", T100KeyID: "TK", T100KeyNo: "102"}
+	if got := matchHint(structural); got != systemNotModifiableHint {
+		t.Errorf("structural T100 key: got: %s, want: %s", got, systemNotModifiableHint)
+	}
 }
 
 func TestErrorResult_WithHint(t *testing.T) {
