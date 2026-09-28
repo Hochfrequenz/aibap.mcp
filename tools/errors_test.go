@@ -196,6 +196,65 @@ func TestMatchHint_ObjectLockedInTransport(t *testing.T) {
 	}
 }
 
+// TestMatchHint_378_WriteErrorClasses pins the four write-error classes from
+// issue #378, using the live reproducer bodies captured against
+// Z_ADT_MCP_TEST_REPORT on an S/4 system (transport/user in the fixtures
+// below are placeholders, not the real values from that capture).
+func TestMatchHint_378_WriteErrorClasses(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		wantHint    string
+		notWantHint string
+	}{
+		{
+			name:        "400 corrNr missing names create_transport, not just generic bad request",
+			err:         &adt.ADTError{StatusCode: 400, Type: "ExceptionParameterNotFound", Message: "Parameter corrNr could not be found."},
+			wantHint:    "create_transport",
+			notWantHint: "Bad request —",
+		},
+		{
+			name:        "403 EU/510 own-stale-lock names unlock_object, not the generic auth hint",
+			err:         &adt.ADTError{StatusCode: 403, Type: "ExceptionResourceNoAccess", Message: "User SMITH is currently editing Z_ADT_MCP_TEST_REPORT"},
+			wantHint:    "unlock_object",
+			notWantHint: "S_DEVELOP",
+		},
+		{
+			name:        "423 invalid lock handle points at lock_object, not unlock_object as the fix",
+			err:         &adt.ADTError{StatusCode: 423, Type: "ExceptionResourceInvalidLockHandle", Message: "Resource INCLUDE Z_ADT_MCP_TEST_REPORT is not locked (invalid lock handle: DEADBEEF)"},
+			wantHint:    "Call `lock_object`",
+			notWantHint: "Call `unlock_object`",
+		},
+		{
+			name:     "500 transport-conflict names the corrNr and the owner from the message",
+			err:      &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure", Message: "Object R3TR PROG Z_ADT_MCP_TEST_REPORT is already locked in request ZZZK900001 of user SMITH"},
+			wantHint: "transport=ZZZK900001",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hint := matchHint(tt.err)
+			if !strings.Contains(hint, tt.wantHint) {
+				t.Errorf("hint should contain %q, got: %s", tt.wantHint, hint)
+			}
+			if tt.notWantHint != "" && strings.Contains(hint, tt.notWantHint) {
+				t.Errorf("hint should NOT contain %q, got: %s", tt.notWantHint, hint)
+			}
+		})
+	}
+
+	// The 500 case must also name the owner, and must not collide with the
+	// unrelated 409 ObjectLockedInTransport hint wording.
+	saveConflict := &adt.ADTError{StatusCode: 500, Type: "ExceptionResourceSaveFailure", Message: "Object R3TR PROG Z_ADT_MCP_TEST_REPORT is already locked in request ZZZK900001 of user SMITH"}
+	hint := matchHint(saveConflict)
+	if !strings.Contains(hint, "SMITH") {
+		t.Errorf("500 transport-conflict hint should name the owner, got: %s", hint)
+	}
+	if !strings.Contains(hint, "500") {
+		t.Errorf("500 transport-conflict hint should note the surprising status code, got: %s", hint)
+	}
+}
+
 // TestMatchHint_NoDeleteHandler pins the #404 hint: a 405 "... does not support
 // method DELETE" (e.g. SAP Gateway VIT objects) must steer the user to a GUI /
 // black-magic path rather than the generic method-not-allowed hint. A generic
