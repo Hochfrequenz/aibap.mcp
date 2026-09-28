@@ -285,25 +285,16 @@ func (m *mockClient) RunQuery(ctx context.Context, sql string, maxRows int) (*ad
 	}
 	return &adt.QueryResult{}, nil
 }
-func (m *mockClient) ReleaseTransport(ctx context.Context, transport string) error {
-	if m.releaseTransportFn != nil {
-		return m.releaseTransportFn(ctx, transport)
-	}
-	return nil
-}
-func (m *mockClient) ReleaseTransportWithTasks(context.Context, string) error {
-	return nil
-}
 
-// ReleaseTransportVerified mirrors adtler's real composition (release, then
-// confirm via a status read) so it routes through the same releaseTransportFn
-// and getTransportInfoFn hooks the tests configure.
-func (m *mockClient) ReleaseTransportVerified(ctx context.Context, transport string, includeTasks bool) (*adt.ReleaseResult, error) {
+// ReleaseTransport mirrors adtler's real composition (release, then confirm
+// via a status read) so it routes through the releaseTransportFn and
+// getTransportInfoFn hooks the tests configure. Since adtler v0.5.5 (#171)
+// this composition lives directly on ReleaseTransport/ReleaseTransportWithTasks
+// rather than a separate ReleaseTransportVerified wrapper.
+func (m *mockClient) ReleaseTransport(ctx context.Context, transport string) (*adt.ReleaseResult, error) {
 	var err error
-	if includeTasks {
-		err = m.ReleaseTransportWithTasks(ctx, transport)
-	} else {
-		err = m.ReleaseTransport(ctx, transport)
+	if m.releaseTransportFn != nil {
+		err = m.releaseTransportFn(ctx, transport)
 	}
 	if err != nil {
 		return nil, err
@@ -311,6 +302,14 @@ func (m *mockClient) ReleaseTransportVerified(ctx context.Context, transport str
 	if info, infoErr := m.GetTransportInfo(ctx, transport); infoErr == nil && info != nil && info.Status == "D" {
 		return &adt.ReleaseResult{Transport: transport, Released: false}, nil
 	}
+	return &adt.ReleaseResult{Transport: transport, Released: true}, nil
+}
+
+// ReleaseTransportWithTasks is a stub: no existing test exercises
+// include_tasks=true (see tools/transport_test.go), matching this mock's
+// pre-#171 behavior of ignoring releaseTransportFn/getTransportInfoFn for
+// this path.
+func (m *mockClient) ReleaseTransportWithTasks(ctx context.Context, transport string) (*adt.ReleaseResult, error) {
 	return &adt.ReleaseResult{Transport: transport, Released: true}, nil
 }
 func (m *mockClient) RollbackTransport(ctx context.Context, transport string) (*adt.RollbackResult, error) {
