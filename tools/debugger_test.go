@@ -2,9 +2,12 @@ package tools
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -93,6 +96,40 @@ func TestDebugStepGetVariableGetStackSetWatchpointBuildersHandleNonJSONBody(t *t
 	}
 }
 
+// TestStepResultForError guards issue #529's consumer wiring: debug_step must
+// treat *adt.DebuggeeEndedError (adtler#157) as a successful "debuggee ran to
+// completion" outcome, not an error. Any other error — including one that
+// merely wraps a timeout without adtler having classified it — must fall
+// through unhandled so the handler still calls errorResult on it.
+func TestStepResultForError(t *testing.T) {
+	endedErr := &adt.DebuggeeEndedError{Action: "stepContinue", Underlying: errors.New("context deadline exceeded")}
+	result, ok := stepResultForError(endedErr)
+	if !ok {
+		t.Fatalf("stepResultForError(%v): got ok=false, want true", endedErr)
+	}
+	if !result.DebuggeeEnded {
+		t.Errorf("stepResultForError(%v): got DebuggeeEnded=false, want true", endedErr)
+	}
+
+	// A genuinely wrapped DebuggeeEndedError (%w) must still be recognised via errors.As.
+	wrappedWithVerb := fmt.Errorf("Step: %w", endedErr)
+	wrappedResult, ok := stepResultForError(wrappedWithVerb)
+	if !ok || !wrappedResult.DebuggeeEnded {
+		t.Errorf("stepResultForError(%v): got (%+v, %v), want DebuggeeEnded=true, ok=true", wrappedWithVerb, wrappedResult, ok)
+	}
+
+	// A message that merely copies the ended-error's text (not wrapped with %w) must NOT match.
+	textOnly := errors.New("Step: " + endedErr.Error())
+	if _, ok := stepResultForError(textOnly); ok {
+		t.Errorf("stepResultForError(%v): a plain error with matching text but no %%w wrapping must not match", textOnly)
+	}
+
+	plainErr := errors.New("SAP ADT error 500 (AdiFailed): Es ist eine Ausnahme aufgetreten")
+	if _, ok := stepResultForError(plainErr); ok {
+		t.Errorf("stepResultForError(%v): got ok=true, want false for a plain error", plainErr)
+	}
+}
+
 // TestDebugStepGetVariableGetStackSetWatchpointResultsMarshalToObject checks
 // that each of the four #501 result types round-trips to a JSON object
 // through NewToolResultJSON, per the MCP 2025-06-18 structuredContent
@@ -106,6 +143,7 @@ func TestDebugStepGetVariableGetStackSetWatchpointBuildersHandleNonJSONBody(t *t
 func TestDebugStepGetVariableGetStackSetWatchpointResultsMarshalToObject(t *testing.T) {
 	results := []any{
 		buildDebugStepResult([]byte(`<x/>`)),
+		DebugStepResult{DebuggeeEnded: true},
 		buildDebugVariableResult("LV_FLAG", []byte("X")),
 		buildDebugStackResult([]byte(`<dbg:stack/>`)),
 		buildDebugWatchpointResult([]byte(`<watchpoint/>`)),

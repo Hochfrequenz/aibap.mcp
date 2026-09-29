@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -60,6 +61,19 @@ func buildDebugSessionsResult(data []byte) DebugSessionsResult {
 
 func buildDebugStepResult(data []byte) DebugStepResult {
 	return DebugStepResult{Raw: string(data)}
+}
+
+// stepResultForError reports whether err is (or wraps) *adt.DebuggeeEndedError —
+// the ADT debugger kernel call hanging until timeout because the debuggee ran
+// past its last statement (see adtler#157, aibap.mcp#513). When it is, the step
+// action's outcome is "debuggee ran to completion", a success, not a failure —
+// see issue #529.
+func stepResultForError(err error) (DebugStepResult, bool) {
+	var ended *adt.DebuggeeEndedError
+	if errors.As(err, &ended) {
+		return DebugStepResult{DebuggeeEnded: true}, true
+	}
+	return DebugStepResult{}, false
 }
 
 func buildDebugVariableResult(name string, data []byte) DebugVariableResult {
@@ -317,7 +331,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process outright, while detachDebugger stops debugging and lets the debuggee continue running to completion normally (the standard meaning of \"detach\" in any debugger — unlike terminateDebuggee, nothing is killed). Requires an active debug session via debug_start + debug_attach."),
+		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process outright, while detachDebugger stops debugging and lets the debuggee continue running to completion normally (the standard meaning of \"detach\" in any debugger — unlike terminateDebuggee, nothing is killed). Requires an active debug session via debug_start + debug_attach. If a step action (typically stepContinue) runs the debuggee past its last statement, the underlying SAP kernel call can hang for up to ~30 seconds before returning; the result is then reported as debuggee_ended=true (raw empty) instead of an error — this is a normal, successful outcome, not a failure, and no further step action is possible on that debuggee."),
 		mcp.WithString("action",
 			mcp.Required(),
 			mcp.Description("Step action: stepInto, stepOver, stepReturn, stepContinue, terminateDebuggee, or detachDebugger"),
@@ -342,6 +356,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		}
 		data, err := getSession(user).Step(ctx, action)
 		if err != nil {
+			if result, ok := stepResultForError(err); ok {
+				return mcp.NewToolResultJSON(result)
+			}
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultJSON(buildDebugStepResult(data))
