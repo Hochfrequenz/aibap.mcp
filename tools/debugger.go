@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -60,6 +61,19 @@ func buildDebugSessionsResult(data []byte) DebugSessionsResult {
 
 func buildDebugStepResult(data []byte) DebugStepResult {
 	return DebugStepResult{Raw: string(data)}
+}
+
+// stepResultForError reports whether err is (or wraps) *adt.DebuggeeEndedError —
+// the ADT debugger kernel call hanging until timeout because the debuggee ran
+// past its last statement (see adtler#157, aibap.mcp#513). When it is, the step
+// action's outcome is "debuggee ran to completion", a success, not a failure —
+// see issue #529.
+func stepResultForError(err error) (DebugStepResult, bool) {
+	var ended *adt.DebuggeeEndedError
+	if errors.As(err, &ended) {
+		return DebugStepResult{DebuggeeEnded: true}, true
+	}
+	return DebugStepResult{}, false
 }
 
 func buildDebugVariableResult(name string, data []byte) DebugVariableResult {
@@ -342,6 +356,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		}
 		data, err := getSession(user).Step(ctx, action)
 		if err != nil {
+			if result, ok := stepResultForError(err); ok {
+				return mcp.NewToolResultJSON(result)
+			}
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultJSON(buildDebugStepResult(data))
