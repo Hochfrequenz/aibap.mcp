@@ -331,7 +331,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process outright, while detachDebugger stops debugging and lets the debuggee continue running to completion normally (the standard meaning of \"detach\" in any debugger — unlike terminateDebuggee, nothing is killed). Requires an active debug session via debug_start + debug_attach."),
+		mcp.WithDescription("Execute a debug step action. stepContinue resumes the suspended debuggee; terminateDebuggee kills the running debuggee process outright, while detachDebugger stops debugging and lets the debuggee continue running to completion normally (the standard meaning of \"detach\" in any debugger — unlike terminateDebuggee, nothing is killed). Requires an active debug session via debug_start + debug_attach. If a step action (typically stepContinue) runs the debuggee past its last statement, the underlying SAP kernel call can hang for up to ~30 seconds before returning; the result is then reported as debuggee_ended=true (raw empty) instead of an error — this is a normal, successful outcome, not a failure, and no further step action is possible on that debuggee."),
 		mcp.WithString("action",
 			mcp.Required(),
 			mcp.Description("Step action: stepInto, stepOver, stepReturn, stepContinue, terminateDebuggee, or detachDebugger"),

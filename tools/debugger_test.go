@@ -3,6 +3,7 @@ package tools
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -110,10 +111,17 @@ func TestStepResultForError(t *testing.T) {
 		t.Errorf("stepResultForError(%v): got DebuggeeEnded=false, want true", endedErr)
 	}
 
-	// Wrapped DebuggeeEndedError must still be recognised via errors.As.
-	wrapped := errors.New("Step: " + endedErr.Error())
-	if _, ok := stepResultForError(wrapped); ok {
-		t.Errorf("stepResultForError(%v): a plain wrapping error (not %%w) must not match", wrapped)
+	// A genuinely wrapped DebuggeeEndedError (%w) must still be recognised via errors.As.
+	wrappedWithVerb := fmt.Errorf("Step: %w", endedErr)
+	wrappedResult, ok := stepResultForError(wrappedWithVerb)
+	if !ok || !wrappedResult.DebuggeeEnded {
+		t.Errorf("stepResultForError(%v): got (%+v, %v), want DebuggeeEnded=true, ok=true", wrappedWithVerb, wrappedResult, ok)
+	}
+
+	// A message that merely copies the ended-error's text (not wrapped with %w) must NOT match.
+	textOnly := errors.New("Step: " + endedErr.Error())
+	if _, ok := stepResultForError(textOnly); ok {
+		t.Errorf("stepResultForError(%v): a plain error with matching text but no %%w wrapping must not match", textOnly)
 	}
 
 	plainErr := errors.New("SAP ADT error 500 (AdiFailed): Es ist eine Ausnahme aufgetreten")

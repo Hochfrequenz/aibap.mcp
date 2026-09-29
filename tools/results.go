@@ -185,12 +185,13 @@ type DebugSessionsResult struct {
 // not JSON, so the payload is forwarded as Raw rather than parsed. See
 // issue #501.
 //
-// DebuggeeEnded is set instead of Raw when a step action (typically
-// stepContinue) ran the debuggee past its last statement: SAP's ADT
-// debugger kernel call never returns an HTTP response for that case, and
-// adtler's Step detects it (timeout + no remaining debuggee session) and
-// returns *adt.DebuggeeEndedError rather than a bare timeout. See #513 for
-// the root-cause derivation and #529 for this consumer wiring.
+// DebuggeeEnded is true, and Raw is empty (there is no XML body to
+// forward), when a step action (typically stepContinue) ran the debuggee
+// past its last statement: SAP's ADT debugger kernel call never returns an
+// HTTP response for that case, and adtler's Step detects it (timeout + no
+// remaining debuggee session) and returns *adt.DebuggeeEndedError rather
+// than a bare timeout. See #513 for the root-cause derivation and #529 for
+// this consumer wiring.
 type DebugStepResult struct {
 	Raw           string `json:"raw"`
 	DebuggeeEnded bool   `json:"debuggee_ended,omitempty"`
