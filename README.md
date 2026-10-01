@@ -542,17 +542,13 @@ claude mcp add --scope user sap-adt -- /path/to/aibap.mcp --tools=all
 
 Everything after `--` is the command line Claude Code starts, so server flags such as `--tools` or `--consent` go there. `--tools=all` also enables the debugger tools. Drop the flag to use the `tools` list from `systems.json`, or the default set (everything except `debug`) if there is none — see [Tool groups](#tool-groups).
 
-[sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp) shares `systems.json` and is registered the same way, for example with the desktop backend:
-
-```bash
-claude mcp add --scope user sap-desktop -e BACKEND_TYPE=desktop -- /path/to/sapgui_mcp_windows_<version>.exe
-```
+[sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp) shares `systems.json` and can be registered in user scope the same way. Its [Setup section](https://github.com/Hochfrequenz/sapgui.mcp#setup) has the server names and environment variables for each backend.
 
 Run `claude mcp list` afterwards: it checks every configured server and shows whether it connected.
 
 Things to know:
 
-- **Put the server name before `-e`.** The `-e` option accepts several values, so in `claude mcp add --scope user -e KEY=VAL sap-desktop -- …` it reads the server name as a second environment variable, and the command fails with `error: missing required argument 'commandOrUrl'` or, if the server command has arguments, `Invalid environment variable format: sap-desktop`.
+- **Put the server name before `-e`.** The `-e` option accepts several values, so in `claude mcp add --scope user -e KEY=VAL my-server -- …` it reads the server name as a second environment variable, and the command fails with `error: missing required argument 'commandOrUrl'` or, if the server command has arguments, `Invalid environment variable format: my-server`.
 - **More specific scopes win.** If the same server name is registered more than once, Claude Code uses local scope first, then project scope (`.mcp.json` in the project root), then user scope. An old local or project entry that points at a deleted binary shadows your user-scope registration and shows up as `CONNECTION_CLOSED` at session start. Local-scope entries live in `~/.claude.json` under `projects.<path>.mcpServers`. Remove the leftover with `claude mcp remove <name> -s local`, or delete the server from the project's `.mcp.json`.
 - **`SAP_CONFIG_FILE` is optional.** The server reads `~/.config/sap-mcp/systems.json` by default. Pass `-e SAP_CONFIG_FILE=/path/to/config.json` only if your config lives elsewhere.
 
