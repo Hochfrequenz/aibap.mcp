@@ -297,7 +297,7 @@ Create `~/.config/sap-mcp/systems.json` (shared with [sapgui.mcp](https://github
 
 ### 3. Connect to Claude
 
-See [Usage with Claude](#usage-with-claude) below for copy-paste configuration snippets.
+See [Usage with Claude](#usage-with-claude) below for copy-paste configuration snippets. For Claude Code, register the server once in user scope — see [Register once for all projects](#register-once-for-all-projects-user-scope) — so you do not need a `.mcp.json` in every project.
 
 ### Alternative: Docker
 
@@ -509,10 +509,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "abap": {
       "command": "/path/to/aibap.mcp",
-      "args": [],
-      "env": {
-        "SAP_CONFIG_FILE": "/path/to/config.json"
-      }
+      "args": []
     }
   }
 }
@@ -525,22 +522,39 @@ To reduce token footprint, load only the tool groups you need:
   "mcpServers": {
     "abap": {
       "command": "/path/to/aibap.mcp",
-      "args": ["--tools=source,objects,testing,transport"],
-      "env": {
-        "SAP_CONFIG_FILE": "/path/to/config.json"
-      }
+      "args": ["--tools=source,objects,testing,transport"]
     }
   }
 }
 ```
 
+The server reads `~/.config/sap-mcp/systems.json` by default. Add `"env": { "SAP_CONFIG_FILE": "/path/to/config.json" }` only if your config lives somewhere else.
+
 ### Claude Code (CLI)
 
-Add to your Claude Code MCP settings or run directly:
+#### Register once for all projects (user scope)
+
+`systems.json` and the server registration are two separate things. `systems.json` tells the server which SAP systems exist and how to log on to them. The registration tells Claude Code which binary to start. Register the server once in user scope, and it is available in every project without a per-project `.mcp.json`:
 
 ```bash
-SAP_CONFIG_FILE=/path/to/config.json aibap.mcp
+claude mcp add --scope user sap-adt -- /path/to/aibap.mcp --tools=all
 ```
+
+Everything after `--` is the command line Claude Code starts, so server flags such as `--tools` or `--consent` go there. Drop `--tools=all` to get the default tool set (everything except `debug`, see [Tool groups](#tool-groups)).
+
+[sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp) shares `systems.json` and is registered the same way, for example with the desktop backend:
+
+```bash
+claude mcp add --scope user sap-desktop -e BACKEND_TYPE=desktop -- /path/to/sapgui_mcp.exe
+```
+
+Run `claude mcp list` afterwards: it starts every configured server and reports whether it connected.
+
+Things to know:
+
+- **Put the server name before `-e`.** The `-e` option accepts several values, so in `claude mcp add --scope user -e KEY=VAL sap-desktop -- …` it reads the server name as a second environment variable, and the command fails with an error such as `Invalid environment variable format: sap-desktop`.
+- **More specific scopes win.** If the same server name is registered more than once, Claude Code uses local scope first, then project scope (`.mcp.json` in the project root), then user scope. An old local or project entry that points at a deleted binary shadows your user-scope registration and shows up as `CONNECTION_CLOSED` at session start. Remove the leftover with `claude mcp remove <name> -s local`, or delete the server from the project's `.mcp.json`.
+- **`SAP_CONFIG_FILE` is optional.** The server reads `~/.config/sap-mcp/systems.json` by default. Pass `-e SAP_CONFIG_FILE=/path/to/config.json` only if your config lives elsewhere.
 
 ## Example workflow
 
