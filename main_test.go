@@ -419,6 +419,17 @@ func TestServerInstructions_DebugLineIsConditional(t *testing.T) {
 	if strings.Contains(withoutDebug, debugClaim) {
 		t.Errorf("debug disabled: instructions must NOT advertise debugging, got:\n%s", withoutDebug)
 	}
+
+	// The core debugging rules and the pointer to the guide resource travel
+	// with the group (#559): present only when the debug tools are.
+	for _, rule := range []string{"\n\nDEBUGGING:\n", tools.DebuggingGuideURI, "detachDebugger", "stepOver"} {
+		if !strings.Contains(withDebug, rule) {
+			t.Errorf("debug enabled: instructions should contain %q, got:\n%s", rule, withDebug)
+		}
+		if strings.Contains(withoutDebug, rule) {
+			t.Errorf("debug disabled: instructions must NOT contain %q", rule)
+		}
+	}
 }
 
 // The non-conditional parts of the blurb (and the system list) must always be

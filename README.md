@@ -201,6 +201,8 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 
 A debugging session is one `debug_run`: the server sets the breakpoints, listens and attaches in the background, so it does not depend on the MCP client running tool calls in parallel. Call `debug_wait` with the returned `version` until the status is `attached`, inspect with `debug_get_stack`, `debug_get_variable` and `debug_step`, end the debuggee with `debug_step` `detachDebugger`, and finish with `debug_stop`. For `manual` and `gui` runs the result carries instructions: the run must be made as the same SAP user before `listening_until`. Breakpoints in system programs are never hit. Each server process uses its own debugger IDE ID, so two processes of the same user do not share breakpoints.
 
+The debug tools do not start the program; an ABAP Unit run or a SAP GUI session has to trigger the breakpoint while `debug_start` waits. With the group enabled, the server also exposes the resource `sap-adt://guides/debugging` ([source](tools/guides/debugging.md)), which describes the triggers that work and how to end a session.
+
 </details>
 
 <details>

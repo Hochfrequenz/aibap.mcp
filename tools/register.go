@@ -277,7 +277,10 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 			registerRollbackTools(ls, client)
 		}},
 		{"enhancements", func() { registerEnhancementTools(ls, client) }},
-		{"debug", func() { registerDebuggerTools(ls, client, selector, fallback, settings) }},
+		{"debug", func() {
+			registerDebuggerTools(ls, client, selector, fallback, settings)
+			registerDebuggingGuide(s)
+		}},
 		{"export", func() {
 			registerExportTools(ls, client)
 			registerAbapGitSyncTools(ls, client)

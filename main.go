@@ -200,14 +200,30 @@ func buildServer(
 	return s
 }
 
+// debugInstructions is the short form of the debugging guide resource
+// (tools.DebuggingGuideURI). Keep both in sync.
+const debugInstructions = `
+
+DEBUGGING:
+- debug_start sets the breakpoint, then waits for a program to hit it; it does not run the program. Start the program a few seconds after debug_start begins waiting, under the SAP user passed as 'user'. A run that starts after debug_start has returned is never caught.
+- Triggers that work: ABAP Unit tests (run_unit_tests) running at the same time as debug_start, or a program started from a SAP GUI session that was first enabled for ADT external debugging. Some clients run tool calls one after another even when issued together; there, run_unit_tests only starts after debug_start has timed out, so use the SAP GUI trigger with a person at the GUI: brief them before calling debug_start (it blocks), and give it a long timeout_seconds.
+- The breakpoint stops before its line executes: a variable assigned on that line is still initial until debug_step stepOver.
+- End a session triggered from SAP GUI with debug_step detachDebugger, not stepContinue (stepContinue can hang and block the debug session). Always finish with debug_stop.
+- Read the resource ` + tools.DebuggingGuideURI + ` for the step-by-step procedures before the first debug_start.`
+
 func serverInstructions(systemNames []string, defaultSystem string, debugEnabled bool) string {
 	// The debugger tools (breakpoints, stepping, variable inspection) are an
 	// opt-in group, off by default (see tools.DefaultGroups / #429). Only
 	// advertise the capability when the group is actually enabled — otherwise
 	// the instructions promise tools the client cannot see.
+	//
+	// With the group enabled, the core debugging rules follow as their own
+	// section. Getting them wrong fails silently — the listener times out
+	// while the program runs to completion — and some clients never read the
+	// guide resource, so the rules cannot live only there (#559).
 	debugLine := ""
 	if debugEnabled {
-		debugLine = "\n- Debugging (breakpoints, stepping, variable inspection)"
+		debugLine = "\n- Debugging (breakpoints, stepping, variable inspection)" + debugInstructions
 	}
 	return fmt.Sprintf(`SAP ADT (ABAP Development Tools) MCP server. Operates on SAP via HTTP/REST — no GUI required.
 
