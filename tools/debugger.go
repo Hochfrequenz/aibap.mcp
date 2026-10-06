@@ -235,14 +235,12 @@ func registerDebugRunTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Stop the current debug run: stop the listener, remove its breakpoints, detach a halted debuggee, and drop the debug session."),
+		mcp.WithDescription("Stop the current debug run: stop the listener, remove its breakpoints, detach a halted debuggee, and drop "+
+			"the debug session. Reports the removed breakpoints and anything that could not be removed or detached."),
 		mcp.WithString(paramUser, mcp.Description("Ignored: debug_stop always stops the current run.")),
-		mcp.WithOutputSchema[DebugListenerStopResult](),
+		mcp.WithOutputSchema[DebugStopResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if err := sessions.stop().err(); err != nil {
-			return errorResult(fmt.Errorf("debug_stop: the run is stopped, but the cleanup was incomplete: %w", err)), nil
-		}
-		return mcp.NewToolResultJSON(DebugListenerStopResult{Stopped: true})
+		return mcp.NewToolResultJSON(buildStopResult(sessions.stop()))
 	})
 }
 

@@ -7,7 +7,10 @@ import (
 )
 
 // secondBreakpointID is the ID the fake gives the second breakpoint it sets.
-const secondBreakpointID = "BP2"
+const (
+	firstBreakpointID  = "BP1"
+	secondBreakpointID = "BP2"
+)
 
 func setBreakpointArgs(uri string, line int) map[string]interface{} {
 	return map[string]interface{}{"object_uri": uri, "line": line}

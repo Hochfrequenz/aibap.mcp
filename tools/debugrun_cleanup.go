@@ -185,3 +185,24 @@ func isNotAttachedErr(err error) bool {
 	var adtErr *adt.ADTError
 	return errors.As(err, &adtErr) && adtErr.Properties[adtExceptionSubtype] == "noSessionAttached"
 }
+
+// buildStopResult shapes a cleanup report as debug_stop's result.
+func buildStopResult(rep cleanupReport) DebugStopResult {
+	res := DebugStopResult{
+		Stopped:            true,
+		RemovedBreakpoints: append([]DebugRunBreakpoint{}, rep.removed...),
+		NotRemoved:         []DebugBreakpointFailure{},
+	}
+	for _, f := range rep.notRemoved {
+		res.NotRemoved = append(res.NotRemoved, DebugBreakpointFailure{
+			ObjectURI: f.bp.ObjectURI, Line: f.bp.Line, ID: f.bp.ID, Scope: f.bp.Scope, Error: f.err.Error(),
+		})
+	}
+	if rep.listenerErr != nil {
+		res.ListenerError = rep.listenerErr.Error()
+	}
+	if rep.detachErr != nil {
+		res.DetachError = rep.detachErr.Error()
+	}
+	return res
+}

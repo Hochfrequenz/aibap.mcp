@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -543,7 +544,9 @@ func (m *debugSessions) shutdown(ctx context.Context) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		m.stop()
+		if err := m.stop().err(); err != nil {
+			slog.Warn("debug cleanup at shutdown was incomplete", "error", err)
+		}
 	}()
 	select {
 	case <-done:

@@ -156,8 +156,23 @@ type BreakpointRemoveResult struct {
 	Message string `json:"message,omitempty"`
 }
 
-type DebugListenerStopResult struct {
-	Stopped bool `json:"stopped"`
+// DebugStopResult reports a debug_stop (#558): what the cleanup removed and
+// what it could not. The run is stopped and the session dropped either way.
+type DebugStopResult struct {
+	Stopped            bool                     `json:"stopped"`
+	RemovedBreakpoints []DebugRunBreakpoint     `json:"removed_breakpoints"`
+	NotRemoved         []DebugBreakpointFailure `json:"not_removed"`
+	ListenerError      string                   `json:"listener_error,omitempty"`
+	DetachError        string                   `json:"detach_error,omitempty"`
+}
+
+// DebugBreakpointFailure is a breakpoint the cleanup could not remove.
+type DebugBreakpointFailure struct {
+	ObjectURI string `json:"object_uri"`
+	Line      int    `json:"line"`
+	ID        string `json:"id"`
+	Scope     string `json:"scope"`
+	Error     string `json:"error"`
 }
 
 // DebugSessionsResult reports active debuggee sessions. GetDebuggeeSessions

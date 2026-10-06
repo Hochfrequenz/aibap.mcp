@@ -690,8 +690,8 @@ func TestDebugStop_FailedStopStillDropsSession(t *testing.T) {
 
 	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
 	backend.set(func(f *fakeDebugBackend) { f.failStop = true })
-	if res := callTool(t, s, "debug_stop", map[string]interface{}{}); !res.IsError {
-		t.Fatalf("debug_stop must report the failed stop, got %s", debugResultText(res))
+	if res := callTool(t, s, "debug_stop", map[string]interface{}{}); res.IsError || !strings.Contains(debugResultText(res), `"listener_error"`) {
+		t.Fatalf("debug_stop must report the failed stop in listener_error, got %s", debugResultText(res))
 	}
 	backend.set(func(f *fakeDebugBackend) { f.failStop = false })
 	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
