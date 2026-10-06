@@ -88,16 +88,10 @@ func buildDebugWatchpointResult(data []byte) DebugWatchpointResult {
 	return DebugWatchpointResult{Raw: string(data)}
 }
 
-func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
-	// Shared debug session — created lazily on first use.
-	var dbg *adt.DebugSession
-
-	getSession := func(user string) *adt.DebugSession {
-		if dbg == nil {
-			dbg = adt.NewDebugSession(client, user, "aibap.mcp")
-		}
-		return dbg
-	}
+func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector) {
+	// The debug tools share one session; debugSessions decides when it is
+	// created, reused or replaced (#562).
+	sessions := newDebugSessions(client, selector)
 
 	s.AddTool(mcp.NewTool("debug_set_breakpoint",
 		mcp.WithTitleAnnotation("Set Breakpoint"),
@@ -145,7 +139,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 			}
 		}
 
-		bp, err := getSession(user).SetBreakpoint(ctx, uri, line, objectType, objectName)
+		bp, err := sessions.open(ctx, user).SetBreakpoint(ctx, uri, line, objectType, objectName)
 		if err != nil {
 			return errorResult(err), nil
 		}
@@ -223,7 +217,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 			}
 		}
 
-		session := getSession(user)
+		session := sessions.open(ctx, user)
 
 		bp, err := session.SetBreakpoint(ctx, uri, line, objectType, objectName)
 		if err != nil {
@@ -261,7 +255,11 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 		if err := requireDebuggerStringParam("debug_stop", "user", user); err != nil {
 			return errorResult(err), nil
 		}
-		if err := getSession(user).StopListener(ctx); err != nil {
+		var errs []error
+		for _, session := range sessions.take(user) {
+			errs = append(errs, session.StopListener(ctx))
+		}
+		if err := errors.Join(errs...); err != nil {
 			return errorResult(err), nil
 		}
 		return mcp.NewToolResultJSON(DebugListenerStopResult{Stopped: true})
@@ -279,17 +277,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 			mcp.Description("SAP username for the debug session"),
 		),
 		mcp.WithOutputSchema[DebugSessionsResult](),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		user := req.GetString("user", "")
-		if err := requireDebuggerStringParam("debug_get_sessions", "user", user); err != nil {
-			return errorResult(err), nil
-		}
-		data, err := getSession(user).GetDebuggeeSessions(ctx)
-		if err != nil {
-			return errorResult(err), nil
-		}
-		return mcp.NewToolResultJSON(buildDebugSessionsResult(data))
-	})
+	), debugUserOnlyHandler(sessions, "debug_get_sessions", (*adt.DebugSession).GetDebuggeeSessions, buildDebugSessionsResult))
 
 	s.AddTool(mcp.NewTool("debug_attach",
 		mcp.WithTitleAnnotation("Attach to Debug Session"),
@@ -320,8 +308,10 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 				return errorResult(err), nil
 			}
 		}
-		if err := getSession(user).Attach(ctx, debuggeeID); err != nil {
-			return errorResult(err), nil
+		if _, errRes := sessions.call(user, func(d *adt.DebugSession) ([]byte, error) {
+			return nil, d.Attach(ctx, debuggeeID)
+		}); errRes != nil {
+			return errRes, nil
 		}
 		return mcp.NewToolResultJSON(DebugAttachResult{DebuggeeID: debuggeeID, Attached: true})
 	})
@@ -354,7 +344,11 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 				action, strings.Join(validDebugStepActions, ", "),
 			)), nil
 		}
-		data, err := getSession(user).Step(ctx, action)
+		session, err := sessions.use(user)
+		if err != nil {
+			return errorResult(err), nil
+		}
+		data, err := session.Step(ctx, action)
 		if err != nil {
 			if result, ok := stepResultForError(err); ok {
 				return mcp.NewToolResultJSON(result)
@@ -394,9 +388,11 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 				return errorResult(err), nil
 			}
 		}
-		data, err := getSession(user).GetVariable(ctx, name)
-		if err != nil {
-			return errorResult(err), nil
+		data, errRes := sessions.call(user, func(d *adt.DebugSession) ([]byte, error) {
+			return d.GetVariable(ctx, name)
+		})
+		if errRes != nil {
+			return errRes, nil
 		}
 		return mcp.NewToolResultJSON(buildDebugVariableResult(name, data))
 	})
@@ -413,17 +409,7 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 			mcp.Description("SAP username for the debug session"),
 		),
 		mcp.WithOutputSchema[DebugStackResult](),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		user := req.GetString("user", "")
-		if err := requireDebuggerStringParam("debug_get_stack", "user", user); err != nil {
-			return errorResult(err), nil
-		}
-		data, err := getSession(user).GetStack(ctx)
-		if err != nil {
-			return errorResult(err), nil
-		}
-		return mcp.NewToolResultJSON(buildDebugStackResult(data))
-	})
+	), debugUserOnlyHandler(sessions, "debug_get_stack", (*adt.DebugSession).GetStack, buildDebugStackResult))
 
 	s.AddTool(mcp.NewTool("debug_set_watchpoint",
 		mcp.WithTitleAnnotation("Set Watchpoint"),
@@ -458,9 +444,11 @@ func registerDebuggerTools(s toolAdder, client adt.Client, _ SystemSelector) {
 				return errorResult(err), nil
 			}
 		}
-		data, err := getSession(user).SetWatchpoint(ctx, variableName, condition)
-		if err != nil {
-			return errorResult(err), nil
+		data, errRes := sessions.call(user, func(d *adt.DebugSession) ([]byte, error) {
+			return d.SetWatchpoint(ctx, variableName, condition)
+		})
+		if errRes != nil {
+			return errRes, nil
 		}
 		return mcp.NewToolResultJSON(buildDebugWatchpointResult(data))
 	})
