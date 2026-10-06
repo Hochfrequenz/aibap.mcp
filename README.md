@@ -208,8 +208,8 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 |------|-------------|
 | `export_package` | Export an ABAP package as abapGit ZIP or folder ([requires companion](https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT)) |
 | `abapgit_list_repos` | List the abapGit repositories on the system ([requires companion](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT)) |
-| `abapgit_pull` | Pull a repository from its Git remote into the system, with confirmation of overwrites and deletions (requires companion) |
-| `abapgit_push` | Commit and push selected objects to the Git remote, with dry run (requires companion) |
+| `abapgit_pull` | Pull a repository from its Git remote into the system, with confirmation of overwrites and deletions ([requires companion](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT)) |
+| `abapgit_push` | Commit and push selected objects to the Git remote, with dry run ([requires companion](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT)); needs the per-user SM59 destination `ZGIT_<SAP user>` — see the [companion README](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT#readme) |
 | `export_packages` | Bulk export with wildcard patterns and include/exclude filters |
 | `export_customizing` | Export all customizing tables to SQLite + JSON (read-only, ~16K tables with `customer_only`) |
 | `update_customizing` | Write entries to a customizing table (SM30/SM34) — requires BlackMagic fallback (SAP GUI automation) |
@@ -399,7 +399,7 @@ with every argument, for as long as the rule stays in the settings file. The rul
 narrowed to one system or package: Claude Code skips any `mcp__` rule containing
 parentheses, and these tools take no system argument to match on.
 
-Six tools do something this server cannot undo:
+Eight tools do something this server cannot undo:
 
 - **delete_object** — the object is gone. SAP has no undo, and the source is not under
   version control on the server side.
@@ -416,15 +416,20 @@ Six tools do something this server cannot undo:
   and under `strict` the client asks for approval *before* the handler runs — so you answer
   a prompt for a call that cannot succeed. That is the price of marking it for the builds
   where it does work.
+- **abapgit_pull** — overwrites the current state of objects on the system with the state in
+  Git, and deletes objects that were deleted in Git, so a wrong call destroys work the same
+  way a rollback does.
+- **abapgit_push** — publishes a commit to an external Git host. A later commit can revert
+  the content, but not the publication.
 
-The `--consent` flag decides how the client's permission system treats those six:
+The `--consent` flag decides how the client's permission system treats those eight:
 
 ```bash
 aibap.mcp --consent=strict   # default
 aibap.mcp --consent=prompt
 ```
 
-- **`strict`** (default) marks the six with `_meta["anthropic/requiresUserInteraction"]`.
+- **`strict`** (default) marks the eight with `_meta["anthropic/requiresUserInteraction"]`.
   Per the [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp) the
   permission prompt then appears on every call — including in `acceptEdits`, `auto` and
   `bypassPermissions` modes — and an allow rule that already matches the tool does not skip
@@ -678,6 +683,18 @@ MCP_INTEGRATION_SYSTEMS=hfq go test -tags integration -v -count=1 ./tools/...
 ```
 
 The default target set is `hfq,s4u`.
+
+The abapGit sync tests (`tools/abapgitsync_integration_test.go`) need the companion
+[`Z_ABAPGIT_PULL_MCP_SHORTCUT`](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT) on the target system and skip when it is missing. The pull and push tests additionally need these variables and skip when they are unset:
+
+| Variable | Meaning |
+|---|---|
+| `AIBAP_ABAPGIT_PULL_TEST_REPO` | Repository (name or URL) for the pull test |
+| `AIBAP_ABAPGIT_PULL_TEST_TRANSPORT` | Optional transport request for the pull test |
+| `AIBAP_ABAPGIT_PUSH_TEST_REPO` | Repository (name or URL) for the push dry-run test |
+| `AIBAP_ABAPGIT_PUSH_TEST_OBJECT` | Object for the push dry run, as `TYPE NAME` |
+
+The pull test changes objects on the system, so point it at a throwaway repository. The push test only does a dry run.
 
 **Coverage visibility:** TestMain prints a grep-friendly summary at the top, e.g. `integration targets: hfq=OK s4u=UNREACHABLE`. Always check this — subtests skip loudly when a system or fixture is unreachable rather than failing, so it is possible to get a green `go test` without actually covering everything.
 

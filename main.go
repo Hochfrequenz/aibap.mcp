@@ -209,7 +209,7 @@ If SAP GUI MCP tools are available, prefer them for:
 - Complex GUI interactions (popups, drag-and-drop, tree navigation)
 - Transactions without ADT endpoints (SE21 on ECC, SM37, SLG1, ST22, SQVI)
 - Visual verification of screen state
-- abapGit operations via SAP GUI
+- abapGit operations when the companion Z_ABAPGIT_PULL_MCP_SHORTCUT (with its ADT endpoints) is not installed. If it is installed, abapGit list/pull/push are available through the abapgit_* tools; push also needs the per-user SM59 destination ZGIT_<SAP user>
 
 SAP API POLICY — MANDATORY:
 This server uses the SAP ADT API which is scoped to development tooling only.
