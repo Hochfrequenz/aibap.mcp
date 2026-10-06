@@ -208,7 +208,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 |------|-------------|
 | `export_package` | Export an ABAP package as abapGit ZIP or folder ([requires companion](https://github.com/Hochfrequenz/Z_ABABGIT_ADT_EXPORT)) |
 | `abapgit_list_repos` | List the abapGit repositories on the system ([requires companion](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT)) |
-| `abapgit_pull` | Pull a repository from its Git remote into the system, with confirmation of overwrites and deletions ([requires companion](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT)) |
+| `abapgit_pull` | Pull a repository from its Git remote into the system, changes that exist only in Git are applied on the first call (including deletions), local changes, package moves and warnings need explicit confirmation ([requires companion](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT)) |
 | `abapgit_push` | Commit and push selected objects to the Git remote, with dry run ([requires companion](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT)); needs the per-user SM59 destination `ZGIT_<SAP user>` — see the [companion README](https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT#readme) |
 | `export_packages` | Bulk export with wildcard patterns and include/exclude filters |
 | `export_customizing` | Export all customizing tables to SQLite + JSON (read-only, ~16K tables with `customer_only`) |

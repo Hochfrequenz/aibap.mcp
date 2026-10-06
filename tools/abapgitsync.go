@@ -19,8 +19,8 @@ const (
 	abapGitCredentialsHint = "Do not retry. Tell the human to create or fix the SM59 HTTP destination `ZGIT_<SAP user>` " +
 		"(connection type G, host github.com, port 443, SSL active, basic authentication with a fine-grained personal access token). " +
 		"Setup: " + abapGitCompanionURL + "#readme"
-	abapGitRemoteChangedHint = "The remote branch changed since the last pull. Run `abapgit_pull` first (with confirmation), " +
-		"re-apply your local change, then push again. There is no merge."
+	abapGitRemoteChangedHint = "The remote branch changed since the last pull. Save the local source first (for example with `get_source`), " +
+		"then run `abapgit_pull` with confirmation, re-apply the change through ADT, and push again. There is no merge."
 	abapGitTransportRequiredHint = "Pass the `transport` parameter with a modifiable request."
 	abapGitNoModifiableTaskHint  = "The calling user needs a modifiable task in that request. See `create_transport_task`."
 	abapGitRepoLookupHint        = "Call `abapgit_list_repos` and pass the exact repository name or URL."
@@ -87,9 +87,12 @@ func decodeArgList[T any](req mcp.CallToolRequest, name string, required ...stri
 			return nil, errorResult(fmt.Errorf("%s[%d] must be an object", name, i))
 		}
 		for _, field := range required {
-			if v, _ := entry[field].(string); strings.TrimSpace(v) == "" {
+			v, _ := entry[field].(string)
+			v = strings.TrimSpace(v)
+			if v == "" {
 				return nil, errorResult(fmt.Errorf("%s[%d].%s is required", name, i, field))
 			}
+			entry[field] = v
 		}
 		data, err := json.Marshal(entry)
 		if err != nil {
@@ -135,7 +138,7 @@ func registerAbapGitSyncTools(s toolAdder, client adt.AbapGitSyncClient) {
 		mcp.WithDescription(
 			"List the abapGit repositories known on the SAP system (key, name, URL, package, branch, last deserialization time). "+
 				"Requires the companion ABAP package: "+abapGitCompanionURL+". "+
-				"Use `deserialized_at` to check whether a pull or push that timed out went through."),
+				"After a pull that timed out, `deserialized_at` shows whether it went through (abapGit updates it on deserialize, not on push)."),
 		mcp.WithOutputSchema[adt.AbapGitRepoList](),
 	), func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		res, err := client.ListAbapGitRepos(ctx)
@@ -153,7 +156,8 @@ func registerAbapGitSyncTools(s toolAdder, client adt.AbapGitSyncClient) {
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
 			"Pull an abapGit repository from its Git remote into the SAP system. This overwrites the current state of the repository objects on SAP "+
-				"and deletes objects that were deleted in Git (both only after confirmation). "+
+				"and deletes objects that were deleted in Git. The first call already applies changes that exist only in Git, including deleting objects that were deleted in Git. "+
+				"Objects with local changes, package moves and package warnings are only touched after explicit confirmation (status `needs_confirmation`). "+
 				"Requires the companion ABAP package: "+abapGitCompanionURL+". "+
 				"If the result has status `needs_confirmation`, nothing was changed yet: show the human the listed objects and the per-file states, "+
 				"and only after the human agrees call again with the same `repo` and the entries to accept in `confirm`. "+
@@ -197,10 +201,10 @@ func registerAbapGitSyncTools(s toolAdder, client adt.AbapGitSyncClient) {
 			"Commit the given objects from the SAP system to the Git remote of the repository and push. This publishes to an external Git host. "+
 				"Requires the companion ABAP package: "+abapGitCompanionURL+". "+
 				"Run with `dry_run: true` first: it lists what would be committed and also performs the credential check. "+
-				"If the remote branch changed since the last pull, the push fails with REMOTE_CHANGED: pull first, re-apply the change, push again (there is no merge). "+
+				"If the remote branch changed since the last pull, the push fails with REMOTE_CHANGED: save the local source first (for example with `get_source`), pull with confirmation, re-apply the change through ADT, and push again (there is no merge). "+
 				"On CREDENTIALS_MISSING or CREDENTIALS_REJECTED do not retry: tell the human to create or fix the SM59 destination `ZGIT_<SAP user>` "+
 				"(setup: "+abapGitCompanionURL+"#readme). "+
-				"Never retry a push automatically. After a timeout the outcome is unknown: check `abapgit_list_repos` (`deserialized_at`) or run a dry run."),
+				"Never retry a push automatically. After a timeout the outcome is unknown: run a dry run (it returns `nothing_to_push` if the push went through)."),
 		mcp.WithString("repo", mcp.Required(), mcp.Description(abapGitRepoParamDesc)),
 		mcp.WithArray("objects", mcp.Required(),
 			mcp.Description("Objects to commit. Each entry: {obj_type, obj_name}. Must not be empty."),

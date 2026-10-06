@@ -123,11 +123,11 @@ type loggingServer struct {
 }
 
 // AddTool annotates the tool before registering it. Doing this here rather
-// than at the six affected registration sites keeps the annotated set in one
+// than at each affected registration site keeps the annotated set in one
 // place (tools.irreversibleTools).
 //
 // The trade-off is worth stating: it moves the "remember this tool" problem
-// from six call sites to one map that sits next to none of them, and a tool
+// from the individual call sites to one map that sits next to none of them, and a tool
 // renamed in its own file would silently drop out of the set. What prevents
 // that is TestStrictConsentAnnotatesTheIrreversibleTools, which pins the
 // annotated names from the wire — not the centralisation itself.

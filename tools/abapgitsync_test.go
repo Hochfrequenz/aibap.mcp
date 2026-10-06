@@ -164,24 +164,68 @@ func TestAbapGitErrors_TextDetailsAndHints(t *testing.T) {
 		{"not installed, wrapped", fmt.Errorf("ListAbapGitRepos: %w", adt.ErrAbapGitSyncNotInstalled),
 			[]string{"Hint:", "https://github.com/Hochfrequenz/Z_ABAPGIT_PULL_MCP_SHORTCUT"}},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			mock := &mockClient{pullAbapGitRepoFn: func(context.Context, adt.AbapGitPullRequest) (*adt.AbapGitPullResult, error) {
-				return nil, tc.err
-			}}
-			text := abapGitToolError(t, "abapgit_pull", map[string]interface{}{"repo": "r"}, mock)
-			for _, want := range tc.contains {
-				if !strings.Contains(text, want) {
-					t.Errorf("error text lacks %q:\n%s", want, text)
+	// Every handler must route errors through abapGitErrorResult, so the whole
+	// table runs through all three tools.
+	validObjects := []interface{}{map[string]interface{}{"obj_type": "CLAS", "obj_name": "ZCL_EXAMPLE"}}
+	tools := []struct {
+		name string
+		args map[string]interface{}
+	}{
+		{"abapgit_list_repos", map[string]interface{}{}},
+		{"abapgit_pull", map[string]interface{}{"repo": "r"}},
+		{"abapgit_push", map[string]interface{}{"repo": "r", "message": "m", "objects": validObjects}},
+	}
+	for _, tool := range tools {
+		for _, tc := range cases {
+			t.Run(tool.name+"/"+tc.name, func(t *testing.T) {
+				mock := &mockClient{
+					listAbapGitReposFn: func(context.Context) (*adt.AbapGitRepoList, error) { return nil, tc.err },
+					pullAbapGitRepoFn: func(context.Context, adt.AbapGitPullRequest) (*adt.AbapGitPullResult, error) {
+						return nil, tc.err
+					},
+					pushAbapGitRepoFn: func(context.Context, adt.AbapGitPushRequest) (*adt.AbapGitPushResult, error) {
+						return nil, tc.err
+					},
 				}
-			}
-			// Companion errors do not wrap *adt.ADTError: no generic status hint.
-			for _, generic := range []string{"search_objects", "SM21", "S_DEVELOP"} {
-				if strings.Contains(text, generic) {
-					t.Errorf("error text carries generic hint %q:\n%s", generic, text)
+				text := abapGitToolError(t, tool.name, tool.args, mock)
+				for _, want := range tc.contains {
+					if !strings.Contains(text, want) {
+						t.Errorf("error text lacks %q:\n%s", want, text)
+					}
 				}
-			}
-		})
+				// Companion errors do not wrap *adt.ADTError: no generic status hint.
+				for _, generic := range []string{"search_objects", "SM21", "S_DEVELOP"} {
+					if strings.Contains(text, generic) {
+						t.Errorf("error text carries generic hint %q:\n%s", generic, text)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestAbapGitArgs_StringFieldsAreTrimmed(t *testing.T) {
+	var pull adt.AbapGitPullRequest
+	var push adt.AbapGitPushRequest
+	mock := &mockClient{
+		pullAbapGitRepoFn: func(_ context.Context, r adt.AbapGitPullRequest) (*adt.AbapGitPullResult, error) {
+			pull = r
+			return &adt.AbapGitPullResult{Status: adt.AbapGitStatusPulled}, nil
+		},
+		pushAbapGitRepoFn: func(_ context.Context, r adt.AbapGitPushRequest) (*adt.AbapGitPushResult, error) {
+			push = r
+			return &adt.AbapGitPushResult{}, nil
+		},
+	}
+	callTool(t, newTestServer(mock), "abapgit_pull", map[string]interface{}{"repo": "r",
+		"confirm": []interface{}{map[string]interface{}{"obj_type": " PROG ", "obj_name": "ZEXAMPLE\n", "action": " overwrite"}}})
+	if want := (adt.AbapGitConfirmation{ObjType: "PROG", ObjName: "ZEXAMPLE", Action: "overwrite"}); len(pull.Confirm) != 1 || pull.Confirm[0] != want {
+		t.Errorf("confirm = %+v, want [%+v]", pull.Confirm, want)
+	}
+	callTool(t, newTestServer(mock), "abapgit_push", map[string]interface{}{"repo": "r", "message": "m",
+		"objects": []interface{}{map[string]interface{}{"obj_type": "\tCLAS", "obj_name": " ZCL_EXAMPLE "}}})
+	if want := (adt.AbapGitObjectRef{ObjType: "CLAS", ObjName: "ZCL_EXAMPLE"}); len(push.Objects) != 1 || push.Objects[0] != want {
+		t.Errorf("objects = %+v, want [%+v]", push.Objects, want)
 	}
 }
 
