@@ -321,22 +321,14 @@ func registerDebugInspectTools(s toolAdder, sessions *debugSessions) {
 				action, strings.Join(validDebugStepActions, ", "),
 			)), nil
 		}
-		var ended bool
-		data, errRes := sessions.call(req.GetString(paramUser, ""), func(d *adt.DebugSession) ([]byte, error) {
-			data, err := d.Step(ctx, action)
-			if _, ok := stepResultForError(err); ok {
-				ended = true
-				return nil, nil
-			}
-			return data, err
-		})
-		if errRes != nil {
-			return errRes, nil
+		out, err := sessions.step(ctx, req.GetString(paramUser, ""), action)
+		if err != nil {
+			return errorResult(err), nil
 		}
-		if ended {
+		if out.state.Status == runEnded && out.state.EndReason == endCompleted {
 			return mcp.NewToolResultJSON(DebugStepResult{DebuggeeEnded: true})
 		}
-		return mcp.NewToolResultJSON(buildDebugStepResult(data))
+		return mcp.NewToolResultJSON(buildDebugStepResult(out.raw))
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_variable",

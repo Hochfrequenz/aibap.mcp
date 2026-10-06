@@ -202,9 +202,62 @@ func (m *debugSessions) callSession(user string, fn func(*adt.DebugSession) ([]b
 	return data, nil
 }
 
-// call runs fn for an in-attempt tool (stack, variables, watchpoints).
+// call runs fn for an in-attempt tool: only while a debuggee is attached, on
+// the run's debug session. The idle timer pauses meanwhile.
 func (m *debugSessions) call(user string, fn func(*adt.DebugSession) ([]byte, error)) ([]byte, *mcp.CallToolResult) {
-	return m.callSession(user, fn)
+	run, err := m.attachedRun(user)
+	if err != nil {
+		return nil, errorResult(err)
+	}
+	if err := run.beginCall(); err != nil {
+		return nil, errorResult(err)
+	}
+	defer run.endCall()
+	data, err := fn(run.sess)
+	if err != nil {
+		return nil, errorResult(err)
+	}
+	return data, nil
+}
+
+// attachedRun returns the run for an in-attempt tool. A given user must be the
+// run's user and the active system the run's system: a mismatch is an error
+// rather than a silent replacement that would discard an attached debuggee.
+func (m *debugSessions) attachedRun(user string) (*debugRun, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.run == nil {
+		return nil, errNoDebuggee
+	}
+	if err := m.checkRunKeyLocked(user); err != nil {
+		return nil, err
+	}
+	return m.run, nil
+}
+
+// checkRunKeyLocked compares user (when given) and the active system with the
+// current run's. Caller holds mu; m.run is not nil.
+func (m *debugSessions) checkRunKeyLocked(user string) error {
+	u := strings.ToUpper(strings.TrimSpace(user))
+	sys := m.activeSystem()
+	if (u == "" || u == m.run.key.user) && sys == m.run.key.system {
+		return nil
+	}
+	if u == "" {
+		u = m.run.key.user
+	}
+	return fmt.Errorf("the current debug run belongs to user %s on system %q, not user %s on system %q; "+
+		"call debug_run (or debug_stop) to start over with the new user or system",
+		m.run.key.user, m.run.key.system, u, sys)
+}
+
+// step implements debug_step on the attached run.
+func (m *debugSessions) step(ctx context.Context, user, action string) (stepOutcome, error) {
+	run, err := m.attachedRun(user)
+	if err != nil {
+		return stepOutcome{}, err
+	}
+	return run.step(ctx, action)
 }
 
 // debugUserOnlyHandler builds the handler of a debug tool whose only argument

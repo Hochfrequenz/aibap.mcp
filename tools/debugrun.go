@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -348,6 +349,7 @@ func (r *debugRun) attach(id string) {
 			st.Hint = "Attached, but the position could not be read: " + perr.Error()
 		}
 	})
+	r.resetIdleLocked()
 }
 
 // detachLate detaches an attach that completed after cleanup had started.
@@ -465,4 +467,150 @@ func (r *debugRun) stopListenerQuietly() {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timings.listenerExitWait)
 	defer cancel()
 	_ = r.cleanupSess.StopListener(ctx)
+}
+
+// errNoDebuggee is the answer of an in-attempt tool outside status attached.
+var errNoDebuggee = errors.New("no debuggee attached; call debug_wait")
+
+// beginCall admits an in-attempt call: only while attached and not being
+// detached for idleness. The idle timer pauses until endCall.
+func (r *debugRun) beginCall() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.st.Status != runAttached || r.detaching {
+		return errNoDebuggee
+	}
+	r.inFlight++
+	r.stopIdleLocked()
+	return nil
+}
+
+// endCall ends an in-attempt call; the last one restarts the idle timer.
+func (r *debugRun) endCall() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.inFlight--
+	if r.inFlight == 0 && r.st.Status == runAttached {
+		r.resetIdleLocked()
+	}
+}
+
+// resetIdleLocked (re)starts the idle timer. Caller holds r.mu.
+func (r *debugRun) resetIdleLocked() {
+	r.stopIdleLocked()
+	gen := r.idleGen
+	r.idleTimer = time.AfterFunc(r.timings.idleLimit, func() { r.onIdle(gen) })
+}
+
+// onIdle detaches a debuggee left attached for idleLimit without a debugger
+// call, so it does not hold a SAP work process indefinitely. It holds the
+// run-start lock across its HTTP call, so it and cleanup never detach twice.
+func (r *debugRun) onIdle(gen int) {
+	r.startMu.Lock()
+	defer r.startMu.Unlock()
+	r.mu.Lock()
+	if gen != r.idleGen || r.st.Status != runAttached || r.inFlight > 0 {
+		r.mu.Unlock()
+		return
+	}
+	r.detaching = true
+	r.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), r.timings.attachTimeout)
+	defer cancel()
+	_, err := r.sess.Step(ctx, "detachDebugger")
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.detaching = false
+	if r.st.Status != runAttached {
+		return
+	}
+	hint := fmt.Sprintf("Detached after %s without a debugger call, so the halted program does not hold a SAP work process.", r.timings.idleLimit)
+	if err != nil && !isNotAttachedErr(err) {
+		hint += " The detach failed: " + err.Error()
+	}
+	r.transitionLocked(func(st *DebugRunState) {
+		st.Status = runEnded
+		st.EndReason = endIdleDetached
+		st.Position = nil
+		st.Hint = hint
+	})
+}
+
+// stepOutcome is what a debug_step did: SAP's raw answer and the run state after it.
+type stepOutcome struct {
+	raw   []byte
+	state DebugRunState
+}
+
+// step runs one step action and moves the run state (spec "Transitions caused
+// by the in-attempt tools").
+func (r *debugRun) step(ctx context.Context, action string) (stepOutcome, error) {
+	if err := r.beginCall(); err != nil {
+		return stepOutcome{}, err
+	}
+	defer r.endCall()
+	data, err := r.sess.Step(ctx, action)
+	switch _, ended := stepResultForError(err); {
+	case err == nil && action == "detachDebugger":
+		r.end(endDetached, "")
+	case err == nil && action == "terminateDebuggee":
+		r.end(endTerminated, "")
+	case err == nil:
+		pos, perr := r.readPosition(ctx)
+		r.transitionIfAttached(func(st *DebugRunState) {
+			st.Position = pos
+			st.Hint = ""
+			if perr != nil {
+				st.Hint = "The position could not be read after the step: " + perr.Error()
+			}
+		})
+	case ended:
+		r.end(endCompleted, "")
+	case action == "stepContinue" && isInvalidDataErr(err):
+		if !r.debuggeeGone(ctx) {
+			return stepOutcome{}, fmt.Errorf("debug_step: %w (a debuggee is still listed, so the attachment may be lost, #513; "+
+				"end it with debug_step detachDebugger or debug_stop)", err)
+		}
+		r.end(endCompleted, "stepContinue answered 400 ExceptionInvalidData and no debuggee remains: the run completed "+
+			"(SAP_BASIS 816 reports the end of a run this way, #513).")
+	default:
+		return stepOutcome{}, fmt.Errorf("debug_step: %w — the debuggee is still attached; if it does not respond, "+
+			"end the session with debug_step detachDebugger or debug_stop", err)
+	}
+	st, _ := r.snapshot()
+	return stepOutcome{raw: data, state: st}, nil
+}
+
+// end moves an attached run to ended with reason.
+func (r *debugRun) end(reason, hint string) {
+	r.transitionIfAttached(func(st *DebugRunState) {
+		st.Status = runEnded
+		st.EndReason = reason
+		st.Position = nil
+		st.Hint = hint
+	})
+}
+
+// transitionIfAttached applies fn only while the run is attached; cleanup or
+// the idle detach may have moved it on meanwhile.
+func (r *debugRun) transitionIfAttached(fn func(st *DebugRunState)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.st.Status == runAttached {
+		r.transitionLocked(fn)
+	}
+}
+
+// debuggeeGone reports whether SAP lists no debuggee session any more.
+func (r *debugRun) debuggeeGone(ctx context.Context) bool {
+	data, err := r.sess.GetDebuggeeSessions(ctx)
+	return err == nil && len(bytes.TrimSpace(data)) == 0
+}
+
+// isInvalidDataErr reports SAP's 400 ExceptionInvalidData.
+func isInvalidDataErr(err error) bool {
+	var adtErr *adt.ADTError
+	return errors.As(err, &adtErr) && adtErr.StatusCode == 400 && adtErr.Type == "ExceptionInvalidData"
 }

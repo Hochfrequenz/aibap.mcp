@@ -48,10 +48,10 @@ func TestDebugRun_ManualHitIsAttached(t *testing.T) {
 	s, _, backend := newDebugServer(t)
 
 	st := runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
-	backend.hit(t, "DBG1")
-	att := mustStatus(t, s, st.Version, "attached")
+	backend.hit(t, testDebuggeeID)
+	att := mustStatus(t, s, st.Version, runAttachedStatus)
 
-	if att.DebuggeeID != "DBG1" {
+	if att.DebuggeeID != testDebuggeeID {
 		t.Errorf("debuggee_id = %q", att.DebuggeeID)
 	}
 	if att.Position == nil || att.Position.Program != "ZPROG" || att.Position.Line != 3 || att.Position.SourceURI != progURI ||
@@ -70,12 +70,12 @@ func TestDebugRun_HitWithoutWaiterIsAttachedInBackground(t *testing.T) {
 	s, _, backend := newDebugServer(t)
 
 	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
-	backend.hit(t, "DBG1")
+	backend.hit(t, testDebuggeeID)
 	backend.waitForRequest(t, http.MethodPost, debuggerPath, "method=getStack")
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{}))
-		if st.Status == "attached" {
+		if st.Status == runAttachedStatus {
 			return
 		}
 		if time.Now().After(deadline) {
@@ -95,13 +95,13 @@ func TestDebugWait_ConcurrentWaitersBothSeeAttached(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			got[i], _ = waitForStatus(t, s, st.Version, "attached")
+			got[i], _ = waitForStatus(t, s, st.Version, runAttachedStatus)
 		}(i)
 	}
-	backend.hit(t, "DBG1")
+	backend.hit(t, testDebuggeeID)
 	wg.Wait()
 	for i, g := range got {
-		if g.Status != "attached" {
+		if g.Status != runAttachedStatus {
 			t.Errorf("waiter %d saw %+v", i, g)
 		}
 	}
@@ -153,8 +153,8 @@ func TestDebugWait_CancelledCallDoesNotStopTheRun(t *testing.T) {
 	if time.Since(start) > 5*time.Second {
 		t.Fatal("a cancelled debug_wait must return")
 	}
-	backend.hit(t, "DBG1")
-	mustStatus(t, s, st.Version, "attached")
+	backend.hit(t, testDebuggeeID)
+	mustStatus(t, s, st.Version, runAttachedStatus)
 }
 
 func TestDebugWait_WithoutRunIsAnError(t *testing.T) {

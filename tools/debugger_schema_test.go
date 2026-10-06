@@ -126,13 +126,13 @@ func TestDebugToolsRejectEmptyRequiredStrings(t *testing.T) {
 			wantSubstr: `"breakpoints" needs 1 to 30`,
 		},
 		{
-			name: "step missing user",
+			name: "step without a debuggee",
 			tool: debugStepToolName,
 			args: map[string]interface{}{
 				"action": "stepInto",
 				"user":   "",
 			},
-			wantSubstr: "no configured logon user",
+			wantSubstr: "no debuggee attached",
 		},
 		{
 			name: "get variable missing variable name",
@@ -144,12 +144,12 @@ func TestDebugToolsRejectEmptyRequiredStrings(t *testing.T) {
 			wantSubstr: `"variable_name" is required`,
 		},
 		{
-			name: "get stack missing user",
+			name: "get stack without a debuggee",
 			tool: "debug_get_stack",
 			args: map[string]interface{}{
 				"user": "",
 			},
-			wantSubstr: "no configured logon user",
+			wantSubstr: "no debuggee attached",
 		},
 		{
 			name: "set watchpoint missing variable name",

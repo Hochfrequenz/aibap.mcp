@@ -43,7 +43,7 @@ func waitForState(t *testing.T, s *server.MCPServer, since int64, pred func(tool
 // unit_tests: the server runs the tests, the run is attached within debug_run.
 func TestDebugRun_UnitTestsAttachWithinTheCall(t *testing.T) {
 	s, _, backend := newDebugServer(t)
-	backend.set(func(f *fakeDebugBackend) { f.unitHit = "DBG1" })
+	backend.set(func(f *fakeDebugBackend) { f.unitHit = testDebuggeeID })
 
 	st := runState(t, callTool(t, s, "debug_run", unitTestRunArgs("")))
 	if st.Status != runAttachedStatus || st.Trigger == nil || st.Trigger.Kind != "unit_tests" || st.Trigger.State != "running" {
@@ -62,7 +62,7 @@ func TestDebugRun_UnitTestsAttachWithinTheCall(t *testing.T) {
 
 	// Releasing the debuggee lets the tests finish; their result lands in the run.
 	backend.release()
-	done := waitForState(t, s, st.Version, func(s tools.DebugRunState) bool { return s.Trigger != nil && s.Trigger.State == "done" })
+	done := waitForState(t, s, st.Version, func(s tools.DebugRunState) bool { return s.Trigger != nil && s.Trigger.State == triggerDoneState })
 	if done.Trigger.UnitTests == nil || done.Trigger.UnitTests.Passed != 1 {
 		t.Errorf("trigger result: %+v", done.Trigger)
 	}
@@ -73,7 +73,7 @@ func TestDebugRun_UnitTestsWithoutHitEndNoHit(t *testing.T) {
 	s, _, backend := newDebugServer(t)
 
 	st := runState(t, callTool(t, s, "debug_run", unitTestRunArgs("")))
-	if st.Status != "ended" || st.EndReason != "no_hit" || st.Trigger.State != "done" || st.Trigger.UnitTests == nil {
+	if st.Status != runEndedStatus || st.EndReason != "no_hit" || st.Trigger.State != triggerDoneState || st.Trigger.UnitTests == nil {
 		t.Fatalf("want ended/no_hit with the test result, got %+v / %+v", st, st.Trigger)
 	}
 	backend.waitForRequest(t, http.MethodDelete, listenersPath, "")
@@ -181,7 +181,7 @@ func newTriggererServer(t *testing.T, trig *fakeTriggerer) (*server.MCPServer, *
 }
 
 func TestDebugRun_GUITriggererIsCalledAfterTheListenerStarted(t *testing.T) {
-	trig := &fakeTriggerer{hit: "DBG1"}
+	trig := &fakeTriggerer{hit: testDebuggeeID}
 	s, _ := newTriggererServer(t, trig)
 
 	st := runState(t, callTool(t, s, "debug_run", guiRunArgs()))

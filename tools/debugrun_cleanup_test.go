@@ -20,8 +20,8 @@ func TestDebugStop_AttachedRunIsDetachedAfterTheExternalCleanup(t *testing.T) {
 	s, _, backend := newDebugServer(t)
 
 	st := runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
-	backend.hit(t, "DBG1")
-	mustStatus(t, s, st.Version, "attached")
+	backend.hit(t, testDebuggeeID)
+	mustStatus(t, s, st.Version, runAttachedStatus)
 	if res := callTool(t, s, "debug_stop", map[string]interface{}{}); res.IsError {
 		t.Fatal(debugResultText(res))
 	}
@@ -47,7 +47,7 @@ func TestDebugStop_LateAttachIsDetachedByTheListener(t *testing.T) {
 	backend.set(func(f *fakeDebugBackend) { f.attachGate = gate })
 
 	st := runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
-	backend.hit(t, "DBG1")
+	backend.hit(t, testDebuggeeID)
 	mustStatus(t, s, st.Version, "attaching")
 	if res := callTool(t, s, "debug_stop", map[string]interface{}{}); res.IsError {
 		t.Fatal(debugResultText(res))
@@ -182,8 +182,8 @@ func TestDebugStop_WedgedAttachedSessionIsBoundedByTheBudget(t *testing.T) {
 	s, _, backend := newDebugServerTimed(t, timings, nil)
 
 	st := runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
-	backend.hit(t, "DBG1")
-	mustStatus(t, s, st.Version, "attached")
+	backend.hit(t, testDebuggeeID)
+	mustStatus(t, s, st.Version, runAttachedStatus)
 	debugCookie := backend.cookieOf(http.MethodPost, breakpointsPath)
 	backend.set(func(f *fakeDebugBackend) { f.hangCookie = debugCookie })
 
@@ -216,7 +216,7 @@ func TestDebugRun_LateDetachFinishesBeforeTheNextRunStarts(t *testing.T) {
 	backend.set(func(f *fakeDebugBackend) { f.attachGate, f.detachGate = attachGate, detachGate })
 
 	st := runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
-	backend.hit(t, "DBG1")
+	backend.hit(t, testDebuggeeID)
 	mustStatus(t, s, st.Version, "attaching")
 	debugCookie := backend.cookieOf(http.MethodPost, breakpointsPath)
 

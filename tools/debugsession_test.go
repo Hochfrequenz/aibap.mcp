@@ -79,6 +79,14 @@ type fakeDebugBackend struct {
 // stepDetach is the debugger step that detaches the debuggee.
 const stepDetach = "detachDebugger"
 
+// Values the debug run tests compare against (runAttachedStatus is in
+// debugrun_trigger_test.go).
+const (
+	testDebuggeeID   = "DBG1"
+	runEndedStatus   = "ended"
+	triggerDoneState = "done"
+)
+
 type recordedRequest struct {
 	host, method, path, query, body, cookie string
 	stateful                                bool
