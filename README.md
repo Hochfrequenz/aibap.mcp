@@ -188,16 +188,18 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 
 | Tool | Description |
 |------|-------------|
-| `debug_run` | Set breakpoints, listen in the background and attach to the first run that hits one |
-| `debug_stop` | Stop the debug listener and clean up breakpoints |
-| `debug_wait` | Wait for the debug run to change: hit, attach, end, timeout |
-| `debug_step` | Step into / over / out / continue, or terminate / detach the debuggee |
-| `debug_get_variable` | Read a variable value in the current scope |
-| `debug_get_stack` | Get the current call stack |
+| `debug_run` | Set breakpoints, listen in the background and attach to the first run that hits one; the run is started by unit tests, by someone else (manual), or in SAP GUI |
+| `debug_wait` | Wait for the run to change (hit, attach, end, timeout); `rearm` listens again |
+| `debug_stop` | Stop the run: listener, breakpoints, detach; reports what could not be removed |
+| `debug_step` | Step into / over / return / continue, or terminate / detach; returns the new position |
+| `debug_get_variable` | Read a variable; `expand` for structures, objects and references; `offset`/`limit` for table rows (max 100) |
+| `debug_get_stack` | Get the call stack of the halted debuggee |
 | `debug_get_sessions` | List active debuggee sessions |
-| `debug_set_breakpoint` | Set an additional breakpoint |
+| `debug_set_breakpoint` | Add a breakpoint to the active run (in the attached debugger while halted) |
 | `debug_set_watchpoint` | Break when a variable value changes |
-| `debug_remove_breakpoint` | Remove a breakpoint (not yet implemented) |
+| `debug_remove_breakpoint` | Remove one breakpoint of the active run |
+
+A debugging session is one `debug_run`: the server sets the breakpoints, listens and attaches in the background, so it does not depend on the MCP client running tool calls in parallel. Call `debug_wait` with the returned `version` until the status is `attached`, inspect with `debug_get_stack`, `debug_get_variable` and `debug_step`, end the debuggee with `debug_step` `detachDebugger`, and finish with `debug_stop`. For `manual` and `gui` runs the result carries instructions: the run must be made as the same SAP user before `listening_until`. Breakpoints in system programs are never hit. Each server process uses its own debugger IDE ID, so two processes of the same user do not share breakpoints.
 
 </details>
 
