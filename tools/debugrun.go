@@ -187,6 +187,9 @@ func copyState(s DebugRunState) DebugRunState {
 	}
 	if s.Trigger != nil {
 		t := *s.Trigger
+		if s.Trigger.UnitTests != nil {
+			t.UnitTests = copyTestResult(s.Trigger.UnitTests)
+		}
 		out.Trigger = &t
 	}
 	if s.Instructions != nil {
@@ -197,6 +200,17 @@ func copyState(s DebugRunState) DebugRunState {
 		}
 	}
 	return out
+}
+
+// copyTestResult deep-copies a unit-test result, test cases and messages included.
+func copyTestResult(r *adt.TestResult) *adt.TestResult {
+	out := *r
+	out.TestCases = make([]adt.TestCase, len(r.TestCases))
+	for i, tc := range r.TestCases {
+		tc.Messages = append([]string(nil), tc.Messages...)
+		out.TestCases[i] = tc
+	}
+	return &out
 }
 
 // waitUntil blocks until pred holds, timeout passes or ctx ends, and returns
@@ -390,4 +404,65 @@ func sourceExcerpt(text string, line, radius int) string {
 		fmt.Fprintf(&b, "%s%d: %s\n", marker, n, lines[n-1])
 	}
 	return strings.TrimSuffix(b.String(), "\n")
+}
+
+// noHitHint explains a unit-test run that finished without a hit.
+const noHitHint = "The trigger finished without a hit: the breakpoint line was not executed, " +
+	"the run was made as another user, or the breakpoint is in a system program."
+
+// runTrigger is the trigger goroutine. It starts about triggerDelay after the
+// listener, because the activation reaches the server asynchronously, and
+// runs fn with a context the run's cleanup does not cancel: the listener
+// budget plus triggerSlack. endsRun says that fn's return proves the run
+// finished (unit tests), so a return without a hit ends the run with no_hit;
+// a DebugTriggerer may return as soon as it has started the run.
+func (r *debugRun) runTrigger(fn func(context.Context) (*adt.TestResult, error), fallback *DebugInstructions, endsRun bool) {
+	delay := time.NewTimer(r.timings.triggerDelay)
+	select {
+	case <-delay.C:
+	case <-r.runCtx.Done():
+		delay.Stop()
+		return // cleaned up before the trigger started
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Until(r.budgetEnd)+r.timings.triggerSlack)
+	defer cancel()
+	r.transition(func(st *DebugRunState) { st.Trigger.State = triggerRunning })
+
+	res, err := fn(ctx)
+	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		err = fmt.Errorf("trigger request timed out: %w", err)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	noHit := endsRun && err == nil && r.st.Status == runListening
+	r.transitionLocked(func(st *DebugRunState) {
+		if err != nil {
+			st.Trigger.State = triggerFailed
+			st.Trigger.Error = err.Error()
+			if st.Status == runListening {
+				st.Instructions = fallback
+			}
+		} else {
+			st.Trigger.State = triggerDone
+			st.Trigger.UnitTests = res
+		}
+		if noHit {
+			st.Status = runEnded
+			st.EndReason = endNoHit
+			st.Hint = strings.TrimSpace(st.Hint + " " + noHitHint)
+		}
+	})
+	if noHit {
+		r.windowCancel()
+		go r.stopListenerQuietly()
+	}
+}
+
+// stopListenerQuietly deregisters the listener after a no_hit end; best
+// effort, from the cleanup session. The breakpoints stay until debug_stop.
+func (r *debugRun) stopListenerQuietly() {
+	ctx, cancel := context.WithTimeout(context.Background(), r.timings.listenerExitWait)
+	defer cancel()
+	_ = r.cleanupSess.StopListener(ctx)
 }

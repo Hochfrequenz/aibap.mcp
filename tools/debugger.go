@@ -102,6 +102,11 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	// The debug tools share one session and one run; debugSessions decides
 	// when they are created, reused or replaced (#562, #558).
 	sessions := newDebugSessions(client, selector, settings.systemUser)
+	// A build may start gui runs itself (#558); checked by type assertion so
+	// existing BlackMagicClient implementations keep compiling.
+	if t, ok := fallback.(DebugTriggerer); ok {
+		sessions.triggerer = t
+	}
 	registerDebugRunTools(s, sessions)
 	registerDebugBreakpointTools(s, sessions)
 	registerDebugInspectTools(s, sessions)

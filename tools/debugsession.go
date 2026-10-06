@@ -226,17 +226,81 @@ func debugUserOnlyHandler[T any](
 }
 
 // startRun implements debug_run: it stops the previous run, sets every
-// breakpoint in one request and starts listening in the background (#558).
+// breakpoint in one request, starts listening in the background and, when the
+// server starts the run itself, waits up to initialWait for it (#558).
 func (m *debugSessions) startRun(ctx context.Context, a debugRunArgs) (DebugRunState, error) {
-	user, err := m.resolveUser(a.user)
+	user, hint, err := m.runUser(a)
 	if err != nil {
 		return DebugRunState{}, err
 	}
-	run, err := m.launchRun(ctx, a, user, "")
+	run, err := m.launchRun(ctx, a, user, hint)
 	if err != nil {
 		return DebugRunState{}, err
 	}
-	return run.snapshot()
+	if !m.serverTriggers(a.kind) {
+		return run.snapshot()
+	}
+	// The run-start lock is released: debug_stop must not wait for this.
+	return run.waitUntil(ctx, m.timings.initialWait, settledAfterTrigger)
+}
+
+// settledAfterTrigger reports whether a server-triggered run has something to
+// report: it was caught (or ended), or its trigger finished.
+func settledAfterTrigger(s DebugRunState) bool {
+	if s.Status != runListening && s.Status != runAttaching {
+		return true
+	}
+	return s.Trigger != nil && (s.Trigger.State == triggerDone || s.Trigger.State == triggerFailed)
+}
+
+// runUser resolves debug_run's user. For unit_tests it must be the logon user,
+// because the tests run as that user; the comparison ignores case. With an
+// unknown logon user (OAuth2) the given user is accepted with a hint.
+func (m *debugSessions) runUser(a debugRunArgs) (user, hint string, err error) {
+	if a.kind != triggerUnitTests {
+		u, err := m.resolveUser(a.user)
+		return u, "", err
+	}
+	logon := strings.ToUpper(m.logonUser(m.activeSystem()))
+	given := strings.ToUpper(strings.TrimSpace(a.user))
+	switch {
+	case given == "" && logon == "":
+		_, err := m.resolveUser("")
+		return "", "", err
+	case given == "":
+		return logon, "", nil
+	case logon == "":
+		return given, "The unit tests run as the logon user, which this server does not know (OAuth2); if that is not " +
+			given + ", no breakpoint will be hit.", nil
+	case given != logon:
+		return "", "", fmt.Errorf("debug_run: trigger kind unit_tests runs the tests as the logon user %s, so user must be %s, not %s", logon, logon, given)
+	}
+	return given, "", nil
+}
+
+// serverTriggers reports whether the server starts runs of kind itself.
+func (m *debugSessions) serverTriggers(kind string) bool {
+	return kind == triggerUnitTests || (kind == triggerGUI && m.triggerer != nil)
+}
+
+// startTrigger starts the trigger goroutine of a server-run trigger. Its
+// fallback instructions replace the trigger if it fails.
+func (m *debugSessions) startTrigger(run *debugRun, a debugRunArgs, user string, guiAvail okCodeAvailability) {
+	switch {
+	case a.kind == triggerUnitTests:
+		uri := a.unitObjectURI
+		go run.runTrigger(func(ctx context.Context) (*adt.TestResult, error) {
+			// RunUnitTests runs on a new isolated session of the run's system:
+			// not the debug session, not the main client (adtler#204).
+			secs := int((time.Until(run.budgetEnd) + run.timings.triggerSlack) / time.Second)
+			return run.sess.RunUnitTests(ctx, uri, secs)
+		}, manualInstructions(user, run.budgetEnd), true)
+	case a.kind == triggerGUI && m.triggerer != nil:
+		trig, system, target := m.triggerer, run.key.system, *a.target
+		go run.runTrigger(func(ctx context.Context) (*adt.TestResult, error) {
+			return nil, trig.TriggerDebugRun(ctx, system, user, target)
+		}, guiInstructions(user, target, guiAvail), false)
+	}
 }
 
 // launchRun is the part of debug_run that holds the run-start lock.
@@ -267,12 +331,16 @@ func (m *debugSessions) launchRun(ctx context.Context, a debugRunArgs, user, hin
 		return nil, fmt.Errorf("debug_run: %w; the breakpoints that were set are removed again", err)
 	}
 
-	run := m.newRun(runParams{key: key, kind: a.kind, sess: sess, cleanupSess: cleanupSess, breakpoints: set, budget: a.timeout, hint: hint})
+	params := runParams{key: key, kind: a.kind, sess: sess, cleanupSess: cleanupSess, breakpoints: set, budget: a.timeout, hint: hint}
+	if m.serverTriggers(a.kind) {
+		params.trigger = &DebugTriggerState{Kind: a.kind, State: triggerPending}
+	}
+	run := m.newRun(params)
 	run.source = m.sourceFor(key.system)
-	switch a.kind {
-	case triggerManual:
+	switch {
+	case a.kind == triggerManual:
 		run.st.Instructions = manualInstructions(user, run.budgetEnd)
-	case triggerGUI:
+	case a.kind == triggerGUI && m.triggerer == nil:
 		run.st.Instructions = guiInstructions(user, *a.target, guiAvail)
 	}
 	m.mu.Lock()
@@ -281,6 +349,7 @@ func (m *debugSessions) launchRun(ctx context.Context, a debugRunArgs, user, hin
 	run.mu.Lock()
 	run.startWindowLocked()
 	run.mu.Unlock()
+	m.startTrigger(run, a, user, guiAvail)
 	return run, nil
 }
 
