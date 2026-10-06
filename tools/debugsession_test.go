@@ -1,11 +1,16 @@
 package tools_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/Hochfrequenz/aibap.mcp/tools"
@@ -14,20 +19,100 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// fakeDebugBackend answers the ADT debugger endpoints just well enough for
-// debug_start / debug_stop to run, and records every request. The debug tools
-// need a real adtler client (adt.NewDebugSession panics on anything else), so
-// the fake sits at the transport level.
+const (
+	breakpointsPath = "/sap/bc/adt/debugger/breakpoints"
+	listenersPath   = "/sap/bc/adt/debugger/listeners"
+	debuggerPath    = "/sap/bc/adt/debugger"
+	unitTestsPath   = "/sap/bc/adt/abapunit/testruns"
+	okCodeProgPath  = "/sap/bc/adt/programs/programs/rs_adtdbg_activate_by_okcode"
+	progURI         = "/sap/bc/adt/programs/programs/zprog/source/main"
+	otherURI        = "/sap/bc/adt/programs/programs/zother/source/main"
+)
+
+// fakeError is an ADT error answer. endsRun releases a halted debuggee (the
+// unit-test request returns) the way a step that ends the run does.
+type fakeError struct {
+	status  int
+	typ     string
+	props   map[string]string
+	endsRun bool
+}
+
+// fakeDebugBackend answers the ADT debugger endpoints at the transport level
+// and records every request. The debug tools need a real adtler client
+// (adt.NewDebugSession panics on anything else), so the fake sits below it.
+// Every CSRF fetch opens a "session": its answer sets the cookie sid=s<n>, so
+// a recorded request's cookie tells which adtler session sent it.
 type fakeDebugBackend struct {
-	mu   sync.Mutex
-	reqs []recordedRequest
-	// failStop makes the listener DELETE answer 500, as a wedged session would
-	// fail it.
-	failStop bool
+	// hits feeds a waiting listener POST: "" answers like a listener timeout,
+	// anything else is the caught debuggee's ID. Set once, never replaced.
+	hits chan string
+
+	mu          sync.Mutex
+	reqs        []recordedRequest
+	sessions    int
+	listenStop  chan struct{}
+	bpCounter   int
+	released    chan struct{}
+	releaseOnce sync.Once
+
+	failStop     bool
+	listenerErr  *fakeError
+	attachGate   chan struct{}
+	attachErr    *fakeError
+	stackXML     string
+	stackGate    chan struct{}
+	sessionsBody string
+	stepErr      map[string]fakeError
+	unitHit      string
+	unitErr      *fakeError
+	rejectBP     map[string][2]string // URI substring → errorKind, errorMessage
+	existingBP   map[string]bool      // URI substring → answered with errorKind "existing"
+	bpDeleteErr  *fakeError
+	okCodeStatus int             // status of the OK-code program lookup; 0 means 200
+	hangCookie   string          // requests with this session cookie hang until their context ends
+	hang         map[string]bool // "METHOD path" → hangs until the request's context ends
 }
 
 type recordedRequest struct {
-	host, method, path, query, body string
+	host, method, path, query, body, cookie string
+	stateful                                bool
+}
+
+const defaultStackXML = `<?xml version="1.0" encoding="utf-8"?><dbg:stack xmlns:dbg="http://www.sap.com/adt/debugger" xmlns:adtcore="http://www.sap.com/adt/core">` +
+	`<stackEntry stackPosition="1" programName="ZPROG" includeName="ZPROG" line="3" eventType="EVENT" eventName="START-OF-SELECTION" systemProgram="false" isActive="true" adtcore:uri="/sap/bc/adt/programs/programs/zprog/source/main#start=3,0"/>` +
+	`</dbg:stack>`
+
+func newFakeDebugBackend() *fakeDebugBackend {
+	return &fakeDebugBackend{hits: make(chan string), released: make(chan struct{}), stackXML: defaultStackXML}
+}
+
+func textBody(s string) io.ReadCloser { return io.NopCloser(strings.NewReader(s)) }
+
+func sourceLines(n int) string {
+	lines := make([]string, n)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d", i+1)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func answerError(resp *http.Response, e fakeError) *http.Response {
+	keys := make([]string, 0, len(e.props))
+	for k := range e.props {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var props strings.Builder
+	for _, k := range keys {
+		fmt.Fprintf(&props, `<entry key="%s">%s</entry>`, k, e.props[k])
+	}
+	resp.StatusCode = e.status
+	resp.Header.Set("Content-Type", "application/xml")
+	resp.Body = textBody(`<?xml version="1.0" encoding="utf-8"?><exc:exception xmlns:exc="http://www.sap.com/abapxml/types/communicationframework">` +
+		`<namespace id="com.sap.adt"/><type id="` + e.typ + `"/><message lang="EN">fake ` + e.typ + `</message>` +
+		`<properties>` + props.String() + `</properties></exc:exception>`)
+	return resp
 }
 
 func (f *fakeDebugBackend) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -36,25 +121,234 @@ func (f *fakeDebugBackend) RoundTrip(req *http.Request) (*http.Response, error) 
 		b, _ := io.ReadAll(req.Body)
 		body = string(b)
 	}
+	cookie := ""
+	if c, err := req.Cookie("sid"); err == nil {
+		cookie = c.Value
+	}
 	f.mu.Lock()
-	f.reqs = append(f.reqs, recordedRequest{req.URL.Host, req.Method, req.URL.Path, req.URL.RawQuery, body})
-	failStop := f.failStop
+	f.reqs = append(f.reqs, recordedRequest{
+		host: req.URL.Host, method: req.Method, path: req.URL.Path, query: req.URL.RawQuery, body: body, cookie: cookie,
+		stateful: req.Header.Get("X-sap-adt-sessiontype") == "stateful",
+	})
+	hang := (f.hangCookie != "" && cookie == f.hangCookie) || f.hang[req.Method+" "+req.URL.Path]
 	f.mu.Unlock()
+	if hang {
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	}
 
 	resp := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req, Body: http.NoBody}
+	p := req.URL.Path
 	switch {
 	case req.Header.Get("X-CSRF-Token") == "Fetch":
+		f.mu.Lock()
+		f.sessions++
+		n := f.sessions
+		f.mu.Unlock()
 		resp.Header.Set("X-CSRF-Token", "token")
-	case failStop && req.Method == http.MethodDelete && req.URL.Path == listenersPath:
-		resp.StatusCode = http.StatusInternalServerError
-	case req.Method == http.MethodPost && req.URL.Path == "/sap/bc/adt/debugger/breakpoints":
+		resp.Header.Add("Set-Cookie", fmt.Sprintf("sid=s%d; Path=/", n))
+	case p == listenersPath && req.Method == http.MethodPost:
+		return f.listen(req, resp)
+	case p == listenersPath && req.Method == http.MethodDelete:
+		f.mu.Lock()
+		fail := f.failStop
+		if f.listenStop != nil {
+			close(f.listenStop)
+			f.listenStop = nil
+		}
+		f.mu.Unlock()
+		if fail {
+			return answerError(resp, fakeError{status: http.StatusInternalServerError, typ: "ExceptionResourceFailure"}), nil
+		}
+	case p == breakpointsPath && req.Method == http.MethodPost:
+		return f.setBreakpoints(resp, body), nil
+	case strings.HasPrefix(p, breakpointsPath+"/") && req.Method == http.MethodDelete:
+		f.mu.Lock()
+		e := f.bpDeleteErr
+		f.mu.Unlock()
+		if e != nil {
+			return answerError(resp, *e), nil
+		}
+	case p == debuggerPath:
+		return f.debugger(req, resp, body)
+	case p == unitTestsPath:
+		return f.unitTests(req, resp)
+	case p == okCodeProgPath:
+		f.mu.Lock()
+		st := f.okCodeStatus
+		f.mu.Unlock()
+		if st != 0 && st != http.StatusOK {
+			return answerError(resp, fakeError{status: st}), nil
+		}
 		resp.Header.Set("Content-Type", "application/xml")
-		resp.Body = io.NopCloser(strings.NewReader(
-			`<?xml version="1.0" encoding="utf-8"?><dbg:breakpoints xmlns:dbg="http://www.sap.com/adt/debugger"><breakpoint kind="line" clientId="0" id="BP1"/></dbg:breakpoints>`))
+		resp.Body = textBody(`<program:abapProgram xmlns:program="http://www.sap.com/adt/programs/programs" xmlns:adtcore="http://www.sap.com/adt/core" adtcore:name="RS_ADTDBG_ACTIVATE_BY_OKCODE" adtcore:type="PROG/P"/>`)
+	case req.Method == http.MethodGet && strings.HasSuffix(p, "/source/main"):
+		resp.Header.Set("Content-Type", "text/plain")
+		resp.Body = textBody(sourceLines(20))
 	}
-	// Everything else, including the listener POST, answers 200 with an empty
-	// body, which adtler reads as a listener timeout.
 	return resp, nil
+}
+
+func (f *fakeDebugBackend) listen(req *http.Request, resp *http.Response) (*http.Response, error) {
+	f.mu.Lock()
+	if f.listenerErr != nil {
+		e := *f.listenerErr
+		f.mu.Unlock()
+		return answerError(resp, e), nil
+	}
+	if f.listenStop == nil {
+		f.listenStop = make(chan struct{})
+	}
+	stop := f.listenStop
+	f.mu.Unlock()
+	select {
+	case id := <-f.hits:
+		if id != "" {
+			resp.Header.Set("Content-Type", "application/vnd.sap.as+xml")
+			resp.Body = textBody(`<?xml version="1.0" encoding="utf-8"?><asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0"><asx:values><DATA><DEBUGGEE_ID>` +
+				id + `</DEBUGGEE_ID></DATA></asx:values></asx:abap>`)
+		}
+		return resp, nil
+	case <-stop:
+		return resp, nil
+	case <-req.Context().Done():
+		return nil, req.Context().Err()
+	}
+}
+
+var bpEntry = regexp.MustCompile(`<breakpoint kind="line" clientId="(\d+)" adtcore:uri="([^"#]+)#start=(\d+)`)
+
+func (f *fakeDebugBackend) setBreakpoints(resp *http.Response, body string) *http.Response {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="utf-8"?><dbg:breakpoints xmlns:dbg="http://www.sap.com/adt/debugger">`)
+	for _, m := range bpEntry.FindAllStringSubmatch(body, -1) {
+		clientID, uri := m[1], m[2]
+		if rej, ok := matchURI(f.rejectBP, uri); ok {
+			fmt.Fprintf(&b, `<breakpoint kind="line" clientId="%s" errorKind="%s" errorMessage="%s"/>`, clientID, rej[0], rej[1])
+			continue
+		}
+		f.bpCounter++
+		extra := ""
+		for k := range f.existingBP {
+			if strings.Contains(uri, k) {
+				extra = ` errorKind="existing"`
+			}
+		}
+		fmt.Fprintf(&b, `<breakpoint kind="line" clientId="%s" id="BP%d"%s/>`, clientID, f.bpCounter, extra)
+	}
+	b.WriteString(`</dbg:breakpoints>`)
+	resp.Header.Set("Content-Type", "application/xml")
+	resp.Body = textBody(b.String())
+	return resp
+}
+
+func matchURI(m map[string][2]string, uri string) ([2]string, bool) {
+	for k, v := range m {
+		if strings.Contains(uri, k) {
+			return v, true
+		}
+	}
+	return [2]string{}, false
+}
+
+func (f *fakeDebugBackend) debugger(req *http.Request, resp *http.Response, body string) (*http.Response, error) {
+	method := req.URL.Query().Get("method")
+	f.mu.Lock()
+	attachGate, attachErr, stack, stackGate, sessions := f.attachGate, f.attachErr, f.stackXML, f.stackGate, f.sessionsBody
+	stepErr, hasStepErr := f.stepErr[method]
+	f.mu.Unlock()
+	wait := func(gate chan struct{}) error {
+		if gate == nil {
+			return nil
+		}
+		select {
+		case <-gate:
+			return nil
+		case <-req.Context().Done():
+			return req.Context().Err()
+		}
+	}
+	switch method {
+	case "attach":
+		if err := wait(attachGate); err != nil {
+			return nil, err
+		}
+		if attachErr != nil {
+			return answerError(resp, *attachErr), nil
+		}
+		resp.Header.Set("Content-Type", "application/xml")
+		resp.Body = textBody(`<dbg:attach xmlns:dbg="http://www.sap.com/adt/debugger"/>`)
+	case "getStack":
+		if err := wait(stackGate); err != nil {
+			return nil, err
+		}
+		resp.Header.Set("Content-Type", "application/xml")
+		resp.Body = textBody(stack)
+	case "getDebuggeeSessions":
+		resp.Header.Set("Content-Type", "application/vnd.sap.as+xml")
+		resp.Body = textBody(sessions)
+	case "stepInto", "stepOver", "stepReturn", "stepContinue", "terminateDebuggee", "detachDebugger":
+		if hasStepErr {
+			if stepErr.endsRun {
+				f.release()
+			}
+			return answerError(resp, stepErr), nil
+		}
+		if method == "detachDebugger" || method == "terminateDebuggee" {
+			f.release()
+		}
+		resp.Header.Set("Content-Type", "application/xml")
+		resp.Body = textBody(`<dbg:step xmlns:dbg="http://www.sap.com/adt/debugger"/>`)
+	}
+	_ = body // read by the variable methods added in Task 12
+	return resp, nil
+}
+
+func (f *fakeDebugBackend) unitTests(req *http.Request, resp *http.Response) (*http.Response, error) {
+	f.mu.Lock()
+	hit, uerr, released := f.unitHit, f.unitErr, f.released
+	f.mu.Unlock()
+	if uerr != nil {
+		return answerError(resp, *uerr), nil
+	}
+	if hit != "" {
+		select {
+		case f.hits <- hit:
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
+		}
+		select {
+		case <-released:
+		case <-req.Context().Done():
+			return nil, req.Context().Err()
+		}
+	}
+	resp.Header.Set("Content-Type", "application/xml")
+	resp.Body = textBody(`<?xml version="1.0" encoding="utf-8"?><aunit:runResult xmlns:aunit="http://www.sap.com/adt/aunit"><program><testClasses>` +
+		`<testClass name="LTC_TEST"><testMethods><testMethod name="TEST_HELLO" executionTime="0.01"/></testMethods></testClass>` +
+		`</testClasses></program></aunit:runResult>`)
+	return resp, nil
+}
+
+func (f *fakeDebugBackend) release() { f.releaseOnce.Do(func() { close(f.released) }) }
+
+// set changes the fake's configuration under its lock.
+func (f *fakeDebugBackend) set(fn func(f *fakeDebugBackend)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	fn(f)
+}
+
+// hit answers the waiting listener with debuggee id ("" = listener timeout).
+func (f *fakeDebugBackend) hit(t *testing.T, id string) {
+	t.Helper()
+	select {
+	case f.hits <- id:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("no listener was waiting for hit %q", id)
+	}
 }
 
 // requests returns the recorded requests matching method and path.
@@ -70,28 +364,71 @@ func (f *fakeDebugBackend) requests(method, path string) []recordedRequest {
 	return out
 }
 
-func (f *fakeDebugBackend) csrfFetches() int {
+// index returns the position of the first request matching method, path and
+// a query substring, or -1.
+func (f *fakeDebugBackend) index(method, path, query string) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	n := 0
-	for _, r := range f.reqs {
-		if r.method == http.MethodGet && r.path == "/sap/bc/adt/discovery" {
-			n++
+	for i, r := range f.reqs {
+		if r.method == method && r.path == path && strings.Contains(r.query, query) {
+			return i
 		}
 	}
-	return n
+	return -1
 }
 
-const (
-	breakpointsPath = "/sap/bc/adt/debugger/breakpoints"
-	listenersPath   = "/sap/bc/adt/debugger/listeners"
-)
+// waitForRequest polls until a matching request was recorded.
+func (f *fakeDebugBackend) waitForRequest(t *testing.T, method, path, query string) recordedRequest {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		for _, r := range f.requests(method, path) {
+			if strings.Contains(r.query, query) {
+				return r
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no %s %s?%s request was sent", method, path, query)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// cookieOf returns the session cookie of the first request matching method and path.
+func (f *fakeDebugBackend) cookieOf(method, path string) string {
+	if rs := f.requests(method, path); len(rs) > 0 {
+		return rs[0].cookie
+	}
+	return ""
+}
+
+func (f *fakeDebugBackend) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.reqs)
+}
+
+var fastDebugTimings = tools.DebugTimingsForTest{
+	TriggerDelay:     10 * time.Millisecond,
+	InitialWait:      3 * time.Second,
+	CleanupBudget:    3 * time.Second,
+	ListenerExitWait: time.Second,
+	IdleLimit:        time.Hour,
+	AttachTimeout:    3 * time.Second,
+}
 
 // newDebugServer registers the debug tools on a registry of two fake systems,
-// sysA (host sap-a.test) and sysB (host sap-b.test), with sysA active.
-func newDebugServer(t *testing.T) (*server.MCPServer, *adt.ClientRegistry, *fakeDebugBackend) {
+// sysA (host sap-a.test) and sysB (host sap-b.test), with sysA active and
+// "alice" as the configured logon user of both.
+func newDebugServer(t *testing.T, opts ...tools.RegisterOption) (*server.MCPServer, *adt.ClientRegistry, *fakeDebugBackend) {
 	t.Helper()
-	backend := &fakeDebugBackend{}
+	return newDebugServerTimed(t, fastDebugTimings, nil, opts...)
+}
+
+func newDebugServerTimed(t *testing.T, timings tools.DebugTimingsForTest, fallback tools.BlackMagicClient, opts ...tools.RegisterOption) (*server.MCPServer, *adt.ClientRegistry, *fakeDebugBackend) {
+	t.Helper()
+	tools.SetDebugTimingsForTest(t, timings)
+	backend := newFakeDebugBackend()
 	clients := map[string]adt.Client{
 		"sysA": adt.NewClientWithTransport(sapmcpconfig.SAPSystem{Host: "http://sap-a.test", User: "u", Password: "p"}, backend),
 		"sysB": adt.NewClientWithTransport(sapmcpconfig.SAPSystem{Host: "http://sap-b.test", User: "u", Password: "p"}, backend),
@@ -101,122 +438,11 @@ func newDebugServer(t *testing.T) (*server.MCPServer, *adt.ClientRegistry, *fake
 		t.Fatal(err)
 	}
 	s := server.NewMCPServer("test", "0")
-	tools.RegisterAllWithLockMap(s, reg, reg, adt.NewLockMap(), map[string]bool{"debug": true}, nil)
+	all := append([]tools.RegisterOption{tools.WithSystemUser(func(string) string { return "alice" })}, opts...)
+	tools.RegisterAllWithLockMap(s, reg, reg, adt.NewLockMap(), map[string]bool{"debug": true}, fallback, all...)
+	// Stop whatever run the test left, so no listener goroutine outlives it.
+	t.Cleanup(func() { callTool(t, s, "debug_stop", map[string]interface{}{}) })
 	return s, reg, backend
-}
-
-func debugStartArgs(user string) map[string]interface{} {
-	return map[string]interface{}{
-		"object_uri":      "/sap/bc/adt/programs/programs/zprog/source/main",
-		"line":            3,
-		"object_type":     "PROG/P",
-		"object_name":     "ZPROG",
-		"user":            user,
-		"timeout_seconds": 1,
-	}
-}
-
-// #562: the first debug_start fixed the user for the rest of the process.
-// A later debug_start for another user must set its breakpoint and listener
-// for that user, and stop the old user's listener.
-func TestDebugStart_OtherUserReplacesSession(t *testing.T) {
-	s, _, backend := newDebugServer(t)
-
-	if res := callTool(t, s, "debug_start", debugStartArgs("alice")); res.IsError {
-		t.Fatalf("first debug_start: %v", res.Content)
-	}
-	if res := callTool(t, s, "debug_start", debugStartArgs("bob")); res.IsError {
-		t.Fatalf("second debug_start: %v", res.Content)
-	}
-
-	bps := backend.requests(http.MethodPost, breakpointsPath)
-	if len(bps) != 2 || !strings.Contains(bps[1].body, `requestUser="BOB"`) {
-		t.Errorf("second breakpoint must be set for BOB; breakpoint requests: %+v", bps)
-	}
-	listens := backend.requests(http.MethodPost, listenersPath)
-	if len(listens) != 2 || !strings.Contains(listens[1].query, "requestUser=BOB") {
-		t.Errorf("second listener must listen for BOB; listener requests: %+v", listens)
-	}
-	stops := backend.requests(http.MethodDelete, listenersPath)
-	if len(stops) != 1 || !strings.Contains(stops[0].query, "requestUser=ALICE") {
-		t.Errorf("replacing the session must stop ALICE's listener; stop requests: %+v", stops)
-	}
-}
-
-// #562: the session copied the client of the system active at creation, so
-// after select_system every debug call still went to the first system.
-func TestDebugStart_SystemSwitchReplacesSession(t *testing.T) {
-	s, reg, backend := newDebugServer(t)
-
-	if res := callTool(t, s, "debug_start", debugStartArgs("alice")); res.IsError {
-		t.Fatalf("debug_start on sysA: %v", res.Content)
-	}
-	if _, err := reg.Select("sysB"); err != nil {
-		t.Fatal(err)
-	}
-	if res := callTool(t, s, "debug_start", debugStartArgs("alice")); res.IsError {
-		t.Fatalf("debug_start on sysB: %v", res.Content)
-	}
-
-	bps := backend.requests(http.MethodPost, breakpointsPath)
-	if len(bps) != 2 || bps[0].host != "sap-a.test" || bps[1].host != "sap-b.test" {
-		t.Errorf("breakpoints must go to sysA, then sysB; got %+v", bps)
-	}
-	stops := backend.requests(http.MethodDelete, listenersPath)
-	if len(stops) != 1 || stops[0].host != "sap-a.test" {
-		t.Errorf("the replaced session's listener must be stopped on sysA; stop requests: %+v", stops)
-	}
-}
-
-// Within a debugging attempt, a mismatching user must not silently replace
-// the session: that would discard the debuggee the session is attached to.
-func TestDebugInAttemptTool_OtherUserIsError(t *testing.T) {
-	s, _, backend := newDebugServer(t)
-
-	if res := callTool(t, s, "debug_start", debugStartArgs("alice")); res.IsError {
-		t.Fatalf("debug_start: %v", res.Content)
-	}
-	before := backend.count()
-
-	res := callTool(t, s, "debug_get_stack", map[string]interface{}{"user": "bob"})
-	if !res.IsError {
-		t.Fatalf("debug_get_stack for another user must fail, got %v", res.Content)
-	}
-	if text := debugResultText(res); !strings.Contains(text, "debug_start") || !strings.Contains(text, "ALICE") {
-		t.Errorf("error should name the session's user and the way out (debug_start), got %q", text)
-	}
-	if after := backend.count(); after != before {
-		t.Errorf("a refused call must not reach SAP; %d new requests", after-before)
-	}
-}
-
-// #562: a wedged session could only be recovered by restarting the server.
-// debug_stop now drops the session, so the next debug_start starts on a
-// fresh one (its own CSRF preflight is the visible sign of a new session).
-func TestDebugStop_DropsSession(t *testing.T) {
-	s, _, backend := newDebugServer(t)
-
-	if res := callTool(t, s, "debug_start", debugStartArgs("alice")); res.IsError {
-		t.Fatalf("debug_start: %v", res.Content)
-	}
-	if res := callTool(t, s, "debug_stop", map[string]interface{}{"user": "alice"}); res.IsError {
-		t.Fatalf("debug_stop: %v", res.Content)
-	}
-	if got := backend.csrfFetches(); got != 1 {
-		t.Fatalf("expected 1 CSRF fetch before the restart, got %d", got)
-	}
-	if res := callTool(t, s, "debug_start", debugStartArgs("alice")); res.IsError {
-		t.Fatalf("debug_start after debug_stop: %v", res.Content)
-	}
-	if got := backend.csrfFetches(); got != 2 {
-		t.Errorf("debug_start after debug_stop must run on a new session (new CSRF fetch); fetches = %d", got)
-	}
-}
-
-func (f *fakeDebugBackend) count() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.reqs)
 }
 
 func debugResultText(res *mcp.CallToolResult) string {
@@ -229,47 +455,167 @@ func debugResultText(res *mcp.CallToolResult) string {
 	return b.String()
 }
 
-// debug_stop must drop the session even when stopping it fails: a wedged
-// session is exactly the one whose StopListener fails, and keeping it would
-// leave the restart as the only way out (#562).
-func TestDebugStop_FailedStopStillDropsSession(t *testing.T) {
+// runState decodes a successful debug_run/debug_wait result.
+func runState(t *testing.T, res *mcp.CallToolResult) tools.DebugRunState {
+	t.Helper()
+	if res.IsError {
+		t.Fatalf("tool error: %s", debugResultText(res))
+	}
+	var st tools.DebugRunState
+	if err := json.Unmarshal([]byte(debugResultText(res)), &st); err != nil {
+		t.Fatalf("decode run state: %v\n%s", err, debugResultText(res))
+	}
+	return st
+}
+
+// waitForStatus calls debug_wait until the run reaches status. It reports
+// failures with t.Errorf, so it may run in a goroutine.
+func waitForStatus(t *testing.T, s *server.MCPServer, since int64, status string) (tools.DebugRunState, bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		res := callTool(t, s, "debug_wait", map[string]interface{}{"since_version": since, "timeout_seconds": 2})
+		var st tools.DebugRunState
+		if res.IsError || json.Unmarshal([]byte(debugResultText(res)), &st) != nil {
+			t.Errorf("debug_wait failed: %s", debugResultText(res))
+			return st, false
+		}
+		if st.Status == status {
+			return st, true
+		}
+		since = st.Version
+	}
+	t.Errorf("the run did not reach status %q", status)
+	return tools.DebugRunState{}, false
+}
+
+func mustStatus(t *testing.T, s *server.MCPServer, since int64, status string) tools.DebugRunState {
+	t.Helper()
+	st, ok := waitForStatus(t, s, since, status)
+	if !ok {
+		t.FailNow()
+	}
+	return st
+}
+
+// manualRunArgs are debug_run arguments for a manual run with one breakpoint
+// at line 3 of each URI (default: progURI).
+func manualRunArgs(user string, uris ...string) map[string]interface{} {
+	if len(uris) == 0 {
+		uris = []string{progURI}
+	}
+	bps := make([]interface{}, 0, len(uris))
+	for _, u := range uris {
+		bps = append(bps, map[string]interface{}{"object_uri": u, "line": 3})
+	}
+	args := map[string]interface{}{
+		"breakpoints":     bps,
+		"trigger":         map[string]interface{}{"kind": "manual"},
+		"timeout_seconds": 60,
+	}
+	if user != "" {
+		args["user"] = user
+	}
+	return args
+}
+
+// #562: the first debug run fixed the user for the rest of the process. A
+// later debug_run for another user must set its breakpoints and listener for
+// that user, after cleaning up the old user's run.
+func TestDebugRun_OtherUserReplacesSession(t *testing.T) {
 	s, _, backend := newDebugServer(t)
 
-	if res := callTool(t, s, "debug_start", debugStartArgs("alice")); res.IsError {
-		t.Fatalf("debug_start: %v", res.Content)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("alice")))
+	backend.waitForRequest(t, http.MethodPost, listenersPath, "requestUser=ALICE")
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("bob")))
+	backend.waitForRequest(t, http.MethodPost, listenersPath, "requestUser=BOB")
+
+	bps := backend.requests(http.MethodPost, breakpointsPath)
+	if len(bps) != 2 || !strings.Contains(bps[1].body, `requestUser="BOB"`) {
+		t.Errorf("second breakpoint request must be for BOB; got %+v", bps)
 	}
-	backend.mu.Lock()
-	backend.failStop = true
-	backend.mu.Unlock()
-	if res := callTool(t, s, "debug_stop", map[string]interface{}{"user": "alice"}); !res.IsError {
-		t.Fatalf("debug_stop must report the failed stop, got %v", res.Content)
+	if backend.index(http.MethodDelete, listenersPath, "requestUser=ALICE") < 0 {
+		t.Error("replacing the session must stop ALICE's listener")
 	}
-	if res := callTool(t, s, "debug_start", debugStartArgs("alice")); res.IsError {
-		t.Fatalf("debug_start after the failed debug_stop: %v", res.Content)
-	}
-	if got := backend.csrfFetches(); got != 2 {
-		t.Errorf("debug_start after a failed debug_stop must run on a new session; CSRF fetches = %d", got)
+	if len(backend.requests(http.MethodDelete, breakpointsPath+"/BP1")) != 1 {
+		t.Error("replacing the session must delete ALICE's breakpoint BP1")
 	}
 }
 
-// debug_stop for a user other than the current session's stops both: the
-// current session, which is dropped, and any listener of the named user.
-func TestDebugStop_OtherUserStopsBoth(t *testing.T) {
-	s, _, backend := newDebugServer(t)
+// #562: after select_system every debug call still went to the first system.
+func TestDebugRun_SystemSwitchReplacesSession(t *testing.T) {
+	s, reg, backend := newDebugServer(t)
 
-	if res := callTool(t, s, "debug_start", debugStartArgs("alice")); res.IsError {
-		t.Fatalf("debug_start: %v", res.Content)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("alice")))
+	backend.waitForRequest(t, http.MethodPost, listenersPath, "requestUser=ALICE")
+	if _, err := reg.Select("sysB"); err != nil {
+		t.Fatal(err)
 	}
-	if res := callTool(t, s, "debug_stop", map[string]interface{}{"user": "bob"}); res.IsError {
-		t.Fatalf("debug_stop: %v", res.Content)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("alice")))
+
+	bps := backend.requests(http.MethodPost, breakpointsPath)
+	if len(bps) != 2 || bps[0].host != "sap-a.test" || bps[1].host != "sap-b.test" {
+		t.Errorf("breakpoints must go to sysA, then sysB; got %+v", bps)
 	}
 	stops := backend.requests(http.MethodDelete, listenersPath)
-	var alice, bob bool
-	for _, r := range stops {
-		alice = alice || strings.Contains(r.query, "requestUser=ALICE")
-		bob = bob || strings.Contains(r.query, "requestUser=BOB")
+	if len(stops) == 0 || stops[0].host != "sap-a.test" {
+		t.Errorf("the replaced run's listener must be stopped on sysA; stop requests: %+v", stops)
 	}
-	if !alice || !bob {
-		t.Errorf("debug_stop for BOB must stop ALICE's current session and BOB's listener; stop requests: %+v", stops)
+}
+
+// Within a debugging attempt, a mismatching user must not silently replace
+// the session: that would discard the debuggee the session is attached to.
+func TestDebugInAttemptTool_OtherUserIsError(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("alice")))
+	backend.waitForRequest(t, http.MethodPost, listenersPath, "requestUser=ALICE")
+	before := backend.count()
+
+	res := callTool(t, s, "debug_get_stack", map[string]interface{}{"user": "bob"})
+	if !res.IsError {
+		t.Fatalf("debug_get_stack for another user must fail, got %v", res.Content)
+	}
+	if text := debugResultText(res); !strings.Contains(text, "debug_run") || !strings.Contains(text, "ALICE") {
+		t.Errorf("error should name the run's user and the way out (debug_run), got %q", text)
+	}
+	if after := backend.count(); after != before {
+		t.Errorf("a refused call must not reach SAP; %d new requests", after-before)
+	}
+}
+
+// #562: a wedged session could only be recovered by restarting the server.
+// debug_stop drops the session, so the next debug_run starts on a new one.
+func TestDebugStop_DropsSession(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	if res := callTool(t, s, "debug_stop", map[string]interface{}{}); res.IsError {
+		t.Fatalf("debug_stop: %s", debugResultText(res))
+	}
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+
+	bps := backend.requests(http.MethodPost, breakpointsPath)
+	if len(bps) != 2 || bps[0].cookie == "" || bps[0].cookie == bps[1].cookie {
+		t.Errorf("debug_run after debug_stop must run on a new session; breakpoint cookies: %+v", bps)
+	}
+}
+
+// debug_stop must drop the session even when stopping fails: a wedged session
+// is exactly the one whose stop fails (#562).
+func TestDebugStop_FailedStopStillDropsSession(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	backend.set(func(f *fakeDebugBackend) { f.failStop = true })
+	if res := callTool(t, s, "debug_stop", map[string]interface{}{}); !res.IsError {
+		t.Fatalf("debug_stop must report the failed stop, got %s", debugResultText(res))
+	}
+	backend.set(func(f *fakeDebugBackend) { f.failStop = false })
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+
+	bps := backend.requests(http.MethodPost, breakpointsPath)
+	if len(bps) != 2 || bps[0].cookie == bps[1].cookie {
+		t.Errorf("debug_run after a failed debug_stop must run on a new session; breakpoint cookies: %+v", bps)
 	}
 }

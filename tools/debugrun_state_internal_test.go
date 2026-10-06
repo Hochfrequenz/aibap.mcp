@@ -124,3 +124,16 @@ func TestDebugRunStateIsAnObjectWithBreakpointArray(t *testing.T) {
 		t.Errorf("structuredContent must be an object with an empty breakpoints array: %s", out)
 	}
 }
+
+func TestSourceExcerpt(t *testing.T) {
+	text := "a\r\nb\r\nc\r\nd\r\ne"
+	if got, want := sourceExcerpt(text, 2, 1), "  1: a\n> 2: b\n  3: c"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got := sourceExcerpt(text, 1, 3); !strings.HasPrefix(got, "> 1: a") || !strings.HasSuffix(got, "  4: d") {
+		t.Errorf("clipped at the start: %q", got)
+	}
+	if got := sourceExcerpt(text, 9, 1); got != "" {
+		t.Errorf("a line past the end gives nothing: %q", got)
+	}
+}

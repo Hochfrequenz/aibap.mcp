@@ -2,6 +2,10 @@ package tools
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -225,4 +229,147 @@ func (r *debugRun) stopIdleLocked() {
 		r.idleTimer.Stop()
 		r.idleTimer = nil
 	}
+}
+
+// timeoutHint explains a listening window that ended without a hit.
+const timeoutHint = "No run hit a breakpoint while the listener was waiting. Usual causes: the run was made as another user, " +
+	"the breakpoint is in a system program, the run started before or after the listening window, " +
+	"or (gui) the SAP GUI session was not enabled for external debugging."
+
+// excerptRadius is how many source lines position.source_excerpt shows above
+// and below the current line.
+const excerptRadius = 3
+
+// adtExceptionSubtype is the ADT exception property that carries a subtype.
+const adtExceptionSubtype = "com.sap.adt.communicationFramework.subType"
+
+// startWindowLocked starts a listening window: one long poll with the run's
+// remaining budget, at most maxRunTimeoutSeconds. Caller holds r.mu.
+func (r *debugRun) startWindowLocked() {
+	secs := int(math.Ceil(time.Until(r.budgetEnd).Seconds()))
+	secs = max(1, min(secs, maxRunTimeoutSeconds))
+	ctx, cancel := context.WithCancel(r.runCtx)
+	done := make(chan struct{})
+	r.windowCancel, r.listenerDone = cancel, done
+	go r.listen(ctx, cancel, secs, done)
+}
+
+// listen is the listener goroutine of one window. On a hit, unless cleanup has
+// started, it sets attaching and attaches.
+func (r *debugRun) listen(ctx context.Context, cancel context.CancelFunc, secs int, done chan struct{}) {
+	defer close(done)
+	defer cancel()
+	res, err := r.sess.StartListener(ctx, secs)
+	if ctx.Err() != nil {
+		return // cleanup, or the trigger ended the run without a hit
+	}
+	r.mu.Lock()
+	if r.st.Status != runListening {
+		r.mu.Unlock()
+		return // cleanup started meanwhile; its StopListener released the poll
+	}
+	if err != nil {
+		r.fatal = fmt.Errorf("the debug listener failed: %w", err)
+		r.transitionLocked(func(st *DebugRunState) {
+			st.Status = runTimeout
+			st.Hint = "The listener failed: " + err.Error()
+		})
+		r.mu.Unlock()
+		return
+	}
+	if res.Status != "attached" || res.DebuggeeID == "" {
+		r.transitionLocked(func(st *DebugRunState) {
+			st.Status = runTimeout
+			st.Hint = timeoutHint
+		})
+		r.mu.Unlock()
+		return
+	}
+	r.transitionLocked(func(st *DebugRunState) {
+		st.Status = runAttaching
+		st.DebuggeeID = res.DebuggeeID
+	})
+	r.mu.Unlock()
+	r.attach(res.DebuggeeID)
+}
+
+// attach attaches to a caught debuggee with one Attach call (adtler retries
+// AdiFailed until adtler#196 lands) and its own deadline, not derived from the
+// run context, so cleanup cannot abort an attach that SAP may already be
+// completing.
+func (r *debugRun) attach(id string) {
+	ctx, cancel := context.WithTimeout(context.Background(), r.timings.attachTimeout)
+	defer cancel()
+	err := r.sess.Attach(ctx, id)
+	var pos *DebugPosition
+	var perr error
+	if err == nil && r.status() == runAttaching {
+		pos, perr = r.readPosition(ctx)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.st.Status != runAttaching {
+		return // cleanup started meanwhile
+	}
+	if err != nil {
+		r.transitionLocked(func(st *DebugRunState) {
+			st.Status = runEnded
+			st.EndReason = endAttachFailed
+			st.Hint = attachFailedHint(err)
+		})
+		return
+	}
+	r.transitionLocked(func(st *DebugRunState) {
+		st.Status = runAttached
+		st.Position = pos
+		st.Hint = ""
+		if perr != nil {
+			st.Hint = "Attached, but the position could not be read: " + perr.Error()
+		}
+	})
+}
+
+func attachFailedHint(err error) string {
+	h := "Attaching to the caught run failed: " + err.Error() + ". Start a new debug_run."
+	var adtErr *adt.ADTError
+	if errors.As(err, &adtErr) && adtErr.Properties[adtExceptionSubtype] == "invalidServer" {
+		h += " SAP answered invalidServer: the run was caught on another application server, which this server cannot attach to yet (#513)."
+	}
+	return h
+}
+
+// readPosition reads where the debuggee stands: the active stack frame
+// (adtler#203) and a few source lines around it.
+func (r *debugRun) readPosition(ctx context.Context) (*DebugPosition, error) {
+	frames, err := r.sess.GetStackFrames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	f, ok := adt.ActiveFrame(frames)
+	if !ok {
+		return nil, errors.New("the debugger returned an empty stack")
+	}
+	pos := &DebugPosition{Program: f.Program, Include: f.Include, Line: f.Line, SourceURI: f.SourceURI, SourceLine: f.SourceLine}
+	if pos.SourceURI != "" && pos.SourceLine > 0 && r.source != nil {
+		if text, err := r.source(ctx, pos.SourceURI); err == nil {
+			pos.SourceExcerpt = sourceExcerpt(text, pos.SourceLine, excerptRadius)
+		}
+	}
+	return pos, nil
+}
+
+// sourceExcerpt returns lines line-radius … line+radius of text, numbered,
+// with the current line marked ">".
+func sourceExcerpt(text string, line, radius int) string {
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	from, to := max(1, line-radius), min(len(lines), line+radius)
+	var b strings.Builder
+	for n := from; n <= to; n++ {
+		marker := "  "
+		if n == line {
+			marker = "> "
+		}
+		fmt.Fprintf(&b, "%s%d: %s\n", marker, n, lines[n-1])
+	}
+	return strings.TrimSuffix(b.String(), "\n")
 }

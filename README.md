@@ -188,9 +188,9 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 
 | Tool | Description |
 |------|-------------|
-| `debug_start` | Set a breakpoint and wait for it to be hit |
+| `debug_run` | Set breakpoints, listen in the background and attach to the first run that hits one |
 | `debug_stop` | Stop the debug listener and clean up breakpoints |
-| `debug_attach` | Attach to an active debuggee session |
+| `debug_wait` | Wait for the debug run to change: hit, attach, end, timeout |
 | `debug_step` | Step into / over / out / continue, or terminate / detach the debuggee |
 | `debug_get_variable` | Read a variable value in the current scope |
 | `debug_get_stack` | Get the current call stack |

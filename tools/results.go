@@ -160,17 +160,6 @@ type DebugListenerStopResult struct {
 	Stopped bool `json:"stopped"`
 }
 
-type DebugAttachResult struct {
-	DebuggeeID string `json:"debuggee_id"`
-	Attached   bool   `json:"attached"`
-}
-
-type DebugStartResult struct {
-	BreakpointID string `json:"breakpoint_id"`
-	Status       string `json:"status"`
-	DebuggeeID   string `json:"debuggee_id"`
-}
-
 // DebugSessionsResult reports active debuggee sessions. GetDebuggeeSessions
 // returns SAP ASX XML (Accept: application/vnd.sap.as+xml), not JSON, so the
 // raw payload is forwarded as a string rather than parsed. HasSessions is

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,11 +16,6 @@ import (
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
 )
-
-// replacedListenerStopTimeout bounds the best-effort StopListener on a session
-// that is being replaced. A replaced session may be the wedged one (#562), so
-// waiting for its full HTTP timeout would stall the call that replaces it.
-const replacedListenerStopTimeout = 10 * time.Second
 
 // processIDEID identifies this server process to SAP's debugger. Breakpoints
 // and listeners are keyed by the logged-on user, requestUser and ideId, so two
@@ -58,6 +54,7 @@ type debugSessions struct {
 	startMu sync.Mutex
 	mu      sync.Mutex
 
+	client       adt.Client
 	newSession   func(user string) *adt.DebugSession
 	activeSystem func() string
 	// systemUser returns the logon user configured for a system, "" when it
@@ -65,10 +62,18 @@ type debugSessions struct {
 	systemUser func(system string) string
 	timings    debugTimings
 	versions   atomic.Int64
+	okCodes    okCodeCache
+	// triggerer starts gui runs when the build provides one (#558).
+	triggerer DebugTriggerer
 
 	cur *adt.DebugSession
-	key debugSessionKey
-	run *debugRun
+	// curCleanup is a second fresh session next to cur, bound to the same
+	// user, system and IDE ID. Cleanup sends StopListener and the external
+	// deletes from it: those endpoints are keyed by user and IDE ID, not by
+	// cookie, so a wedged debug session cannot block them.
+	curCleanup *adt.DebugSession
+	key        debugSessionKey
+	run        *debugRun
 }
 
 // newDebugSessions expects selector to be the same registry as client (as
@@ -76,6 +81,7 @@ type debugSessions struct {
 // adt.NewDebugSession binds the session to client's active system.
 func newDebugSessions(client adt.Client, selector SystemSelector, systemUser func(string) string) *debugSessions {
 	return &debugSessions{
+		client: client,
 		newSession: func(user string) *adt.DebugSession {
 			return adt.NewDebugSession(client, user, processIDEID)
 		},
@@ -123,93 +129,69 @@ func (m *debugSessions) keyFor(user string) debugSessionKey {
 	return debugSessionKey{user: strings.ToUpper(user), system: m.activeSystem()}
 }
 
-// createLocked creates a session for user and returns it with the key it is
-// bound to. adt.NewDebugSession reads the active system separately from
-// keyFor, so a select_system in between would record the wrong system; the
-// key is read again after creation and the session rebuilt if it moved.
-// Creating a session sends no request. Caller holds mu.
-func (m *debugSessions) createLocked(user string) (*adt.DebugSession, debugSessionKey) {
+// createLocked creates the debug session and its cleanup session for user and
+// returns them with the key they are bound to. adt.NewDebugSession reads the
+// active system separately from keyFor, so a select_system in between would
+// record the wrong system; the key is read again after creation and both
+// rebuilt if it moved. Creating a session sends no request. Caller holds mu.
+func (m *debugSessions) createLocked(user string) (*adt.DebugSession, *adt.DebugSession, debugSessionKey) {
 	for {
 		key := m.keyFor(user)
-		sess := m.newSession(user)
+		sess, cleanup := m.newSession(user), m.newSession(user)
 		if m.keyFor(user) == key {
-			return sess, key
+			return sess, cleanup, key
 		}
 	}
 }
 
-// open returns the session for user on the active system, for the tools that
-// begin a debugging attempt (debug_start, debug_set_breakpoint). A session
-// bound to another user or system is replaced; its listener is stopped on a
-// best-effort basis so it does not keep catching runs nobody waits for. A
-// debuggee the old listener caught just before that stop belongs to the old
-// session and can no longer be attached from here.
-func (m *debugSessions) open(ctx context.Context, user string) *adt.DebugSession {
+// open returns the debug session and its cleanup session for user on the
+// active system. A session bound to another user or system is replaced; its
+// run is cleaned up first (#558). Caller holds startMu.
+func (m *debugSessions) open(user string) (*adt.DebugSession, *adt.DebugSession, debugSessionKey) {
 	m.mu.Lock()
-	old := m.cur
-	if old != nil && m.key == m.keyFor(user) {
-		m.mu.Unlock()
-		return old
+	if m.cur != nil && m.key == m.keyFor(user) {
+		defer m.mu.Unlock()
+		return m.cur, m.curCleanup, m.key
 	}
-	sess, key := m.createLocked(user)
-	m.cur, m.key = sess, key
+	run := m.run
 	m.mu.Unlock()
-
-	if old != nil {
-		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), replacedListenerStopTimeout)
-		_ = old.StopListener(stopCtx)
-		cancel()
+	if run != nil {
+		m.cleanupRun(run)
 	}
-	return sess
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cur, m.curCleanup, m.key = m.createLocked(user)
+	return m.cur, m.curCleanup, m.key
 }
 
-// use returns the current session for the tools that work inside an attempt
-// (attach, step, variables, stack, watchpoints, debuggee list). Those calls
-// only make sense on the session that caught the debuggee, so a mismatching
+// use returns the current session for user (already resolved). A mismatching
 // user or system is an error rather than a silent replacement that would
 // discard an attached debuggee. Without a session, one is created.
 func (m *debugSessions) use(user string) (*adt.DebugSession, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.cur == nil {
-		m.cur, m.key = m.createLocked(user)
+		m.cur, m.curCleanup, m.key = m.createLocked(user)
 		return m.cur, nil
 	}
 	if key := m.keyFor(user); m.key != key {
 		return nil, fmt.Errorf(
 			"the current debug session belongs to user %s on system %q, not user %s on system %q; "+
-				"call debug_start (or debug_stop) to start over with the new user or system",
+				"call debug_run (or debug_stop) to start over with the new user or system",
 			m.key.user, m.key.system, key.user, key.system)
 	}
 	return m.cur, nil
 }
 
-// take removes the current session and returns every session debug_stop has
-// to stop: the current one, and a fresh one for user on the active system
-// unless the current one is exactly that. The fresh one removes a listener
-// left behind for that user, e.g. by an earlier server process. The caller
-// owns the returned sessions; the next debug call starts on a new one, which
-// is the recovery path for a wedged session.
-func (m *debugSessions) take(user string) []*adt.DebugSession {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var out []*adt.DebugSession
-	if m.cur != nil {
-		out = append(out, m.cur)
+// callSession resolves user, runs fn on the session for that user (see use)
+// and maps both ways it can fail to an MCP error result. debug_get_sessions
+// uses it: it works in any state.
+func (m *debugSessions) callSession(user string, fn func(*adt.DebugSession) ([]byte, error)) ([]byte, *mcp.CallToolResult) {
+	u, err := m.resolveUser(user)
+	if err != nil {
+		return nil, errorResult(err)
 	}
-	if m.cur == nil || m.key != m.keyFor(user) {
-		sess, _ := m.createLocked(user)
-		out = append(out, sess)
-	}
-	m.cur = nil
-	m.key = debugSessionKey{}
-	return out
-}
-
-// call runs fn on the session for user (see use) and maps both ways it can
-// fail, a mismatching session and a failed SAP call, to an MCP error result.
-func (m *debugSessions) call(user string, fn func(*adt.DebugSession) ([]byte, error)) ([]byte, *mcp.CallToolResult) {
-	sess, err := m.use(user)
+	sess, err := m.use(u)
 	if err != nil {
 		return nil, errorResult(err)
 	}
@@ -220,20 +202,20 @@ func (m *debugSessions) call(user string, fn func(*adt.DebugSession) ([]byte, er
 	return data, nil
 }
 
+// call runs fn for an in-attempt tool (stack, variables, watchpoints).
+func (m *debugSessions) call(user string, fn func(*adt.DebugSession) ([]byte, error)) ([]byte, *mcp.CallToolResult) {
+	return m.callSession(user, fn)
+}
+
 // debugUserOnlyHandler builds the handler of a debug tool whose only argument
-// is user: read the session's data with fn and return it shaped by build.
+// is user: read the session's data with fn through via and shape it by build.
 func debugUserOnlyHandler[T any](
-	sessions *debugSessions,
-	toolName string,
+	via func(string, func(*adt.DebugSession) ([]byte, error)) ([]byte, *mcp.CallToolResult),
 	fn func(*adt.DebugSession, context.Context) ([]byte, error),
 	build func([]byte) T,
 ) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		user := req.GetString("user", "")
-		if err := requireDebuggerStringParam(toolName, "user", user); err != nil {
-			return errorResult(err), nil
-		}
-		data, errRes := sessions.call(user, func(d *adt.DebugSession) ([]byte, error) {
+		data, errRes := via(req.GetString(paramUser, ""), func(d *adt.DebugSession) ([]byte, error) {
 			return fn(d, ctx)
 		})
 		if errRes != nil {
@@ -241,4 +223,167 @@ func debugUserOnlyHandler[T any](
 		}
 		return mcp.NewToolResultJSON(build(data))
 	}
+}
+
+// startRun implements debug_run: it stops the previous run, sets every
+// breakpoint in one request and starts listening in the background (#558).
+func (m *debugSessions) startRun(ctx context.Context, a debugRunArgs) (DebugRunState, error) {
+	user, err := m.resolveUser(a.user)
+	if err != nil {
+		return DebugRunState{}, err
+	}
+	run, err := m.launchRun(ctx, a, user, "")
+	if err != nil {
+		return DebugRunState{}, err
+	}
+	return run.snapshot()
+}
+
+// launchRun is the part of debug_run that holds the run-start lock.
+func (m *debugSessions) launchRun(ctx context.Context, a debugRunArgs, user, hint string) (*debugRun, error) {
+	m.startMu.Lock()
+	defer m.startMu.Unlock()
+
+	m.mu.Lock()
+	old := m.run
+	m.mu.Unlock()
+	if old != nil {
+		m.cleanupRun(old)
+	}
+
+	sess, cleanupSess, key := m.open(user)
+	guiAvail := okCodeUnknown
+	if a.kind == triggerGUI {
+		guiAvail = m.okCodes.lookup(ctx, key.system, m.objectInfoFor(key.system))
+	}
+
+	results, err := sess.SetBreakpoints(ctx, adt.BreakpointScopeExternal, a.breakpoints)
+	if err != nil {
+		return nil, fmt.Errorf("debug_run: setting the breakpoints failed: %w", err)
+	}
+	set, err := checkBreakpointResults(a.breakpoints, results)
+	if err != nil {
+		removeSetBreakpoints(ctx, sess, set)
+		return nil, fmt.Errorf("debug_run: %w; the breakpoints that were set are removed again", err)
+	}
+
+	run := m.newRun(runParams{key: key, kind: a.kind, sess: sess, cleanupSess: cleanupSess, breakpoints: set, budget: a.timeout, hint: hint})
+	run.source = m.sourceFor(key.system)
+	switch a.kind {
+	case triggerManual:
+		run.st.Instructions = manualInstructions(user, run.budgetEnd)
+	case triggerGUI:
+		run.st.Instructions = guiInstructions(user, *a.target, guiAvail)
+	}
+	m.mu.Lock()
+	m.run = run
+	m.mu.Unlock()
+	run.mu.Lock()
+	run.startWindowLocked()
+	run.mu.Unlock()
+	return run, nil
+}
+
+// stop implements debug_stop: it cleans up the run and drops the session, so
+// the next debug call starts on a new one (#562). The stopped run stays
+// readable by debug_wait.
+func (m *debugSessions) stop() cleanupReport {
+	m.startMu.Lock()
+	defer m.startMu.Unlock()
+	m.mu.Lock()
+	run := m.run
+	m.mu.Unlock()
+	var rep cleanupReport
+	if run != nil {
+		rep = m.cleanupRun(run)
+	}
+	m.mu.Lock()
+	m.cur, m.curCleanup, m.key = nil, nil, debugSessionKey{}
+	m.mu.Unlock()
+	return rep
+}
+
+// currentRun returns the run debug_wait reports on. A given user must be the
+// run's user; a missing one is fine.
+func (m *debugSessions) currentRun(user string) (*debugRun, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.run == nil {
+		return nil, errors.New("no debug run: start one with debug_run")
+	}
+	if u := strings.ToUpper(strings.TrimSpace(user)); u != "" && u != m.run.user {
+		return nil, fmt.Errorf("the current debug run belongs to user %s, not %s", m.run.user, u)
+	}
+	return m.run, nil
+}
+
+var errOtherSystemActive = errors.New("another system is active than the one the run is bound to")
+
+// sourceFor reads source text for the position excerpt. The main client is the
+// registry, so it reads only while the run's system is the active one.
+func (m *debugSessions) sourceFor(system string) func(context.Context, string) (string, error) {
+	return func(ctx context.Context, uri string) (string, error) {
+		if m.client == nil || m.activeSystem() != system {
+			return "", errOtherSystemActive
+		}
+		return readSourceText(ctx, m.client, uri)
+	}
+}
+
+// readSourceText reads a source URI as a stack frame returns it: …/source/main
+// (GetSource appends /source/main itself) or …/includes/<name>.
+func readSourceText(ctx context.Context, client adt.Client, uri string) (string, error) {
+	if base, ok := strings.CutSuffix(uri, "/source/main"); ok {
+		res, err := client.GetSource(ctx, base)
+		if err != nil {
+			return "", err
+		}
+		return res.Source, nil
+	}
+	if i := strings.Index(uri, "/includes/"); i > 0 {
+		res, err := client.GetIncludeSource(ctx, uri[:i], uri[i+len("/includes/"):])
+		if err != nil {
+			return "", err
+		}
+		return res.Source, nil
+	}
+	return "", fmt.Errorf("no source reader for %s", uri)
+}
+
+// objectInfoFor is the OK-code lookup: an ADT repository lookup, not a table
+// read (scope guardrail). Like sourceFor it only asks the run's system.
+func (m *debugSessions) objectInfoFor(system string) func(context.Context, string) error {
+	return func(ctx context.Context, uri string) error {
+		if m.client == nil || m.activeSystem() != system {
+			return errOtherSystemActive
+		}
+		_, err := m.client.GetObjectInfo(ctx, uri)
+		return err
+	}
+}
+
+// removeSetBreakpoints deletes external breakpoints that were set before a
+// later step failed; best effort.
+func removeSetBreakpoints(ctx context.Context, sess *adt.DebugSession, set []DebugRunBreakpoint) {
+	for _, bp := range set {
+		if bp.ID != "" {
+			_ = sess.RemoveBreakpoint(ctx, adt.BreakpointScopeExternal, bp.ID)
+		}
+	}
+}
+
+// setBreakpointWithoutRun is debug_set_breakpoint while no run is active.
+// During a run it is refused: one external request replaces the run's
+// breakpoints on SAP_BASIS 816 and would leave the stored IDs wrong.
+func (m *debugSessions) setBreakpointWithoutRun(ctx context.Context, user string, bp adt.LineBreakpoint) (*adt.BreakpointResult, error) {
+	m.startMu.Lock()
+	defer m.startMu.Unlock()
+	m.mu.Lock()
+	run := m.run
+	m.mu.Unlock()
+	if run != nil && run.active() {
+		return nil, errors.New("debug_set_breakpoint: a debug_run is active; pass every breakpoint to debug_run instead")
+	}
+	sess, _, _ := m.open(user)
+	return sess.SetBreakpoint(ctx, bp.ObjectURI, bp.Line, bp.ObjectType, bp.ObjectName)
 }
