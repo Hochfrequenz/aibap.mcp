@@ -134,7 +134,7 @@ func TestFindConfigFile(t *testing.T) {
 // wantAnnotatedCount is the size of tools.irreversibleTools. Spelled out here
 // so annotating a subset by accident fails rather than passing a "more than
 // zero" check; the names themselves are pinned in the tools package.
-const wantAnnotatedCount = 6
+const wantAnnotatedCount = 8
 
 func TestConsentFlagReachesTheToolList(t *testing.T) {
 	for _, tc := range []struct {

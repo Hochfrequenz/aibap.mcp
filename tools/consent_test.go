@@ -32,6 +32,8 @@ var wantInteractionRequired = []string{
 	"rollback_transport",
 	"run_class",
 	"update_customizing",
+	"abapgit_pull",
+	"abapgit_push",
 }
 
 func newConsentTestServer(t *testing.T, opts ...tools.RegisterOption) *server.MCPServer {
@@ -107,7 +109,7 @@ func TestParseConsentMode(t *testing.T) {
 
 // TestStrictConsentAnnotatesTheIrreversibleTools pins the default. The
 // annotation is what stops one "Yes, and don't ask again" click from granting
-// consent for every later call to these six tools (issue #507).
+// consent for every later call to these eight tools (issue #507).
 func TestStrictConsentAnnotatesTheIrreversibleTools(t *testing.T) {
 	got := interactionRequiredTools(t, newConsentTestServer(t))
 
