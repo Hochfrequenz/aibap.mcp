@@ -108,6 +108,9 @@ func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelect
 	if t, ok := fallback.(DebugTriggerer); ok {
 		sessions.triggerer = t
 	}
+	if settings.shutdown != nil {
+		settings.shutdown.add(sessions.shutdown)
+	}
 	registerDebugRunTools(s, sessions)
 	registerDebugBreakpointTools(s, sessions)
 	registerDebugInspectTools(s, sessions)

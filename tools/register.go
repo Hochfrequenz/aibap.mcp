@@ -99,6 +99,8 @@ type registerSettings struct {
 	// systemUser returns the logon user configured for a system ("" for
 	// OAuth2); the debug tools use it as their default `user` (#558).
 	systemUser func(system string) string
+	// shutdown receives the hooks to run when the process ends (#558).
+	shutdown *Shutdown
 }
 
 // WithConsentMode selects how the client's permission system is asked to treat
@@ -112,6 +114,13 @@ func WithConsentMode(m ConsentMode) RegisterOption {
 // name its user (#558).
 func WithSystemUser(fn func(system string) string) RegisterOption {
 	return func(rs *registerSettings) { rs.systemUser = fn }
+}
+
+// WithShutdown registers the tools' process-exit hooks on s; the caller runs
+// s.Run before it logs out of SAP. Without it, a debug run left active when
+// the process ends is not cleaned up.
+func WithShutdown(s *Shutdown) RegisterOption {
+	return func(rs *registerSettings) { rs.shutdown = s }
 }
 
 // RegisterAll registers all SAP ADT MCP tools on the given server.

@@ -553,3 +553,17 @@ func (m *debugSessions) rearm(run *debugRun) error {
 	run.startWindowLocked()
 	return nil
 }
+
+// shutdown is the process-exit hook: debug_stop's cleanup, given up when ctx
+// ends (the cleanup itself keeps its own 20 s budget).
+func (m *debugSessions) shutdown(ctx context.Context) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		m.stop()
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
+}

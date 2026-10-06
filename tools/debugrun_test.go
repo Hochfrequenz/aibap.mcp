@@ -323,3 +323,21 @@ func TestDebugWait_AfterListenerFailureAndStopReportsStopped(t *testing.T) {
 		t.Errorf("status = %q, want stopped", st.Status)
 	}
 }
+
+func TestShutdown_StopsTheDebugRun(t *testing.T) {
+	sd := tools.NewShutdown()
+	s, _, backend := newDebugServer(t, tools.WithShutdown(sd))
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	backend.waitForRequest(t, http.MethodPost, listenersPath, "")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	sd.Run(ctx)
+
+	if len(backend.requests(http.MethodDelete, listenersPath)) != 1 || len(backend.requests(http.MethodDelete, breakpointsPath+"/BP1")) != 1 {
+		t.Error("shutdown must stop the listener and remove the breakpoints")
+	}
+	if st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{})); st.Status != "stopped" {
+		t.Errorf("status = %q", st.Status)
+	}
+}

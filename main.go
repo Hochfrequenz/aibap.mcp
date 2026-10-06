@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/Hochfrequenz/adtler/auth"
@@ -145,6 +146,15 @@ func run() error {
 		}
 	}()
 
+	// Runs before the logout above (defers run last-in, first-out): the debug
+	// cleanup needs the SAP sessions. 25 s covers the 20 s cleanup budget.
+	shutdown := tools.NewShutdown()
+	defer func() {
+		sctx, scancel := context.WithTimeout(context.Background(), 25*time.Second)
+		defer scancel()
+		shutdown.Run(sctx)
+	}()
+
 	// The debug tools default `user` to the logon user of the active system.
 	systemUsers := make(map[string]string, len(cfg.Systems))
 	for name, sys := range cfg.Systems {
@@ -155,6 +165,7 @@ func run() error {
 		registry, registry, enabledGroups, blackMagic, consent,
 		serverInstructions(systemNames, cfg.DefaultSystem, enabledGroups["debug"]),
 		tools.WithSystemUser(func(system string) string { return systemUsers[system] }),
+		tools.WithShutdown(shutdown),
 	)
 
 	stdioServer := server.NewStdioServer(s)
