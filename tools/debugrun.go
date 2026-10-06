@@ -307,15 +307,17 @@ func (r *debugRun) attach(id string) {
 		pos, perr = r.readPosition(ctx)
 	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.st.Status != runAttaching {
+		r.mu.Unlock()
 		// Cleanup started meanwhile and skipped the detach (the run was not
-		// attached at its step 1), so a completed attach is detached here.
+		// attached at its step 1), so a completed attach is detached here, in
+		// the listener goroutine, whose exit cleanup step 2b waits for.
 		if err == nil {
-			go r.detachLate()
+			r.detachLate()
 		}
 		return
 	}
+	defer r.mu.Unlock()
 	if err != nil {
 		r.transitionLocked(func(st *DebugRunState) {
 			st.Status = runEnded
@@ -335,7 +337,10 @@ func (r *debugRun) attach(id string) {
 }
 
 // detachLate detaches an attach that completed after cleanup had started.
-// Best effort, with its own deadline.
+// Best effort, with its own deadline. It runs synchronously in the listener
+// goroutine without r.mu: a new run on the same debug session starts only
+// after cleanup has waited for that goroutine, so the detach cannot hit the
+// new run's breakpoints or listener.
 func (r *debugRun) detachLate() {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timings.attachTimeout)
 	defer cancel()

@@ -73,7 +73,11 @@ type fakeDebugBackend struct {
 	hangCookie   string          // requests with this session cookie hang until their context ends
 	hang         map[string]bool // "METHOD path" → hangs until the request's context ends
 	bpSetGate    chan struct{}   // a breakpoint POST waits for this gate (nil: no wait)
+	detachGate   chan struct{}   // a detachDebugger request waits for this gate (nil: no wait)
 }
+
+// stepDetach is the debugger step that detaches the debuggee.
+const stepDetach = "detachDebugger"
 
 type recordedRequest struct {
 	host, method, path, query, body, cookie string
@@ -268,6 +272,7 @@ func (f *fakeDebugBackend) debugger(req *http.Request, resp *http.Response, body
 	method := req.URL.Query().Get("method")
 	f.mu.Lock()
 	attachGate, attachErr, stack, stackGate, sessions := f.attachGate, f.attachErr, f.stackXML, f.stackGate, f.sessionsBody
+	detachGate := f.detachGate
 	stepErr, hasStepErr := f.stepErr[method]
 	f.mu.Unlock()
 	wait := func(gate chan struct{}) error {
@@ -300,14 +305,20 @@ func (f *fakeDebugBackend) debugger(req *http.Request, resp *http.Response, body
 	case "getDebuggeeSessions":
 		resp.Header.Set("Content-Type", "application/vnd.sap.as+xml")
 		resp.Body = textBody(sessions)
-	case "stepInto", "stepOver", "stepReturn", "stepContinue", "terminateDebuggee", "detachDebugger":
+	case "stepInto", "stepOver", "stepReturn", "stepContinue", "terminateDebuggee", stepDetach:
+		if method != stepDetach {
+			detachGate = nil
+		}
+		if err := wait(detachGate); err != nil {
+			return nil, err
+		}
 		if hasStepErr {
 			if stepErr.endsRun {
 				f.release()
 			}
 			return answerError(resp, stepErr), nil
 		}
-		if method == "detachDebugger" || method == "terminateDebuggee" {
+		if method == stepDetach || method == "terminateDebuggee" {
 			f.release()
 		}
 		resp.Header.Set("Content-Type", "application/xml")

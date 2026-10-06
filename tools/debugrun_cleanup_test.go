@@ -202,3 +202,65 @@ func TestDebugStop_WedgedAttachedSessionIsBoundedByTheBudget(t *testing.T) {
 	}
 	backend.set(func(f *fakeDebugBackend) { f.hangCookie = "" })
 }
+
+// An attach that completes inside the listener-exit wait is detached by the
+// listener goroutine before cleanup returns. A following debug_run for the
+// same user reuses the debug session, so its breakpoints and listener must not
+// race that detach.
+func TestDebugRun_LateDetachFinishesBeforeTheNextRunStarts(t *testing.T) {
+	timings := fastDebugTimings
+	timings.ListenerExitWait = 5 * time.Second
+	timings.AttachTimeout = 10 * time.Second
+	s, _, backend := newDebugServerTimed(t, timings, nil)
+	attachGate, detachGate := make(chan struct{}), make(chan struct{})
+	backend.set(func(f *fakeDebugBackend) { f.attachGate, f.detachGate = attachGate, detachGate })
+
+	st := runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	backend.hit(t, "DBG1")
+	mustStatus(t, s, st.Version, "attaching")
+	debugCookie := backend.cookieOf(http.MethodPost, breakpointsPath)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if res := callTool(t, s, "debug_run", manualRunArgs("", otherURI)); res.IsError {
+			t.Errorf("second debug_run: %s", debugResultText(res))
+		}
+	}()
+	backend.waitForRequest(t, http.MethodDelete, listenersPath, "") // cleanup step 2 started
+	close(attachGate)
+	detach := backend.waitForRequest(t, http.MethodPost, debuggerPath, "method=detachDebugger")
+	if detach.cookie != debugCookie {
+		t.Errorf("the late detach must be sent in the debug session (cookie %q, want %q)", detach.cookie, debugCookie)
+	}
+	// The detach is held by the fake. Cleanup must wait for it, so the second
+	// run sets no breakpoints meanwhile; the window only bounds how long a
+	// detach outside the listener goroutine gets to show itself.
+	deadline := time.Now().Add(100 * time.Millisecond)
+	for time.Now().Before(deadline) && len(backend.requests(http.MethodPost, breakpointsPath)) < 2 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if n := len(backend.requests(http.MethodPost, breakpointsPath)); n != 1 {
+		t.Errorf("the next run set breakpoints while the late detach was still in flight (%d breakpoint requests)", n)
+	}
+	close(detachGate)
+	<-done
+
+	posts := backend.requests(http.MethodPost, breakpointsPath)
+	if len(posts) != 2 || posts[1].cookie != debugCookie {
+		t.Fatalf("the next run must reuse the debug session: %+v", posts)
+	}
+	second := -1
+	backend.mu.Lock()
+	for i, r := range backend.reqs {
+		if r.method == http.MethodPost && r.path == breakpointsPath {
+			second = i
+		}
+	}
+	for _, r := range backend.reqs[second:] {
+		if r.method == http.MethodPost && r.path == debuggerPath && strings.Contains(r.query, "method=detachDebugger") {
+			t.Error("a detach was sent after the next run set its breakpoints")
+		}
+	}
+	backend.mu.Unlock()
+}
