@@ -509,3 +509,47 @@ func (m *debugSessions) setBreakpointWithoutRun(ctx context.Context, user string
 	sess, _, _ := m.open(user)
 	return sess.SetBreakpoint(ctx, bp.ObjectURI, bp.Line, bp.ObjectType, bp.ObjectName)
 }
+
+// rearm starts the next listening window of run inside its remaining budget
+// (debug_wait rearm). Only for manual and gui runs, after a timeout or after
+// the debuggee has ended; a new unit-test run needs a new debug_run.
+func (m *debugSessions) rearm(run *debugRun) error {
+	m.startMu.Lock()
+	defer m.startMu.Unlock()
+	if run.kind == triggerUnitTests {
+		return errors.New("debug_wait rearm: a unit-test run cannot listen again; start a new debug_run")
+	}
+	// The listener goroutine publishes timeout/ended just before it returns,
+	// so wait (without run.mu) for it to finish before starting the next one.
+	run.mu.Lock()
+	status, done := run.st.Status, run.listenerDone
+	run.mu.Unlock()
+	if status != runTimeout && status != runEnded {
+		return fmt.Errorf("debug_wait rearm: the run is %s; rearm needs status timeout or ended", status)
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-time.After(run.timings.listenerExitWait):
+			return errors.New("debug_wait rearm: the previous listener is still running; call debug_wait again")
+		}
+	}
+	run.mu.Lock()
+	defer run.mu.Unlock()
+	if s := run.st.Status; s != runTimeout && s != runEnded {
+		return fmt.Errorf("debug_wait rearm: the run is %s; rearm needs status timeout or ended", s)
+	}
+	if time.Until(run.budgetEnd) < time.Second {
+		return errors.New("debug_wait rearm: the run's listener budget is used up; start a new debug_run")
+	}
+	run.fatal = nil
+	run.transitionLocked(func(st *DebugRunState) {
+		st.Status = runListening
+		st.EndReason = ""
+		st.DebuggeeID = ""
+		st.Position = nil
+		st.Hint = ""
+	})
+	run.startWindowLocked()
+	return nil
+}

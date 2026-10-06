@@ -96,7 +96,8 @@ const debugRunDescription = "Debug one ABAP run. Sets all breakpoints in one req
 
 const debugWaitDescription = "Wait for the debug run started by debug_run to change. With since_version (the version you saw last) " +
 	"it returns as soon as the run's version is greater, or after timeout_seconds (default 45) with the unchanged state; " +
-	"without since_version it returns the current state at once. Cancelling or timing out debug_wait does not stop the run."
+	"without since_version it returns the current state at once. Cancelling or timing out debug_wait does not stop the run. " +
+	"rearm: true starts the next listening window of a manual or gui run after status timeout or ended, within the run's remaining budget; a unit_tests run needs a new debug_run."
 
 func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector, fallback BlackMagicClient, settings registerSettings) {
 	// The debug tools share one session and one run; debugSessions decides
@@ -172,18 +173,24 @@ func registerDebugRunTools(s toolAdder, sessions *debugSessions) {
 
 	s.AddTool(mcp.NewTool("debug_wait",
 		mcp.WithTitleAnnotation("Wait for the Debug Run"),
-		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
-		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(debugWaitDescription),
 		mcp.WithNumber("since_version", mcp.Description("The version of the last run state you saw; debug_wait returns once the run has a newer one")),
 		mcp.WithNumber("timeout_seconds", mcp.Description("Longest wait in seconds (default 45, max 300)")),
+		mcp.WithBoolean("rearm", mcp.Description("Listen again (manual and gui runs, after timeout or ended)")),
 		withDebugUser(),
 		mcp.WithOutputSchema[DebugRunState](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		run, err := sessions.currentRun(req.GetString(paramUser, ""))
 		if err != nil {
 			return errorResult(err), nil
+		}
+		if req.GetBool("rearm", false) {
+			if err := sessions.rearm(run); err != nil {
+				return errorResult(err), nil
+			}
 		}
 		args := req.GetArguments()
 		timeout := defaultWaitSeconds
