@@ -3,10 +3,12 @@ package tools_test
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -70,12 +72,14 @@ type fakeDebugBackend struct {
 	rejectBP     map[string][2]string // URI substring → errorKind, errorMessage
 	existingBP   map[string]bool      // URI substring → answered with errorKind "existing"
 	bpDeleteErr  *fakeError
-	okCodeStatus int             // status of the OK-code program lookup; 0 means 200
-	hangCookie   string          // requests with this session cookie hang until their context ends
-	hang         map[string]bool // "METHOD path" → hangs until the request's context ends
-	bpSetGate    chan struct{}   // a breakpoint POST waits for this gate (nil: no wait)
-	detachGate   chan struct{}   // a detachDebugger request waits for this gate (nil: no wait)
-	bpSetDone    func()          // called once the breakpoint POST's body was read to its end (nil: none)
+	okCodeStatus int                  // status of the OK-code program lookup; 0 means 200
+	hangCookie   string               // requests with this session cookie hang until their context ends
+	hang         map[string]bool      // "METHOD path" → hangs until the request's context ends
+	vars         map[string]fakeVar   // variable ID -> metadata and value
+	children     map[string][]fakeVar // parent ID -> its children
+	bpSetGate    chan struct{}        // a breakpoint POST waits for this gate (nil: no wait)
+	detachGate   chan struct{}        // a detachDebugger request waits for this gate (nil: no wait)
+	bpSetDone    func()               // called once the breakpoint POST's body was read to its end (nil: none)
 }
 
 // onEOFReader calls fn once, when the wrapped body is read to its end.
@@ -360,8 +364,15 @@ func (f *fakeDebugBackend) debugger(req *http.Request, resp *http.Response, body
 		}
 		resp.Header.Set("Content-Type", "application/xml")
 		resp.Body = textBody(`<dbg:step xmlns:dbg="http://www.sap.com/adt/debugger"/>`)
+	case "getVariableValue":
+		f.mu.Lock()
+		v := f.vars[req.URL.Query().Get("variableName")]
+		f.mu.Unlock()
+		resp.Header.Set("Content-Type", "text/plain")
+		resp.Body = textBody(v.value)
+	case "getVariables", "getChildVariables", "getVariableData":
+		return f.variables(resp, method, body), nil
 	}
-	_ = body // read by the variable methods added in Task 12
 	return resp, nil
 }
 
@@ -677,4 +688,71 @@ func TestDebugStop_FailedStopStillDropsSession(t *testing.T) {
 	if len(bps) != 2 || bps[0].cookie == bps[1].cookie {
 		t.Errorf("debug_run after a failed debug_stop must run on a new session; breakpoint cookies: %+v", bps)
 	}
+}
+
+// fakeVar is one debuggee variable of the fake.
+type fakeVar struct {
+	id, name, meta, value string
+	lines                 int
+}
+
+var (
+	asxIDs     = regexp.MustCompile(`<ID>([^<]*)</ID>`)
+	asxParents = regexp.MustCompile(`<PARENT_ID>([^<]*)</PARENT_ID>`)
+	dataTable  = regexp.MustCompile(`<table name="([^"]*)" offset="(\d+)" length="(\d+)"`)
+)
+
+const (
+	asxHead = `<?xml version="1.0" encoding="utf-8"?><asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0"><asx:values><DATA>`
+	asxTail = `</DATA></asx:values></asx:abap>`
+)
+
+func asxVar(v fakeVar) string {
+	return fmt.Sprintf(`<STPDA_ADT_VARIABLE><ID>%s</ID><NAME>%s</NAME><META_TYPE>%s</META_TYPE><VALUE>%s</VALUE><TABLE_LINES>%d</TABLE_LINES></STPDA_ADT_VARIABLE>`,
+		html.EscapeString(v.id), html.EscapeString(v.name), v.meta, html.EscapeString(v.value), v.lines)
+}
+
+// variables answers getVariables, getChildVariables and getVariableData. The
+// request bodies are XML, so IDs such as REF->* arrive escaped.
+func (f *fakeDebugBackend) variables(resp *http.Response, method, body string) *http.Response {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var b strings.Builder
+	switch method {
+	case "getVariables":
+		b.WriteString(asxHead)
+		for _, m := range asxIDs.FindAllStringSubmatch(body, -1) {
+			if v, ok := f.vars[html.UnescapeString(m[1])]; ok {
+				b.WriteString(asxVar(v))
+			}
+		}
+		b.WriteString(asxTail)
+	case "getChildVariables":
+		var links strings.Builder
+		b.WriteString(asxHead + "<VARIABLES>")
+		for _, m := range asxParents.FindAllStringSubmatch(body, -1) {
+			parent := html.UnescapeString(m[1])
+			for _, c := range f.children[parent] {
+				b.WriteString(asxVar(c))
+				fmt.Fprintf(&links, `<STPDA_ADT_VARIABLE_HIERARCHY><PARENT_ID>%s</PARENT_ID><CHILD_ID>%s</CHILD_ID><CHILD_NAME>%s</CHILD_NAME></STPDA_ADT_VARIABLE_HIERARCHY>`,
+					html.EscapeString(parent), html.EscapeString(c.id), html.EscapeString(c.name))
+			}
+		}
+		b.WriteString("</VARIABLES><HIERARCHIES>" + links.String() + "</HIERARCHIES>" + asxTail)
+	case "getVariableData":
+		m := dataTable.FindStringSubmatch(body)
+		if m == nil {
+			break
+		}
+		offset, _ := strconv.Atoi(m[2])
+		length, _ := strconv.Atoi(m[3])
+		fmt.Fprintf(&b, `<dbg:data xmlns:dbg="http://www.sap.com/adt/debugger"><table name="%s" totalLines="%d">`, m[1], f.vars[m[1]].lines)
+		for i := offset; i < offset+length; i++ {
+			fmt.Fprintf(&b, `<tableLine index="%d"><field path="TEXT"><value>row %d</value></field></tableLine>`, i, i)
+		}
+		b.WriteString(`</table></dbg:data>`)
+	}
+	resp.Header.Set("Content-Type", "application/vnd.sap.as+xml")
+	resp.Body = textBody(b.String())
+	return resp
 }

@@ -355,22 +355,31 @@ func registerDebugInspectTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Read a variable value from the halted debuggee."),
-		mcp.WithString("variable_name", mcp.Required(), mcp.Description("ABAP variable name, e.g. LV_RESULT")),
+		mcp.WithDescription("Read a variable of the halted debuggee (debug_run status attached). This is for debugging a halted program, "+
+			"not for retrieving data. Scalars return their value. expand: true returns the components of a structure, the attributes "+
+			"of an object reference, or the dereferenced value of a data reference (REF->*). offset/limit return rows of an internal "+
+			"table: offset is 1-based (default 1), limit defaults to 20, with a hard cap of 100 rows per call."),
+		mcp.WithString("variable_name", mcp.Required(), mcp.Description("ABAP variable name, e.g. LV_RESULT, LS_ROW-TEXT, LO_OBJ->ATTR")),
+		mcp.WithBoolean("expand", mcp.Description("Return the children of a structure, object reference or data reference")),
+		mcp.WithNumber("offset", mcp.Description("Internal tables: first row, 1-based (default 1)")),
+		mcp.WithNumber("limit", mcp.Description("Internal tables: number of rows (default 20, max 100)")),
 		withDebugUser(),
 		mcp.WithOutputSchema[DebugVariableResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		name := req.GetString("variable_name", "")
-		if err := requireDebuggerStringParam("debug_get_variable", "variable_name", name); err != nil {
+		q, err := parseVariableQuery(req.GetArguments())
+		if err != nil {
 			return errorResult(err), nil
 		}
-		data, errRes := sessions.call(req.GetString(paramUser, ""), func(d *adt.DebugSession) ([]byte, error) {
-			return d.GetVariable(ctx, name)
+		var res DebugVariableResult
+		_, errRes := sessions.call(req.GetString(paramUser, ""), func(d *adt.DebugSession) ([]byte, error) {
+			var err error
+			res, err = readVariable(ctx, d, q)
+			return nil, err
 		})
 		if errRes != nil {
 			return errRes, nil
 		}
-		return mcp.NewToolResultJSON(buildDebugVariableResult(name, data))
+		return mcp.NewToolResultJSON(res)
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_stack",

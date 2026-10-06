@@ -182,12 +182,45 @@ type DebugStepResult struct {
 	Hint          string         `json:"hint,omitempty"`
 }
 
-// DebugVariableResult reports a variable value read from an active debug
-// session. GetVariable requests Accept: text/plain, so the value is
-// forwarded as-is rather than parsed. See issue #501.
+// DebugVariableResult reports a variable of the halted debuggee. Value is the
+// value as SAP renders it (scalars: the value itself). Children are filled
+// with expand (structure components, object attributes, the dereferenced
+// value of a data reference); Table with offset/limit (#558).
 type DebugVariableResult struct {
-	VariableName string `json:"variable_name"`
-	Value        string `json:"value"`
+	VariableName string               `json:"variable_name"`
+	Value        string               `json:"value"`
+	MetaType     string               `json:"meta_type,omitempty"`
+	Children     []DebugVariableChild `json:"children,omitempty"`
+	Table        *DebugTablePage      `json:"table,omitempty"`
+}
+
+// DebugVariableChild is one component, attribute or dereferenced value.
+type DebugVariableChild struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	MetaType   string `json:"meta_type"`
+	Type       string `json:"type,omitempty"`
+	Value      string `json:"value"`
+	TableLines int    `json:"table_lines,omitempty"`
+}
+
+// DebugTablePage is one page of an internal table; Offset is 1-based.
+type DebugTablePage struct {
+	TotalLines int             `json:"total_lines"`
+	Offset     int             `json:"offset"`
+	Rows       []DebugTableRow `json:"rows"`
+}
+
+// DebugTableRow is one internal-table row.
+type DebugTableRow struct {
+	Index  int               `json:"index"`
+	Fields []DebugTableField `json:"fields"`
+}
+
+// DebugTableField is one cell of a row.
+type DebugTableField struct {
+	Path  string `json:"path"`
+	Value string `json:"value"`
 }
 
 // DebugStackResult reports the call stack of an active debug session.
