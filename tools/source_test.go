@@ -1393,3 +1393,17 @@ func TestCreateTestIncludeToolRejectsWhenNoLockTracked(t *testing.T) {
 		t.Errorf("error message should hint at lock_object; got: %s", text)
 	}
 }
+
+// abapGit methods (adtler #198). The debug tools under test do not use them;
+// they exist so mockClient keeps satisfying adt.Client.
+func (m *mockClient) ListAbapGitRepos(context.Context) (*adt.AbapGitRepoList, error) {
+	return &adt.AbapGitRepoList{}, nil
+}
+
+func (m *mockClient) PullAbapGitRepo(context.Context, adt.AbapGitPullRequest) (*adt.AbapGitPullResult, error) {
+	return &adt.AbapGitPullResult{}, nil
+}
+
+func (m *mockClient) PushAbapGitRepo(context.Context, adt.AbapGitPushRequest) (*adt.AbapGitPushResult, error) {
+	return &adt.AbapGitPushResult{}, nil
+}
