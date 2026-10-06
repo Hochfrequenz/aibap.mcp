@@ -309,7 +309,12 @@ func (r *debugRun) attach(id string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.st.Status != runAttaching {
-		return // cleanup started meanwhile
+		// Cleanup started meanwhile and skipped the detach (the run was not
+		// attached at its step 1), so a completed attach is detached here.
+		if err == nil {
+			go r.detachLate()
+		}
+		return
 	}
 	if err != nil {
 		r.transitionLocked(func(st *DebugRunState) {
@@ -327,6 +332,14 @@ func (r *debugRun) attach(id string) {
 			st.Hint = "Attached, but the position could not be read: " + perr.Error()
 		}
 	})
+}
+
+// detachLate detaches an attach that completed after cleanup had started.
+// Best effort, with its own deadline.
+func (r *debugRun) detachLate() {
+	ctx, cancel := context.WithTimeout(context.Background(), r.timings.attachTimeout)
+	defer cancel()
+	_, _ = r.sess.Step(ctx, "detachDebugger")
 }
 
 func attachFailedHint(err error) string {

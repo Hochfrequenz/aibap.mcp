@@ -49,6 +49,7 @@ func (m *debugSessions) cleanupRun(r *debugRun) cleanupReport {
 		r.mu.Unlock()
 		return cleanupReport{}
 	}
+	attached := r.st.Status == runAttached
 	bps := append([]DebugRunBreakpoint(nil), r.st.Breakpoints...)
 	done := r.listenerDone
 	r.stopIdleLocked()
@@ -72,6 +73,13 @@ func (m *debugSessions) cleanupRun(r *debugRun) cleanupReport {
 		r.awaitListenerExit(ctx, done)
 	}()
 	wg.Wait()
+
+	// Step 3: an attached debuggee would stay suspended in SAP, holding a work
+	// process, and the trigger request would stay open. An attach completing
+	// after step 1 is detached by the listener goroutine itself (detachLate).
+	if attached {
+		r.detachAttached(ctx, bps, &rep)
+	}
 
 	// Step 4: a trigger keeps running; its result goes into the stopped run.
 	// Step 5: stopped. A listener failure belonged to the run that is now
@@ -123,4 +131,57 @@ func (r *debugRun) awaitListenerExit(ctx context.Context, done chan struct{}) {
 	case <-t.C:
 	case <-ctx.Done():
 	}
+}
+
+// detachAttached deletes the debugger-scope breakpoints (they need the
+// attachment) and detaches, both in the debug session. A "not attached"
+// answer counts as success: the external deletes of step 2 may already have
+// ended the attachment.
+func (r *debugRun) detachAttached(ctx context.Context, bps []DebugRunBreakpoint, rep *cleanupReport) {
+	for _, bp := range bps {
+		if bp.Scope != string(adt.BreakpointScopeDebugger) {
+			continue
+		}
+		if err := r.sess.RemoveBreakpoint(ctx, adt.BreakpointScopeDebugger, bp.ID); err != nil && !isNotAttachedErr(err) {
+			rep.notRemoved = append(rep.notRemoved, bpFailure{bp, err})
+			continue
+		}
+		rep.removed = append(rep.removed, bp)
+	}
+	if err := r.detachWithin(ctx); err != nil && !isNotAttachedErr(err) {
+		rep.detachErr = err
+	}
+}
+
+// detachWithin sends detachDebugger in the debug session and returns when ctx
+// ends even if the call has not. adt.DebugSession.Step follows a timed-out
+// request with a check of its own (up to 10 s, not bound to ctx), which would
+// otherwise overrun the cleanup budget; the abandoned call holds no lock and
+// ends on its own.
+func (r *debugRun) detachWithin(ctx context.Context) error {
+	errc := make(chan error, 1)
+	go func() {
+		_, err := r.sess.Step(ctx, "detachDebugger")
+		errc <- err
+	}()
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// isNotAttachedErr reports whether err says that no debugger is attached (any
+// more), or that the debuggee already ended.
+func isNotAttachedErr(err error) bool {
+	if errors.Is(err, adt.ErrNoSessionAttached) {
+		return true
+	}
+	var ended *adt.DebuggeeEndedError
+	if errors.As(err, &ended) {
+		return true
+	}
+	var adtErr *adt.ADTError
+	return errors.As(err, &adtErr) && adtErr.Properties[adtExceptionSubtype] == "noSessionAttached"
 }

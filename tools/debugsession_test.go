@@ -72,6 +72,7 @@ type fakeDebugBackend struct {
 	okCodeStatus int             // status of the OK-code program lookup; 0 means 200
 	hangCookie   string          // requests with this session cookie hang until their context ends
 	hang         map[string]bool // "METHOD path" → hangs until the request's context ends
+	bpSetGate    chan struct{}   // a breakpoint POST waits for this gate (nil: no wait)
 }
 
 type recordedRequest struct {
@@ -161,6 +162,16 @@ func (f *fakeDebugBackend) RoundTrip(req *http.Request) (*http.Response, error) 
 			return answerError(resp, fakeError{status: http.StatusInternalServerError, typ: "ExceptionResourceFailure"}), nil
 		}
 	case p == breakpointsPath && req.Method == http.MethodPost:
+		f.mu.Lock()
+		gate := f.bpSetGate
+		f.mu.Unlock()
+		if gate != nil {
+			select {
+			case <-gate:
+			case <-req.Context().Done():
+				return nil, req.Context().Err()
+			}
+		}
 		return f.setBreakpoints(resp, body), nil
 	case strings.HasPrefix(p, breakpointsPath+"/") && req.Method == http.MethodDelete:
 		f.mu.Lock()
