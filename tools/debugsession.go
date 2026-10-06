@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -46,22 +47,28 @@ type debugSessionKey struct {
 	system string
 }
 
-// debugSessions owns the one DebugSession the debug tools share. Before #562
-// it was created on the first call and kept for the life of the process, so a
-// later user, a system switch or a wedged session could not be recovered from
-// without a restart.
+// debugSessions owns the one DebugSession the debug tools share (#562) and
+// the debugging run on it (#558).
 //
-// Tool calls run concurrently (mcp-go's worker pool), so every access holds mu.
-// HTTP calls on a session happen outside the lock.
+// Locks, always taken in this order and never the reverse: startMu (the
+// run-start lock: serialises debug_run, debug_stop, session replacement, the
+// idle detach and the shutdown hook, and is held across their HTTP calls),
+// mu, then a run's mu. No HTTP call is made while mu or a run's mu is held.
 type debugSessions struct {
-	mu           sync.Mutex
+	startMu sync.Mutex
+	mu      sync.Mutex
+
 	newSession   func(user string) *adt.DebugSession
 	activeSystem func() string
 	// systemUser returns the logon user configured for a system, "" when it
 	// has none (OAuth2). It supplies the default `user` (#558).
 	systemUser func(system string) string
-	cur        *adt.DebugSession
-	key        debugSessionKey
+	timings    debugTimings
+	versions   atomic.Int64
+
+	cur *adt.DebugSession
+	key debugSessionKey
+	run *debugRun
 }
 
 // newDebugSessions expects selector to be the same registry as client (as
@@ -79,7 +86,16 @@ func newDebugSessions(client adt.Client, selector SystemSelector, systemUser fun
 			return selector.ActiveName()
 		},
 		systemUser: systemUser,
+		timings:    currentDebugTimings(),
 	}
+}
+
+// nextVersion returns the next run-state version of this process.
+func (m *debugSessions) nextVersion() int64 { return m.versions.Add(1) }
+
+// newRun creates a run bound to m's version counter, timings and run-start lock.
+func (m *debugSessions) newRun(p runParams) *debugRun {
+	return newDebugRun(p, m.timings, m.nextVersion, &m.startMu)
 }
 
 // logonUser returns the logon user configured for system, "" when unknown.
