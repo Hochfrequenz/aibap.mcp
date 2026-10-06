@@ -171,7 +171,7 @@ func TestDebugWait_AfterStopReportsStopped(t *testing.T) {
 	if res := callTool(t, s, "debug_stop", map[string]interface{}{}); res.IsError {
 		t.Fatal(debugResultText(res))
 	}
-	if st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{})); st.Status != "stopped" {
+	if st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{})); st.Status != runStoppedStatus {
 		t.Errorf("status = %q, want stopped", st.Status)
 	}
 }
@@ -319,7 +319,7 @@ func TestDebugWait_AfterListenerFailureAndStopReportsStopped(t *testing.T) {
 	if res := callTool(t, s, "debug_stop", map[string]interface{}{}); res.IsError {
 		t.Fatalf("debug_stop: %s", debugResultText(res))
 	}
-	if st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{})); st.Status != "stopped" {
+	if st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{})); st.Status != runStoppedStatus {
 		t.Errorf("status = %q, want stopped", st.Status)
 	}
 }

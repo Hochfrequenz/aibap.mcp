@@ -63,6 +63,7 @@ type fakeDebugBackend struct {
 	stackXML     string
 	stackGate    chan struct{}
 	sessionsBody string
+	sessionsErr  *fakeError // getDebuggeeSessions answers this error (nil: sessionsBody)
 	stepErr      map[string]fakeError
 	unitHit      string
 	unitErr      *fakeError
@@ -280,6 +281,7 @@ func (f *fakeDebugBackend) debugger(req *http.Request, resp *http.Response, body
 	method := req.URL.Query().Get("method")
 	f.mu.Lock()
 	attachGate, attachErr, stack, stackGate, sessions := f.attachGate, f.attachErr, f.stackXML, f.stackGate, f.sessionsBody
+	sessionsErr := f.sessionsErr
 	detachGate := f.detachGate
 	stepErr, hasStepErr := f.stepErr[method]
 	f.mu.Unlock()
@@ -311,6 +313,9 @@ func (f *fakeDebugBackend) debugger(req *http.Request, resp *http.Response, body
 		resp.Header.Set("Content-Type", "application/xml")
 		resp.Body = textBody(stack)
 	case "getDebuggeeSessions":
+		if sessionsErr != nil {
+			return answerError(resp, *sessionsErr), nil
+		}
 		resp.Header.Set("Content-Type", "application/vnd.sap.as+xml")
 		resp.Body = textBody(sessions)
 	case "stepInto", "stepOver", "stepReturn", "stepContinue", "terminateDebuggee", stepDetach:

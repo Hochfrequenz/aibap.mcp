@@ -138,6 +138,26 @@ func TestDebugStep_InvalidDataWithDebuggeeListedStaysAttached(t *testing.T) {
 	}
 }
 
+// When the debuggee-session check itself fails after a 400, the error says so
+// instead of claiming a debuggee is still listed; the run stays attached.
+func TestDebugStep_InvalidDataWithFailedSessionCheckStaysAttached(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	attachRun(t, s, backend)
+	backend.set(func(f *fakeDebugBackend) {
+		f.stepErr = map[string]fakeError{"stepContinue": {status: http.StatusBadRequest, typ: "ExceptionInvalidData"}}
+		f.sessionsErr = &fakeError{status: http.StatusInternalServerError, typ: "ExceptionResourceFailure"}
+	})
+	res := callTool(t, s, "debug_step", map[string]interface{}{"action": "stepContinue"})
+	text := debugResultText(res)
+	if !res.IsError || !strings.Contains(text, "check") || !strings.Contains(text, "ExceptionResourceFailure") ||
+		strings.Contains(text, "still listed") || !strings.Contains(text, "detachDebugger") {
+		t.Errorf("the error must say the session check failed: %s", text)
+	}
+	if st := currentState(t, s); st.Status != runAttachedStatus {
+		t.Errorf("got %+v", st)
+	}
+}
+
 func TestDebugStep_OtherFailureStaysAttached(t *testing.T) {
 	s, _, backend := newDebugServer(t)
 	attachRun(t, s, backend)
@@ -203,4 +223,29 @@ func TestDebugRun_IdleTimerPausesDuringACall(t *testing.T) {
 	close(gate)
 	<-done
 	backend.waitForRequest(t, http.MethodPost, debuggerPath, "method=detachDebugger")
+}
+
+// The idle detach is bounded by attachTimeout: a hanging detach must not hold
+// the run-start lock until adtler's own follow-up check (10 s) gives up, so a
+// debug_stop issued meanwhile returns soon after attachTimeout.
+func TestDebugRun_HangingIdleDetachDoesNotBlockDebugStop(t *testing.T) {
+	timings := fastDebugTimings
+	timings.IdleLimit = 500 * time.Millisecond
+	timings.AttachTimeout = time.Second
+	s, _, backend := newDebugServerTimed(t, timings, nil)
+
+	att := attachRun(t, s, backend)
+	debugCookie := backend.cookieOf(http.MethodPost, breakpointsPath)
+	backend.set(func(f *fakeDebugBackend) { f.hangCookie = debugCookie })
+	defer backend.set(func(f *fakeDebugBackend) { f.hangCookie = "" })
+	backend.waitForRequest(t, http.MethodPost, debuggerPath, "method=detachDebugger")
+
+	start := time.Now()
+	callTool(t, s, "debug_stop", map[string]interface{}{})
+	if elapsed := time.Since(start); elapsed > 3*time.Second {
+		t.Errorf("debug_stop waited %v behind a hanging idle detach (bound: attachTimeout 1s)", elapsed)
+	}
+	if st := currentState(t, s); st.Version <= att.Version || st.Status != runStoppedStatus {
+		t.Errorf("got %+v", st)
+	}
 }

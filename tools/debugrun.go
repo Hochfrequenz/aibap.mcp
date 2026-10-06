@@ -516,9 +516,12 @@ func (r *debugRun) onIdle(gen int) {
 	r.detaching = true
 	r.mu.Unlock()
 
+	// detachWithin returns at the deadline even when adtler's follow-up check
+	// of a timed-out step is still running, so the run-start lock is held for
+	// at most attachTimeout.
 	ctx, cancel := context.WithTimeout(context.Background(), r.timings.attachTimeout)
 	defer cancel()
-	_, err := r.sess.Step(ctx, "detachDebugger")
+	err := r.detachWithin(ctx)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -569,7 +572,13 @@ func (r *debugRun) step(ctx context.Context, action string) (stepOutcome, error)
 	case ended:
 		r.end(endCompleted, "")
 	case action == "stepContinue" && isInvalidDataErr(err):
-		if !r.debuggeeGone(ctx) {
+		gone, cerr := r.debuggeeGone(ctx)
+		if cerr != nil {
+			return stepOutcome{}, fmt.Errorf("debug_step: %w; checking whether a debuggee remains failed too (%v), so it is unknown "+
+				"whether the run completed or the attachment was lost (#513); the run stays attached: end it with "+
+				"debug_step detachDebugger or debug_stop", err, cerr)
+		}
+		if !gone {
 			return stepOutcome{}, fmt.Errorf("debug_step: %w (a debuggee is still listed, so the attachment may be lost, #513; "+
 				"end it with debug_step detachDebugger or debug_stop)", err)
 		}
@@ -603,10 +612,14 @@ func (r *debugRun) transitionIfAttached(fn func(st *DebugRunState)) {
 	}
 }
 
-// debuggeeGone reports whether SAP lists no debuggee session any more.
-func (r *debugRun) debuggeeGone(ctx context.Context) bool {
+// debuggeeGone reports whether SAP lists no debuggee session any more; err is
+// set when the list could not be read.
+func (r *debugRun) debuggeeGone(ctx context.Context) (bool, error) {
 	data, err := r.sess.GetDebuggeeSessions(ctx)
-	return err == nil && len(bytes.TrimSpace(data)) == 0
+	if err != nil {
+		return false, err
+	}
+	return len(bytes.TrimSpace(data)) == 0, nil
 }
 
 // isInvalidDataErr reports SAP's 400 ExceptionInvalidData.
