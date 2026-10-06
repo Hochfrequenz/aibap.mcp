@@ -4,7 +4,7 @@
 - **Repo:** aibap.mcp
 - **Status:** Draft, revised after three independent reviews; awaiting the maintainer's approval
 - **Issues:** #558 (this tool; live evidence in the 2026-10-06 comment), #559 / PR #561 (debugging guide), #562 / PR #563 (debug session lifecycle), #513, #435
-- **adtler prerequisites:** Hochfrequenz/adtler#200 (breakpoints), Hochfrequenz/adtler#201 (variables), Hochfrequenz/adtler#196 (attach without retry), plus the two adtler additions listed under "Delivery". Already on adtler `main`: #189, #190, #192.
+- **adtler prerequisites:** Hochfrequenz/adtler#200 (breakpoints), Hochfrequenz/adtler#201 (variables), Hochfrequenz/adtler#196 (attach without retry), Hochfrequenz/adtler#203 (stack frames), Hochfrequenz/adtler#204 (unit-test trigger). Already on adtler `main`: #189, #190, #192.
 
 ## Motivation
 
@@ -141,7 +141,7 @@ status:          "listening" | "attaching" | "attached" | "ended" | "timeout" | 
 end_reason?:     "detached" | "completed" | "terminated" | "no_hit" | "attach_failed" | "idle_detached"   // status ended
 breakpoints:     [{object_uri, line, id, scope}]
 debuggee_id?:    string
-position?:       {program, include, line, source_uri, source_excerpt}   // attached
+position?:       {program, include, line, source_uri, source_line, source_excerpt}   // attached
 trigger?: {
   kind, state: "pending" | "running" | "done" | "failed",
   error?:        string,
@@ -166,7 +166,7 @@ The status values mean:
 - **`timeout`**: the listener budget is used up.
 - **`stopping`**, **`stopped`**: cleanup is running or done.
 
-`position.source_excerpt` holds a few lines around the current line, read from `source_uri`. The include-to-URI mapping and the parsing of stack positions belong in adtler (see "Delivery").
+`position` comes from the active stack frame (Hochfrequenz/adtler#203): `source_uri` and the line are taken from the frame's `adtcore:uri`, and `source_excerpt` holds a few lines around that line, read from `source_uri`.
 
 ### Changes to existing tools
 
@@ -360,8 +360,8 @@ PR #561 stays open until the live acceptance has passed.
 | A1 | adtler | #200: breakpoints (`SetBreakpoints`, scope, `RemoveBreakpoint`, `clientId`/`errorKind`) | — |
 | A2 | adtler | #201: variables | — |
 | A3 | adtler | #196: attach without retry (open PR) | — |
-| A4 | adtler | **new issue:** debugger position (parse the listener response and the stack into program, include, line; map the include to a source URI) | — |
-| A5 | adtler | **new issue:** `RunUnitTests` on an isolated session bound to one system (as `RunClass` does) | — |
+| A4 | adtler | Hochfrequenz/adtler#203: parsed stack frames (program, include, line, source URI and line from `adtcore:uri`) | — |
+| A5 | adtler | Hochfrequenz/adtler#204: `DebugSession.RunUnitTests` on an isolated session of the debug session's system | — |
 | A6 | adtler | **release** | A1–A5 |
 | B1 | aibap.mcp | #563: session lifecycle (open PR) | — |
 | B2 | aibap.mcp | #558: `debug_run`, `debug_wait`, run state, `DebugTriggerer`, instructions, per-process IDE ID, idle limit, shutdown hook; `debug_start` and `debug_attach` removed | B1, A1, A3–A5 |
