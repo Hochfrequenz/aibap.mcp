@@ -169,21 +169,17 @@ type DebugSessionsResult struct {
 	Raw         string `json:"raw,omitempty"`
 }
 
-// DebugStepResult reports the outcome of a debug step action. The ADT
-// debugger endpoint (POST /debugger?method=...) returns application/xml,
-// not JSON, so the payload is forwarded as Raw rather than parsed. See
-// issue #501.
-//
-// DebuggeeEnded is true, and Raw is empty (there is no XML body to
-// forward), when a step action (typically stepContinue) ran the debuggee
-// past its last statement: SAP's ADT debugger kernel call never returns an
-// HTTP response for that case, and adtler's Step detects it (timeout + no
-// remaining debuggee session) and returns *adt.DebuggeeEndedError rather
-// than a bare timeout. See #513 for the root-cause derivation and #529 for
-// this consumer wiring.
+// DebugStepResult reports what a debug_step did (#558): the run's version and
+// status after the step and, when the debuggee halted again, where it stands.
+// DebuggeeEnded is true when the step ran the debuggee to completion (#529,
+// #513); EndReason tells detached and terminated apart.
 type DebugStepResult struct {
-	Raw           string `json:"raw"`
-	DebuggeeEnded bool   `json:"debuggee_ended,omitempty"`
+	Version       int64          `json:"version"`
+	Status        string         `json:"status"`
+	EndReason     string         `json:"end_reason,omitempty"`
+	DebuggeeEnded bool           `json:"debuggee_ended,omitempty"`
+	Position      *DebugPosition `json:"position,omitempty"`
+	Hint          string         `json:"hint,omitempty"`
 }
 
 // DebugVariableResult reports a variable value read from an active debug

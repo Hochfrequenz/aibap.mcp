@@ -101,6 +101,7 @@ const stepDetach = "detachDebugger"
 const (
 	testDebuggeeID   = "DBG1"
 	runEndedStatus   = "ended"
+	endDetachedStr   = "detached"
 	triggerDoneState = "done"
 )
 

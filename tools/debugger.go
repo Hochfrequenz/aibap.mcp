@@ -49,12 +49,20 @@ func buildDebugSessionsResult(data []byte) DebugSessionsResult {
 	return DebugSessionsResult{HasSessions: true, Raw: string(data)}
 }
 
-// buildDebugStepResult, buildDebugVariableResult, buildDebugStackResult, and
+// buildDebugVariableResult, buildDebugStackResult, and
 // buildDebugWatchpointResult wrap the non-JSON bodies returned by the ADT
 // debugger endpoints in a typed struct (#501).
 
-func buildDebugStepResult(data []byte) DebugStepResult {
-	return DebugStepResult{Raw: string(data)}
+// stepResultFromState shapes the run state after a step as debug_step's result.
+func stepResultFromState(st DebugRunState) DebugStepResult {
+	return DebugStepResult{
+		Version:       st.Version,
+		Status:        st.Status,
+		EndReason:     st.EndReason,
+		DebuggeeEnded: st.Status == runEnded && st.EndReason == endCompleted,
+		Position:      st.Position,
+		Hint:          st.Hint,
+	}
 }
 
 // stepResultForError reports whether err is (or wraps) *adt.DebuggeeEndedError:
@@ -312,10 +320,13 @@ func registerDebugInspectTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Execute a debug step action while debug_run's state is attached. stepContinue resumes the suspended debuggee; "+
-			"terminateDebuggee kills the running debuggee process outright, while detachDebugger stops debugging and lets the debuggee "+
-			"continue running to completion normally. If a step action runs the debuggee past its last statement, the result is "+
-			"reported as debuggee_ended=true instead of an error — a normal, successful outcome."),
+		mcp.WithDescription("Execute a debug step action while debug_run's state is attached, and return the run's status and the new position. "+
+			"stepInto, stepOver, stepReturn and stepContinue (to a next breakpoint) halt again: status stays attached with the new position. "+
+			"End a session with detachDebugger: the debuggee runs on to its end and the run ends with end_reason detached; "+
+			"terminateDebuggee kills it (end_reason terminated). Use detachDebugger, never stepContinue, to finish: past the end of a run "+
+			"stepContinue answers SAP_BASIS 750 with AdiFailed / CX_TPDAPI_DEBUGGEE_ENDED and SAP_BASIS 816 with 400 ExceptionInvalidData; "+
+			"both are reported as debuggee_ended=true (end_reason completed) when no debuggee remains, and after a SAP GUI trigger "+
+			"stepContinue can hang. A failed step leaves the debuggee attached: detach it, or debug_stop."),
 		mcp.WithString("action",
 			mcp.Required(),
 			mcp.Description("Step action: stepInto, stepOver, stepReturn, stepContinue, terminateDebuggee, or detachDebugger"),
@@ -335,10 +346,7 @@ func registerDebugInspectTools(s toolAdder, sessions *debugSessions) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		if out.state.Status == runEnded && out.state.EndReason == endCompleted {
-			return mcp.NewToolResultJSON(DebugStepResult{DebuggeeEnded: true})
-		}
-		return mcp.NewToolResultJSON(buildDebugStepResult(out.raw))
+		return mcp.NewToolResultJSON(stepResultFromState(out.state))
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_variable",

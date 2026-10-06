@@ -74,7 +74,7 @@ func TestDebugStep_DetachEndsTheRun(t *testing.T) {
 	s, _, backend := newDebugServer(t)
 	attachRun(t, s, backend)
 	stepState(t, callTool(t, s, "debug_step", map[string]interface{}{"action": "detachDebugger"}))
-	if st := currentState(t, s); st.Status != runEndedStatus || st.EndReason != "detached" || st.Position != nil {
+	if st := currentState(t, s); st.Status != runEndedStatus || st.EndReason != endDetachedStr || st.Position != nil {
 		t.Errorf("got %+v", st)
 	}
 }
@@ -184,7 +184,7 @@ func TestDebugRun_UnitTestsEndWithTheTriggerResult(t *testing.T) {
 	}
 	stepState(t, callTool(t, s, "debug_step", map[string]interface{}{"action": "detachDebugger"}))
 	end := waitForState(t, s, st.Version, func(s tools.DebugRunState) bool { return s.Trigger.State == triggerDoneState })
-	if end.Status != runEndedStatus || end.EndReason != "detached" || end.Trigger.UnitTests == nil || end.Trigger.UnitTests.Passed != 1 {
+	if end.Status != runEndedStatus || end.EndReason != endDetachedStr || end.Trigger.UnitTests == nil || end.Trigger.UnitTests.Passed != 1 {
 		t.Errorf("got %+v / %+v", end, end.Trigger)
 	}
 }
@@ -248,4 +248,36 @@ func TestDebugRun_HangingIdleDetachDoesNotBlockDebugStop(t *testing.T) {
 	if st := currentState(t, s); st.Version <= att.Version || st.Status != runStoppedStatus {
 		t.Errorf("got %+v", st)
 	}
+}
+
+func TestDebugStep_ReturnsStatusAndPosition(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	attachRun(t, s, backend)
+	backend.set(func(f *fakeDebugBackend) { f.stackXML = strings.ReplaceAll(defaultStackXML, "3", "5") })
+
+	out := stepState(t, callTool(t, s, "debug_step", map[string]interface{}{"action": "stepOver"}))
+	st := currentState(t, s)
+	if out.Status != "attached" || out.Version != st.Version || out.Position == nil || out.Position.Line != 5 ||
+		!strings.Contains(out.Position.SourceExcerpt, "> 5: line 5") {
+		t.Errorf("step result: %+v / %+v", out, out.Position)
+	}
+	out = stepState(t, callTool(t, s, "debug_step", map[string]interface{}{"action": "detachDebugger"}))
+	if out.Status != runEndedStatus || out.EndReason != endDetachedStr || out.Position != nil || out.DebuggeeEnded {
+		t.Errorf("detach result: %+v", out)
+	}
+}
+
+func TestDebugStepDescriptionRecommendsDetach(t *testing.T) {
+	for _, tl := range listRegisteredTools(t, newTestServer(&mockClient{})) {
+		if tl.Name != "debug_step" {
+			continue
+		}
+		for _, want := range []string{"detachDebugger", "never stepContinue", "ExceptionInvalidData", "CX_TPDAPI_DEBUGGEE_ENDED"} {
+			if !strings.Contains(tl.Description, want) {
+				t.Errorf("debug_step description lacks %q", want)
+			}
+		}
+		return
+	}
+	t.Fatal("debug_step not registered")
 }
