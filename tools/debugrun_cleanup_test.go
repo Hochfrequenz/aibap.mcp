@@ -168,7 +168,7 @@ func TestDebugRun_ConcurrentCallsDoNotInterleave(t *testing.T) {
 	}
 
 	st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{}))
-	if len(st.Breakpoints) != 1 || st.Breakpoints[0].ObjectURI != otherURI || st.Breakpoints[0].ID != "BP2" || st.Status != runListeningStatus {
+	if len(st.Breakpoints) != 1 || st.Breakpoints[0].ObjectURI != otherURI || st.Breakpoints[0].ID != secondBreakpointID || st.Status != runListeningStatus {
 		t.Errorf("the surviving run must be the second one, with only its breakpoint: %+v", st)
 	}
 }

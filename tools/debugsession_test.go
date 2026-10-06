@@ -72,11 +72,13 @@ type fakeDebugBackend struct {
 	rejectBP     map[string][2]string // URI substring → errorKind, errorMessage
 	existingBP   map[string]bool      // URI substring → answered with errorKind "existing"
 	bpDeleteErr  *fakeError
+	bpDeleteID   string               // when set, only the DELETE of this breakpoint ID fails with bpDeleteErr
 	okCodeStatus int                  // status of the OK-code program lookup; 0 means 200
 	hangCookie   string               // requests with this session cookie hang until their context ends
 	hang         map[string]bool      // "METHOD path" → hangs until the request's context ends
 	vars         map[string]fakeVar   // variable ID -> metadata and value
 	children     map[string][]fakeVar // parent ID -> its children
+	bpPostErr    []*fakeError         // answers of the next breakpoint POSTs, in order; nil = normal
 	bpSetGate    chan struct{}        // a breakpoint POST waits for this gate (nil: no wait)
 	detachGate   chan struct{}        // a detachDebugger request waits for this gate (nil: no wait)
 	bpSetDone    func()               // called once the breakpoint POST's body was read to its end (nil: none)
@@ -214,6 +216,9 @@ func (f *fakeDebugBackend) RoundTrip(req *http.Request) (*http.Response, error) 
 	case strings.HasPrefix(p, breakpointsPath+"/") && req.Method == http.MethodDelete:
 		f.mu.Lock()
 		e := f.bpDeleteErr
+		if f.bpDeleteID != "" && !strings.HasSuffix(p, "/"+f.bpDeleteID) {
+			e = nil
+		}
 		f.mu.Unlock()
 		if e != nil {
 			return answerError(resp, *e), nil
@@ -270,6 +275,13 @@ var bpEntry = regexp.MustCompile(`<breakpoint kind="line" clientId="(\d+)" adtco
 func (f *fakeDebugBackend) setBreakpoints(resp *http.Response, body string) *http.Response {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if len(f.bpPostErr) > 0 {
+		e := f.bpPostErr[0]
+		f.bpPostErr = f.bpPostErr[1:]
+		if e != nil {
+			return answerError(resp, *e)
+		}
+	}
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="utf-8"?><dbg:breakpoints xmlns:dbg="http://www.sap.com/adt/debugger">`)
 	for _, m := range bpEntry.FindAllStringSubmatch(body, -1) {

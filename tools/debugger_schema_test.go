@@ -81,7 +81,7 @@ func TestDebugToolsDeclareOutputSchema(t *testing.T) {
 		byName[tl.Name] = tl
 	}
 
-	for _, name := range []string{debugStepToolName, "debug_get_variable", "debug_get_stack", "debug_set_watchpoint", "debug_run", "debug_wait"} {
+	for _, name := range []string{debugStepToolName, "debug_get_variable", "debug_get_stack", "debug_set_watchpoint", "debug_run", "debug_wait", "debug_set_breakpoint"} {
 		tl, ok := byName[name]
 		if !ok {
 			t.Errorf("%s not registered", name)
@@ -107,15 +107,13 @@ func TestDebugToolsRejectEmptyRequiredStrings(t *testing.T) {
 		wantSubstr string
 	}{
 		{
-			name: "set breakpoint without user on a system without logon user",
+			name: "set breakpoint without a run",
 			tool: "debug_set_breakpoint",
 			args: map[string]interface{}{
-				"object_uri":  testObjectURI,
-				"line":        1,
-				"object_type": "PROG/P",
-				"object_name": "ZTEST",
+				"object_uri": testObjectURI + "/source/main",
+				"line":       1,
 			},
-			wantSubstr: "no configured logon user",
+			wantSubstr: "start a run with debug_run",
 		},
 		{
 			name: "run without breakpoints",

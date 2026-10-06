@@ -252,37 +252,32 @@ func registerDebugBreakpointTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Set a line breakpoint for external debugging outside a run. While a debug_run is active, pass every breakpoint to debug_run instead."),
+		mcp.WithDescription("Add a line breakpoint to the active debug run and return the run state. While the debuggee is halted "+
+			"(status attached) the breakpoint is set in the attached debugger. Otherwise every external breakpoint of the run is set "+
+			"again together with the new one, in one request. Fails without an active run (start one with debug_run) and while an "+
+			"attach is in progress (call debug_wait)."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
-			mcp.Description("ADT object URI, e.g. /sap/bc/adt/programs/programs/zreport/source/main"),
+			mcp.Description("Source URI, e.g. /sap/bc/adt/programs/programs/zreport/source/main or …/includes/…"),
 		),
-		mcp.WithNumber("line", mcp.Required(), mcp.Description("Line number for the breakpoint")),
-		mcp.WithString("object_type", mcp.Required(), mcp.Description("ADT object type, e.g. PROG/P")),
-		mcp.WithString("object_name", mcp.Required(), mcp.Description("ABAP object name, e.g. ZREPORT")),
+		mcp.WithNumber("line", mcp.Required(), mcp.Description("Source line")),
 		withDebugUser(),
+		mcp.WithOutputSchema[DebugRunState](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString(paramObjectURI, "")
-		objectType := req.GetString("object_type", "")
-		objectName := req.GetString("object_name", "")
-		for _, field := range []struct{ name, value string }{
-			{paramObjectURI, uri}, {"object_type", objectType}, {"object_name", objectName},
-		} {
-			if err := requireDebuggerStringParam("debug_set_breakpoint", field.name, field.value); err != nil {
-				return errorResult(err), nil
-			}
+		uri := strings.TrimSpace(req.GetString(paramObjectURI, ""))
+		if _, ok := sourceObjectURI(uri); !ok {
+			return errorResult(fmt.Errorf("debug_set_breakpoint: object_uri %q is not a source URI (…/source/main or …/includes/…)", uri)), nil
 		}
-		user, err := sessions.resolveUser(req.GetString(paramUser, ""))
+		line, ok := intArg(req.GetArguments()["line"])
+		if !ok || line < 1 {
+			return errorResult(errors.New("debug_set_breakpoint: line must be a whole number of at least 1")), nil
+		}
+		typ, name := deriveBreakpointObject(uri)
+		st, err := sessions.addBreakpoint(ctx, req.GetString(paramUser, ""), adt.LineBreakpoint{ObjectURI: uri, Line: line, ObjectType: typ, ObjectName: name})
 		if err != nil {
 			return errorResult(err), nil
 		}
-		bp, err := sessions.setBreakpointWithoutRun(ctx, user, adt.LineBreakpoint{
-			ObjectURI: uri, Line: req.GetInt("line", 0), ObjectType: objectType, ObjectName: objectName,
-		})
-		if err != nil {
-			return errorResult(err), nil
-		}
-		return mcp.NewToolResultJSON(bp)
+		return mcp.NewToolResultJSON(st)
 	})
 
 	s.AddTool(mcp.NewTool("debug_remove_breakpoint",

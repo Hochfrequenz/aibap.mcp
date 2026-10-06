@@ -1,0 +1,163 @@
+package tools_test
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+)
+
+// secondBreakpointID is the ID the fake gives the second breakpoint it sets.
+const secondBreakpointID = "BP2"
+
+func setBreakpointArgs(uri string, line int) map[string]interface{} {
+	return map[string]interface{}{"object_uri": uri, "line": line}
+}
+
+func TestDebugSetBreakpoint_NeedsARun(t *testing.T) {
+	s, _, _ := newDebugServer(t)
+	res := callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7))
+	if !res.IsError || !strings.Contains(debugResultText(res), "start a run with debug_run") {
+		t.Errorf("got %s", debugResultText(res))
+	}
+}
+
+func TestDebugSetBreakpoint_DuringAttachIsRefused(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	gate := make(chan struct{})
+	backend.set(func(f *fakeDebugBackend) { f.attachGate = gate })
+	defer close(gate)
+	st := runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	backend.hit(t, "DBG1")
+	mustStatus(t, s, st.Version, "attaching")
+	res := callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7))
+	if !res.IsError || !strings.Contains(debugResultText(res), "attach in progress; call debug_wait") {
+		t.Errorf("got %s", debugResultText(res))
+	}
+}
+
+// While attached, an external request would detach the debugger (SAP_BASIS
+// 750): the breakpoint goes to the attached debugger, in the stateful session.
+func TestDebugSetBreakpoint_WhileAttachedUsesDebuggerScope(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	attachRun(t, s, backend)
+	st := runState(t, callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7)))
+	if len(st.Breakpoints) != 2 || st.Breakpoints[1].Scope != "debugger" || st.Breakpoints[1].ID != secondBreakpointID || st.Breakpoints[0].ID != "BP1" {
+		t.Fatalf("breakpoints: %+v", st.Breakpoints)
+	}
+	posts := backend.requests(http.MethodPost, breakpointsPath)
+	last := posts[len(posts)-1]
+	if !strings.Contains(last.body, `scope="debugger"`) || !last.stateful || last.cookie != posts[0].cookie {
+		t.Errorf("debugger-scope request: %+v", last)
+	}
+	if n := len(backend.requests(http.MethodDelete, breakpointsPath+"/BP1")); n != 0 {
+		t.Error("the external breakpoint must stay while attached")
+	}
+}
+
+// Outside an attachment all external breakpoints are deleted and the full
+// list is set again, so the stored IDs stay right on both releases.
+func TestDebugSetBreakpoint_OutsideAttachResetsTheExternalList(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	st := runState(t, callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7)))
+
+	if len(backend.requests(http.MethodDelete, breakpointsPath+"/BP1")) != 1 {
+		t.Error("the old external breakpoint must be deleted first")
+	}
+	posts := backend.requests(http.MethodPost, breakpointsPath)
+	if len(posts) != 2 || !strings.Contains(posts[1].body, "zprog") || !strings.Contains(posts[1].body, "zother") || !strings.Contains(posts[1].body, `scope="external"`) {
+		t.Errorf("the full list must be set in one request: %+v", posts)
+	}
+	if len(st.Breakpoints) != 2 || st.Breakpoints[0].ID != secondBreakpointID || st.Breakpoints[1].ID != "BP3" || st.Breakpoints[1].Scope != "external" {
+		t.Errorf("stored IDs: %+v", st.Breakpoints)
+	}
+}
+
+func TestDebugSetBreakpoint_RestoresThePreviousListWhenTheResetFails(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	backend.set(func(f *fakeDebugBackend) {
+		f.bpPostErr = []*fakeError{{status: http.StatusInternalServerError, typ: "ExceptionResourceFailure"}}
+	})
+	res := callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7))
+	if !res.IsError || !strings.Contains(debugResultText(res), "previous breakpoints are set again") {
+		t.Fatalf("got %s", debugResultText(res))
+	}
+	st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{}))
+	if len(st.Breakpoints) != 1 || st.Breakpoints[0].ObjectURI != progURI || st.Breakpoints[0].ID != secondBreakpointID {
+		t.Errorf("restored list: %+v", st.Breakpoints)
+	}
+}
+
+func TestDebugSetBreakpoint_NamesBreakpointsNoLongerSet(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	fail := &fakeError{status: http.StatusInternalServerError, typ: "ExceptionResourceFailure"}
+	backend.set(func(f *fakeDebugBackend) { f.bpPostErr = []*fakeError{fail, fail} })
+	res := callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7))
+	text := debugResultText(res)
+	if !res.IsError || !strings.Contains(text, "no longer set") || !strings.Contains(text, progURI) {
+		t.Fatalf("got %s", text)
+	}
+	if st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{})); len(st.Breakpoints) != 0 {
+		t.Errorf("the run must not claim breakpoints that are gone: %+v", st.Breakpoints)
+	}
+}
+
+// Cleanup step 3: debugger-scope breakpoints are deleted in the debug session
+// before the detach.
+func TestDebugStop_RemovesDebuggerBreakpointsBeforeTheDetach(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	attachRun(t, s, backend)
+	runState(t, callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7)))
+	callTool(t, s, "debug_stop", map[string]interface{}{})
+
+	del := backend.index(http.MethodDelete, breakpointsPath+"/BP2", "scope=debugger")
+	detach := backend.index(http.MethodPost, debuggerPath, "method=detachDebugger")
+	if del < 0 || detach < 0 || del > detach {
+		t.Errorf("want the debugger-scope delete (%d) before the detach (%d)", del, detach)
+	}
+}
+
+// A debugger-scope request that SAP answers with noSessionAttached means the
+// debuggee is gone meanwhile: the call fails and stores nothing.
+func TestDebugSetBreakpoint_DebuggerScopeWithoutAttachedDebugger(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	attachRun(t, s, backend)
+	backend.set(func(f *fakeDebugBackend) {
+		f.bpPostErr = []*fakeError{{
+			status: http.StatusBadRequest, typ: "ExceptionInvalidData",
+			props: map[string]string{"com.sap.adt.communicationFramework.subType": "noSessionAttached"},
+		}}
+	})
+	res := callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7))
+	if !res.IsError || !strings.Contains(debugResultText(res), "no debugger is attached any more; call debug_wait") {
+		t.Fatalf("got %s", debugResultText(res))
+	}
+	if st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{})); len(st.Breakpoints) != 1 {
+		t.Errorf("only the run's breakpoint may be stored: %+v", st.Breakpoints)
+	}
+}
+
+// A failed delete stops the reset: the breakpoints deleted before it are no
+// longer set and the run stops claiming them; the rest stay as they were.
+func TestDebugSetBreakpoint_FailedDeleteDropsTheDeletedOnes(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("", progURI, otherURI)))
+	backend.set(func(f *fakeDebugBackend) {
+		f.bpDeleteErr = &fakeError{status: http.StatusInternalServerError, typ: "ExceptionResourceFailure"}
+		f.bpDeleteID = secondBreakpointID
+	})
+	res := callTool(t, s, "debug_set_breakpoint", setBreakpointArgs("/sap/bc/adt/programs/programs/zthird/source/main", 7))
+	text := debugResultText(res)
+	if !res.IsError || !strings.Contains(text, secondBreakpointID) || !strings.Contains(text, "no longer set: "+progURI+" line 3") {
+		t.Fatalf("got %s", text)
+	}
+	if n := len(backend.requests(http.MethodPost, breakpointsPath)); n != 1 {
+		t.Errorf("no breakpoint may be set after the failed delete (%d requests)", n)
+	}
+	st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{}))
+	if len(st.Breakpoints) != 1 || st.Breakpoints[0].ID != secondBreakpointID || st.Breakpoints[0].ObjectURI != otherURI {
+		t.Errorf("stored breakpoints: %+v", st.Breakpoints)
+	}
+}
