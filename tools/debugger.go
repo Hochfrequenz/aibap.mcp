@@ -88,10 +88,10 @@ func buildDebugWatchpointResult(data []byte) DebugWatchpointResult {
 	return DebugWatchpointResult{Raw: string(data)}
 }
 
-func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector) {
+func registerDebuggerTools(s toolAdder, client adt.Client, selector SystemSelector, settings registerSettings) {
 	// The debug tools share one session; debugSessions decides when it is
 	// created, reused or replaced (#562).
-	sessions := newDebugSessions(client, selector)
+	sessions := newDebugSessions(client, selector, settings.systemUser)
 
 	s.AddTool(mcp.NewTool("debug_set_breakpoint",
 		mcp.WithTitleAnnotation("Set Breakpoint"),

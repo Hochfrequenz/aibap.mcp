@@ -2,7 +2,11 @@ package tools
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +19,24 @@ import (
 // that is being replaced. A replaced session may be the wedged one (#562), so
 // waiting for its full HTTP timeout would stall the call that replaces it.
 const replacedListenerStopTimeout = 10 * time.Second
+
+// processIDEID identifies this server process to SAP's debugger. Breakpoints
+// and listeners are keyed by the logged-on user, requestUser and ideId, so two
+// aibap.mcp processes of the same user no longer overwrite (SAP_BASIS 816) or
+// mix (SAP_BASIS 750) each other's breakpoints (#558). The price: a new
+// process cannot delete breakpoints a crashed one left behind.
+var processIDEID = newIDEID(rand.Reader)
+
+// newIDEID returns 32 upper-case hex characters read from r. If r fails, which
+// crypto/rand does not do on supported platforms, it falls back to the start
+// time and process ID so the server still starts with a per-process value.
+func newIDEID(r io.Reader) string {
+	b := make([]byte, 16)
+	if _, err := io.ReadFull(r, b); err == nil {
+		return strings.ToUpper(hex.EncodeToString(b))
+	}
+	return fmt.Sprintf("%016X%016X", uint64(time.Now().UnixNano()), uint64(os.Getpid()))
+}
 
 // debugSessionKey identifies what a DebugSession is bound to. adt.NewDebugSession
 // fixes both at creation: the SAP user (upper-cased) and the system that was
@@ -35,17 +57,20 @@ type debugSessions struct {
 	mu           sync.Mutex
 	newSession   func(user string) *adt.DebugSession
 	activeSystem func() string
-	cur          *adt.DebugSession
-	key          debugSessionKey
+	// systemUser returns the logon user configured for a system, "" when it
+	// has none (OAuth2). It supplies the default `user` (#558).
+	systemUser func(system string) string
+	cur        *adt.DebugSession
+	key        debugSessionKey
 }
 
 // newDebugSessions expects selector to be the same registry as client (as
 // main.go passes it): the key records selector.ActiveName(), while
 // adt.NewDebugSession binds the session to client's active system.
-func newDebugSessions(client adt.Client, selector SystemSelector) *debugSessions {
+func newDebugSessions(client adt.Client, selector SystemSelector, systemUser func(string) string) *debugSessions {
 	return &debugSessions{
 		newSession: func(user string) *adt.DebugSession {
-			return adt.NewDebugSession(client, user, "aibap.mcp")
+			return adt.NewDebugSession(client, user, processIDEID)
 		},
 		activeSystem: func() string {
 			if selector == nil {
@@ -53,7 +78,29 @@ func newDebugSessions(client adt.Client, selector SystemSelector) *debugSessions
 			}
 			return selector.ActiveName()
 		},
+		systemUser: systemUser,
 	}
+}
+
+// logonUser returns the logon user configured for system, "" when unknown.
+func (m *debugSessions) logonUser(system string) string {
+	if m.systemUser == nil {
+		return ""
+	}
+	return strings.TrimSpace(m.systemUser(system))
+}
+
+// resolveUser returns the SAP user a debug tool acts for, upper-cased: the
+// given one, or the logon user configured for the active system (#558).
+func (m *debugSessions) resolveUser(given string) (string, error) {
+	if u := strings.TrimSpace(given); u != "" {
+		return strings.ToUpper(u), nil
+	}
+	system := m.activeSystem()
+	if u := m.logonUser(system); u != "" {
+		return strings.ToUpper(u), nil
+	}
+	return "", fmt.Errorf("no user given, and system %q has no configured logon user (OAuth2): pass user", system)
 }
 
 func (m *debugSessions) keyFor(user string) debugSessionKey {

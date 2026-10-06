@@ -145,9 +145,16 @@ func run() error {
 		}
 	}()
 
+	// The debug tools default `user` to the logon user of the active system.
+	systemUsers := make(map[string]string, len(cfg.Systems))
+	for name, sys := range cfg.Systems {
+		systemUsers[name] = sys.User
+	}
+
 	s := buildServer(
 		registry, registry, enabledGroups, blackMagic, consent,
 		serverInstructions(systemNames, cfg.DefaultSystem, enabledGroups["debug"]),
+		tools.WithSystemUser(func(system string) string { return systemUsers[system] }),
 	)
 
 	stdioServer := server.NewStdioServer(s)
@@ -168,12 +175,13 @@ func buildServer(
 	fallback tools.BlackMagicClient,
 	consent tools.ConsentMode,
 	instructions string,
+	extra ...tools.RegisterOption,
 ) *server.MCPServer {
 	s := server.NewMCPServer("SAP ADT MCP Server", version,
 		server.WithInstructions(instructions),
 	)
-	tools.RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), enabledGroups, fallback,
-		tools.WithConsentMode(consent))
+	opts := append([]tools.RegisterOption{tools.WithConsentMode(consent)}, extra...)
+	tools.RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), enabledGroups, fallback, opts...)
 	return s
 }
 
