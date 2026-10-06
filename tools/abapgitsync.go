@@ -229,11 +229,15 @@ func registerAbapGitSyncTools(s toolAdder, client adt.AbapGitSyncClient) {
 		if len(objects) == 0 {
 			return errorResult(errors.New("parameter \"objects\" must contain at least one {obj_type, obj_name} entry")), nil
 		}
+		dryRun, errRes := optionalBool(req, "dry_run")
+		if errRes != nil {
+			return errRes, nil
+		}
 		res, err := client.PushAbapGitRepo(ctx, adt.AbapGitPushRequest{
 			Repo:    repo,
 			Objects: objects,
 			Message: message,
-			DryRun:  req.GetBool("dry_run", false),
+			DryRun:  dryRun,
 		})
 		if err != nil {
 			return abapGitErrorResult(err), nil

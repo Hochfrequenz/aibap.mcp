@@ -120,6 +120,7 @@ func TestAbapGitValidation_RejectsBeforeCallingAdtler(t *testing.T) {
 		{"push empty message", "abapgit_push", map[string]interface{}{"repo": "r", "message": " ", "objects": obj}},
 		{"push object without name", "abapgit_push", map[string]interface{}{"repo": "r", "message": "m", "objects": []interface{}{map[string]interface{}{"obj_type": "CLAS"}}}},
 		{"pull confirm without action", "abapgit_pull", map[string]interface{}{"repo": "r", "confirm": []interface{}{map[string]interface{}{"obj_type": "PROG", "obj_name": "ZEXAMPLE"}}}},
+		{"push dry_run not a boolean", "abapgit_push", map[string]interface{}{"repo": "r", "message": "m", "objects": obj, "dry_run": "yes"}},
 		{"pull confirm not an object", "abapgit_pull", map[string]interface{}{"repo": "r", "confirm": []interface{}{"PROG"}}},
 	}
 	for _, tc := range cases {
