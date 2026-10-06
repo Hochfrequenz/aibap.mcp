@@ -285,15 +285,23 @@ func registerDebugBreakpointTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Remove a breakpoint by ID. Note: all breakpoints of a run are also removed when debug_stop is called."),
-		mcp.WithString("breakpoint_id", mcp.Required(), mcp.Description("Breakpoint ID returned by debug_set_breakpoint")),
+		mcp.WithDescription("Remove one breakpoint of the active debug run by the id in its run state, in the scope it was set in. "+
+			"A debugger-scope breakpoint can only be removed while the debuggee is attached. debug_stop removes all of them."),
+		mcp.WithString("breakpoint_id", mcp.Required(), mcp.Description("Breakpoint id from the run state's breakpoints")),
 		withDebugUser(),
 		mcp.WithOutputSchema[BreakpointRemoveResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		_ = req.GetString("breakpoint_id", "")
+		id := strings.TrimSpace(req.GetString("breakpoint_id", ""))
+		if err := requireDebuggerStringParam("debug_remove_breakpoint", "breakpoint_id", id); err != nil {
+			return errorResult(err), nil
+		}
+		bp, err := sessions.removeBreakpoint(ctx, req.GetString(paramUser, ""), id)
+		if err != nil {
+			return errorResult(err), nil
+		}
 		return mcp.NewToolResultJSON(BreakpointRemoveResult{
-			Removed: false,
-			Message: "Breakpoint removal not yet implemented — breakpoints are cleared on debug_stop",
+			Removed: true,
+			Message: fmt.Sprintf("removed %s (%s line %d, scope %s)", bp.ID, bp.ObjectURI, bp.Line, bp.Scope),
 		})
 	})
 }

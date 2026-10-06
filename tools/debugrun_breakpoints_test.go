@@ -161,3 +161,43 @@ func TestDebugSetBreakpoint_FailedDeleteDropsTheDeletedOnes(t *testing.T) {
 		t.Errorf("stored breakpoints: %+v", st.Breakpoints)
 	}
 }
+
+func TestDebugRemoveBreakpoint_External(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	res := callTool(t, s, "debug_remove_breakpoint", map[string]interface{}{"breakpoint_id": "BP1"})
+	if res.IsError || !strings.Contains(debugResultText(res), `"removed":true`) {
+		t.Fatalf("got %s", debugResultText(res))
+	}
+	del := backend.requests(http.MethodDelete, breakpointsPath+"/BP1")
+	if len(del) != 1 || !strings.Contains(del[0].query, "scope=external") {
+		t.Errorf("delete request: %+v", del)
+	}
+	if st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{})); len(st.Breakpoints) != 0 {
+		t.Errorf("the run must forget the breakpoint: %+v", st.Breakpoints)
+	}
+}
+
+func TestDebugRemoveBreakpoint_DebuggerScopeUsesItsScope(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	attachRun(t, s, backend)
+	runState(t, callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7)))
+	if res := callTool(t, s, "debug_remove_breakpoint", map[string]interface{}{"breakpoint_id": secondBreakpointID}); res.IsError {
+		t.Fatal(debugResultText(res))
+	}
+	del := backend.requests(http.MethodDelete, breakpointsPath+"/"+secondBreakpointID)
+	if len(del) != 1 || !strings.Contains(del[0].query, "scope=debugger") || !del[0].stateful {
+		t.Errorf("delete request: %+v", del)
+	}
+}
+
+func TestDebugRemoveBreakpoint_Refusals(t *testing.T) {
+	s, _, _ := newDebugServer(t)
+	if res := callTool(t, s, "debug_remove_breakpoint", map[string]interface{}{"breakpoint_id": "BP1"}); !res.IsError || !strings.Contains(debugResultText(res), "debug_run") {
+		t.Errorf("without a run: %s", debugResultText(res))
+	}
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	if res := callTool(t, s, "debug_remove_breakpoint", map[string]interface{}{"breakpoint_id": "BP9"}); !res.IsError || !strings.Contains(debugResultText(res), "not part of the current run") {
+		t.Errorf("unknown ID: %s", debugResultText(res))
+	}
+}

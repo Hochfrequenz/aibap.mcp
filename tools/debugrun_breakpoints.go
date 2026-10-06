@@ -195,3 +195,45 @@ func (r *debugRun) dropBreakpoint(id string) {
 		st.Breakpoints = kept
 	})
 }
+
+// breakpoint returns the stored breakpoint with id.
+func (r *debugRun) breakpoint(id string) (DebugRunBreakpoint, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, b := range r.st.Breakpoints {
+		if b.ID == id {
+			return b, true
+		}
+	}
+	return DebugRunBreakpoint{}, false
+}
+
+// removeBreakpoint implements debug_remove_breakpoint: DELETE with the scope
+// stored for the breakpoint. A debugger-scope breakpoint needs the attachment.
+func (m *debugSessions) removeBreakpoint(ctx context.Context, user, id string) (DebugRunBreakpoint, error) {
+	run, err := m.runFor(user)
+	if err != nil {
+		return DebugRunBreakpoint{}, err
+	}
+	bp, ok := run.breakpoint(id)
+	if !ok {
+		return DebugRunBreakpoint{}, fmt.Errorf("debug_remove_breakpoint: breakpoint %q is not part of the current run", id)
+	}
+	if bp.Scope == string(adt.BreakpointScopeDebugger) {
+		if err := run.beginCall(); err != nil {
+			return DebugRunBreakpoint{}, err
+		}
+		defer run.endCall()
+		if err := run.sess.RemoveBreakpoint(ctx, adt.BreakpointScopeDebugger, id); err != nil && !isNotAttachedErr(err) {
+			return DebugRunBreakpoint{}, fmt.Errorf("debug_remove_breakpoint: %w", err)
+		}
+	} else {
+		m.startMu.Lock()
+		defer m.startMu.Unlock()
+		if err := run.sess.RemoveBreakpoint(ctx, adt.BreakpointScopeExternal, id); err != nil {
+			return DebugRunBreakpoint{}, fmt.Errorf("debug_remove_breakpoint: %w", err)
+		}
+	}
+	run.dropBreakpoint(id)
+	return bp, nil
+}
