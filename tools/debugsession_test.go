@@ -75,6 +75,22 @@ type fakeDebugBackend struct {
 	hang         map[string]bool // "METHOD path" → hangs until the request's context ends
 	bpSetGate    chan struct{}   // a breakpoint POST waits for this gate (nil: no wait)
 	detachGate   chan struct{}   // a detachDebugger request waits for this gate (nil: no wait)
+	bpSetDone    func()          // called once the breakpoint POST's body was read to its end (nil: none)
+}
+
+// onEOFReader calls fn once, when the wrapped body is read to its end.
+type onEOFReader struct {
+	io.Reader
+	fn   func()
+	once sync.Once
+}
+
+func (r *onEOFReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	if err == io.EOF {
+		r.once.Do(r.fn)
+	}
+	return n, err
 }
 
 // stepDetach is the debugger step that detaches the debuggee.
@@ -130,6 +146,10 @@ func answerError(resp *http.Response, e fakeError) *http.Response {
 }
 
 func (f *fakeDebugBackend) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Like http.Transport: a request whose context is already done never reaches SAP.
+	if err := req.Context().Err(); err != nil {
+		return nil, err
+	}
 	var body string
 	if req.Body != nil {
 		b, _ := io.ReadAll(req.Body)
@@ -265,6 +285,9 @@ func (f *fakeDebugBackend) setBreakpoints(resp *http.Response, body string) *htt
 	b.WriteString(`</dbg:breakpoints>`)
 	resp.Header.Set("Content-Type", "application/xml")
 	resp.Body = textBody(b.String())
+	if f.bpSetDone != nil {
+		resp.Body = io.NopCloser(&onEOFReader{Reader: resp.Body, fn: f.bpSetDone})
+	}
 	return resp
 }
 

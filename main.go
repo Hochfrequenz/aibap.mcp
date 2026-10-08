@@ -150,6 +150,10 @@ func run() error {
 	// cleanup needs the SAP sessions. 25 s covers the 20 s cleanup budget.
 	shutdown := tools.NewShutdown()
 	defer func() {
+		// Stop capturing SIGINT/SIGTERM first: until cancel() runs, a second
+		// Ctrl-C would be swallowed for the whole cleanup. After it, the
+		// default handler ends the process.
+		cancel()
 		sctx, scancel := context.WithTimeout(context.Background(), 25*time.Second)
 		defer scancel()
 		shutdown.Run(sctx)

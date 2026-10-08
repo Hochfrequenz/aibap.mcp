@@ -195,6 +195,27 @@ func TestDebugRun_RejectedBreakpointRemovesTheOthers(t *testing.T) {
 	}
 }
 
+// A client that cancels debug_run after SAP answered the breakpoint request
+// must not leave the already-set breakpoints behind: the rollback deletes
+// run on a context that outlives the request.
+func TestDebugRun_CancelledRequestStillRollsBackBreakpoints(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	backend.set(func(f *fakeDebugBackend) {
+		f.rejectBP = map[string][2]string{"zother": {"invalidPosition", "no executable statement"}}
+		f.bpSetDone = cancel
+	})
+
+	res := callToolCtx(ctx, t, s, "debug_run", manualRunArgs("", progURI, otherURI))
+	if !res.IsError {
+		t.Fatalf("debug_run must fail, got %s", debugResultText(res))
+	}
+	if len(backend.requests(http.MethodDelete, breakpointsPath+"/BP1")) != 1 {
+		t.Error("the breakpoint that was set must be deleted although the request was cancelled")
+	}
+}
+
 func TestDebugRun_ExistingBreakpointCountsAsSet(t *testing.T) {
 	s, _, backend := newDebugServer(t)
 	backend.set(func(f *fakeDebugBackend) { f.existingBP = map[string]bool{"zprog": true} })
@@ -275,6 +296,9 @@ func TestDebugRun_ListenerFailureIsReported(t *testing.T) {
 	}
 	if !res.IsError || !strings.Contains(debugResultText(res), "listener failed") {
 		t.Errorf("listener failure must be reported, got %s", debugResultText(res))
+	}
+	if !strings.Contains(debugResultText(res), "debug_stop") {
+		t.Errorf("the error must tell the caller to call debug_stop, got %s", debugResultText(res))
 	}
 }
 

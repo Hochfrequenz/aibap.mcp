@@ -485,8 +485,12 @@ func (m *debugSessions) objectInfoFor(system string) func(context.Context, strin
 }
 
 // removeSetBreakpoints deletes external breakpoints that were set before a
-// later step failed; best effort.
+// later step failed; best effort. A cancelled request must not leave them
+// behind, so the deletes run detached from the request context, bounded by the
+// cleanup budget.
 func removeSetBreakpoints(ctx context.Context, sess *adt.DebugSession, set []DebugRunBreakpoint) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), currentDebugTimings().cleanupBudget)
+	defer cancel()
 	for _, bp := range set {
 		if bp.ID != "" {
 			_ = sess.RemoveBreakpoint(ctx, adt.BreakpointScopeExternal, bp.ID)

@@ -284,10 +284,10 @@ func (r *debugRun) listen(ctx context.Context, cancel context.CancelFunc, secs i
 		return // cleanup started meanwhile; its StopListener released the poll
 	}
 	if err != nil {
-		r.fatal = fmt.Errorf("the debug listener failed: %w", err)
+		r.fatal = fmt.Errorf("the debug listener failed: %w; the run's breakpoints stay set in SAP: call debug_stop to remove them", err)
 		r.transitionLocked(func(st *DebugRunState) {
 			st.Status = runTimeout
-			st.Hint = "The listener failed: " + err.Error()
+			st.Hint = "The listener failed: " + err.Error() + " Call debug_stop to remove the run's breakpoints."
 		})
 		r.mu.Unlock()
 		return
