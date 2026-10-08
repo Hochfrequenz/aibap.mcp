@@ -1,9 +1,11 @@
 package tools_test
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // secondBreakpointID is the ID the fake gives the second breakpoint it sets.
@@ -202,5 +204,68 @@ func TestDebugRemoveBreakpoint_Refusals(t *testing.T) {
 	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
 	if res := callTool(t, s, "debug_remove_breakpoint", map[string]interface{}{"breakpoint_id": "BP9"}); !res.IsError || !strings.Contains(debugResultText(res), "not part of the current run") {
 		t.Errorf("unknown ID: %s", debugResultText(res))
+	}
+}
+
+// A client that cancels debug_set_breakpoint after the old breakpoints were
+// deleted and the new list failed must not lose them: the restore runs on a
+// context that outlives the request.
+func TestDebugSetBreakpoint_CancelledRequestStillRestoresThePreviousList(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	backend.set(func(f *fakeDebugBackend) {
+		f.bpPostErr = []*fakeError{{status: http.StatusInternalServerError, typ: "ExceptionResourceFailure"}}
+		f.bpSetDone = cancel
+	})
+	res := callToolCtx(ctx, t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7))
+	if !res.IsError || !strings.Contains(debugResultText(res), "previous breakpoints are set again") {
+		t.Fatalf("got %s", debugResultText(res))
+	}
+	st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{}))
+	if len(st.Breakpoints) != 1 || st.Breakpoints[0].ObjectURI != progURI {
+		t.Errorf("the run must still hold its breakpoint: %+v", st.Breakpoints)
+	}
+}
+
+// A debug_stop that wins the run-start lock between the run lookup and the
+// DELETE of debug_remove_breakpoint must turn the removal into "no active run",
+// not a request against the stopped run's session.
+func TestDebugRemoveBreakpoint_RunStoppedWhileWaitingForTheLock(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	gate := make(chan struct{})
+	backend.set(func(f *fakeDebugBackend) { f.bpSetGate = gate })
+
+	go callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7)) // holds the lock at its gated POST
+	deadline := time.Now().Add(5 * time.Second)
+	for len(backend.requests(http.MethodPost, breakpointsPath)) < 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("debug_set_breakpoint never reached its breakpoint request")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	go callTool(t, s, "debug_stop", map[string]interface{}{})
+	time.Sleep(200 * time.Millisecond) // the stop waits for the lock; the run is still active
+	removed := make(chan string, 1)
+	go func() {
+		res := callTool(t, s, "debug_remove_breakpoint", map[string]interface{}{"breakpoint_id": firstBreakpointID})
+		if !res.IsError {
+			removed <- "removal succeeded: " + debugResultText(res)
+			return
+		}
+		removed <- debugResultText(res)
+	}()
+	time.Sleep(200 * time.Millisecond) // the removal passed its run lookup and waits behind the stop
+	close(gate)
+
+	select {
+	case text := <-removed:
+		if !strings.Contains(text, "no active debug run") {
+			t.Errorf("got %s", text)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("debug_remove_breakpoint never returned")
 	}
 }

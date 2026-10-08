@@ -81,7 +81,7 @@ type fakeDebugBackend struct {
 	bpPostErr    []*fakeError         // answers of the next breakpoint POSTs, in order; nil = normal
 	bpSetGate    chan struct{}        // a breakpoint POST waits for this gate (nil: no wait)
 	detachGate   chan struct{}        // a detachDebugger request waits for this gate (nil: no wait)
-	bpSetDone    func()               // called once the breakpoint POST's body was read to its end (nil: none)
+	bpSetDone    func()               // called once a breakpoint POST's answer body was read to its end (nil: none)
 }
 
 // onEOFReader calls fn once, when the wrapped body is read to its end.
@@ -279,7 +279,11 @@ func (f *fakeDebugBackend) setBreakpoints(resp *http.Response, body string) *htt
 		e := f.bpPostErr[0]
 		f.bpPostErr = f.bpPostErr[1:]
 		if e != nil {
-			return answerError(resp, *e)
+			resp = answerError(resp, *e)
+			if f.bpSetDone != nil {
+				resp.Body = io.NopCloser(&onEOFReader{Reader: resp.Body, fn: f.bpSetDone})
+			}
+			return resp
 		}
 	}
 	var b strings.Builder

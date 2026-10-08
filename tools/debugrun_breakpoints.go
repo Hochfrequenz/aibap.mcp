@@ -118,7 +118,11 @@ func (r *debugRun) resetExternalBreakpoints(ctx context.Context, bp adt.LineBrea
 	prev := lineBreakpoints(ext)
 	set, err := setExternal(ctx, r.sess, append(append([]adt.LineBreakpoint{}, prev...), bp))
 	if err != nil {
-		restored, rerr := setExternal(ctx, r.sess, prev)
+		// The restore must outlive a cancelled request, or the run would lose
+		// its breakpoints silently.
+		rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), currentDebugTimings().cleanupBudget)
+		restored, rerr := setExternal(rctx, r.sess, prev)
+		rcancel()
 		if rerr != nil {
 			r.replaceExternal(nil)
 			return DebugRunState{}, fmt.Errorf("debug_set_breakpoint: %w; setting the previous breakpoints again failed too (%v), so these are no longer set: %s",
@@ -230,6 +234,9 @@ func (m *debugSessions) removeBreakpoint(ctx context.Context, user, id string) (
 	} else {
 		m.startMu.Lock()
 		defer m.startMu.Unlock()
+		if !run.active() { // a debug_stop or a new debug_run won the lock meanwhile
+			return DebugRunBreakpoint{}, errNoRun
+		}
 		if err := run.sess.RemoveBreakpoint(ctx, adt.BreakpointScopeExternal, id); err != nil {
 			return DebugRunBreakpoint{}, fmt.Errorf("debug_remove_breakpoint: %w", err)
 		}
