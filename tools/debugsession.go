@@ -533,6 +533,15 @@ func (m *debugSessions) rearm(run *debugRun) error {
 		st.DebuggeeID = ""
 		st.Position = nil
 		st.Hint = ""
+		// SAP drops debugger-scope breakpoints with the attachment (seen live
+		// on SAP_BASIS 750 and 816), so they are not part of the next window.
+		ext := st.Breakpoints[:0:0]
+		for _, b := range st.Breakpoints {
+			if b.Scope == string(adt.BreakpointScopeExternal) {
+				ext = append(ext, b)
+			}
+		}
+		st.Breakpoints = ext
 	})
 	run.startWindowLocked()
 	return nil
