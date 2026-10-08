@@ -269,3 +269,52 @@ func TestDebugRemoveBreakpoint_RunStoppedWhileWaitingForTheLock(t *testing.T) {
 		t.Fatal("debug_remove_breakpoint never returned")
 	}
 }
+
+// SAP serialises requests per stateful session, so while the listener's long
+// poll is open every external breakpoint request must go to the cleanup
+// session, not the listener's (a request on it hangs until the client timeout).
+func TestDebugBreakpoints_WhileListeningUseTheCleanupSession(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	backend.set(func(f *fakeDebugBackend) { f.serializeSessions = true })
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	listener := backend.waitForRequest(t, http.MethodPost, listenersPath, "").cookie
+
+	st := runState(t, callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7)))
+	if len(st.Breakpoints) != 2 {
+		t.Fatalf("breakpoints: %+v", st.Breakpoints)
+	}
+	posts := backend.requests(http.MethodPost, breakpointsPath)
+	if len(posts) != 2 || posts[1].cookie == "" || posts[1].cookie == listener {
+		t.Errorf("the external set must not use the listener session %q: %+v", listener, posts)
+	}
+	dels := backend.requests(http.MethodDelete, breakpointsPath+"/BP1")
+	if len(dels) != 1 || dels[0].cookie == listener {
+		t.Errorf("the external delete must not use the listener session: %+v", dels)
+	}
+
+	res := callTool(t, s, "debug_remove_breakpoint", map[string]interface{}{"breakpoint_id": st.Breakpoints[1].ID})
+	if res.IsError {
+		t.Fatal(debugResultText(res))
+	}
+	dels = backend.requests(http.MethodDelete, breakpointsPath+"/"+st.Breakpoints[1].ID)
+	if len(dels) != 1 || dels[0].cookie == listener {
+		t.Errorf("the external remove must not use the listener session: %+v", dels)
+	}
+}
+
+// On SAP_BASIS 750 an external request while attached detaches the debugger,
+// so removing an external breakpoint is refused then, without any request.
+func TestDebugRemoveBreakpoint_ExternalWhileAttachedIsRefused(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	attachRun(t, s, backend)
+	res := callTool(t, s, "debug_remove_breakpoint", map[string]interface{}{"breakpoint_id": firstBreakpointID})
+	if !res.IsError || !strings.Contains(debugResultText(res), "cannot be removed while the debuggee is attached") {
+		t.Fatalf("got %s", debugResultText(res))
+	}
+	if n := len(backend.requests(http.MethodDelete, breakpointsPath+"/"+firstBreakpointID)); n != 0 {
+		t.Errorf("no request may be sent, got %d DELETEs", n)
+	}
+	if st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{})); len(st.Breakpoints) != 1 || st.Status != runAttachedStatus {
+		t.Errorf("run state must be unchanged: %+v", st)
+	}
+}

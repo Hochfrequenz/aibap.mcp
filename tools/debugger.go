@@ -284,7 +284,9 @@ func registerDebugBreakpointTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription("Remove one breakpoint of the active debug run by the id in its run state, in the scope it was set in. "+
-			"A debugger-scope breakpoint can only be removed while the debuggee is attached. debug_stop removes all of them."),
+			"A debugger-scope breakpoint can only be removed while the debuggee is attached. "+
+			"An external breakpoint cannot be removed while the debuggee is attached or attaching (on SAP_BASIS 750 the request detaches the debugger): remove it after detachDebugger. "+
+			"debug_stop removes all of them."),
 		mcp.WithString("breakpoint_id", mcp.Required(), mcp.Description("Breakpoint id from the run state's breakpoints")),
 		withDebugUser(),
 		mcp.WithOutputSchema[BreakpointRemoveResult](),

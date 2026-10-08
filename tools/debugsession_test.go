@@ -58,30 +58,32 @@ type fakeDebugBackend struct {
 	released    chan struct{}
 	releaseOnce sync.Once
 
-	failStop     bool
-	listenerErr  *fakeError
-	attachGate   chan struct{}
-	attachErr    *fakeError
-	stackXML     string
-	stackGate    chan struct{}
-	sessionsBody string
-	sessionsErr  *fakeError // getDebuggeeSessions answers this error (nil: sessionsBody)
-	stepErr      map[string]fakeError
-	unitHit      string
-	unitErr      *fakeError
-	rejectBP     map[string][2]string // URI substring → errorKind, errorMessage
-	existingBP   map[string]bool      // URI substring → answered with errorKind "existing"
-	bpDeleteErr  *fakeError
-	bpDeleteID   string               // when set, only the DELETE of this breakpoint ID fails with bpDeleteErr
-	okCodeStatus int                  // status of the OK-code program lookup; 0 means 200
-	hangCookie   string               // requests with this session cookie hang until their context ends
-	hang         map[string]bool      // "METHOD path" → hangs until the request's context ends
-	vars         map[string]fakeVar   // variable ID -> metadata and value
-	children     map[string][]fakeVar // parent ID -> its children
-	bpPostErr    []*fakeError         // answers of the next breakpoint POSTs, in order; nil = normal
-	bpSetGate    chan struct{}        // a breakpoint POST waits for this gate (nil: no wait)
-	detachGate   chan struct{}        // a detachDebugger request waits for this gate (nil: no wait)
-	bpSetDone    func()               // called once a breakpoint POST's answer body was read to its end (nil: none)
+	failStop          bool
+	listenerErr       *fakeError
+	attachGate        chan struct{}
+	attachErr         *fakeError
+	stackXML          string
+	stackGate         chan struct{}
+	sessionsBody      string
+	sessionsErr       *fakeError // getDebuggeeSessions answers this error (nil: sessionsBody)
+	stepErr           map[string]fakeError
+	unitHit           string
+	unitErr           *fakeError
+	rejectBP          map[string][2]string // URI substring → errorKind, errorMessage
+	existingBP        map[string]bool      // URI substring → answered with errorKind "existing"
+	bpDeleteErr       *fakeError
+	bpDeleteID        string               // when set, only the DELETE of this breakpoint ID fails with bpDeleteErr
+	okCodeStatus      int                  // status of the OK-code program lookup; 0 means 200
+	hangCookie        string               // requests with this session cookie hang until their context ends
+	hang              map[string]bool      // "METHOD path" → hangs until the request's context ends
+	vars              map[string]fakeVar   // variable ID -> metadata and value
+	children          map[string][]fakeVar // parent ID -> its children
+	bpPostErr         []*fakeError         // answers of the next breakpoint POSTs, in order; nil = normal
+	bpSetGate         chan struct{}        // a breakpoint POST waits for this gate (nil: no wait)
+	detachGate        chan struct{}        // a detachDebugger request waits for this gate (nil: no wait)
+	serializeSessions bool                 // like SAP: a request on a session whose listener long poll is open hangs until its context ends
+	listening         map[string]bool      // session cookie -> a listener long poll is open on it
+	bpSetDone         func()               // called once a breakpoint POST's answer body was read to its end (nil: none)
 }
 
 // onEOFReader calls fn once, when the wrapped body is read to its end.
@@ -166,18 +168,16 @@ func (f *fakeDebugBackend) answer(req *http.Request) (*http.Response, error) {
 		b, _ := io.ReadAll(req.Body)
 		body = string(b)
 	}
-	cookie := ""
-	if c, err := req.Cookie("sid"); err == nil {
-		cookie = c.Value
-	}
+	cookie := sessionCookie(req)
 	f.mu.Lock()
 	f.reqs = append(f.reqs, recordedRequest{
 		host: req.URL.Host, method: req.Method, path: req.URL.Path, query: req.URL.RawQuery, body: body, cookie: cookie,
 		stateful: req.Header.Get("X-sap-adt-sessiontype") == "stateful",
 	})
 	hang := (f.hangCookie != "" && cookie == f.hangCookie) || f.hang[req.Method+" "+req.URL.Path]
+	busy := f.sessionBusyLocked(req, cookie)
 	f.mu.Unlock()
-	if hang {
+	if hang || busy {
 		<-req.Context().Done()
 		return nil, req.Context().Err()
 	}
@@ -247,6 +247,22 @@ func (f *fakeDebugBackend) answer(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+// sessionBusyLocked: with serializeSessions, any request but a listener POST
+// on a session with an open long poll waits (SAP serialises per session).
+func sessionCookie(req *http.Request) string {
+	if c, err := req.Cookie("sid"); err == nil {
+		return c.Value
+	}
+	return ""
+}
+
+func (f *fakeDebugBackend) sessionBusyLocked(req *http.Request, cookie string) bool {
+	if !f.serializeSessions || !f.listening[cookie] {
+		return false
+	}
+	return req.URL.Path != listenersPath || req.Method != http.MethodPost
+}
+
 func (f *fakeDebugBackend) listen(req *http.Request, resp *http.Response) (*http.Response, error) {
 	f.mu.Lock()
 	if f.listenerErr != nil {
@@ -258,7 +274,17 @@ func (f *fakeDebugBackend) listen(req *http.Request, resp *http.Response) (*http
 		f.listenStop = make(chan struct{})
 	}
 	stop := f.listenStop
+	cookie := sessionCookie(req)
+	if f.listening == nil {
+		f.listening = map[string]bool{}
+	}
+	f.listening[cookie] = true
 	f.mu.Unlock()
+	defer func() {
+		f.mu.Lock()
+		delete(f.listening, cookie)
+		f.mu.Unlock()
+	}()
 	select {
 	case id := <-f.hits:
 		if id != "" {

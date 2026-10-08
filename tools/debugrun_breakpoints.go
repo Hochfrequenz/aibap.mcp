@@ -11,6 +11,9 @@ import (
 
 var errNoRun = errors.New("no active debug run: start a run with debug_run")
 
+var errExternalRemoveWhileAttached = errors.New("debug_remove_breakpoint: an external breakpoint cannot be removed while the debuggee is attached " +
+	"(on SAP_BASIS 750 the request detaches the debugger); remove it after detachDebugger, or debug_stop removes it")
+
 // runFor returns the active run for a breakpoint tool; user (when given) and
 // the active system must match it.
 func (m *debugSessions) runFor(user string) (*debugRun, error) {
@@ -80,6 +83,14 @@ func (r *debugRun) addDebuggerBreakpoint(ctx context.Context, bp adt.LineBreakpo
 // delete, the previous list is set again; if that fails too, the error names
 // the breakpoints that are no longer set. A failed delete stops the reset; the
 // ones deleted before it are no longer set. Caller holds the run-start lock.
+//
+// Every request here goes through the cleanup session, never r.sess: while the
+// run is listening, r.sess is busy with the listener's long poll and SAP
+// serialises requests per stateful session, so a DELETE or POST on it hangs
+// until the client timeout (SAP_BASIS 816). Breakpoints are bound to the user
+// and terminal/IDE ID, not to the session, so the listener still catches. The
+// cleanup session is only used under the run-start lock (this, removeBreakpoint
+// and cleanupRun all hold it), so its requests never overlap.
 func (r *debugRun) resetExternalBreakpoints(ctx context.Context, bp adt.LineBreakpoint) (DebugRunState, error) {
 	r.mu.Lock()
 	if s := r.st.Status; s == runAttaching || s == runAttached {
@@ -98,7 +109,7 @@ func (r *debugRun) resetExternalBreakpoints(ctx context.Context, bp adt.LineBrea
 		if b.ID == "" {
 			continue
 		}
-		if err := r.sess.RemoveBreakpoint(ctx, adt.BreakpointScopeExternal, b.ID); err != nil {
+		if err := r.cleanupSess.RemoveBreakpoint(ctx, adt.BreakpointScopeExternal, b.ID); err != nil {
 			var gone []DebugRunBreakpoint
 			for _, d := range ext[:i] {
 				if d.ID != "" {
@@ -116,12 +127,12 @@ func (r *debugRun) resetExternalBreakpoints(ctx context.Context, bp adt.LineBrea
 		}
 	}
 	prev := lineBreakpoints(ext)
-	set, err := setExternal(ctx, r.sess, append(append([]adt.LineBreakpoint{}, prev...), bp))
+	set, err := setExternal(ctx, r.cleanupSess, append(append([]adt.LineBreakpoint{}, prev...), bp))
 	if err != nil {
 		// The restore must outlive a cancelled request, or the run would lose
 		// its breakpoints silently.
 		rctx, rcancel := context.WithTimeout(context.WithoutCancel(ctx), currentDebugTimings().cleanupBudget)
-		restored, rerr := setExternal(rctx, r.sess, prev)
+		restored, rerr := setExternal(rctx, r.cleanupSess, prev)
 		rcancel()
 		if rerr != nil {
 			r.replaceExternal(nil)
@@ -214,6 +225,9 @@ func (r *debugRun) breakpoint(id string) (DebugRunBreakpoint, bool) {
 
 // removeBreakpoint implements debug_remove_breakpoint: DELETE with the scope
 // stored for the breakpoint. A debugger-scope breakpoint needs the attachment.
+// An external one is deleted on the cleanup session (r.sess may be busy with
+// the listener's long poll) and is refused while attaching or attached: on
+// SAP_BASIS 750 an external request then detaches the debugger.
 func (m *debugSessions) removeBreakpoint(ctx context.Context, user, id string) (DebugRunBreakpoint, error) {
 	run, err := m.runFor(user)
 	if err != nil {
@@ -237,7 +251,10 @@ func (m *debugSessions) removeBreakpoint(ctx context.Context, user, id string) (
 		if !run.active() { // a debug_stop or a new debug_run won the lock meanwhile
 			return DebugRunBreakpoint{}, errNoRun
 		}
-		if err := run.sess.RemoveBreakpoint(ctx, adt.BreakpointScopeExternal, id); err != nil {
+		if s := run.status(); s == runAttaching || s == runAttached {
+			return DebugRunBreakpoint{}, errExternalRemoveWhileAttached
+		}
+		if err := run.cleanupSess.RemoveBreakpoint(ctx, adt.BreakpointScopeExternal, id); err != nil {
 			return DebugRunBreakpoint{}, fmt.Errorf("debug_remove_breakpoint: %w", err)
 		}
 	}

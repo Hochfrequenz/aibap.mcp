@@ -90,7 +90,7 @@ type debugRun struct {
 	user        string
 	kind        string
 	sess        *adt.DebugSession // the debug session: listener, attach, steps
-	cleanupSess *adt.DebugSession // fresh session, same user/terminal/IDE ID: StopListener and external deletes
+	cleanupSess *adt.DebugSession // fresh session, same user/terminal/IDE ID: StopListener and every external breakpoint request (r.sess is busy with the listener's long poll); used only under startMu
 	source      func(ctx context.Context, uri string) (string, error)
 	timings     debugTimings
 	nextVersion func() int64
