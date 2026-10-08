@@ -157,6 +157,10 @@ func (f *fakeDebugBackend) RoundTrip(req *http.Request) (*http.Response, error) 
 	if err := req.Context().Err(); err != nil {
 		return nil, err
 	}
+	return f.answer(req)
+}
+
+func (f *fakeDebugBackend) answer(req *http.Request) (*http.Response, error) {
 	var body string
 	if req.Body != nil {
 		b, _ := io.ReadAll(req.Body)
