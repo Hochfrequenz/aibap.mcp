@@ -1381,3 +1381,65 @@ func TestBatchGetSourceEmptyURIs(t *testing.T) {
 		t.Errorf("total: got %d, want 0", out.Total)
 	}
 }
+
+// Issue #491: a batch whose results carry alerts (run skipped for risk level,
+// runtime abortion) or test errors must not read as a clean 0/0 at the top level.
+func TestBatchRunUnitTestsCountsAlertsAndErrors(t *testing.T) {
+	mock := &mockClient{
+		runTestsFn: func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error) {
+			switch uri {
+			case testObjectURIFail:
+				return &adt.TestResult{Alerts: []adt.TestAlert{{Kind: "runtimeAbortion", Severity: "fatal", Title: "Runtime Error"}}}, nil
+			case "/sap/bc/adt/oo/classes/ZCL_SKIPPED":
+				return &adt.TestResult{Alerts: []adt.TestAlert{{Kind: "warning", Severity: "tolerable", Title: "No execution"}}}, nil
+			}
+			return &adt.TestResult{Passed: 2, Errors: 1}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "run_unit_tests", map[string]interface{}{
+		"object_uri": []string{testObjectURIOK, testObjectURIFail, "/sap/bc/adt/oo/classes/ZCL_SKIPPED"},
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out struct {
+		TotalPassed     int `json:"total_passed"`
+		TotalFailed     int `json:"total_failed"`
+		TotalErrors     int `json:"total_errors"`
+		TotalWithAlerts int `json:"total_with_alerts"`
+	}
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.TotalPassed != 2 || out.TotalFailed != 0 {
+		t.Errorf("passed/failed: got %d/%d, want 2/0", out.TotalPassed, out.TotalFailed)
+	}
+	if out.TotalErrors != 1 {
+		t.Errorf("total_errors: got %d, want 1", out.TotalErrors)
+	}
+	if out.TotalWithAlerts != 2 {
+		t.Errorf("total_with_alerts: got %d, want 2", out.TotalWithAlerts)
+	}
+}
+
+// Issue #491: the single-URI form passes adtler's alerts through to the caller.
+func TestRunUnitTestsSingleURIPassesAlertsThrough(t *testing.T) {
+	mock := &mockClient{
+		runTestsFn: func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error) {
+			return &adt.TestResult{Alerts: []adt.TestAlert{{Kind: "warning", Severity: "tolerable", Title: "No execution"}}}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "run_unit_tests", map[string]interface{}{"object_uri": testObjectURIOK})
+	if result.IsError {
+		t.Fatalf("unexpected error: %s", firstText(result))
+	}
+	var out adt.TestResult
+	if err := json.Unmarshal([]byte(firstText(result)), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out.Alerts) != 1 || out.Alerts[0].Kind != "warning" {
+		t.Errorf("alerts: got %+v, want one warning alert", out.Alerts)
+	}
+}
