@@ -221,7 +221,7 @@ func TestDebugRun_ExistingBreakpointCountsAsSet(t *testing.T) {
 	backend.set(func(f *fakeDebugBackend) { f.existingBP = map[string]bool{"zprog": true} })
 
 	st := runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
-	if st.Status != "listening" || len(st.Breakpoints) != 1 || st.Breakpoints[0].ID != "BP1" {
+	if st.Status != "listening" || len(st.Breakpoints) != 1 || st.Breakpoints[0].ID != firstBreakpointID {
 		t.Errorf("errorKind existing must count as set: %+v", st)
 	}
 }

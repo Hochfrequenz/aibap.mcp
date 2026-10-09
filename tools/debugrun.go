@@ -90,7 +90,7 @@ type debugRun struct {
 	user        string
 	kind        string
 	sess        *adt.DebugSession // the debug session: listener, attach, steps
-	cleanupSess *adt.DebugSession // fresh session, same user/terminal/IDE ID: StopListener and external deletes
+	cleanupSess *adt.DebugSession // fresh session, same user/terminal/IDE ID: StopListener and every external breakpoint request (r.sess is busy with the listener's long poll); used only under startMu
 	source      func(ctx context.Context, uri string) (string, error)
 	timings     debugTimings
 	nextVersion func() int64
@@ -541,9 +541,8 @@ func (r *debugRun) onIdle(gen int) {
 	})
 }
 
-// stepOutcome is what a debug_step did: SAP's raw answer and the run state after it.
+// stepOutcome is the run state after a debug_step.
 type stepOutcome struct {
-	raw   []byte
 	state DebugRunState
 }
 
@@ -554,7 +553,7 @@ func (r *debugRun) step(ctx context.Context, action string) (stepOutcome, error)
 		return stepOutcome{}, err
 	}
 	defer r.endCall()
-	data, err := r.sess.Step(ctx, action)
+	_, err := r.sess.Step(ctx, action)
 	switch _, ended := stepResultForError(err); {
 	case err == nil && action == "detachDebugger":
 		r.end(endDetached, "")
@@ -589,7 +588,7 @@ func (r *debugRun) step(ctx context.Context, action string) (stepOutcome, error)
 			"end the session with debug_step detachDebugger or debug_stop", err)
 	}
 	st, _ := r.snapshot()
-	return stepOutcome{raw: data, state: st}, nil
+	return stepOutcome{state: st}, nil
 }
 
 // end moves an attached run to ended with reason.

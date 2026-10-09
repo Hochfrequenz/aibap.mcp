@@ -21,9 +21,12 @@ type DebugTriggerer interface {
 	TriggerDebugRun(ctx context.Context, system, user string, t DebugTarget) error
 }
 
-const targetClassMethod = "class_method"
+const (
+	targetFunctionModule = "function_module"
+	targetClassMethod    = "class_method"
+)
 
-var validDebugTargetTypes = []string{"report", "transaction", "function_module", targetClassMethod}
+var validDebugTargetTypes = []string{"report", "transaction", targetFunctionModule, targetClassMethod}
 
 func validDebugTargetType(s string) bool {
 	for _, v := range validDebugTargetTypes {

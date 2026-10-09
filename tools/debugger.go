@@ -49,12 +49,20 @@ func buildDebugSessionsResult(data []byte) DebugSessionsResult {
 	return DebugSessionsResult{HasSessions: true, Raw: string(data)}
 }
 
-// buildDebugStepResult, buildDebugVariableResult, buildDebugStackResult, and
+// buildDebugVariableResult, buildDebugStackResult, and
 // buildDebugWatchpointResult wrap the non-JSON bodies returned by the ADT
 // debugger endpoints in a typed struct (#501).
 
-func buildDebugStepResult(data []byte) DebugStepResult {
-	return DebugStepResult{Raw: string(data)}
+// stepResultFromState shapes the run state after a step as debug_step's result.
+func stepResultFromState(st DebugRunState) DebugStepResult {
+	return DebugStepResult{
+		Version:       st.Version,
+		Status:        st.Status,
+		EndReason:     st.EndReason,
+		DebuggeeEnded: st.Status == runEnded && st.EndReason == endCompleted,
+		Position:      st.Position,
+		Hint:          st.Hint,
+	}
 }
 
 // stepResultForError reports whether err is (or wraps) *adt.DebuggeeEndedError:
@@ -227,14 +235,12 @@ func registerDebugRunTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Stop the current debug run: stop the listener, remove its breakpoints, detach a halted debuggee, and drop the debug session."),
+		mcp.WithDescription("Stop the current debug run: stop the listener, remove its breakpoints, detach a halted debuggee, and drop "+
+			"the debug session. Reports the removed breakpoints and anything that could not be removed or detached."),
 		mcp.WithString(paramUser, mcp.Description("Ignored: debug_stop always stops the current run.")),
-		mcp.WithOutputSchema[DebugListenerStopResult](),
+		mcp.WithOutputSchema[DebugStopResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		if err := sessions.stop().err(); err != nil {
-			return errorResult(fmt.Errorf("debug_stop: the run is stopped, but the cleanup was incomplete: %w", err)), nil
-		}
-		return mcp.NewToolResultJSON(DebugListenerStopResult{Stopped: true})
+		return mcp.NewToolResultJSON(buildStopResult(sessions.stop()))
 	})
 }
 
@@ -244,37 +250,32 @@ func registerDebugBreakpointTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Set a line breakpoint for external debugging outside a run. While a debug_run is active, pass every breakpoint to debug_run instead."),
+		mcp.WithDescription("Add a line breakpoint to the active debug run and return the run state. While the debuggee is halted "+
+			"(status attached) the breakpoint is set in the attached debugger. Otherwise every external breakpoint of the run is set "+
+			"again together with the new one, in one request. Fails without an active run (start one with debug_run) and while an "+
+			"attach is in progress (call debug_wait)."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
-			mcp.Description("ADT object URI, e.g. /sap/bc/adt/programs/programs/zreport/source/main"),
+			mcp.Description("Source URI, e.g. /sap/bc/adt/programs/programs/zreport/source/main or …/includes/…"),
 		),
-		mcp.WithNumber("line", mcp.Required(), mcp.Description("Line number for the breakpoint")),
-		mcp.WithString("object_type", mcp.Required(), mcp.Description("ADT object type, e.g. PROG/P")),
-		mcp.WithString("object_name", mcp.Required(), mcp.Description("ABAP object name, e.g. ZREPORT")),
+		mcp.WithNumber("line", mcp.Required(), mcp.Description("Source line")),
 		withDebugUser(),
+		mcp.WithOutputSchema[DebugRunState](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString(paramObjectURI, "")
-		objectType := req.GetString("object_type", "")
-		objectName := req.GetString("object_name", "")
-		for _, field := range []struct{ name, value string }{
-			{paramObjectURI, uri}, {"object_type", objectType}, {"object_name", objectName},
-		} {
-			if err := requireDebuggerStringParam("debug_set_breakpoint", field.name, field.value); err != nil {
-				return errorResult(err), nil
-			}
+		uri := strings.TrimSpace(req.GetString(paramObjectURI, ""))
+		if _, ok := sourceObjectURI(uri); !ok {
+			return errorResult(fmt.Errorf("debug_set_breakpoint: object_uri %q is not a source URI (…/source/main or …/includes/…)", uri)), nil
 		}
-		user, err := sessions.resolveUser(req.GetString(paramUser, ""))
+		line, ok := intArg(req.GetArguments()["line"])
+		if !ok || line < 1 {
+			return errorResult(errors.New("debug_set_breakpoint: line must be a whole number of at least 1")), nil
+		}
+		typ, name := deriveBreakpointObject(uri)
+		st, err := sessions.addBreakpoint(ctx, req.GetString(paramUser, ""), adt.LineBreakpoint{ObjectURI: uri, Line: line, ObjectType: typ, ObjectName: name})
 		if err != nil {
 			return errorResult(err), nil
 		}
-		bp, err := sessions.setBreakpointWithoutRun(ctx, user, adt.LineBreakpoint{
-			ObjectURI: uri, Line: req.GetInt("line", 0), ObjectType: objectType, ObjectName: objectName,
-		})
-		if err != nil {
-			return errorResult(err), nil
-		}
-		return mcp.NewToolResultJSON(bp)
+		return mcp.NewToolResultJSON(st)
 	})
 
 	s.AddTool(mcp.NewTool("debug_remove_breakpoint",
@@ -282,15 +283,25 @@ func registerDebugBreakpointTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Remove a breakpoint by ID. Note: all breakpoints of a run are also removed when debug_stop is called."),
-		mcp.WithString("breakpoint_id", mcp.Required(), mcp.Description("Breakpoint ID returned by debug_set_breakpoint")),
+		mcp.WithDescription("Remove one breakpoint of the active debug run by the id in its run state, in the scope it was set in. "+
+			"A debugger-scope breakpoint can only be removed while the debuggee is attached. "+
+			"An external breakpoint cannot be removed while the debuggee is attached or attaching (on SAP_BASIS 750 the request detaches the debugger): remove it after detachDebugger. "+
+			"debug_stop removes all of them."),
+		mcp.WithString("breakpoint_id", mcp.Required(), mcp.Description("Breakpoint id from the run state's breakpoints")),
 		withDebugUser(),
 		mcp.WithOutputSchema[BreakpointRemoveResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		_ = req.GetString("breakpoint_id", "")
+		id := strings.TrimSpace(req.GetString("breakpoint_id", ""))
+		if err := requireDebuggerStringParam("debug_remove_breakpoint", "breakpoint_id", id); err != nil {
+			return errorResult(err), nil
+		}
+		bp, err := sessions.removeBreakpoint(ctx, req.GetString(paramUser, ""), id)
+		if err != nil {
+			return errorResult(err), nil
+		}
 		return mcp.NewToolResultJSON(BreakpointRemoveResult{
-			Removed: false,
-			Message: "Breakpoint removal not yet implemented — breakpoints are cleared on debug_stop",
+			Removed: true,
+			Message: fmt.Sprintf("removed %s (%s line %d, scope %s)", bp.ID, bp.ObjectURI, bp.Line, bp.Scope),
 		})
 	})
 }
@@ -312,10 +323,13 @@ func registerDebugInspectTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Execute a debug step action while debug_run's state is attached. stepContinue resumes the suspended debuggee; "+
-			"terminateDebuggee kills the running debuggee process outright, while detachDebugger stops debugging and lets the debuggee "+
-			"continue running to completion normally. If a step action runs the debuggee past its last statement, the result is "+
-			"reported as debuggee_ended=true instead of an error — a normal, successful outcome."),
+		mcp.WithDescription("Execute a debug step action while debug_run's state is attached, and return the run's status and the new position. "+
+			"stepInto, stepOver, stepReturn and stepContinue (to a next breakpoint) halt again: status stays attached with the new position. "+
+			"End a session with detachDebugger: the debuggee runs on to its end and the run ends with end_reason detached; "+
+			"terminateDebuggee kills it (end_reason terminated). Use detachDebugger, never stepContinue, to finish: past the end of a run "+
+			"stepContinue answers SAP_BASIS 750 with AdiFailed / CX_TPDAPI_DEBUGGEE_ENDED and SAP_BASIS 816 with 400 ExceptionInvalidData; "+
+			"both are reported as debuggee_ended=true (end_reason completed) when no debuggee remains, and after a SAP GUI trigger "+
+			"stepContinue can hang. A failed step leaves the debuggee attached: detach it, or debug_stop."),
 		mcp.WithString("action",
 			mcp.Required(),
 			mcp.Description("Step action: stepInto, stepOver, stepReturn, stepContinue, terminateDebuggee, or detachDebugger"),
@@ -335,10 +349,7 @@ func registerDebugInspectTools(s toolAdder, sessions *debugSessions) {
 		if err != nil {
 			return errorResult(err), nil
 		}
-		if out.state.Status == runEnded && out.state.EndReason == endCompleted {
-			return mcp.NewToolResultJSON(DebugStepResult{DebuggeeEnded: true})
-		}
-		return mcp.NewToolResultJSON(buildDebugStepResult(out.raw))
+		return mcp.NewToolResultJSON(stepResultFromState(out.state))
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_variable",
@@ -347,22 +358,31 @@ func registerDebugInspectTools(s toolAdder, sessions *debugSessions) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Read a variable value from the halted debuggee."),
-		mcp.WithString("variable_name", mcp.Required(), mcp.Description("ABAP variable name, e.g. LV_RESULT")),
+		mcp.WithDescription("Read a variable of the halted debuggee (debug_run status attached). This is for debugging a halted program, "+
+			"not for retrieving data. Scalars return their value. expand: true returns the components of a structure, the attributes "+
+			"of an object reference, or the dereferenced value of a data reference (REF->*). offset/limit return rows of an internal "+
+			"table: offset is 1-based (default 1), limit defaults to 20, with a hard cap of 100 rows per call."),
+		mcp.WithString("variable_name", mcp.Required(), mcp.Description("ABAP variable name, e.g. LV_RESULT, LS_ROW-TEXT, LO_OBJ->ATTR")),
+		mcp.WithBoolean("expand", mcp.Description("Return the children of a structure, object reference or data reference")),
+		mcp.WithNumber("offset", mcp.Description("Internal tables: first row, 1-based (default 1)")),
+		mcp.WithNumber("limit", mcp.Description("Internal tables: number of rows (default 20, max 100)")),
 		withDebugUser(),
 		mcp.WithOutputSchema[DebugVariableResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		name := req.GetString("variable_name", "")
-		if err := requireDebuggerStringParam("debug_get_variable", "variable_name", name); err != nil {
+		q, err := parseVariableQuery(req.GetArguments())
+		if err != nil {
 			return errorResult(err), nil
 		}
-		data, errRes := sessions.call(req.GetString(paramUser, ""), func(d *adt.DebugSession) ([]byte, error) {
-			return d.GetVariable(ctx, name)
+		var res DebugVariableResult
+		_, errRes := sessions.call(req.GetString(paramUser, ""), func(d *adt.DebugSession) ([]byte, error) {
+			var err error
+			res, err = readVariable(ctx, d, q)
+			return nil, err
 		})
 		if errRes != nil {
 			return errRes, nil
 		}
-		return mcp.NewToolResultJSON(buildDebugVariableResult(name, data))
+		return mcp.NewToolResultJSON(res)
 	})
 
 	s.AddTool(mcp.NewTool("debug_get_stack",

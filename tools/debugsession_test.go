@@ -3,10 +3,12 @@ package tools_test
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -56,26 +58,32 @@ type fakeDebugBackend struct {
 	released    chan struct{}
 	releaseOnce sync.Once
 
-	failStop     bool
-	listenerErr  *fakeError
-	attachGate   chan struct{}
-	attachErr    *fakeError
-	stackXML     string
-	stackGate    chan struct{}
-	sessionsBody string
-	sessionsErr  *fakeError // getDebuggeeSessions answers this error (nil: sessionsBody)
-	stepErr      map[string]fakeError
-	unitHit      string
-	unitErr      *fakeError
-	rejectBP     map[string][2]string // URI substring → errorKind, errorMessage
-	existingBP   map[string]bool      // URI substring → answered with errorKind "existing"
-	bpDeleteErr  *fakeError
-	okCodeStatus int             // status of the OK-code program lookup; 0 means 200
-	hangCookie   string          // requests with this session cookie hang until their context ends
-	hang         map[string]bool // "METHOD path" → hangs until the request's context ends
-	bpSetGate    chan struct{}   // a breakpoint POST waits for this gate (nil: no wait)
-	detachGate   chan struct{}   // a detachDebugger request waits for this gate (nil: no wait)
-	bpSetDone    func()          // called once the breakpoint POST's body was read to its end (nil: none)
+	failStop          bool
+	listenerErr       *fakeError
+	attachGate        chan struct{}
+	attachErr         *fakeError
+	stackXML          string
+	stackGate         chan struct{}
+	sessionsBody      string
+	sessionsErr       *fakeError // getDebuggeeSessions answers this error (nil: sessionsBody)
+	stepErr           map[string]fakeError
+	unitHit           string
+	unitErr           *fakeError
+	rejectBP          map[string][2]string // URI substring → errorKind, errorMessage
+	existingBP        map[string]bool      // URI substring → answered with errorKind "existing"
+	bpDeleteErr       *fakeError
+	bpDeleteID        string               // when set, only the DELETE of this breakpoint ID fails with bpDeleteErr
+	okCodeStatus      int                  // status of the OK-code program lookup; 0 means 200
+	hangCookie        string               // requests with this session cookie hang until their context ends
+	hang              map[string]bool      // "METHOD path" → hangs until the request's context ends
+	vars              map[string]fakeVar   // variable ID -> metadata and value
+	children          map[string][]fakeVar // parent ID -> its children
+	bpPostErr         []*fakeError         // answers of the next breakpoint POSTs, in order; nil = normal
+	bpSetGate         chan struct{}        // a breakpoint POST waits for this gate (nil: no wait)
+	detachGate        chan struct{}        // a detachDebugger request waits for this gate (nil: no wait)
+	serializeSessions bool                 // like SAP: a request on a session whose listener long poll is open hangs until its context ends
+	listening         map[string]bool      // session cookie -> a listener long poll is open on it
+	bpSetDone         func()               // called once a breakpoint POST's answer body was read to its end (nil: none)
 }
 
 // onEOFReader calls fn once, when the wrapped body is read to its end.
@@ -101,6 +109,7 @@ const stepDetach = "detachDebugger"
 const (
 	testDebuggeeID   = "DBG1"
 	runEndedStatus   = "ended"
+	endDetachedStr   = "detached"
 	triggerDoneState = "done"
 )
 
@@ -150,23 +159,25 @@ func (f *fakeDebugBackend) RoundTrip(req *http.Request) (*http.Response, error) 
 	if err := req.Context().Err(); err != nil {
 		return nil, err
 	}
+	return f.answer(req)
+}
+
+func (f *fakeDebugBackend) answer(req *http.Request) (*http.Response, error) {
 	var body string
 	if req.Body != nil {
 		b, _ := io.ReadAll(req.Body)
 		body = string(b)
 	}
-	cookie := ""
-	if c, err := req.Cookie("sid"); err == nil {
-		cookie = c.Value
-	}
+	cookie := sessionCookie(req)
 	f.mu.Lock()
 	f.reqs = append(f.reqs, recordedRequest{
 		host: req.URL.Host, method: req.Method, path: req.URL.Path, query: req.URL.RawQuery, body: body, cookie: cookie,
 		stateful: req.Header.Get("X-sap-adt-sessiontype") == "stateful",
 	})
 	hang := (f.hangCookie != "" && cookie == f.hangCookie) || f.hang[req.Method+" "+req.URL.Path]
+	busy := f.sessionBusyLocked(req, cookie)
 	f.mu.Unlock()
-	if hang {
+	if hang || busy {
 		<-req.Context().Done()
 		return nil, req.Context().Err()
 	}
@@ -209,6 +220,9 @@ func (f *fakeDebugBackend) RoundTrip(req *http.Request) (*http.Response, error) 
 	case strings.HasPrefix(p, breakpointsPath+"/") && req.Method == http.MethodDelete:
 		f.mu.Lock()
 		e := f.bpDeleteErr
+		if f.bpDeleteID != "" && !strings.HasSuffix(p, "/"+f.bpDeleteID) {
+			e = nil
+		}
 		f.mu.Unlock()
 		if e != nil {
 			return answerError(resp, *e), nil
@@ -233,6 +247,22 @@ func (f *fakeDebugBackend) RoundTrip(req *http.Request) (*http.Response, error) 
 	return resp, nil
 }
 
+// sessionBusyLocked: with serializeSessions, any request but a listener POST
+// on a session with an open long poll waits (SAP serialises per session).
+func sessionCookie(req *http.Request) string {
+	if c, err := req.Cookie("sid"); err == nil {
+		return c.Value
+	}
+	return ""
+}
+
+func (f *fakeDebugBackend) sessionBusyLocked(req *http.Request, cookie string) bool {
+	if !f.serializeSessions || !f.listening[cookie] {
+		return false
+	}
+	return req.URL.Path != listenersPath || req.Method != http.MethodPost
+}
+
 func (f *fakeDebugBackend) listen(req *http.Request, resp *http.Response) (*http.Response, error) {
 	f.mu.Lock()
 	if f.listenerErr != nil {
@@ -244,7 +274,17 @@ func (f *fakeDebugBackend) listen(req *http.Request, resp *http.Response) (*http
 		f.listenStop = make(chan struct{})
 	}
 	stop := f.listenStop
+	cookie := sessionCookie(req)
+	if f.listening == nil {
+		f.listening = map[string]bool{}
+	}
+	f.listening[cookie] = true
 	f.mu.Unlock()
+	defer func() {
+		f.mu.Lock()
+		delete(f.listening, cookie)
+		f.mu.Unlock()
+	}()
 	select {
 	case id := <-f.hits:
 		if id != "" {
@@ -265,6 +305,17 @@ var bpEntry = regexp.MustCompile(`<breakpoint kind="line" clientId="(\d+)" adtco
 func (f *fakeDebugBackend) setBreakpoints(resp *http.Response, body string) *http.Response {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if len(f.bpPostErr) > 0 {
+		e := f.bpPostErr[0]
+		f.bpPostErr = f.bpPostErr[1:]
+		if e != nil {
+			resp = answerError(resp, *e)
+			if f.bpSetDone != nil {
+				resp.Body = io.NopCloser(&onEOFReader{Reader: resp.Body, fn: f.bpSetDone})
+			}
+			return resp
+		}
+	}
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="utf-8"?><dbg:breakpoints xmlns:dbg="http://www.sap.com/adt/debugger">`)
 	for _, m := range bpEntry.FindAllStringSubmatch(body, -1) {
@@ -359,8 +410,15 @@ func (f *fakeDebugBackend) debugger(req *http.Request, resp *http.Response, body
 		}
 		resp.Header.Set("Content-Type", "application/xml")
 		resp.Body = textBody(`<dbg:step xmlns:dbg="http://www.sap.com/adt/debugger"/>`)
+	case "getVariableValue":
+		f.mu.Lock()
+		v := f.vars[req.URL.Query().Get("variableName")]
+		f.mu.Unlock()
+		resp.Header.Set("Content-Type", "text/plain")
+		resp.Body = textBody(v.value)
+	case "getVariables", "getChildVariables", "getVariableData":
+		return f.variables(resp, method, body), nil
 	}
-	_ = body // read by the variable methods added in Task 12
 	return resp, nil
 }
 
@@ -666,8 +724,8 @@ func TestDebugStop_FailedStopStillDropsSession(t *testing.T) {
 
 	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
 	backend.set(func(f *fakeDebugBackend) { f.failStop = true })
-	if res := callTool(t, s, "debug_stop", map[string]interface{}{}); !res.IsError {
-		t.Fatalf("debug_stop must report the failed stop, got %s", debugResultText(res))
+	if res := callTool(t, s, "debug_stop", map[string]interface{}{}); res.IsError || !strings.Contains(debugResultText(res), `"listener_error"`) {
+		t.Fatalf("debug_stop must report the failed stop in listener_error, got %s", debugResultText(res))
 	}
 	backend.set(func(f *fakeDebugBackend) { f.failStop = false })
 	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
@@ -676,4 +734,71 @@ func TestDebugStop_FailedStopStillDropsSession(t *testing.T) {
 	if len(bps) != 2 || bps[0].cookie == bps[1].cookie {
 		t.Errorf("debug_run after a failed debug_stop must run on a new session; breakpoint cookies: %+v", bps)
 	}
+}
+
+// fakeVar is one debuggee variable of the fake.
+type fakeVar struct {
+	id, name, meta, value string
+	lines                 int
+}
+
+var (
+	asxIDs     = regexp.MustCompile(`<ID>([^<]*)</ID>`)
+	asxParents = regexp.MustCompile(`<PARENT_ID>([^<]*)</PARENT_ID>`)
+	dataTable  = regexp.MustCompile(`<table name="([^"]*)" offset="(\d+)" length="(\d+)"`)
+)
+
+const (
+	asxHead = `<?xml version="1.0" encoding="utf-8"?><asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0"><asx:values><DATA>`
+	asxTail = `</DATA></asx:values></asx:abap>`
+)
+
+func asxVar(v fakeVar) string {
+	return fmt.Sprintf(`<STPDA_ADT_VARIABLE><ID>%s</ID><NAME>%s</NAME><META_TYPE>%s</META_TYPE><VALUE>%s</VALUE><TABLE_LINES>%d</TABLE_LINES></STPDA_ADT_VARIABLE>`,
+		html.EscapeString(v.id), html.EscapeString(v.name), v.meta, html.EscapeString(v.value), v.lines)
+}
+
+// variables answers getVariables, getChildVariables and getVariableData. The
+// request bodies are XML, so IDs such as REF->* arrive escaped.
+func (f *fakeDebugBackend) variables(resp *http.Response, method, body string) *http.Response {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var b strings.Builder
+	switch method {
+	case "getVariables":
+		b.WriteString(asxHead)
+		for _, m := range asxIDs.FindAllStringSubmatch(body, -1) {
+			if v, ok := f.vars[html.UnescapeString(m[1])]; ok {
+				b.WriteString(asxVar(v))
+			}
+		}
+		b.WriteString(asxTail)
+	case "getChildVariables":
+		var links strings.Builder
+		b.WriteString(asxHead + "<VARIABLES>")
+		for _, m := range asxParents.FindAllStringSubmatch(body, -1) {
+			parent := html.UnescapeString(m[1])
+			for _, c := range f.children[parent] {
+				b.WriteString(asxVar(c))
+				fmt.Fprintf(&links, `<STPDA_ADT_VARIABLE_HIERARCHY><PARENT_ID>%s</PARENT_ID><CHILD_ID>%s</CHILD_ID><CHILD_NAME>%s</CHILD_NAME></STPDA_ADT_VARIABLE_HIERARCHY>`,
+					html.EscapeString(parent), html.EscapeString(c.id), html.EscapeString(c.name))
+			}
+		}
+		b.WriteString("</VARIABLES><HIERARCHIES>" + links.String() + "</HIERARCHIES>" + asxTail)
+	case "getVariableData":
+		m := dataTable.FindStringSubmatch(body)
+		if m == nil {
+			break
+		}
+		offset, _ := strconv.Atoi(m[2])
+		length, _ := strconv.Atoi(m[3])
+		fmt.Fprintf(&b, `<dbg:data xmlns:dbg="http://www.sap.com/adt/debugger"><table name="%s" totalLines="%d">`, m[1], f.vars[m[1]].lines)
+		for i := offset; i < offset+length; i++ {
+			fmt.Fprintf(&b, `<tableLine index="%d"><field path="TEXT"><value>row %d</value></field></tableLine>`, i, i)
+		}
+		b.WriteString(`</table></dbg:data>`)
+	}
+	resp.Header.Set("Content-Type", "application/vnd.sap.as+xml")
+	resp.Body = textBody(b.String())
+	return resp
 }

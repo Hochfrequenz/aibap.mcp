@@ -1,5 +1,7 @@
 # Debugger Investigation Notes (2026-03-25)
 
+> **Status (2026-10):** these are the notes of March 2026. Two of their conclusions no longer hold. Debugging works over plain ADT HTTP, without RFC: breakpoints, listener, attach, stack, variables and stepping were verified on SAP_BASIS 750 and 816 (#435, #513, #558). And `syncMode="full"` is ignored by SAP: sending the complete breakpoint list in one request is what behaves the same on both releases (Hochfrequenz/adtler#200). The tools that implement the working flow are `debug_run` and `debug_wait` (#558).
+
 ## What works (verified against SAP ERP 6.0 EHP8, SAP_BASIS 750)
 
 - **Setting breakpoints**: POST `/debugger/breakpoints` with `syncMode="full"` persists breakpoints in SAP shared memory

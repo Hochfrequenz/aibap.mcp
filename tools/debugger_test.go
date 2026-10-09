@@ -75,10 +75,6 @@ func TestDebugSessionsResultMarshalsToObject(t *testing.T) {
 // unit tests safely can: the declared tool schema, without invoking a
 // handler.
 func TestDebugStepGetVariableGetStackSetWatchpointBuildersHandleNonJSONBody(t *testing.T) {
-	stepXML := `<PROGATTR><DEBUGGEE_STATE/></PROGATTR>`
-	if got := buildDebugStepResult([]byte(stepXML)); got.Raw != stepXML {
-		t.Errorf("buildDebugStepResult: got %+v, want Raw=%q", got, stepXML)
-	}
 
 	if got := buildDebugVariableResult("LV_FLAG", []byte("X")); got.VariableName != "LV_FLAG" || got.Value != "X" {
 		t.Errorf("buildDebugVariableResult: got %+v, want {VariableName:LV_FLAG Value:X}", got)
@@ -141,8 +137,8 @@ func TestStepResultForError(t *testing.T) {
 // the handler-wiring class of regression #501 was.
 func TestDebugStepGetVariableGetStackSetWatchpointResultsMarshalToObject(t *testing.T) {
 	results := []any{
-		buildDebugStepResult([]byte(`<x/>`)),
-		DebugStepResult{DebuggeeEnded: true},
+		stepResultFromState(DebugRunState{Version: 3, Status: runAttached, Position: &DebugPosition{Program: "ZPROG", Line: 3}}),
+		stepResultFromState(DebugRunState{Version: 4, Status: runEnded, EndReason: endCompleted}),
 		buildDebugVariableResult("LV_FLAG", []byte("X")),
 		buildDebugStackResult([]byte(`<dbg:stack/>`)),
 		buildDebugWatchpointResult([]byte(`<watchpoint/>`)),
@@ -159,5 +155,15 @@ func TestDebugStepGetVariableGetStackSetWatchpointResultsMarshalToObject(t *test
 		if !strings.HasPrefix(string(out), "{") {
 			t.Errorf("%T: StructuredContent is not a JSON object: %s", r, out)
 		}
+	}
+}
+
+func TestStepResultFromState(t *testing.T) {
+	got := stepResultFromState(DebugRunState{Version: 7, Status: runEnded, EndReason: endCompleted, Hint: "h"})
+	if !got.DebuggeeEnded || got.Version != 7 || got.Status != runEnded || got.Hint != "h" {
+		t.Errorf("completed: %+v", got)
+	}
+	if got := stepResultFromState(DebugRunState{Status: runEnded, EndReason: endDetached}); got.DebuggeeEnded {
+		t.Errorf("a detach is not the debuggee running to its end: %+v", got)
 	}
 }

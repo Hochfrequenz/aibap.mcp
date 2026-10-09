@@ -1,11 +1,15 @@
 package tools_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/Hochfrequenz/aibap.mcp/tools"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 // Run statuses this file compares against.
@@ -100,8 +104,8 @@ func TestDebugStop_RespectsTheCleanupBudget(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Errorf("cleanup exceeded its budget: %v", elapsed)
 	}
-	if !res.IsError || !strings.Contains(debugResultText(res), "stopping the listener") {
-		t.Errorf("the hanging listener stop must be reported: %s", debugResultText(res))
+	if res.IsError || !strings.Contains(debugResultText(res), `"listener_error"`) {
+		t.Errorf("the hanging listener stop must be reported in listener_error: %s", debugResultText(res))
 	}
 	backend.set(func(f *fakeDebugBackend) { f.hang = nil })
 }
@@ -168,7 +172,7 @@ func TestDebugRun_ConcurrentCallsDoNotInterleave(t *testing.T) {
 	}
 
 	st := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{}))
-	if len(st.Breakpoints) != 1 || st.Breakpoints[0].ObjectURI != otherURI || st.Breakpoints[0].ID != "BP2" || st.Status != runListeningStatus {
+	if len(st.Breakpoints) != 1 || st.Breakpoints[0].ObjectURI != otherURI || st.Breakpoints[0].ID != secondBreakpointID || st.Status != runListeningStatus {
 		t.Errorf("the surviving run must be the second one, with only its breakpoint: %+v", st)
 	}
 }
@@ -192,8 +196,8 @@ func TestDebugStop_WedgedAttachedSessionIsBoundedByTheBudget(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Errorf("debug_stop took %v with a wedged attached debug session", elapsed)
 	}
-	if !res.IsError || !strings.Contains(debugResultText(res), "detaching the debugger") {
-		t.Errorf("the hanging detach must be reported: %s", debugResultText(res))
+	if res.IsError || !strings.Contains(debugResultText(res), `"detach_error"`) {
+		t.Errorf("the hanging detach must be reported in detach_error: %s", debugResultText(res))
 	}
 	stop := backend.requests(http.MethodDelete, listenersPath)
 	del := backend.requests(http.MethodDelete, breakpointsPath+"/BP1")
@@ -263,4 +267,39 @@ func TestDebugRun_LateDetachFinishesBeforeTheNextRunStarts(t *testing.T) {
 		}
 	}
 	backend.mu.Unlock()
+}
+
+func stopResult(t *testing.T, s *server.MCPServer) tools.DebugStopResult {
+	t.Helper()
+	res := callTool(t, s, "debug_stop", map[string]interface{}{})
+	if res.IsError {
+		t.Fatalf("debug_stop: %s", debugResultText(res))
+	}
+	var out tools.DebugStopResult
+	if err := json.Unmarshal([]byte(debugResultText(res)), &out); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestDebugStop_ReportsRemovedBreakpoints(t *testing.T) {
+	s, _, _ := newDebugServer(t)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("", progURI, otherURI)))
+	out := stopResult(t, s)
+	if !out.Stopped || len(out.RemovedBreakpoints) != 2 || len(out.NotRemoved) != 0 || out.ListenerError != "" || out.DetachError != "" {
+		t.Errorf("got %+v", out)
+	}
+}
+
+func TestDebugStop_ReportsWhatItCouldNotRemove(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	runState(t, callTool(t, s, "debug_run", manualRunArgs("")))
+	backend.set(func(f *fakeDebugBackend) {
+		f.bpDeleteErr = &fakeError{status: http.StatusInternalServerError, typ: "ExceptionResourceFailure"}
+	})
+	out := stopResult(t, s)
+	if len(out.NotRemoved) != 1 || out.NotRemoved[0].ID != firstBreakpointID || out.NotRemoved[0].Error == "" || len(out.RemovedBreakpoints) != 0 {
+		t.Errorf("got %+v", out)
+	}
+	backend.set(func(f *fakeDebugBackend) { f.bpDeleteErr = nil })
 }

@@ -31,7 +31,7 @@ func TestGUIInstructionsFollowOKCodeAvailability(t *testing.T) {
 		t.Errorf("available: %q", ok.Steps[0])
 	}
 	missing := guiInstructions("ALICE", report, okCodeMissing)
-	if !strings.Contains(missing.Steps[0], "SADT_START_TCODE") || !strings.Contains(missing.Steps[0], "D_AIE_TCODE = SE38") || strings.Contains(missing.Steps[0], "/H_REACTIVATE") {
+	if !strings.Contains(missing.Steps[0], "SADT_START_TCODE") || !strings.Contains(missing.Steps[0], "D_AIE_TCODE") || strings.Contains(missing.Steps[0], "/H_REACTIVATE") {
 		t.Errorf("missing: %q", missing.Steps[0])
 	}
 	unknown := guiInstructions("ALICE", report, okCodeUnknown)
@@ -44,26 +44,53 @@ func TestGUIInstructionsFollowOKCodeAvailability(t *testing.T) {
 	if last := ok.Steps[len(ok.Steps)-1]; !strings.Contains(last, "detachDebugger") || !strings.Contains(last, "never stepContinue") {
 		t.Errorf("last step must end with detachDebugger: %q", last)
 	}
-	if strings.Contains(strings.Join(ok.Notes, " "), "Untested") {
-		t.Error("the report path is tested live; no untested note")
+	if !strings.Contains(ok.Steps[1], "/nSE38") {
+		t.Errorf("after the OK code the person opens the transaction: %q", ok.Steps[1])
 	}
-	for _, typ := range []string{"transaction", "function_module", "class_method"} {
+	if !strings.Contains(strings.Join(ok.Notes, " "), "stays busy") {
+		t.Errorf("notes must say the window stays busy while attached: %v", ok.Notes)
+	}
+	for _, s := range []string{"/nSADT_START_TCODE", "D_IDE_USER", "ALICE", "required"} {
+		if !strings.Contains(missing.Steps[0], s) {
+			t.Errorf("missing: step 0 lacks %q: %q", s, missing.Steps[0])
+		}
+	}
+	if strings.Contains(missing.Steps[0], "D_REQUEST_USER =") {
+		t.Errorf("the request user is not required (live: transaction + IDE user suffice): %q", missing.Steps[0])
+	}
+	if strings.Contains(missing.Steps[1], "/n") || !strings.Contains(missing.Steps[1], "SADT_START_TCODE opened") {
+		t.Errorf("SADT_START_TCODE opens the transaction itself; no /n: %q", missing.Steps[1])
+	}
+}
+
+func TestGUIInstructionsPerTarget(t *testing.T) {
+	for _, typ := range []string{"report", "transaction", "function_module", "class_method"} {
 		name := "ZT"
 		if typ == "class_method" {
 			name = "zcl_x=>run"
 		}
 		in := guiInstructions("ALICE", DebugTarget{Type: typ, Name: name}, okCodeAvailable)
-		if !strings.Contains(strings.Join(in.Notes, " "), "Untested") {
-			t.Errorf("%s: missing untested note: %v", typ, in.Notes)
+		notes := strings.Join(in.Notes, " ")
+		if strings.Contains(notes, "Untested") {
+			t.Errorf("%s: every target is tested live; no untested note: %v", typ, in.Notes)
+		}
+		wantUpper := typ == "function_module" || typ == "class_method"
+		if got := strings.Contains(notes, "upper case"); got != wantUpper {
+			t.Errorf("%s: upper case note = %v, want %v: %v", typ, got, wantUpper, in.Notes)
 		}
 	}
 	cm := guiInstructions("ALICE", DebugTarget{Type: "class_method", Name: "zcl_x=>run"}, okCodeMissing)
-	if !strings.Contains(cm.Steps[0], "D_AIE_TCODE = SE24") || !strings.Contains(cm.Steps[1], "ZCL_X") || !strings.Contains(cm.Steps[1], "RUN") {
+	if !strings.Contains(cm.Steps[0], "D_AIE_TCODE") || !strings.Contains(cm.Steps[0], "SE24") ||
+		!strings.Contains(cm.Steps[1], "ZCL_X") || !strings.Contains(cm.Steps[1], "Execute Method") {
 		t.Errorf("class method: %v", cm.Steps)
 	}
 	tx := guiInstructions("ALICE", DebugTarget{Type: "transaction", Name: "zt01"}, okCodeMissing)
-	if !strings.Contains(tx.Steps[0], "D_AIE_TCODE = ZT01") || !strings.Contains(tx.Steps[1], "/nZT01") {
+	if !strings.Contains(tx.Steps[0], "ZT01") || strings.Contains(tx.Steps[1], "/nZT01") {
 		t.Errorf("transaction: %v", tx.Steps)
+	}
+	un := guiInstructions("ALICE", DebugTarget{Type: "transaction", Name: "zt01"}, okCodeUnknown)
+	if !strings.Contains(un.Steps[1], "/nZT01") || !strings.Contains(un.Steps[1], "SADT_START_TCODE opened") {
+		t.Errorf("unknown: the step must cover both paths: %q", un.Steps[1])
 	}
 }
 

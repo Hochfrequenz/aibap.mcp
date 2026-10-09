@@ -35,6 +35,19 @@ func TestDebugWait_RearmAfterADetachedRun(t *testing.T) {
 	}
 }
 
+// SAP drops debugger-scope breakpoints with the attachment (seen live on
+// SAP_BASIS 750 and 816), so the next window must not list them.
+func TestDebugWait_RearmForgetsDebuggerScopeBreakpoints(t *testing.T) {
+	s, _, backend := newDebugServer(t)
+	attachRun(t, s, backend)
+	runState(t, callTool(t, s, "debug_set_breakpoint", setBreakpointArgs(otherURI, 7)))
+	stepState(t, callTool(t, s, "debug_step", map[string]interface{}{"action": "detachDebugger"}))
+	re := runState(t, callTool(t, s, "debug_wait", map[string]interface{}{"rearm": true}))
+	if len(re.Breakpoints) != 1 || re.Breakpoints[0].Scope != "external" {
+		t.Errorf("after rearm only the external breakpoint may remain: %+v", re.Breakpoints)
+	}
+}
+
 func TestDebugWait_RearmRefused(t *testing.T) {
 	t.Run("unit tests", func(t *testing.T) {
 		s, _, _ := newDebugServer(t)

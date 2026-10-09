@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -374,14 +375,9 @@ func (m *debugSessions) launchRun(ctx context.Context, a debugRunArgs, user, hin
 		guiAvail = m.okCodes.lookup(ctx, key.system, m.objectInfoFor(key.system))
 	}
 
-	results, err := sess.SetBreakpoints(ctx, adt.BreakpointScopeExternal, a.breakpoints)
+	set, err := setExternal(ctx, sess, a.breakpoints)
 	if err != nil {
-		return nil, fmt.Errorf("debug_run: setting the breakpoints failed: %w", err)
-	}
-	set, err := checkBreakpointResults(a.breakpoints, results)
-	if err != nil {
-		removeSetBreakpoints(ctx, sess, set)
-		return nil, fmt.Errorf("debug_run: %w; the breakpoints that were set are removed again", err)
+		return nil, fmt.Errorf("debug_run: %w", err)
 	}
 
 	params := runParams{key: key, kind: a.kind, sess: sess, cleanupSess: cleanupSess, breakpoints: set, budget: a.timeout, hint: hint}
@@ -498,22 +494,6 @@ func removeSetBreakpoints(ctx context.Context, sess *adt.DebugSession, set []Deb
 	}
 }
 
-// setBreakpointWithoutRun is debug_set_breakpoint while no run is active.
-// During a run it is refused: one external request replaces the run's
-// breakpoints on SAP_BASIS 816 and would leave the stored IDs wrong.
-func (m *debugSessions) setBreakpointWithoutRun(ctx context.Context, user string, bp adt.LineBreakpoint) (*adt.BreakpointResult, error) {
-	m.startMu.Lock()
-	defer m.startMu.Unlock()
-	m.mu.Lock()
-	run := m.run
-	m.mu.Unlock()
-	if run != nil && run.active() {
-		return nil, errors.New("debug_set_breakpoint: a debug_run is active; pass every breakpoint to debug_run instead")
-	}
-	sess, _, _ := m.open(user)
-	return sess.SetBreakpoint(ctx, bp.ObjectURI, bp.Line, bp.ObjectType, bp.ObjectName)
-}
-
 // rearm starts the next listening window of run inside its remaining budget
 // (debug_wait rearm). Only for manual and gui runs, after a timeout or after
 // the debuggee has ended; a new unit-test run needs a new debug_run.
@@ -553,6 +533,15 @@ func (m *debugSessions) rearm(run *debugRun) error {
 		st.DebuggeeID = ""
 		st.Position = nil
 		st.Hint = ""
+		// SAP drops debugger-scope breakpoints with the attachment (seen live
+		// on SAP_BASIS 750 and 816), so they are not part of the next window.
+		ext := st.Breakpoints[:0:0]
+		for _, b := range st.Breakpoints {
+			if b.Scope == string(adt.BreakpointScopeExternal) {
+				ext = append(ext, b)
+			}
+		}
+		st.Breakpoints = ext
 	})
 	run.startWindowLocked()
 	return nil
@@ -564,7 +553,9 @@ func (m *debugSessions) shutdown(ctx context.Context) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		m.stop()
+		if err := m.stop().err(); err != nil {
+			slog.Warn("debug cleanup at shutdown was incomplete", "error", err)
+		}
 	}()
 	select {
 	case <-done:
