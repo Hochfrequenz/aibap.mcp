@@ -10,7 +10,12 @@ permissions:
 jobs:
   automerge:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    # adtler bumps are excluded: they must not merge before the linked issues'
+    # reproducers have run against a live system (CLAUDE.md, "Cross-Repo Issue
+    # Tracking"). adtler-bump-template.yml labels them for that instead (#548).
+    if: >
+      github.actor == 'dependabot[bot]' &&
+      !contains(github.event.pull_request.head.ref, 'adtler')
     env:
       PR_URL: ${{github.event.pull_request.html_url}}
       GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
