@@ -385,10 +385,15 @@ type UnitTestBatchEntry struct {
 }
 
 type UnitTestBatchResult struct {
-	TotalObjects int                  `json:"total_objects"`
-	TotalPassed  int                  `json:"total_passed"`
-	TotalFailed  int                  `json:"total_failed"`
-	Results      []UnitTestBatchEntry `json:"results"`
+	TotalObjects int `json:"total_objects"`
+	TotalPassed  int `json:"total_passed"`
+	TotalFailed  int `json:"total_failed"`
+	TotalErrors  int `json:"total_errors"`
+	// TotalWithAlerts counts the results whose TestResult carries at least one
+	// alert outside a test method — e.g. a test class skipped for its risk level,
+	// or a run ended by a runtime error. Their zero counts are not a pass (#491).
+	TotalWithAlerts int                  `json:"total_with_alerts"`
+	Results         []UnitTestBatchEntry `json:"results"`
 }
 
 type ObjectInfoBatchEntry struct {
