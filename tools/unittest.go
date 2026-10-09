@@ -20,7 +20,8 @@ func registerUnitTestTools(s toolAdder, client adt.QualityClient) {
 				"Pass a single URI string for one object: returns *TestResult with Passed/Failed/Errors counts, TestCases, Alerts and InactiveURIs. "+
 				"Pass an array of URIs to run tests concurrently (up to 10): returns {total_objects, total_passed, total_failed, total_errors, total_with_alerts, results:[{object_uri, test_result, error}]}. "+
 				"Zero counts are only a pass when Alerts is empty (batch: total_with_alerts is 0): "+
-				"SAP reports a test class skipped for its risk level (Kind \"warning\") or a run ended by a short dump (Kind \"runtimeAbortion\"/\"abortion\") as an alert, not as a failed test, so Failed can stay 0. "+
+				"SAP reports a test class skipped for its risk level (Kind \"warning\") only as an alert, and on some releases a run ended by a short dump (Kind \"runtimeAbortion\"/\"abortion\") as well, so Failed can stay 0. "+
+				"On some releases an object without test classes also carries an alert (Kind \"noTestClasses\"): zero tests is not a pass either. "+
 				"InactiveURIs, filled only when no test method ran, names inactive parts (e.g. the test-classes include) whose tests could not run.",
 		),
 		withStringOrArray(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
