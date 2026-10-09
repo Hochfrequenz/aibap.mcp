@@ -86,9 +86,15 @@ const MetaRequiresUserInteraction = "anthropic/requiresUserInteraction"
 //   - update_customizing — an entry with op "delete" removes a customizing
 //     row through SAP GUI automation. Customizing tables have no version
 //     database, so a removed row cannot be reconstructed from this server.
+//   - abapgit_pull — overwrites the current state of the repository objects
+//     on SAP with the Git state and deletes objects deleted in Git, so a wrong
+//     call destroys work the way a delete does (same argument as
+//     rollback_transport).
+//   - abapgit_push — publishes to an external Git host. A later commit can
+//     revert the content, but not the publication.
 //
-// The tools left out are left out on the merits, not by oversight. Eight tools
-// declare destructiveHint true and six of them are here, so a reader comparing
+// The tools left out are left out on the merits, not by oversight. Ten tools
+// declare destructiveHint true and eight of them are here, so a reader comparing
 // the two sets will find remove_from_transport and force_unlock missing and
 // deserves the reason. run_query and rename are listed too because they were
 // part of the elicitation-era guarded set:
@@ -118,6 +124,8 @@ var irreversibleTools = map[string]bool{
 	"rollback_transport": true,
 	"run_class":          true,
 	"update_customizing": true,
+	"abapgit_pull":       true,
+	"abapgit_push":       true,
 }
 
 // ParseConsentMode converts the --consent flag value to a ConsentMode. An empty

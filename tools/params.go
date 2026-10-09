@@ -57,3 +57,19 @@ func requireRawString(req mcp.CallToolRequest, name string) (string, *mcp.CallTo
 	}
 	return val, nil
 }
+
+// optionalBool reads an optional boolean parameter. A missing parameter
+// yields false. A present value that is not a JSON boolean yields a tool
+// error instead of silently falling back to false, which matters where
+// false is the unsafe default (for example dry_run on a push).
+func optionalBool(req mcp.CallToolRequest, name string) (bool, *mcp.CallToolResult) {
+	raw, ok := req.GetArguments()[name]
+	if !ok || raw == nil {
+		return false, nil
+	}
+	b, ok := raw.(bool)
+	if !ok {
+		return false, errorResult(fmt.Errorf("parameter %q must be a boolean (true or false), got %T", name, raw))
+	}
+	return b, nil
+}

@@ -221,7 +221,7 @@ BEST FOR:
 - DDIC lookups (get_object_info, get_ddic_info)%s
 
 APPROVAL:
-This server does not ask for confirmation itself. Approving a call is the MCP client's job, and what the client asks depends on its own permission settings. Six tools carry a marking that asks the client to require approval on every call, because nothing here can undo them: delete_object, delete_transport, release_transport, rollback_transport, run_class and update_customizing. The marking is a request, not a guarantee — whether a client honours it, and some do not, is outside this server's control. A call that never reaches SAP was refused by the client, not by SAP — repeating it unchanged will not help.
+This server does not ask for confirmation itself. Approving a call is the MCP client's job, and what the client asks depends on its own permission settings. Eight tools carry a marking that asks the client to require approval on every call, because nothing here can undo them: delete_object, delete_transport, release_transport, rollback_transport, run_class, update_customizing, abapgit_pull and abapgit_push. The marking is a request, not a guarantee — whether a client honours it, and some do not, is outside this server's control. A call that never reaches SAP was refused by the client, not by SAP — repeating it unchanged will not help.
 
 run_query is not part of that set. It rejects a missing or unrecognised 'purpose' locally, before reaching SAP; that is a scope check under the SAP API Policy below, not an approval step.
 
@@ -232,7 +232,7 @@ If SAP GUI MCP tools are available, prefer them for:
 - Complex GUI interactions (popups, drag-and-drop, tree navigation)
 - Transactions without ADT endpoints (SE21 on ECC, SM37, SLG1, ST22, SQVI)
 - Visual verification of screen state
-- abapGit operations via SAP GUI
+- abapGit operations when the companion Z_ABAPGIT_PULL_MCP_SHORTCUT (with its ADT endpoints) is not installed. If it is installed, abapGit list/pull/push are available through the abapgit_* tools; push also needs the per-user SM59 destination ZGIT_<SAP user>
 
 SAP API POLICY — MANDATORY:
 This server uses the SAP ADT API which is scoped to development tooling only.
