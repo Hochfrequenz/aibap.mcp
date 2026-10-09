@@ -48,9 +48,11 @@ func (f *fakeDebugBackend) RoundTrip(req *http.Request) (*http.Response, error) 
 	case failStop && req.Method == http.MethodDelete && req.URL.Path == listenersPath:
 		resp.StatusCode = http.StatusInternalServerError
 	case req.Method == http.MethodPost && req.URL.Path == "/sap/bc/adt/debugger/breakpoints":
+		// adtler matches results to requested breakpoints by clientId (the
+		// request index); SAP echoes it, and SetBreakpoint sends one breakpoint.
 		resp.Header.Set("Content-Type", "application/xml")
 		resp.Body = io.NopCloser(strings.NewReader(
-			`<?xml version="1.0" encoding="utf-8"?><dbg:breakpoints xmlns:dbg="http://www.sap.com/adt/debugger"><breakpoint kind="line" id="BP1"/></dbg:breakpoints>`))
+			`<?xml version="1.0" encoding="utf-8"?><dbg:breakpoints xmlns:dbg="http://www.sap.com/adt/debugger"><breakpoint kind="line" clientId="0" id="BP1"/></dbg:breakpoints>`))
 	}
 	// Everything else, including the listener POST, answers 200 with an empty
 	// body, which adtler reads as a listener timeout.
