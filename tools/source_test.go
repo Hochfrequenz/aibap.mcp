@@ -70,6 +70,9 @@ type mockClient struct {
 	searchMessagesFn       func(ctx context.Context, query string, maxResults int) ([]adt.MessageSearchResult, error)
 	setMessagesFn          func(ctx context.Context, name, etag string, messages []adt.Message) error
 	navigateToDefinitionFn func(ctx context.Context, uri, source string) (string, error)
+	listAbapGitReposFn     func(ctx context.Context) (*adt.AbapGitRepoList, error)
+	pullAbapGitRepoFn      func(ctx context.Context, req adt.AbapGitPullRequest) (*adt.AbapGitPullResult, error)
+	pushAbapGitRepoFn      func(ctx context.Context, req adt.AbapGitPushRequest) (*adt.AbapGitPushResult, error)
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -269,6 +272,24 @@ func (m *mockClient) GetCompletions(ctx context.Context, uri, source string, lin
 		return m.getCompletionsFn(ctx, uri, source, line, column)
 	}
 	return nil, nil
+}
+func (m *mockClient) ListAbapGitRepos(ctx context.Context) (*adt.AbapGitRepoList, error) {
+	if m.listAbapGitReposFn != nil {
+		return m.listAbapGitReposFn(ctx)
+	}
+	return &adt.AbapGitRepoList{Repos: []adt.AbapGitRepo{}}, nil
+}
+func (m *mockClient) PullAbapGitRepo(ctx context.Context, req adt.AbapGitPullRequest) (*adt.AbapGitPullResult, error) {
+	if m.pullAbapGitRepoFn != nil {
+		return m.pullAbapGitRepoFn(ctx, req)
+	}
+	return &adt.AbapGitPullResult{Status: adt.AbapGitStatusPulled, ConfirmationsRequired: []adt.AbapGitConfirmationRequired{}, Log: []adt.AbapGitLogEntry{}}, nil
+}
+func (m *mockClient) PushAbapGitRepo(ctx context.Context, req adt.AbapGitPushRequest) (*adt.AbapGitPushResult, error) {
+	if m.pushAbapGitRepoFn != nil {
+		return m.pushAbapGitRepoFn(ctx, req)
+	}
+	return &adt.AbapGitPushResult{Status: adt.AbapGitStatusDryRun, Files: []adt.AbapGitPushFile{}}, nil
 }
 func (m *mockClient) ExportPackage(ctx context.Context, packageName string) ([]byte, error) {
 	return nil, nil
