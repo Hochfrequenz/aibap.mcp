@@ -137,8 +137,8 @@ first enables the session for ADT external debugging, then starts the program
 there).
 
 - **SAP_BASIS 816:** the OK code `/H_REACTIVATE_EXTD_DBG KIND=USER USER=<user>`
-  in the command field. The status bar shows message SY628 (German logon:
-  "Debugger-Aktivierung mit externer IDE neu synchronisiert."). Then
+  in the command field. The status bar shows message SY628, "Debugger
+  activation with external IDE was resynchronized". Then
   `/n<transaction>` in the same window.
 - **SAP_BASIS 750:** the OK code is not available there. Transaction
   `SADT_START_TCODE` instead, with **both** the transaction field
