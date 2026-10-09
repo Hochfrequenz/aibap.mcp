@@ -43,9 +43,14 @@ var AllGroups = []string{
 //
 // "export" was originally in this map alongside "debug" (#230). Removed in
 // #303 because the export tools (export_package, export_packages,
-// export_customizing) are read-only and production-ready — hiding them
+// export_customizing) were read-only and production-ready — hiding them
 // just caused confusion when users tried to export packages and couldn't
-// find the tools.
+// find the tools. The group has since gained abapgit_pull and abapgit_push,
+// which write to the SAP system and to a Git remote. They stay in the
+// default-on group because every call needs explicit consent (see
+// consent.go) and abapgit_push supports dry_run; this is no longer a
+// read-only group, so do not use "read-only" as an argument for or against
+// its default.
 //
 // "debug" stays off because debugger tools (breakpoints, stepping, variable
 // inspection) can interfere with other active debugger sessions on the same
@@ -142,11 +147,11 @@ type loggingServer struct {
 }
 
 // AddTool annotates the tool before registering it. Doing this here rather
-// than at the six affected registration sites keeps the annotated set in one
+// than at each affected registration site keeps the annotated set in one
 // place (tools.irreversibleTools).
 //
 // The trade-off is worth stating: it moves the "remember this tool" problem
-// from six call sites to one map that sits next to none of them, and a tool
+// from the individual call sites to one map that sits next to none of them, and a tool
 // renamed in its own file would silently drop out of the set. What prevents
 // that is TestStrictConsentAnnotatesTheIrreversibleTools, which pins the
 // annotated names from the wire — not the centralisation itself.
@@ -275,6 +280,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 		{"debug", func() { registerDebuggerTools(ls, client, selector, fallback, settings) }},
 		{"export", func() {
 			registerExportTools(ls, client)
+			registerAbapGitSyncTools(ls, client)
 			registerCustomizingTools(ls, client)
 			registerCustomizingWriteTools(ls, fallback)
 		}},
