@@ -206,7 +206,7 @@ const debugInstructions = `
 
 DEBUGGING:
 - debug_run sets the breakpoints and listens in the background; it does not wait for the hit. Then call debug_wait with since_version until status is attached. A debug_wait that times out does not stop the run.
-- trigger unit_tests: the server runs the ABAP Unit tests itself. trigger manual or gui: the state carries instructions; the run must be made as the user of debug_run before listening_until. For gui, pass the steps to the person in full and end your turn; call debug_wait once they have started the run.
+- trigger unit_tests: the server runs the ABAP Unit tests itself. trigger manual or gui: the state carries instructions; the run must be made as debug_run's user before listening_until. For gui, pass the steps to the person in full and end your turn; call debug_wait once they have started the run.
 - The breakpoint stops before its line executes: a variable assigned on that line is still initial until debug_step stepOver.
 - End the debuggee with debug_step detachDebugger, not stepContinue (stepContinue can hang after a SAP GUI run). Always finish with debug_stop.
 - Read the resource ` + tools.DebuggingGuideURI + ` for the procedures per trigger before the first debug_run.`

@@ -52,7 +52,7 @@ call blocks while it waits (#558).
 
 ## Corrections to the 2026-03 notes
 
-Earlier versions of this file stated three things that turned out wrong:
+Earlier versions of this file concluded three things that turned out wrong:
 
 - *"External breakpoints only trigger in HTTP/ICF sessions, not SAP GUI
   (message ED702)."* A SAP GUI session triggers them once it has been enabled

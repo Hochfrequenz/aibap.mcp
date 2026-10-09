@@ -56,8 +56,10 @@ process.
    activation of any other IDE for the same user. Do not debug the same user
    from Eclipse ADT and from this server at the same time.
 6. **Do not leave a debuggee halted.** A halted program holds a SAP work
-   process. After 10 minutes without a `debug_step`, `debug_get_stack`,
-   `debug_get_variable` or `debug_set_breakpoint` call (`debug_wait` does not
+   process. After 10 minutes without a call that needs the halted debuggee
+   (`debug_step`, `debug_get_stack`, `debug_get_variable`,
+   `debug_set_watchpoint`, `debug_set_breakpoint`, or `debug_remove_breakpoint`
+   of a debugger-scope breakpoint; `debug_wait` and `debug_get_sessions` do not
    count), the server detaches it (`end_reason: idle_detached`).
 
 ## Run states
@@ -99,7 +101,8 @@ executes: in a test method, or in code a test calls.
   finished, i.e. after the debuggee was detached.
 - If the tests finish without a hit, the run ends with `no_hit`.
 - If the test run itself fails, `trigger.state` is `failed` with
-  `trigger.error`, and the state carries `manual` instructions instead.
+  `trigger.error`. If the run is still listening, the state then carries
+  `manual` instructions, so the run can be started another way.
 
 ## Trigger `manual`: someone else starts the run
 
@@ -180,8 +183,8 @@ end of the run it fails on both releases (SAP_BASIS 816: 400
 `ExceptionInvalidData`; SAP_BASIS 750: `AdiFailed` /
 `CX_TPDAPI_DEBUGGEE_ENDED`). `debug_step` reports that as
 `debuggee_ended: true` with `end_reason: completed`, but after a SAP GUI
-trigger `stepContinue` hung instead (SAP_BASIS 816, one run). A failed step leaves the debuggee
-attached: detach it, or call `debug_stop`.
+trigger `stepContinue` hung instead (SAP_BASIS 816, one run). A failed step
+leaves the debuggee attached: detach it, or call `debug_stop`.
 
 ## Troubleshooting
 
