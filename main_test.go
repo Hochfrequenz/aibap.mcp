@@ -422,7 +422,7 @@ func TestServerInstructions_DebugLineIsConditional(t *testing.T) {
 
 	// The core debugging rules and the pointer to the guide resource travel
 	// with the group (#559): present only when the debug tools are.
-	for _, rule := range []string{"\n\nDEBUGGING:\n", tools.DebuggingGuideURI, "detachDebugger", "stepOver"} {
+	for _, rule := range []string{"\n\nDEBUGGING:\n", tools.DebuggingGuideURI, "debug_wait", "detachDebugger", "stepOver"} {
 		if !strings.Contains(withDebug, rule) {
 			t.Errorf("debug enabled: instructions should contain %q, got:\n%s", rule, withDebug)
 		}

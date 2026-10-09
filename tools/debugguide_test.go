@@ -55,10 +55,17 @@ func TestDebuggingGuideContent(t *testing.T) {
 		"SADT_START_TCODE",
 		"detachDebugger",
 		"stepOver",
-		"run_unit_tests",
+		"debug_wait",
+		"D_IDE_USER",
 	} {
 		if !strings.Contains(debuggingGuide, want) {
 			t.Errorf("debugging guide does not mention %q", want)
+		}
+	}
+	// Tools removed with the run model (#558) must not come back via the guide.
+	for _, gone := range []string{"debug_start", "debug_attach"} {
+		if strings.Contains(debuggingGuide, gone) {
+			t.Errorf("debugging guide mentions the removed tool %q", gone)
 		}
 	}
 }

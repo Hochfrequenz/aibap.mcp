@@ -11,8 +11,8 @@ import (
 // DebuggingGuideURI is the resource that tells a client how to get a program
 // to actually stop at a breakpoint: which triggers work, in which order, and
 // how to end a session. The debug_* tool descriptions only cover single steps;
-// combining them wrongly fails silently (the listener times out while the
-// program runs to completion). See #559.
+// combining them wrongly fails silently (the run times out while the program
+// runs to completion). See #559.
 const DebuggingGuideURI = "sap-adt://guides/debugging"
 
 // debuggingGuide is embedded so the guide is versioned with the tools it
@@ -33,7 +33,7 @@ type resourceAdder interface {
 func registerDebuggingGuide(s resourceAdder) {
 	s.AddResource(
 		mcp.NewResource(DebuggingGuideURI, "Debugging guide",
-			mcp.WithResourceDescription("How to trigger a breakpoint set with debug_start (ABAP Unit tests, SAP GUI), what does not trigger, and how to end a session. Read before the first debug_start."),
+			mcp.WithResourceDescription("How a debug run with debug_run and debug_wait works: the triggers (ABAP Unit tests, manual, SAP GUI), run states, breakpoints during a run, and how to end a session. Read before the first debug_run."),
 			mcp.WithMIMEType("text/markdown"),
 		),
 		func(context.Context, mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {

@@ -1,161 +1,195 @@
 # Debugging ABAP with this server
 
-The debug tools stop a running ABAP program at an external breakpoint and let
-you inspect and step through it. They do not start the program. Something else
-has to run it, at the right moment, as the right SAP user. This guide describes
-the triggers that are known to work and the ones that do not.
+The debug tools stop an ABAP run at a breakpoint and let you inspect and step
+through it. A debugging session is one **debug run**: `debug_run` sets the
+breakpoints, listens in the background for a run of one SAP user, and attaches
+to the first run that hits a breakpoint. The tool calls return at once, so the
+flow does not depend on the MCP client running tool calls in parallel.
 
-**How this was tested.** The procedures below were tested on SAP S/4HANA 2025
-on-premise (SAP_BASIS 816) and SAP ERP 6.0 EHP8 (SAP_BASIS 750), with the
-debug client of the library this server is built on (the same requests these
-tools send), in late September and early October 2026. They have **not yet
-been run end to end through an MCP client** with `debug_start` as the
-listener. Points tested on one system only, or derived from reading SAP
-source code, are marked as such.
+**How this was tested.** Every procedure below passed through an MCP client on
+SAP S/4HANA 2025 on-premise (SAP_BASIS 816) and SAP ERP 6.0 EHP8
+(SAP_BASIS 750) in October 2026, with throwaway objects (#558). Points that
+differ between the two releases are marked.
 
-## Rules that apply to every trigger
+## The flow
 
-1. **Start the listener first, then trigger, with a short pause.**
-   `debug_start` sets the breakpoint and then waits (up to `timeout_seconds`,
-   default 60) for a program to hit it. The program has to start while
-   `debug_start` is still waiting. A run that starts after `debug_start` has
-   returned is never caught. The tests started the trigger about 4 seconds
-   after the listener; the activation reaches the server asynchronously, so a
-   trigger fired at the very same instant may be missed.
-2. **Same SAP user.** The program must run under the SAP user passed as `user`
-   to `debug_start`. Breakpoints are set in "user" mode: they catch eligible
-   runs (see the triggers below) by that user, and only by that user. In all
-   tests, this user was also the SAP user this server logs on with. A
-   different `user` than the server's logon user is untested.
-3. **The user is fixed per server process.** The first `debug_start` creates
-   the debug session for its `user`; later calls with a different `user` keep
-   using the first one. To change the user, or to recover a debug session that
-   no longer answers, restart the MCP server.
-4. **Use the source URI.** `object_uri` is the source URI, e.g.
-   `/sap/bc/adt/programs/programs/zreport/source/main`. The bare object URI is
-   rejected. `object_type` is the ADT type, e.g. `PROG/P`.
-5. **The breakpoint stops before its line executes.** A variable that is
-   assigned on the breakpoint line is still initial. Call
-   `debug_step` with `stepOver` before reading it with `debug_get_variable`.
-6. **One debug client per SAP user.** According to the SAP source (read on
-   SAP_BASIS 816), setting a breakpoint replaces the external-debugging
-   activation of any other IDE or listener for the same user. Do not debug the
-   same user from Eclipse ADT and from this server at the same time.
-7. **Always finish with `debug_stop`**, also after a timeout or a failure. It
-   stops the listener.
+1. **`debug_run`** with the breakpoints, the `user` whose run is debugged
+   (default: the logon user of the active system) and a `trigger`. It returns
+   the run state with a `version` and a `status`.
+2. **Start the run**, unless the server does it (see the triggers below). For
+   `manual` and `gui` runs the state carries `instructions`: the steps, and
+   `listening_until`, the time by which the run has to start.
+3. **`debug_wait`** with `since_version` = the last `version` you saw. It
+   returns as soon as the run changes, or after `timeout_seconds` (default 45)
+   with the unchanged state. Call it again until `status` is `attached`. A
+   `debug_wait` that times out does not stop the run.
+4. **Inspect** while `status` is `attached`: `position` in the state shows
+   program, include, line and a source excerpt. Use `debug_get_stack`,
+   `debug_get_variable` and `debug_step`.
+5. **End the debuggee with `debug_step` `detachDebugger`**, not
+   `stepContinue`. The program runs on to its end, and the run ends with
+   `end_reason: detached`.
+6. **`debug_stop`** when done, also after a timeout or a failure. It stops the
+   listener, removes the run's breakpoints, detaches a halted debuggee, and
+   reports anything it could not remove.
 
-After `debug_start` returns `status: "attached"` with a `debuggee_id`, pass that
-ID to `debug_attach`. Then use `debug_get_stack`, `debug_get_variable` and
-`debug_step`.
+A new `debug_run` first stops the previous one; there is one run per server
+process.
 
-## Trigger A: ABAP Unit tests (no SAP GUI needed)
+## Rules that apply to every run
 
-Put the breakpoint on a line that a unit test executes: in the test method of
-a program's local test class (tested), or in code that test calls. While
-`debug_start` is waiting, run the unit tests that execute that line
-(`run_unit_tests`). The tests run as the SAP user this server logs on with;
-pass that user to `debug_start`. If you do not know it, ask the person you are
-working for.
+1. **Same SAP user.** Only a run made as `user` is caught. Breakpoints are set
+   in user mode: they catch eligible runs of that user, in any session, and of
+   no one else.
+2. **Source URIs.** A breakpoint's `object_uri` is a source URI, e.g.
+   `/sap/bc/adt/programs/programs/zreport/source/main` or
+   `/sap/bc/adt/oo/classes/zcl_example/includes/testclasses`. The bare object
+   URI is rejected.
+3. **The breakpoint stops before its line executes.** A variable assigned on
+   the breakpoint line is still initial. `debug_step` `stepOver` first, then
+   read it.
+4. **System programs are never hit.** A breakpoint in a program SAP marks as a
+   system program never stops a run.
+5. **One debug client per SAP user.** According to the SAP source (read on
+   SAP_BASIS 816), setting breakpoints replaces the external-debugging
+   activation of any other IDE for the same user. Do not debug the same user
+   from Eclipse ADT and from this server at the same time.
+6. **Do not leave a debuggee halted.** A halted program holds a SAP work
+   process. After 10 minutes without a debugger call the server detaches it
+   (`end_reason: idle_detached`).
 
-- Caught 4 out of 4 times on both systems, usually within a second.
-- Ending: `debug_step` `stepContinue` lets the test finish. With the library
-  version this server currently ships, `debug_step` reports this as an error,
-  `SAP ADT error 500 (AdiFailed)`, with a message saying the debuggee session
-  was stopped (in the logon language). That error means the test ran to
-  completion, not that something failed. A later version reports it as
-  `debuggee_ended: true`.
-- `run_unit_tests` currently gives up after 30 seconds. If you stay at the
-  breakpoint longer than that, the debug session continues, but
-  `run_unit_tests` returns a timeout error instead of the test result. Run
-  the unit tests again afterwards to get the result.
+## Run states
 
-**Client limitation.** This needs `debug_start` and `run_unit_tests` to run at
-the same time. Some MCP clients run tool calls one after another, even when
-they are issued together in one turn. In such a client, `run_unit_tests` only
-starts after `debug_start` has already timed out, and nothing is caught:
-`debug_start` returns `timeout` while the unit tests pass normally. There is no
-workaround inside such a client yet; use trigger B with a person at the SAP
-GUI instead.
+| `status` | Meaning |
+|---|---|
+| `listening` | Breakpoints are set; waiting for a run to hit one. |
+| `attaching` | A run hit a breakpoint; the debugger is attaching. |
+| `attached` | The debuggee is halted. Inspect and step. |
+| `timeout` | The listening window passed without a hit. See `hint`. |
+| `ended` | See `end_reason`. |
+| `stopping`, `stopped` | `debug_stop` is cleaning up, or has. |
 
-## Trigger B: a program run from SAP GUI
+| `end_reason` | Meaning |
+|---|---|
+| `detached` | `detachDebugger`: the program ran on to its end. |
+| `completed` | A step ran the program to its end (`debuggee_ended: true` in `debug_step`). |
+| `terminated` | `terminateDebuggee` killed the program. |
+| `no_hit` | The unit tests finished without hitting a breakpoint. |
+| `attach_failed` | The attach failed; see `hint`. |
+| `idle_detached` | Detached after 10 minutes without a debugger call. |
 
-A SAP GUI session does not trigger external breakpoints by default. The GUI
-session that runs the program has to be enabled for ADT external debugging,
-and the program has to run **in that same GUI session**. Another session
-(window) of the same user was not caught (tested on SAP_BASIS 750).
+After `timeout` or `ended`, `debug_wait` with `rearm: true` listens again with
+the same breakpoints, within the run's remaining budget (`timeout_seconds` of
+`debug_run`, default 300, max 600). This works for `manual` and `gui` runs; a
+`unit_tests` run needs a new `debug_run`.
 
-`debug_start` blocks while it waits, so you cannot give instructions once it
-is running. Do it in this order:
+## Trigger `unit_tests`: ABAP Unit tests (no person needed)
 
-1. **Brief the person first**: the program to run, and the exact enable step
-   for their release (below). Tell them to wait until you say the listener is
-   running, then to do the enable step and start the program in the same GUI
-   window. If your client shows the person your message before the tool call
-   runs, that is enough; otherwise ask them to confirm they are ready.
-2. **Call `debug_start`** with a generous `timeout_seconds`, e.g. 180 to 300,
-   since the steps are done by hand. Your MCP client may have its own,
-   shorter limit for a single tool call.
-3. **The person enables the GUI session**, after the breakpoint is set:
-   - **SAP_BASIS 816 (S/4HANA 2025):** enter the OK code
-     `/H_REACTIVATE_EXTD_DBG KIND=USER USER=<user>` in the command field and
-     press Enter. The status bar shows "Debugger activation with external IDE
-     was resynchronized".
-   - **SAP_BASIS 750 (ECC 6.0 EHP8):** the OK code is not available there
-     ("This function is not possible"). Run transaction `SADT_START_TCODE`
-     instead, with:
-     - Transaction (`D_AIE_TCODE`) = `SE38`
-     - IDE user (`D_IDE_USER`) = `<user>`
-     - Request user (`D_REQUEST_USER`) = `<user>`
-     - Eclipse navigation: unchecked
+`trigger: {"kind": "unit_tests"}` makes the server run the ABAP Unit tests of
+`trigger.object_uri` (default: the object of the first breakpoint) about four
+seconds after the listener starts. Put the breakpoint on a line a test
+executes: in a test method, or in code a test calls.
 
-     Press Enter. This lands in SE38, in the now-enabled session. Fill in
-     `D_IDE_USER`: according to the SAP source, the enable step is skipped
-     when it is empty (not tested).
-   - Other releases: untested. Try the OK code first; if the system answers
-     "This function is not possible", use `SADT_START_TCODE`.
-4. **The person starts the program** in the same window (e.g. `/nSE38`,
-   program name, F8; on SAP_BASIS 750 they are already in SE38). The GUI
-   then appears to hang; that is the program waiting at the breakpoint.
-5. `debug_start` returns `attached`. Continue with `debug_attach`.
+- The tests run as the logon user of the active system, so `user` must be that
+  user.
+- `debug_run` waits up to 15 seconds and usually returns `attached` already.
+- The test result arrives in `trigger.unit_tests` once the tests have
+  finished, i.e. after the debuggee was detached.
+- If the tests finish without a hit, the run ends with `no_hit`.
 
-The tests enabled the session again before every run. Whether one enable step
-is enough for several runs has not been tested.
+## Trigger `manual`: someone else starts the run
 
-**End a GUI-triggered session with `debug_step` `detachDebugger`**, not
-`stepContinue`. `detachDebugger` returned within about a second on both
-systems, and the program then ran to completion in the GUI. `stepContinue`
-hung for 30 seconds in this case, and afterwards the debug session no longer
-answered (see rule 3 for recovery).
+`trigger: {"kind": "manual"}` when the run comes from outside: an HTTP call to
+an ICF service, an RFC call of a function module, or a program someone runs.
+`debug_run` returns `listening` at once, with `instructions`. Start the run
+now, as `user`, before `listening_until`, then `debug_wait`.
 
-## What does not trigger
+- Tested: an HTTP call to an ICF handler, and a SOAP-RFC call of a function
+  module.
+- Use a new connection, or the first request of a stateful session.
 
-Do not spend attempts on these:
+## Trigger `gui`: a SAP GUI dialog run
 
-- A SAP GUI session that was not enabled as described in trigger B.
-- A different GUI session of the same user than the one that was enabled
-  (SAP_BASIS 750).
-- `run_class` (an `IF_OO_ADT_CLASSRUN` class): not caught in the one attempt
-  made (SAP_BASIS 750).
-- Any trigger started after `debug_start` has returned.
+`trigger: {"kind": "gui", "target": {"type": ..., "name": ..., "inputs": {...}}}`
+for a program a person starts from SAP GUI. `target.type` is `report`,
+`transaction`, `function_module` (SE37 test environment) or `class_method`
+(`name` = `CLASS=>METHOD`, SE24 test environment). `inputs` are the
+selection-screen or parameter values.
 
-## Not tested yet
+`debug_run` returns `listening` at once, with `instructions` written for the
+person at the SAP GUI. **Pass the steps on in full and end your turn**; call
+`debug_wait` only when the person says they have started the run. Some clients
+do not show your messages while a tool call is running, so a `debug_wait`
+started before the person has read the steps leaves them without instructions.
 
-- The whole flow end to end through an MCP client (see the top of this guide).
-- Breakpoints in global classes (only programs and their local test classes
-  were tested).
-- A `user` different from the SAP user this server logs on with.
-- Systems with several application servers.
-- `SADT_START_TCODE` with the field values above on S/4HANA.
+A SAP GUI session does not trigger external breakpoints by default. The person
+first enables the session for ADT external debugging, then starts the program
+**in the same window**. Another window of the same user is not enabled.
+
+- **SAP_BASIS 816:** the OK code `/H_REACTIVATE_EXTD_DBG KIND=USER USER=<user>`
+  in the command field. The status bar says the debugger activation was
+  resynchronized. Then `/n<transaction>` in the same window.
+- **SAP_BASIS 750:** the OK code is not available there. Transaction
+  `SADT_START_TCODE` instead, with **both** the transaction field
+  (`D_AIE_TCODE`) and the IDE user field (`D_IDE_USER`, = `user`) filled,
+  Eclipse navigation off, then F8. With only the transaction filled, the run
+  was not caught. `SADT_START_TCODE` opens the transaction itself, so the
+  person continues there. The screen is built for Eclipse and shows only
+  technical field names; tell the person which field is which. Its fields
+  cannot be passed in the command field.
+
+The server checks which of the two the system supports and writes the matching
+steps. Further points for the person:
+
+- While the debugger is attached, the SAP GUI window stays busy. It continues
+  after `detachDebugger`.
+- The SE37 and SE24 test environments convert input values to upper case
+  unless their upper/lower case option is set.
+- In SE24, the method is started with the "Execute Method" icon in its line.
+- To debug the next run, `debug_wait` `rearm: true`, then the person enables
+  the session and starts the program again.
+
+A server build that can drive SAP GUI itself starts the run without a person;
+`debug_run` then waits up to 15 seconds like a `unit_tests` run.
+
+## Breakpoints during a run
+
+- `debug_set_breakpoint` adds a breakpoint to the active run. While the
+  debuggee is halted, it is set in the attached debugger (scope `debugger`);
+  SAP drops those breakpoints when the debugger detaches, so a rearmed run
+  keeps only the external ones. Otherwise all external breakpoints of the run
+  are set again together with the new one, and a listening run picks it up.
+- `debug_remove_breakpoint` removes one by the `id` in the run state. An
+  external breakpoint cannot be removed while the debuggee is attaching or
+  attached: on SAP_BASIS 750 that request detaches the debugger. Remove it
+  after `detachDebugger`.
+
+## Ending a session
+
+Use `detachDebugger`. `stepContinue` goes on to the next breakpoint; past the
+end of the run it fails on both releases (SAP_BASIS 816: 400
+`ExceptionInvalidData`; SAP_BASIS 750: `AdiFailed` /
+`CX_TPDAPI_DEBUGGEE_ENDED`). `debug_step` reports that as
+`debuggee_ended: true` with `end_reason: completed`, but after a SAP GUI
+trigger `stepContinue` can hang instead. A failed step leaves the debuggee
+attached: detach it, or call `debug_stop`.
 
 ## Troubleshooting
 
-- **`debug_start` returns `timeout`, but the program ran:** the program ran
-  before or after the listener was waiting, under a different SAP user, or in
-  a GUI session that was not enabled. Check rules 1 and 2 first.
-- **`debug_attach` fails with `500 AdiFailed`:** do not retry it; the pending
-  debuggee is used up by the failed attempt. Call `debug_stop`, then start
-  over with `debug_start` and a new trigger.
-- **`debug_get_variable` returns an empty value right after the catch:** the
-  variable is assigned on the breakpoint line (rule 5). Step over first.
-- **A step call hangs for about 30 seconds and the session stops answering:**
-  see "End a GUI-triggered session" above and rule 3.
+- **`timeout`, but the program ran:** the run was made as another user, before
+  or after the listening window, in a system program, or (gui) in a SAP GUI
+  session or window that was not enabled. On SAP_BASIS 750, check that
+  `D_IDE_USER` was filled.
+- **`no_hit` with `unit_tests`:** no test executed the breakpoint line, or the
+  breakpoint is in a system program.
+- **`debug_get_variable` returns an initial value right after the hit:** the
+  variable is assigned on the breakpoint line (rule 3). Step over first.
+- **`attach_failed`:** a failed attach uses up the caught run. `rearm` (manual,
+  gui) or a new `debug_run`, and start the run again.
+
+## Not tested yet
+
+- Systems with several application servers.
+- A `user` different from the logon user, for `manual` and `gui` runs.
+- Releases other than SAP_BASIS 750 and 816. The server tries the OK code
+  first when it cannot tell which one the system supports.

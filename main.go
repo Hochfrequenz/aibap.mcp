@@ -205,11 +205,11 @@ func buildServer(
 const debugInstructions = `
 
 DEBUGGING:
-- debug_start sets the breakpoint, then waits for a program to hit it; it does not run the program. Start the program a few seconds after debug_start begins waiting, under the SAP user passed as 'user'. A run that starts after debug_start has returned is never caught.
-- Triggers that work: ABAP Unit tests (run_unit_tests) running at the same time as debug_start, or a program started from a SAP GUI session that was first enabled for ADT external debugging. Some clients run tool calls one after another even when issued together; there, run_unit_tests only starts after debug_start has timed out, so use the SAP GUI trigger with a person at the GUI: brief them before calling debug_start (it blocks), and give it a long timeout_seconds.
+- debug_run sets the breakpoints and listens in the background; it does not wait for the hit. Then call debug_wait with since_version until status is attached. A debug_wait that times out does not stop the run.
+- trigger unit_tests: the server runs the ABAP Unit tests itself. trigger manual or gui: the state carries instructions; the run must be made as user before listening_until. For gui, pass the steps to the person in full and end your turn; call debug_wait once they have started the run.
 - The breakpoint stops before its line executes: a variable assigned on that line is still initial until debug_step stepOver.
-- End a session triggered from SAP GUI with debug_step detachDebugger, not stepContinue (stepContinue can hang and block the debug session). Always finish with debug_stop.
-- Read the resource ` + tools.DebuggingGuideURI + ` for the step-by-step procedures before the first debug_start.`
+- End the debuggee with debug_step detachDebugger, not stepContinue (stepContinue can hang after a SAP GUI run). Always finish with debug_stop.
+- Read the resource ` + tools.DebuggingGuideURI + ` for the procedures per trigger before the first debug_run.`
 
 func serverInstructions(systemNames []string, defaultSystem string, debugEnabled bool) string {
 	// The debugger tools (breakpoints, stepping, variable inspection) are an
