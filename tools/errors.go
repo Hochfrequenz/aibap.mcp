@@ -234,6 +234,11 @@ func errorResult(err error) *mcp.CallToolResult {
 // is accepted for conditions with no clean structural signal (#406, #404) or
 // where SAP's own body is simply sparser (ECC, #378, #490).
 func matchHint(err error) string {
+	// abapGit companion errors (#135) are not ADT errors: they carry their own
+	// code, and the generic status-code hints below must never attach to them.
+	if hint, ok := abapGitSyncHint(err); ok {
+		return hint
+	}
 	kind := adt.ClassifyError(err)
 	errText := strings.ToLower(err.Error())
 	adtErr, isADTErr := asADTError(err)

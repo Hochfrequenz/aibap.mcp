@@ -16,7 +16,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13.2
+          version: v2.14.0
 
       - name: Check formatting
         run: golangci-lint fmt --diff
