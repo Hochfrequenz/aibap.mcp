@@ -1,6 +1,6 @@
 # Debugger Investigation Notes (2026-03-25)
 
-## What works (verified against hfq.sap.msp.local:8100)
+## What works (verified against SAP ERP 6.0 EHP8, SAP_BASIS 750)
 
 - **Setting breakpoints**: POST `/debugger/breakpoints` with `syncMode="full"` persists breakpoints in SAP shared memory
 - **Listener**: POST `/debugger/listeners` with `Accept: application/vnd.sap.as+xml` returns debuggee session info when a breakpoint is hit
