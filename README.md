@@ -133,7 +133,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 </details>
 
 <details>
-<summary><strong>Messages and texts</strong> — <code>messages</code> (4 tools)</summary>
+<summary><strong>Messages and texts</strong> — <code>messages</code> (5 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -156,7 +156,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 </details>
 
 <details>
-<summary><strong>Transport management</strong> — <code>transport</code> (8 tools)</summary>
+<summary><strong>Transport management</strong> — <code>transport</code> (9 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
