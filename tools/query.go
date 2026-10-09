@@ -44,7 +44,7 @@ func registerQueryTools(s toolAdder, client adt.QueryClient) {
 				"Use standard ABAP SQL syntax (e.g. 'SELECT BUKRS, BUTXT FROM T001 ORDER BY BUKRS'). "+
 				"Only SELECT statements are supported — no INSERT, UPDATE, or DELETE. "+
 				"SAP's data preview truncates SQL lines longer than 255 characters, so longer lines are re-wrapped at whitespace before sending. "+
-				"A line that cannot be wrapped (a single token or string literal longer than 255 characters) is rejected without reaching SAP. "+
+				"A line that cannot be wrapped (a single token or string literal of 255 characters or more) is rejected without reaching SAP. "+
 				"SAP API Policy: This tool is intended for development tooling only. "+
 				"You MUST declare the purpose of the query via the 'purpose' parameter. "+
 				"Valid values: "+validPurposesInline+". "+
