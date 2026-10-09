@@ -81,8 +81,12 @@ func manualInstructions(user string, until time.Time) *DebugInstructions {
 // that the user's external debugging applies to.
 func guiInstructions(user string, t DebugTarget, ok okCodeAvailability) *DebugInstructions {
 	okCode := fmt.Sprintf("enter the OK code %s KIND=USER USER=%s in the command field and press Enter", okCodeCommand, user)
-	tcode := fmt.Sprintf("start transaction SADT_START_TCODE with D_AIE_TCODE = %s, D_IDE_USER = %s and D_REQUEST_USER = %s, with Eclipse navigation switched off",
-		startTransaction(t), user, user)
+	// Live on SAP_BASIS 750 a run was caught with only the transaction and
+	// the IDE user filled; with the transaction alone it was not.
+	tcode := fmt.Sprintf("enter /nSADT_START_TCODE in the command field, fill the transaction field (D_AIE_TCODE) with %s "+
+		"and the IDE user field (D_IDE_USER) with %s (both are required: without the IDE user the run is not caught), "+
+		"switch Eclipse navigation off if it is on, and press F8",
+		startTransaction(t), user)
 	var enable string
 	switch ok {
 	case okCodeAvailable:
@@ -96,14 +100,15 @@ func guiInstructions(user string, t DebugTarget, ok okCodeAvailability) *DebugIn
 	notes := []string{
 		"Do every step in the same SAP GUI window: another window of the same user is not enabled for external debugging.",
 		"The run must be made as user " + user + ".",
+		"While the debugger is attached, the SAP GUI window stays busy; it continues after detachDebugger.",
 		"Breakpoints in system programs are never hit.",
 	}
-	if t.Type != "report" {
-		notes = append(notes, "Untested: starting a "+strings.ReplaceAll(t.Type, "_", " ")+" this way has not been verified on a live system yet.")
+	if t.Type == targetFunctionModule || t.Type == targetClassMethod {
+		notes = append(notes, "The test environment converts input values to upper case unless its upper/lower case option is set.")
 	}
 	return &DebugInstructions{
 		User:  user,
-		Steps: []string{enable, startTargetStep(t), "End the session with debug_step action detachDebugger, never stepContinue."},
+		Steps: []string{enable, startTargetStep(t, ok), "End the session with debug_step action detachDebugger, never stepContinue."},
 		Notes: notes,
 	}
 }
@@ -113,7 +118,7 @@ func startTransaction(t DebugTarget) string {
 	switch t.Type {
 	case "transaction":
 		return strings.ToUpper(t.Name)
-	case "function_module":
+	case targetFunctionModule:
 		return "SE37"
 	case targetClassMethod:
 		return "SE24"
@@ -121,31 +126,44 @@ func startTransaction(t DebugTarget) string {
 	return "SE38"
 }
 
-func startTargetStep(t DebugTarget) string {
+// openTransaction says how the person reaches tx: after the OK code they
+// open it themselves; SADT_START_TCODE has already opened it.
+func openTransaction(tx string, ok okCodeAvailability) string {
+	opened := "continue in " + tx + ", which SADT_START_TCODE opened"
+	switch ok {
+	case okCodeAvailable:
+		return "In the same window, enter /n" + tx + " in the command field"
+	case okCodeMissing:
+		return "In the same window, " + opened
+	}
+	return "In the same window, " + opened + " (after the OK code, enter /n" + tx + " in the command field instead)"
+}
+
+func startTargetStep(t DebugTarget, ok okCodeAvailability) string {
 	in := formatInputs(t.Inputs)
 	name := strings.ToUpper(t.Name)
+	open := openTransaction(startTransaction(t), ok)
 	switch t.Type {
 	case "transaction":
-		s := fmt.Sprintf("In the same window, start transaction %s (enter /n%s; with SADT_START_TCODE it starts directly from D_AIE_TCODE)", name, name)
 		if in != "" {
-			s += " and enter " + in
+			return open + " and enter " + in + "."
 		}
-		return s + "."
-	case "function_module":
-		s := fmt.Sprintf("In the same window, open SE37, enter function module %s and press F8 (test environment)", name)
+		return open + "."
+	case targetFunctionModule:
+		s := open + ", enter function module " + name + " and press F8 (test environment)"
 		if in != "" {
-			s += ", enter " + in
+			s += ", enter " + in + " (a popup may open for the value)"
 		}
 		return s + ", then press F8."
 	case targetClassMethod:
 		class, method, _ := strings.Cut(name, "=>")
-		s := fmt.Sprintf("In the same window, open SE24, enter class %s and press F8 (test environment), choose method %s", class, method)
+		s := open + ", enter class " + class + " and press F8 (test environment), then click the Execute Method icon in the line of method " + method
 		if in != "" {
 			s += ", enter " + in
 		}
-		return s + ", then execute."
+		return s + " and press F8."
 	}
-	s := fmt.Sprintf("In the same window, open SE38, enter program %s and press F8", name)
+	s := open + ", enter program " + name + " and press F8"
 	if in != "" {
 		return s + "; on the selection screen enter " + in + ", then press F8."
 	}
