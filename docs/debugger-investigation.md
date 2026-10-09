@@ -52,7 +52,7 @@ call blocks while it waits (#558).
 
 ## Corrections to the 2026-03 notes
 
-Earlier versions of this file stated four things that turned out wrong:
+Earlier versions of this file stated three things that turned out wrong:
 
 - *"External breakpoints only trigger in HTTP/ICF sessions, not SAP GUI
   (message ED702)."* A SAP GUI session triggers them once it has been enabled
@@ -62,12 +62,13 @@ Earlier versions of this file stated four things that turned out wrong:
   IDE user field (`D_IDE_USER`) is filled.
 - *"Step, variables and stack do not work over HTTP; RFC is required."* They
   work in a stateful HTTP session.
-- *"ABAP Unit runs cannot be debugged from MCP."* An ABAP Unit run over ADT is
-  caught reliably. The earlier misses came from the MCP client running the
-  listener and the unit tests one after the other, so the tests only started
-  after the listener had timed out (#558).
 - *"`syncMode="full"` persists breakpoints."* SAP ignores it for external
   breakpoints; see the flow above.
+
+ABAP Unit runs over ADT are caught reliably. Misses seen with the earlier
+`debug_start` tool came from the MCP client running the listener and the unit
+tests one after the other, so the tests only started after the listener had
+timed out (#558).
 
 ## Server-side details (from reading the ABAP handler source, SAP_BASIS 816)
 
@@ -81,15 +82,16 @@ Earlier versions of this file stated four things that turned out wrong:
 - **SAP GUI** sessions are enabled per session. The enabling step stamps the
   current GUI session; another session of the same user stays unaffected.
 - **Attach failures** surface as HTTP 500 `AdiFailed` (exception class
-  `CX_TPDA_ADT_SER_ADI_FAILED`). The server consumes the pending debuggee
-  before it attaches, so retrying an attach after such a failure cannot
+  `CX_TPDA_ADT_SER_ADI_FAILED`). SAP consumes the pending debuggee before
+  the attach completes, so retrying an attach after such a failure cannot
   succeed (#513, Hochfrequenz/adtler#196).
 - **Ending:** past the end of a run, `stepContinue` answers SAP_BASIS 816 with
   400 `ExceptionInvalidData` and SAP_BASIS 750 with `AdiFailed` /
   `CX_TPDAPI_DEBUGGEE_ENDED`. adtler maps the 750 answer to
   `DebuggeeEndedError`; this server treats the 816 answer as the end of the
   run when no debuggee remains. After a
-  SAP GUI trigger, `stepContinue` hung until the client timeout;
+  SAP GUI trigger, `stepContinue` hung until the client timeout (SAP_BASIS
+  816, one run);
   `detachDebugger` ended the session within about a second.
 
 ## Open questions

@@ -6,10 +6,10 @@ breakpoints, listens in the background for a run of one SAP user, and attaches
 to the first run that hits a breakpoint. The tool calls return at once, so the
 flow does not depend on the MCP client running tool calls in parallel.
 
-**How this was tested.** Every procedure below passed through an MCP client on
-SAP S/4HANA 2025 on-premise (SAP_BASIS 816) and SAP ERP 6.0 EHP8
-(SAP_BASIS 750) in October 2026, with throwaway objects (#558). Points that
-differ between the two releases are marked.
+**How this was tested.** The procedures below were tested through an MCP
+client on SAP S/4HANA 2025 on-premise (SAP_BASIS 816) and SAP ERP 6.0 EHP8
+(SAP_BASIS 750) in October 2026, with throwaway objects (#558). Exceptions are
+noted where they apply, and so are points that differ between the releases.
 
 ## The flow
 
@@ -17,8 +17,9 @@ differ between the two releases are marked.
    (default: the logon user of the active system) and a `trigger`. It returns
    the run state with a `version` and a `status`.
 2. **Start the run**, unless the server does it (see the triggers below). For
-   `manual` and `gui` runs the state carries `instructions`: the steps, and
-   `listening_until`, the time by which the run has to start.
+   `manual` and `gui` runs the state carries `instructions` (the steps for the
+   person or caller); `listening_until` in the state is the time by which the
+   run has to start.
 3. **`debug_wait`** with `since_version` = the last `version` you saw. It
    returns as soon as the run changes, or after `timeout_seconds` (default 45)
    with the unchanged state. Call it again until `status` is `attached`. A
@@ -39,8 +40,8 @@ process.
 ## Rules that apply to every run
 
 1. **Same SAP user.** Only a run made as `user` is caught. Breakpoints are set
-   in user mode: they catch eligible runs of that user, in any session, and of
-   no one else.
+   in user mode: they catch eligible runs of that user (for SAP GUI only in an
+   enabled session, see below), and of no one else.
 2. **Source URIs.** A breakpoint's `object_uri` is a source URI, e.g.
    `/sap/bc/adt/programs/programs/zreport/source/main` or
    `/sap/bc/adt/oo/classes/zcl_example/includes/testclasses`. The bare object
@@ -55,8 +56,9 @@ process.
    activation of any other IDE for the same user. Do not debug the same user
    from Eclipse ADT and from this server at the same time.
 6. **Do not leave a debuggee halted.** A halted program holds a SAP work
-   process. After 10 minutes without a debugger call the server detaches it
-   (`end_reason: idle_detached`).
+   process. After 10 minutes without a `debug_step`, `debug_get_stack`,
+   `debug_get_variable` or `debug_set_breakpoint` call (`debug_wait` does not
+   count), the server detaches it (`end_reason: idle_detached`).
 
 ## Run states
 
@@ -76,7 +78,7 @@ process.
 | `terminated` | `terminateDebuggee` killed the program. |
 | `no_hit` | The unit tests finished without hitting a breakpoint. |
 | `attach_failed` | The attach failed; see `hint`. |
-| `idle_detached` | Detached after 10 minutes without a debugger call. |
+| `idle_detached` | Detached after 10 minutes without a debugger call (rule 6). |
 
 After `timeout` or `ended`, `debug_wait` with `rearm: true` listens again with
 the same breakpoints, within the run's remaining budget (`timeout_seconds` of
@@ -96,6 +98,8 @@ executes: in a test method, or in code a test calls.
 - The test result arrives in `trigger.unit_tests` once the tests have
   finished, i.e. after the debuggee was detached.
 - If the tests finish without a hit, the run ends with `no_hit`.
+- If the test run itself fails, `trigger.state` is `failed` with
+  `trigger.error`, and the state carries `manual` instructions instead.
 
 ## Trigger `manual`: someone else starts the run
 
@@ -104,8 +108,9 @@ an ICF service, an RFC call of a function module, or a program someone runs.
 `debug_run` returns `listening` at once, with `instructions`. Start the run
 now, as `user`, before `listening_until`, then `debug_wait`.
 
-- Tested: an HTTP call to an ICF handler, and a SOAP-RFC call of a function
-  module.
+- Tested through `debug_run`: a SOAP-RFC call of a function module. An HTTP
+  call to an ICF handler was caught in earlier tests of the underlying ADT
+  flow, not yet through `debug_run`.
 - Use a new connection, or the first request of a stateful session.
 
 ## Trigger `gui`: a SAP GUI dialog run
@@ -124,7 +129,9 @@ started before the person has read the steps leaves them without instructions.
 
 A SAP GUI session does not trigger external breakpoints by default. The person
 first enables the session for ADT external debugging, then starts the program
-**in the same window**. Another window of the same user is not enabled.
+**in the same window**. Another window of the same user is not enabled
+(tested on SAP_BASIS 750; according to the SAP_BASIS 816 source the same holds
+there).
 
 - **SAP_BASIS 816:** the OK code `/H_REACTIVATE_EXTD_DBG KIND=USER USER=<user>`
   in the command field. The status bar says the debugger activation was
@@ -149,7 +156,8 @@ steps. Further points for the person:
 - To debug the next run, `debug_wait` `rearm: true`, then the person enables
   the session and starts the program again.
 
-A server build that can drive SAP GUI itself starts the run without a person;
+Not in the standard build: a server build that can drive SAP GUI itself
+starts the run without a person;
 `debug_run` then waits up to 15 seconds like a `unit_tests` run.
 
 ## Breakpoints during a run
@@ -159,6 +167,7 @@ A server build that can drive SAP GUI itself starts the run without a person;
   SAP drops those breakpoints when the debugger detaches, so a rearmed run
   keeps only the external ones. Otherwise all external breakpoints of the run
   are set again together with the new one, and a listening run picks it up.
+  While `attaching` it is refused; call `debug_wait` first.
 - `debug_remove_breakpoint` removes one by the `id` in the run state. An
   external breakpoint cannot be removed while the debuggee is attaching or
   attached: on SAP_BASIS 750 that request detaches the debugger. Remove it
@@ -171,7 +180,7 @@ end of the run it fails on both releases (SAP_BASIS 816: 400
 `ExceptionInvalidData`; SAP_BASIS 750: `AdiFailed` /
 `CX_TPDAPI_DEBUGGEE_ENDED`). `debug_step` reports that as
 `debuggee_ended: true` with `end_reason: completed`, but after a SAP GUI
-trigger `stepContinue` can hang instead. A failed step leaves the debuggee
+trigger `stepContinue` hung instead (SAP_BASIS 816, one run). A failed step leaves the debuggee
 attached: detach it, or call `debug_stop`.
 
 ## Troubleshooting
@@ -184,8 +193,9 @@ attached: detach it, or call `debug_stop`.
   breakpoint is in a system program.
 - **`debug_get_variable` returns an initial value right after the hit:** the
   variable is assigned on the breakpoint line (rule 3). Step over first.
-- **`attach_failed`:** a failed attach uses up the caught run. `rearm` (manual,
-  gui) or a new `debug_run`, and start the run again.
+- **`attach_failed`:** a failed attach uses up the caught run. Start a new
+  `debug_run` (for `manual` and `gui`, `debug_wait` `rearm: true` also works),
+  then start the run again.
 
 ## Not tested yet
 
