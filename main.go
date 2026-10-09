@@ -200,14 +200,30 @@ func buildServer(
 	return s
 }
 
+// debugInstructions is the short form of the debugging guide resource
+// (tools.DebuggingGuideURI). Keep both in sync.
+const debugInstructions = `
+
+DEBUGGING:
+- debug_run sets the breakpoints and listens in the background; it does not wait for the hit. Then call debug_wait with since_version until status is attached. A debug_wait that times out does not stop the run.
+- trigger unit_tests: the server runs the ABAP Unit tests itself. trigger manual or gui: the state carries instructions; the run must be made as debug_run's user before listening_until. For gui, pass the steps to the person in full and end your turn; call debug_wait once they have started the run.
+- The breakpoint stops before its line executes: a variable assigned on that line is still initial until debug_step stepOver.
+- End the debuggee with debug_step detachDebugger, not stepContinue (stepContinue can hang after a SAP GUI run). Always finish with debug_stop.
+- Read the resource ` + tools.DebuggingGuideURI + ` for the procedures per trigger before the first debug_run.`
+
 func serverInstructions(systemNames []string, defaultSystem string, debugEnabled bool) string {
 	// The debugger tools (breakpoints, stepping, variable inspection) are an
 	// opt-in group, off by default (see tools.DefaultGroups / #429). Only
 	// advertise the capability when the group is actually enabled — otherwise
 	// the instructions promise tools the client cannot see.
+	//
+	// With the group enabled, the core debugging rules follow as their own
+	// section. Getting them wrong fails silently — the listener times out
+	// while the program runs to completion — and some clients never read the
+	// guide resource, so the rules cannot live only there (#559).
 	debugLine := ""
 	if debugEnabled {
-		debugLine = "\n- Debugging (breakpoints, stepping, variable inspection)"
+		debugLine = "\n- Debugging (breakpoints, stepping, variable inspection)" + debugInstructions
 	}
 	return fmt.Sprintf(`SAP ADT (ABAP Development Tools) MCP server. Operates on SAP via HTTP/REST — no GUI required.
 

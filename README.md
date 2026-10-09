@@ -39,7 +39,7 @@ graph TD
 
 A handful of operations aren't exposed by the ADT REST API at all — customizing table writes (SM30/SM34), transport release on ECC (SE09), and similar SAP-GUI-only workflows. For these, aibap.mcp defines a `BlackMagicClient` Go interface, but **ships no implementation**. The hook says *what* the tool needs done; it does not say *how* to do it.
 
-If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP Web GUI, RFC, or whatever else you've conjured bend to your will, you can write a Go implementation of `BlackMagicClient` and compile it into a **custom build** — the hook is a package-level `var blackMagic tools.BlackMagicClient` in `main.go`, set from a build-tagged `init()` in a file you maintain in your own fork. There is no runtime flag or config entry for this; the choice is baked into the binary at compile time. Your build then calls through your implementation transparently for the fallback-requiring tools. The interface is deliberately shape-agnostic: any Go struct that satisfies it works. No public implementation is shipped — producing one, and maintaining a custom build, is the implementer's own problem (and, arguably, part of the craft).
+If you command the forbidden knowledge (or the raw power) to make SAP GUI, SAP Web GUI, RFC, or whatever else you've conjured bend to your will, you can write a Go implementation of `BlackMagicClient` and compile it into a **custom build** — the hook is a package-level `var blackMagic tools.BlackMagicClient` in `main.go`, set from a build-tagged `init()` in a file you maintain in your own fork. There is no runtime flag or config entry for this; the choice is baked into the binary at compile time. Your build then calls through your implementation transparently for the fallback-requiring tools. The interface is deliberately shape-agnostic: any Go struct that satisfies it works. If your implementation also satisfies the optional `tools.DebugTriggerer` interface (`TriggerDebugRun`), `debug_run` with `trigger.kind: gui` starts the run using your arcane powers instead of returning instructions for a person. No public implementation is shipped — producing one, and maintaining a custom build, is the implementer's own problem (and, arguably, part of the craft).
 
 Without such a build, the fallback-requiring tools return an error at runtime on the stock binary; everything else keeps working. If building your own binary isn't your path, a GUI-driven peer MCP (for example [sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp), which your agent calls directly — separate from this server, not plugged into its `BlackMagicClient` interface) can cover the same SAP-GUI-only workflows from outside.
 
@@ -133,7 +133,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 </details>
 
 <details>
-<summary><strong>Messages and texts</strong> — <code>messages</code> (4 tools)</summary>
+<summary><strong>Messages and texts</strong> — <code>messages</code> (5 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -156,7 +156,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 </details>
 
 <details>
-<summary><strong>Transport management</strong> — <code>transport</code> (8 tools)</summary>
+<summary><strong>Transport management</strong> — <code>transport</code> (9 tools)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -200,6 +200,8 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 | `debug_remove_breakpoint` | Remove one breakpoint of the active run |
 
 A debugging session is one `debug_run`: the server sets the breakpoints, listens and attaches in the background, so it does not depend on the MCP client running tool calls in parallel. Call `debug_wait` with the returned `version` until the status is `attached`, inspect with `debug_get_stack`, `debug_get_variable` and `debug_step`, end the debuggee with `debug_step` `detachDebugger`, and finish with `debug_stop`. For `manual` and `gui` runs the result carries instructions: the run must be made as the same SAP user before `listening_until`. Breakpoints in system programs are never hit. Each server process uses its own debugger IDE ID, so two processes of the same user do not share breakpoints.
+
+With the group enabled, the server also exposes the resource `sap-adt://guides/debugging` ([source](tools/guides/debugging.md)): the triggers per release, the run states, and how to end a session.
 
 </details>
 
