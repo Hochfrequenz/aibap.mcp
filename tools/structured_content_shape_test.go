@@ -41,22 +41,12 @@ import (
 // failure modes no amount of arg synthesis can dodge (panics, infinite
 // hangs, real side effects).
 var knownOptOuts = map[string]string{
-	// adtler's NewDebugSession requires a concrete *httpClient or
-	// *ClientRegistry and panics when given the test mockClient — the
-	// debug_* handlers construct a session on first use and crash the
-	// test goroutine before StructuredContent is ever produced. The
-	// debugger handlers' result shapes are still guarded by the
-	// convention-wide rule in CLAUDE.md ("structuredContent must be a
-	// JSON object"); reviewers check by eye.
-	"debug_set_breakpoint": "adtler debug session panics on mockClient",
-	"debug_start":          "adtler debug session panics on mockClient",
-	"debug_stop":           "adtler debug session panics on mockClient",
-	"debug_get_sessions":   "adtler debug session panics on mockClient",
-	"debug_attach":         "adtler debug session panics on mockClient",
-	"debug_step":           "adtler debug session panics on mockClient",
-	"debug_get_variable":   "adtler debug session panics on mockClient",
-	"debug_get_stack":      "adtler debug session panics on mockClient",
-	"debug_set_watchpoint": "adtler debug session panics on mockClient",
+	// Empty: the debug_* tools used to be listed here because adtler's
+	// NewDebugSession panics on the test mockClient. Since #558 none of them
+	// builds a debug session on a blind call: without a configured logon user
+	// and without a run, each one rejects the call (or, for debug_stop, has
+	// nothing to clean up) before a session exists, so they are checked like
+	// every other tool.
 }
 
 // TestStructuredContentIsObject is the reflective guardrail — one test,

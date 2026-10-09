@@ -160,17 +160,6 @@ type DebugListenerStopResult struct {
 	Stopped bool `json:"stopped"`
 }
 
-type DebugAttachResult struct {
-	DebuggeeID string `json:"debuggee_id"`
-	Attached   bool   `json:"attached"`
-}
-
-type DebugStartResult struct {
-	BreakpointID string `json:"breakpoint_id"`
-	Status       string `json:"status"`
-	DebuggeeID   string `json:"debuggee_id"`
-}
-
 // DebugSessionsResult reports active debuggee sessions. GetDebuggeeSessions
 // returns SAP ASX XML (Accept: application/vnd.sap.as+xml), not JSON, so the
 // raw payload is forwarded as a string rather than parsed. HasSessions is
@@ -217,6 +206,60 @@ type DebugStackResult struct {
 // forwarded as Raw rather than parsed. See issue #501.
 type DebugWatchpointResult struct {
 	Raw string `json:"raw"`
+}
+
+// DebugRunState is the state of the current debugging run, returned by
+// debug_run and debug_wait (#558). Every transition increments Version, one
+// counter per server process, so a since_version from an earlier run never
+// blocks a later one.
+type DebugRunState struct {
+	Version   int64  `json:"version"`
+	Status    string `json:"status"`
+	EndReason string `json:"end_reason,omitempty"`
+	// Breakpoints are never null: an empty run reports [].
+	Breakpoints    []DebugRunBreakpoint `json:"breakpoints"`
+	DebuggeeID     string               `json:"debuggee_id,omitempty"`
+	Position       *DebugPosition       `json:"position,omitempty"`
+	Trigger        *DebugTriggerState   `json:"trigger,omitempty"`
+	Instructions   *DebugInstructions   `json:"instructions,omitempty"`
+	ListeningUntil string               `json:"listening_until,omitempty"`
+	Hint           string               `json:"hint,omitempty"`
+}
+
+// DebugRunBreakpoint is one breakpoint of the run with the ID SAP returned
+// and the scope ("external" or "debugger") it was set in.
+type DebugRunBreakpoint struct {
+	ObjectURI string `json:"object_uri"`
+	Line      int    `json:"line"`
+	ID        string `json:"id"`
+	Scope     string `json:"scope"`
+}
+
+// DebugPosition is where the halted debuggee stands, from the active stack
+// frame (adtler#203). SourceExcerpt holds a few lines around SourceLine.
+type DebugPosition struct {
+	Program       string `json:"program"`
+	Include       string `json:"include"`
+	Line          int    `json:"line"`
+	SourceURI     string `json:"source_uri,omitempty"`
+	SourceLine    int    `json:"source_line,omitempty"`
+	SourceExcerpt string `json:"source_excerpt,omitempty"`
+}
+
+// DebugTriggerState is the state of a trigger the server runs itself.
+type DebugTriggerState struct {
+	Kind      string          `json:"kind"`
+	State     string          `json:"state"`
+	Error     string          `json:"error,omitempty"`
+	UnitTests *adt.TestResult `json:"unit_tests,omitempty"`
+}
+
+// DebugInstructions tell a person, an agent or a script how to start the run
+// the listener waits for. The deadline is DebugRunState.ListeningUntil.
+type DebugInstructions struct {
+	Steps []string `json:"steps"`
+	Notes []string `json:"notes"`
+	User  string   `json:"user"`
 }
 
 type UpdateCustomizingResult struct {

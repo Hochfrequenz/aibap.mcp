@@ -14,10 +14,8 @@ const debugStepToolName = "debug_step"
 // method — must not appear in debug_step's action enum, and its
 // replacement plus the two additional release actions must.
 //
-// This asserts against the declared input schema only; it does not invoke
-// the debug_step handler (which panics on the mockClient used by
-// TestStructuredContentIsObject — see that test's knownOptOuts comment for
-// why). Schema listing itself does not touch adtler, so it's safe.
+// This asserts against the declared input schema only; the handler is
+// exercised against a transport-level fake in debugsession_test.go.
 func TestDebugStepActionEnum(t *testing.T) {
 	s := newTestServer(&mockClient{})
 	tools := listRegisteredTools(t, s)
@@ -83,7 +81,7 @@ func TestDebugToolsDeclareOutputSchema(t *testing.T) {
 		byName[tl.Name] = tl
 	}
 
-	for _, name := range []string{debugStepToolName, "debug_get_variable", "debug_get_stack", "debug_set_watchpoint"} {
+	for _, name := range []string{debugStepToolName, "debug_get_variable", "debug_get_stack", "debug_set_watchpoint", "debug_run", "debug_wait"} {
 		tl, ok := byName[name]
 		if !ok {
 			t.Errorf("%s not registered", name)
@@ -109,46 +107,32 @@ func TestDebugToolsRejectEmptyRequiredStrings(t *testing.T) {
 		wantSubstr string
 	}{
 		{
-			name: "set breakpoint missing user",
+			name: "set breakpoint without user on a system without logon user",
 			tool: "debug_set_breakpoint",
 			args: map[string]interface{}{
 				"object_uri":  testObjectURI,
 				"line":        1,
 				"object_type": "PROG/P",
 				"object_name": "ZTEST",
-				"user":        "",
 			},
-			wantSubstr: `"user" is required`,
+			wantSubstr: "no configured logon user",
 		},
 		{
-			name: "start missing object name",
-			tool: "debug_start",
+			name: "run without breakpoints",
+			tool: "debug_run",
 			args: map[string]interface{}{
-				"object_uri":  testObjectURI,
-				"line":        1,
-				"object_type": "PROG/P",
-				"object_name": "",
-				"user":        "TESTUSER",
+				"trigger": map[string]interface{}{"kind": "manual"},
 			},
-			wantSubstr: `"object_name" is required`,
+			wantSubstr: `"breakpoints" needs 1 to 30`,
 		},
 		{
-			name: "attach missing debuggee id",
-			tool: "debug_attach",
-			args: map[string]interface{}{
-				"debuggee_id": "",
-				"user":        "TESTUSER",
-			},
-			wantSubstr: `"debuggee_id" is required`,
-		},
-		{
-			name: "step missing user",
+			name: "step without a debuggee",
 			tool: debugStepToolName,
 			args: map[string]interface{}{
 				"action": "stepInto",
 				"user":   "",
 			},
-			wantSubstr: `"user" is required`,
+			wantSubstr: "no debuggee attached",
 		},
 		{
 			name: "get variable missing variable name",
@@ -160,12 +144,12 @@ func TestDebugToolsRejectEmptyRequiredStrings(t *testing.T) {
 			wantSubstr: `"variable_name" is required`,
 		},
 		{
-			name: "get stack missing user",
+			name: "get stack without a debuggee",
 			tool: "debug_get_stack",
 			args: map[string]interface{}{
 				"user": "",
 			},
-			wantSubstr: `"user" is required`,
+			wantSubstr: "no debuggee attached",
 		},
 		{
 			name: "set watchpoint missing variable name",

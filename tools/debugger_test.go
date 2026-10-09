@@ -35,9 +35,9 @@ func TestBuildDebugSessionsResult(t *testing.T) {
 	}
 }
 
-// TestDebugSessionsResultMarshalsToObject closes the loop the reflective
-// structured_content_shape_test guardrail can't reach (debug_get_sessions is in
-// knownOptOuts): the value the handler feeds to NewToolResultJSON must round-trip
+// TestDebugSessionsResultMarshalsToObject pins the success shape the reflective
+// structured_content_shape_test guardrail cannot reach without a configured
+// logon user: the value the handler feeds to NewToolResultJSON must round-trip
 // to a JSON object, per the MCP 2025-06-18 structuredContent requirement. Covers
 // both the empty and non-empty branches.
 func TestDebugSessionsResultMarshalsToObject(t *testing.T) {
@@ -67,8 +67,7 @@ func TestDebugSessionsResultMarshalsToObject(t *testing.T) {
 //
 // This test calls the builders directly, not the registered debug_* tool
 // handlers — adtler's DebugSession panics against the mockClient used
-// elsewhere in this package's tests (see TestStructuredContentIsObject's
-// knownOptOuts comment), so there is no unit-test-level way to pin that a
+// elsewhere in this package's tests, so this test cannot pin that a
 // handler actually calls the right builder with the right bytes. That
 // wiring is proven live instead — see issue #501's linked 2026-09-18
 // end-to-end verification. TestDebugStepActionEnum and

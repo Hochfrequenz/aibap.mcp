@@ -101,12 +101,31 @@ type RegisterOption func(*registerSettings)
 // registerSettings holds the resolved options.
 type registerSettings struct {
 	consent ConsentMode
+	// systemUser returns the logon user configured for a system ("" for
+	// OAuth2); the debug tools use it as their default `user` (#558).
+	systemUser func(system string) string
+	// shutdown receives the hooks to run when the process ends (#558).
+	shutdown *Shutdown
 }
 
 // WithConsentMode selects how the client's permission system is asked to treat
 // the irreversible tools. The default is ConsentStrict; see ConsentMode.
 func WithConsentMode(m ConsentMode) RegisterOption {
 	return func(rs *registerSettings) { rs.consent = m }
+}
+
+// WithSystemUser tells the debug tools the logon user configured for each
+// system, which is their default `user`. Without it, every debug call must
+// name its user (#558).
+func WithSystemUser(fn func(system string) string) RegisterOption {
+	return func(rs *registerSettings) { rs.systemUser = fn }
+}
+
+// WithShutdown registers the tools' process-exit hooks on s; the caller runs
+// s.Run before it logs out of SAP. Without it, a debug run left active when
+// the process ends is not cleaned up.
+func WithShutdown(s *Shutdown) RegisterOption {
+	return func(rs *registerSettings) { rs.shutdown = s }
 }
 
 // RegisterAll registers all SAP ADT MCP tools on the given server.
@@ -258,7 +277,7 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 			registerRollbackTools(ls, client)
 		}},
 		{"enhancements", func() { registerEnhancementTools(ls, client) }},
-		{"debug", func() { registerDebuggerTools(ls, client, selector) }},
+		{"debug", func() { registerDebuggerTools(ls, client, selector, fallback, settings) }},
 		{"export", func() {
 			registerExportTools(ls, client)
 			registerAbapGitSyncTools(ls, client)
