@@ -123,10 +123,10 @@ func TestLoadResolvesEnvPlaceholders(t *testing.T) {
 	}
 }
 
-// TestLoadRejectsUnsetEnvPlaceholder pins that an unset or empty variable fails
+// TestLoadRejectsUnsetOrEmptyEnvPlaceholder pins that an unset or empty variable fails
 // at load time, so the server never starts with a credential adtler would
 // refuse on every request (#575).
-func TestLoadRejectsUnsetEnvPlaceholder(t *testing.T) {
+func TestLoadRejectsUnsetOrEmptyEnvPlaceholder(t *testing.T) {
 	t.Setenv("AIBAP_TEST_SAP_USER", "DEVUSER")
 	t.Setenv("AIBAP_TEST_SAP_EMPTY", "")
 	for _, password := range []string{"${env:AIBAP_TEST_SAP_UNSET}", "${env:AIBAP_TEST_SAP_EMPTY}"} {

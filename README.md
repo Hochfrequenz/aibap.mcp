@@ -300,7 +300,7 @@ Create `~/.config/sap-mcp/systems.json` (shared with [sapgui.mcp](https://github
 >
 > Placeholders are **not** resolved in the `tools` list or in system names — those are read by this server rather than by the shared config layer. Text that only looks like a placeholder, such as `${SAP_PASSWORD}` without the `env:` prefix, is used verbatim.
 >
-> Placeholders are resolved once and do not nest: a variable whose value is itself `${env:OTHER}` leaves that text in the credential. The server then refuses every request for that system before contacting SAP, so no failed logon counts against the user, and the tool error says it is a configuration problem.
+> Placeholders are resolved once and do not nest: a variable whose value is exactly `${env:OTHER}` leaves that text in the credential. The server then refuses every request for that system before contacting SAP, so no failed logon counts against the user, and the tool error says it is a configuration problem. A value with other text around the placeholder, such as `abc${env:OTHER}`, is sent as written.
 >
 > See [sap-mcp-config](https://github.com/Hochfrequenz/sap-mcp-config#keeping-secrets-out-of-the-config-file) for the exact rules, including which text is and is not treated as a placeholder.
 

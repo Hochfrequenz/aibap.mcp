@@ -93,7 +93,7 @@ const (
 	// already fails at startup on an unset or empty variable, so reaching this
 	// means the variable's own value is a placeholder: substitution is
 	// single-pass and does not nest.
-	unresolvedPlaceholderHint = "Configuration problem, not an authentication failure: a user or password in systems.json is still an unresolved `${env:VAR}` placeholder, so the request was refused before it reached SAP and no failed logon was counted. Set the named environment variable to the credential itself (not to another `${env:...}` placeholder — placeholders are resolved once, not nested) in the environment the MCP server starts with, then restart the server."
+	unresolvedPlaceholderHint = "Configuration problem, not an authentication failure: the user or password resolved from systems.json is itself an unresolved `${env:VAR}` placeholder, so the request was refused before it reached SAP and no failed logon was counted. Set the environment variable that systems.json references for this field (not the one shown in the error, which is that variable's current value) to the credential itself in the environment the MCP server starts with, then restart the server — placeholders are resolved once and do not nest."
 	ownAccessConflictHintFmt  = "Resource access denied (403 `ExceptionResourceNoAccess` / EU-510) — despite the \"currently editing\" wording, `%s` is often your own stale lock from an earlier session, not a real concurrent editor. If that's you, call `unlock_object` to drop the stale lock and retry; otherwise wait, or check SM12 for the lock owner."
 )
 
