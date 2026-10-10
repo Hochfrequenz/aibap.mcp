@@ -18,6 +18,13 @@ jobs:
       pull-requests: write
       issues: write
     steps:
+      # Base commit, not the PR head: the job holds a write token, so it must
+      # only run scripts that are already on the base branch.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
       - name: Inject workflow template into PR body
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -26,8 +33,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Ensure the verification label exists (idempotent). The job has no
-          # checkout, so every gh call needs an explicit --repo (#548).
+          # Ensure the verification label exists (idempotent). Keep the
+          # explicit --repo on every gh call: the checkout carries no
+          # credentials and no PR branch (#548).
           gh label create needs-reproducer-verify --repo "$REPO" \
             --description "Adtler bump PR — reproducers not yet verified" \
             --color E4E669 --force
@@ -50,7 +58,11 @@ jobs:
             [ -z "$line" ] && continue
             # \x1f, not \t: tab is IFS whitespace, so an empty summary would
             # collapse and shift the adtler ref into its place.
-            IFS=$'\x1f' read -r checkbox issue_num summary adtler_ref <<<"$(LINE="$line" python3 -c 'import os,re; line=os.environ["LINE"]; match=re.match(r"- \[(?P<mark>.)\] (?:\*\*)?(?P<issue>#[0-9]+)(?:\*\*)?(?: —|:)?(?P<rest>.*)$", line); rest=(match.group("rest") or "").strip(); adtler_re=r"\s*\(adtler: ((?:\[[^\]]*\]\([^)]*\)|[^()])+)\)"; adtler_match=re.search(adtler_re, rest); adtler=adtler_match.group(1) if adtler_match else ""; summary=re.sub(adtler_re, "", rest).strip(); summary=" ".join(summary.split()); summary=re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b","<redacted>",summary); host_token=re.compile(r"\b[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?::\d+)?\b"); summary=host_token.sub(lambda m: m.group(0) if re.fullmatch(r"v?\d+(?:\.\d+)+", m.group(0).split(":",1)[0]) else "<redacted>", summary); summary=re.sub(r"\b[A-Z0-9]{3}K9\d+\b","<redacted>",summary); summary=re.sub(r"/[A-Za-z0-9_]+/[A-Za-z0-9_/-]+\b","<redacted>",summary); summary=summary.replace("@","@ "); print("- [{}]\x1f{}\x1f{}\x1f{}".format(match.group("mark"), match.group("issue"), summary, adtler))')"
+            # Parsing and redaction rules live in the script, with tests (#578).
+            # Assign first: set -e ignores a failing $(...) inside a here-string,
+            # which would silently empty the checklist.
+            parsed=$(LINE="$line" python3 .github/scripts/tracker_bullet.py)
+            IFS=$'\x1f' read -r checkbox issue_num summary adtler_ref <<<"$parsed"
             if [ -n "$summary" ] && [ -n "$adtler_ref" ]; then
               printf '%s %s — %s (adtler: %s)\n' \
                 "$checkbox" "$issue_num" "$summary" "$adtler_ref"

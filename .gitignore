@@ -10,3 +10,4 @@ mcp-server-abap
 dist/
 .worktrees/
 .idea/
+__pycache__/

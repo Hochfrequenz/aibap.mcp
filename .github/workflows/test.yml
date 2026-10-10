@@ -20,6 +20,14 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+  workflow-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test .github/scripts
+        run: python3 -m unittest discover -s .github/scripts -v
+
   smoke-test:
     if: github.event_name == 'pull_request'
     strategy:
