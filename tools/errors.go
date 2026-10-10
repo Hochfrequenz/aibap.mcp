@@ -86,7 +86,15 @@ const (
 	// active user" to compare against, so the hint names the user structurally
 	// (via adt.ADTError.IsEnqueueLock) and lets the caller decide by comparing
 	// it against themselves. %s is that user.
-	ownAccessConflictHintFmt = "Resource access denied (403 `ExceptionResourceNoAccess` / EU-510) — despite the \"currently editing\" wording, `%s` is often your own stale lock from an earlier session, not a real concurrent editor. If that's you, call `unlock_object` to drop the stale lock and retry; otherwise wait, or check SM12 for the lock owner."
+	// unresolvedPlaceholderHint (#575): adtler refuses a Basic-auth user or
+	// password that is still exactly one ${env:VAR} placeholder before sending
+	// anything (adt.ErrUnresolvedPlaceholder, adtler#216), because SAP would
+	// count the rejected logon and a few in a row lock the user. config.Load
+	// already fails at startup on an unset or empty variable, so reaching this
+	// means the variable's own value is a placeholder: substitution is
+	// single-pass and does not nest.
+	unresolvedPlaceholderHint = "Configuration problem, not an authentication failure: the user or password resolved from systems.json is itself an unresolved `${env:VAR}` placeholder, so the request was refused before it reached SAP and no failed logon was counted. Set the environment variable that systems.json references for this field (not the one shown in the error, which is that variable's current value) to the credential itself in the environment the MCP server starts with, then restart the server — placeholders are resolved once and do not nest."
+	ownAccessConflictHintFmt  = "Resource access denied (403 `ExceptionResourceNoAccess` / EU-510) — despite the \"currently editing\" wording, `%s` is often your own stale lock from an earlier session, not a real concurrent editor. If that's you, call `unlock_object` to drop the stale lock and retry; otherwise wait, or check SM12 for the lock owner."
 )
 
 // t100KeyIDSystemChange / t100KeyNoSystemNotModifiable = SE91's TK/102, the
@@ -234,6 +242,12 @@ func errorResult(err error) *mcp.CallToolResult {
 // is accepted for conditions with no clean structural signal (#406, #404) or
 // where SAP's own body is simply sparser (ECC, #378, #490).
 func matchHint(err error) string {
+	// An unresolved credential placeholder (#575) is refused by adtler before
+	// any request, so it carries no ADT Type or status; check it first so no
+	// status-code or abapGit hint can claim it.
+	if errors.Is(err, adt.ErrUnresolvedPlaceholder) {
+		return unresolvedPlaceholderHint
+	}
 	// abapGit companion errors (#135) are not ADT errors: they carry their own
 	// code, and the generic status-code hints below must never attach to them.
 	if hint, ok := abapGitSyncHint(err); ok {
