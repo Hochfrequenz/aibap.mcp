@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/aibap.mcp/config"
@@ -81,5 +82,62 @@ func TestLoadValidationFailure(t *testing.T) {
 	}
 	if _, err := config.Load(path); err == nil {
 		t.Fatal("expected error for empty systems")
+	}
+}
+
+// writeConfig writes a single-system config whose user and password are the
+// given raw JSON string values, and returns its path.
+func writeConfig(t *testing.T, user, password string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.json")
+	data := `{
+		"default_system": "dev",
+		"systems": {
+			"dev": {"host": "https://example.com", "user": "` + user + `", "password": "` + password + `", "client": "100"}
+		}
+	}`
+	if err := os.WriteFile(path, []byte(data), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return path
+}
+
+// TestLoadResolvesEnvPlaceholders pins that config.Load — the only path main.go
+// and cmd/login.go use to build a SAPSystem — resolves ${env:VAR} credentials
+// before adtler sees them. adtler refuses an unresolved placeholder outright
+// (adt.ErrUnresolvedPlaceholder, #575), so a regression here would break every
+// Basic-auth system configured with placeholders.
+func TestLoadResolvesEnvPlaceholders(t *testing.T) {
+	t.Setenv("AIBAP_TEST_SAP_USER", "DEVUSER")
+	t.Setenv("AIBAP_TEST_SAP_PASSWORD", "s3cret")
+	cfg, err := config.Load(writeConfig(t, "${env:AIBAP_TEST_SAP_USER}", "${env:AIBAP_TEST_SAP_PASSWORD}"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	sys := cfg.Systems["dev"]
+	if sys.User != "DEVUSER" {
+		t.Errorf("User: got %q, want %q", sys.User, "DEVUSER")
+	}
+	if sys.Password != "s3cret" {
+		t.Errorf("Password: got %q, want the resolved value", sys.Password)
+	}
+}
+
+// TestLoadRejectsUnsetEnvPlaceholder pins that an unset or empty variable fails
+// at load time, so the server never starts with a credential adtler would
+// refuse on every request (#575).
+func TestLoadRejectsUnsetEnvPlaceholder(t *testing.T) {
+	t.Setenv("AIBAP_TEST_SAP_USER", "DEVUSER")
+	t.Setenv("AIBAP_TEST_SAP_EMPTY", "")
+	for _, password := range []string{"${env:AIBAP_TEST_SAP_UNSET}", "${env:AIBAP_TEST_SAP_EMPTY}"} {
+		t.Run(password, func(t *testing.T) {
+			_, err := config.Load(writeConfig(t, "${env:AIBAP_TEST_SAP_USER}", password))
+			if err == nil {
+				t.Fatal("Load succeeded, want an error for the unresolvable placeholder")
+			}
+			if !strings.Contains(err.Error(), "password") {
+				t.Errorf("error should name the password field, got: %v", err)
+			}
+		})
 	}
 }
