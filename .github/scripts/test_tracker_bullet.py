@@ -26,6 +26,9 @@ class SanitizeSummaryTest(unittest.TestCase):
             "two-label host example.internal": "two-label host <redacted>",
             "file-like name with port object.go:8080": "file-like name with port <redacted>",
             "three labels ending in an extension a.b.go": "three labels ending in an extension <redacted>",
+            "ccTLD that is also an extension corp.sh": "ccTLD that is also an extension <redacted>",
+            "md host sapdev.md": "md host <redacted>",
+            "py host intranet.py": "py host <redacted>",
             "ip 10.1.2.3:8000 down": "ip <redacted> down",
             "ip 10.1.2.3 down": "ip <redacted> down",
         }

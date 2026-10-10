@@ -22,17 +22,20 @@ TRANSPORT_RE = re.compile(r"\b[A-Z0-9]{3}K9\d+\b")
 NAMESPACE_RE = re.compile(r"/[A-Za-z0-9_]+/[A-Za-z0-9_/-]+\b")
 
 # A two-label token whose second label is one of these is a file or repository
-# name (object.go, README.md, aibap.mcp), not a host. Three or more labels, or a
-# port, are always treated as a host.
-NON_HOST_SUFFIXES = {
-    "go", "mod", "sum", "md", "yml", "yaml", "json", "py", "sh", "txt", "xml", "abap", "mcp",
-}
+# name (object.go, aibap.mcp), not a host. None of them is a top-level domain;
+# extensions that are (md, sh, py) are left out on purpose, so a two-label host
+# under one of those TLDs stays redacted. Three or more labels, or a port, are
+# always treated as a host.
+NON_HOST_SUFFIXES = {"go", "mod", "sum", "yml", "yaml", "json", "txt", "xml", "abap", "mcp"}
+
+# Markdown files are kept by exact name, because md is a top-level domain.
+NON_HOST_NAMES = {"README.md", "CLAUDE.md", "AGENTS.md", "CHANGELOG.md", "CONTRIBUTING.md"}
 
 
 def _is_harmless(token):
     if ":" in token:
         return False
-    if VERSION_RE.fullmatch(token):
+    if VERSION_RE.fullmatch(token) or token in NON_HOST_NAMES:
         return True
     labels = token.split(".")
     # Abbreviations such as e.g / i.e: every label a single letter.

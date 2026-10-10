@@ -59,8 +59,10 @@ jobs:
             # \x1f, not \t: tab is IFS whitespace, so an empty summary would
             # collapse and shift the adtler ref into its place.
             # Parsing and redaction rules live in the script, with tests (#578).
-            IFS=$'\x1f' read -r checkbox issue_num summary adtler_ref \
-              <<<"$(LINE="$line" python3 .github/scripts/tracker_bullet.py)"
+            # Assign first: set -e ignores a failing $(...) inside a here-string,
+            # which would silently empty the checklist.
+            parsed=$(LINE="$line" python3 .github/scripts/tracker_bullet.py)
+            IFS=$'\x1f' read -r checkbox issue_num summary adtler_ref <<<"$parsed"
             if [ -n "$summary" ] && [ -n "$adtler_ref" ]; then
               printf '%s %s — %s (adtler: %s)\n' \
                 "$checkbox" "$issue_num" "$summary" "$adtler_ref"
