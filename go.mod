@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/Hochfrequenz/adtler v0.8.0
-	github.com/Hochfrequenz/sap-mcp-config v1.1.0
+	github.com/Hochfrequenz/sap-mcp-config v1.1.1
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v1.4.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
