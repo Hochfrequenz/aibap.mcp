@@ -1,5 +1,5 @@
-github.com/Hochfrequenz/adtler v0.8.0 h1:T8f0c1zLvTbuA4CMHGpgNXiNjJ7MLrrRFn7db/FFADE=
-github.com/Hochfrequenz/adtler v0.8.0/go.mod h1:MXIK5coKIJfV6L2U2pgluWwMrHQHVMVAgKAgDmpVdSg=
+github.com/Hochfrequenz/adtler v0.10.0 h1:am1FqHypX1QjFCU/X0iBNHS8a+t1+b9RIbYcQkeTXZY=
+github.com/Hochfrequenz/adtler v0.10.0/go.mod h1:MXIK5coKIJfV6L2U2pgluWwMrHQHVMVAgKAgDmpVdSg=
 github.com/Hochfrequenz/sap-mcp-config v1.1.1 h1:FCpazy8/qaw+UNxQkRbMiQrEeiDHgw9aKchwLMFfnyo=
 github.com/Hochfrequenz/sap-mcp-config v1.1.1/go.mod h1:FYNXWpfH16558Ai3BxYbJeTnKelaOqwbxi4TiFeYWsY=
 github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxKI=
