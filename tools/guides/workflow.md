@@ -30,8 +30,8 @@ Answer these before anything else. The rest of the workflow depends on them.
 - **A**: develop in the target system's development system through ADT, as in
   section 2. Deliver through that system's own transport landscape.
 - **B**: like A, but start from what is in the system: export or read the
-  current state into git first (`export_package`, `get_source`); from then on
-  git is authoritative for the change. The unit of change is the transport
+  current state into git first (`export_package`) so the diff shows only
+  your change. The unit of change is the transport
   request, not the package, because changes usually touch objects in several
   packages that other people also work on. Code that depends heavily on the
   existing system cannot be meaningfully tested outside it.
@@ -101,9 +101,8 @@ branch
    by inspection. In E not at all.
 5. **A commit is the checkpoint**, not a transport release. Use
    `rollback_transport` as a last resort (see its limits below).
-6. **Run the inner loop without SAP where possible**: unit tests with test
-   doubles, or a local ABAP interpreter. Results from there do not replace the
-   checks in SAP.
+6. **Use local tests for isolated logic** (section 2). They do not replace
+   the checks in SAP.
 7. **One workbench request per feature.** For self-contained work, one
    package per repository.
 
@@ -114,7 +113,7 @@ system owner, not of the tooling.
 
 | Situation | Route |
 |---|---|
-| Target has ADT access | Write the tagged state into its development system through ADT, then use its transport landscape. |
+| Target has ADT access | The tagged state is already in its development system (SAP-first). Compare (rule 4), then use its transport landscape. |
 | Target has no ADT access | Build a transport from the tagged state on your own system (compare first, rule 4), release it, hand over the files. Or apply by hand. |
 
 A transport built from a reviewed and compared git state is as trustworthy as
