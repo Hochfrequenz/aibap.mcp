@@ -38,7 +38,7 @@ func WithWorkflowGuide(text string) RegisterOption {
 func registerWorkflowGuide(s resourceAdder, text string) {
 	s.AddResource(
 		mcp.NewResource(WorkflowGuideURI, "Development workflow guide",
-			mcp.WithResourceDescription("How to organise an ABAP development project with this server: a decision tree (self-contained or embedded change; ADT, SAP GUI or no access), the edit-in-SAP, check, export, review loop, delivery routes, and the tool limits that matter. Read before starting a project."),
+			mcp.WithResourceDescription("How to organise an ABAP development project with this server: a decision tree (self-contained or embedded change; ADT, SAP GUI or no access), two variants of the development loop (SAP-first, files-first) and when to use which, delivery routes, and the tool limits that matter. Read before starting a project."),
 			mcp.WithMIMEType("text/markdown"),
 		),
 		func(context.Context, mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {

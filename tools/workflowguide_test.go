@@ -72,6 +72,8 @@ func TestWorkflowGuideContent(t *testing.T) {
 		"release_transport",
 		"transport of copies",
 		"abapgit_pull",
+		"SAP-first",
+		"files-first",
 	} {
 		if !strings.Contains(strings.ToLower(defaultWorkflowGuide), strings.ToLower(want)) {
 			t.Errorf("workflow guide does not mention %q", want)
