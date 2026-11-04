@@ -3,6 +3,9 @@ package tools_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/adtler/adt"
@@ -52,6 +55,39 @@ func TestVerifySourceTool(t *testing.T) {
 		}
 		if len(out.Messages) != 1 || out.Messages[0].Type != "E" {
 			t.Errorf("expected one E message, got %+v", out.Messages)
+		}
+	})
+
+	t.Run("failed cleanup keeps the result and names the program", func(t *testing.T) {
+		mock := &mockClient{
+			verifySourceFn: func(_ context.Context, _ string) (bool, []adt.SyntaxMessage, error) {
+				return true, nil, &adt.VerifyCleanupError{Program: "Z_ADTLER_VERIFY_000001", Err: errors.New("delete failed")}
+			},
+		}
+		result := callTool(t, newTestServer(mock), "verify_source", map[string]interface{}{"source": "REPORT zx."})
+		if result.IsError {
+			t.Fatalf("unexpected error: %v", result.Content)
+		}
+		var out struct {
+			Valid        bool   `json:"valid"`
+			CleanupError string `json:"cleanup_error"`
+		}
+		_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
+		if !out.Valid || !strings.Contains(out.CleanupError, "Z_ADTLER_VERIFY_000001") {
+			t.Errorf("want valid=true and the program named in cleanup_error, got %+v", out)
+		}
+	})
+
+	t.Run("failed check with failed cleanup is an error", func(t *testing.T) {
+		mock := &mockClient{
+			verifySourceFn: func(_ context.Context, _ string) (bool, []adt.SyntaxMessage, error) {
+				leak := &adt.VerifyCleanupError{Program: "Z_ADTLER_VERIFY_000002", Err: errors.New("delete failed")}
+				return false, nil, fmt.Errorf("VerifySource: set source: %w; additionally: %w", errors.New("boom"), leak)
+			},
+		}
+		result := callTool(t, newTestServer(mock), "verify_source", map[string]interface{}{"source": "REPORT zx."})
+		if !result.IsError {
+			t.Fatalf("want a tool error, got %v", result.Content)
 		}
 	})
 

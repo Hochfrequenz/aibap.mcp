@@ -44,7 +44,7 @@ const (
 	notFoundHint       = "Object not found. Check the URI spelling or use `search_objects` to find it."
 	forbiddenHint      = "Authorization error. Check that the ADT user has the required S_DEVELOP authorizations."
 	// unauthorizedHint: every repeated call with a rejected credential counts as a failed SAP logon and can lock the user.
-	unauthorizedHint = "Logon rejected (401). Do not retry: each attempt counts as a failed logon and can lock the SAP user. Ask the user to check the credentials of this system in systems.json."
+	unauthorizedHint = "Logon rejected (401). Do not retry: each attempt counts as a failed logon and can lock the SAP user. Ask the user to check the credentials of this system in systems.json, or to log on again on an OAuth2 system."
 	// systemNotModifiableHint: a 403 ExceptionResourceNoAccess whose message
 	// says the system change option is "not modifiable" is a system-wide
 	// configuration state, not an authorization problem — no role or profile
