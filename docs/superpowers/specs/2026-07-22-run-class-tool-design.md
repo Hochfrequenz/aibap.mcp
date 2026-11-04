@@ -222,7 +222,7 @@ are spec-legal regardless.)
   expected `console_output`.
 - classrun error from client → `errorResult`.
 
-**Integration (`//go:build integration`, live, `MCP_INTEGRATION_SYSTEMS` = hfq,s4u):**
+**Integration (`//go:build integration`, live, `MCP_INTEGRATION_SYSTEMS` = the default set, see README.md):**
 - `run_class` against the real fixture class `ZCL_ADT_MCP_CLASSRUN_TST` in
   `Z_ADT_MCP_TEST` → asserts the known console string.
 
@@ -244,7 +244,7 @@ unit tests per the TDD convention.
 
 **Reproducer snippet** (for the tracking issue, per CLAUDE.md point 3):
 - Tool call: `run_class` with `{"class_name": "ZCL_ADT_MCP_CLASSRUN_TST"}`
-- Target: `s4u` (S/4) and `hfq` (ECC), fresh MCP session, no preconditions.
+- Target: the S/4 system and the ECC system, fresh MCP session, no preconditions.
 - Fixed (expected): `{"class_name": "ZCL_ADT_MCP_CLASSRUN_TST", "console_output": "<known string the fixture writes>"}`
 - Broken (current): tool `run_class` does not exist / not registered.
 
