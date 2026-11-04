@@ -5,6 +5,7 @@ of truth lives, how code gets into SAP and back out, and how it is delivered.
 Read this before starting a project. The tool descriptions cover single steps;
 this guide covers how they fit together.
 
+Tools named here may be disabled by the server's tool-group configuration.
 Rules are marked **must** or **should**. A *should* that cannot be met in a
 given setup is acceptable, but say so in the pull request or release notes.
 
@@ -28,15 +29,18 @@ Answer these before anything else. The rest of the workflow depends on them.
 
 - **A**: develop in the target system's development system through ADT, as in
   section 2. Deliver through that system's own transport landscape.
-- **B**: like A, but start from what is in the system: read the current source
-  with `get_source` before changing it. The unit of change is the transport
+- **B**: like A, but start from what is in the system: export or read the
+  current state into git first (`export_package`, `get_source`); from then on
+  git is authoritative for the change. The unit of change is the transport
   request, not the package, because changes usually touch objects in several
   packages that other people also work on. Code that depends heavily on the
   existing system cannot be meaningfully tested outside it.
 - **C**: develop on a system you do have ADT access to, at the **lowest
   release** among the targets (or check compatibility as in rule 2 below).
   Deliver as a transport: put the objects into a request, release it, and
-  hand the transport files to whoever imports them. Or apply the code by hand.
+  hand the transport files (outside this server) to whoever imports them. Or
+  apply the code by hand. On an ECC system the release step needs SE09 or a
+  fallback (section 5).
 - **D**: write the code locally, then apply and test it through SAP GUI (for
   example with the [sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp)
   server). Commit what was applied.
@@ -75,7 +79,8 @@ branch → write files → (optional) run logic locally without SAP
    request before it is delivered.
 2. **Compatibility with the lowest target release is checked before
    delivery.** How is up to you: develop on that release, activate there, or
-   at least check statically against its syntax version.
+   at least run a static check configured for its syntax version (for
+   example abaplint).
 3. **Document what could not be checked**, in the pull request or the
    release notes.
 
@@ -109,14 +114,17 @@ dependencies, release differences), exactly as with manual delivery.
 
 ## 5. Tool limits that matter for the workflow
 
-- **`release_transport`**: works over ADT on S/4HANA. ECC has no ADT release
-  endpoint; release there through SE09 unless your build includes a fallback.
+- **`release_transport`**: works over ADT on S/4HANA. On ECC, release over
+  ADT does not work (SAP can answer success while the request stays
+  modifiable; the tool detects this). Release through SE09 unless your build
+  includes a fallback.
 - **`rollback_transport`**: restores the version before the transport for
   source objects (PROG, CLAS, INTF, FUGR) only; other types are skipped.
   Objects the transport *created* are reported as failed and left in place
   (#603).
 - **Transport of copies**: `create_transport` can create one (category `T`),
   but no tool can fill it yet (#602).
-- **`create_object`**: DDIC types (TABL, DTEL, DOMA, DDLS) only on S/4HANA.
-- **`export_package`** exports one package. There is no export of the objects
+- **`create_object`**: DDIC and CDS types (TABL, DTEL, DOMA, DDLS) only on
+  S/4HANA.
+- **`export_package` / `export_packages`** export whole packages. There is no export of the objects
   of a single transport request yet, which limits the comparison in B.
