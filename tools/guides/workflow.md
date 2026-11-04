@@ -24,10 +24,10 @@ Answer these before anything else. The rest of the workflow depends on them.
 
 | | ADT access | SAP GUI only | No access |
 |---|---|---|---|
-| **Self-contained** | **A**: standard loop against the target system | **C**: standard loop on another system with ADT, deliver by transport | **C** |
-| **Embedded** | **B**: standard loop in the existing system, git tracks the change set | **D**: AI-assisted manual work | **E**: no workable route |
+| **Self-contained** | **A**: loop (section 2) against the target system | **C**: loop (section 2) on another system with ADT, deliver by transport | **C** |
+| **Embedded** | **B**: loop (section 2) in the existing system, git tracks the change set | **D**: AI-assisted manual work | **E**: no workable route |
 
-- **A**: develop in the target system's development system through ADT, as in
+- **A**: develop in the target system's development system through ADT, with the loop in
   section 2. Deliver through that system's own transport landscape.
 - **B**: like A, but start from what is in the system: export or read the
   current state into git first (`export_package`, or `get_source` without
@@ -76,14 +76,24 @@ branch → write files → test locally without SAP (unit tests with test
 
 **Which variant**
 
+Decide in two steps. Step 1 can force a variant for the whole change; if it
+does not, step 2 decides object by object, and the first matching row wins.
+
+*Step 1: the whole change*
+
 | Situation | Variant | Why |
 |---|---|---|
-| The export companion (see `export_package`) is not installed on the development system and cannot be | Files-first | Without the export, code reaches git only from files. git then holds the sources, not SAP's full serialization. |
-| Change embedded in existing custom code (B) | SAP-first | It can only be tested in the system anyway, and the export captures exactly what SAP has. |
-| Mostly DDIC | SAP-first | DDIC is created in SAP; the export serializes it, so nobody writes its XML. |
-| Logic that can be isolated and tested without SAP | Files-first | Fast local loop; SAP only for the final checks. |
-| Several branches of the same package in parallel | Files-first | SAP holds one state per package; write into SAP one branch at a time. |
-| None of the above | SAP-first | Fewer sync steps, and SAP does the serialization. |
+| The export companion (see `export_package`) is not installed on the development system and cannot be | Files-first | Without the export, code reaches git only from files; git then holds the sources, not SAP's full serialization. |
+| Several branches touch the same objects in parallel | Files-first for the branch work | SAP holds one state per object; write into SAP one branch at a time. |
+
+*Step 2: each object*
+
+| Object | Variant | Why |
+|---|---|---|
+| Logic that can be isolated and tested without SAP, even inside an embedded change (e.g. a new helper class) | Files-first | Fast local loop; SAP only for the final checks. |
+| DDIC object | SAP-first | DDIC is created in SAP (on ECC see section 5); the export serializes it. |
+| Code that depends on the existing system (case B) | SAP-first | It can only be tested in the system anyway, and the export captures exactly what SAP has. |
+| Anything else | SAP-first | Fewer sync steps, and SAP does the serialization. |
 
 Both variants can be mixed within one change, object by object, with two
 rules:
@@ -140,7 +150,7 @@ system owner, not of the tooling.
 
 | Situation | Route |
 |---|---|
-| Target has ADT access | SAP-first: the tagged state is already in its development system. Files-first: write it there through ADT. Compare (rule 4), then use its transport landscape. |
+| Target has ADT access | SAP-first: the tagged state should already be in its development system. Files-first: write it there through ADT. Compare (rule 4), then use its transport landscape. |
 | Target has no ADT access | Build a transport from the tagged state on your own system (compare first, rule 4), release it, hand over the files. Or apply by hand. |
 
 A transport built from a reviewed and compared git state is as trustworthy as
