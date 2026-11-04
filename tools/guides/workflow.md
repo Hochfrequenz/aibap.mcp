@@ -50,23 +50,30 @@ Answer these before anything else. The rest of the workflow depends on them.
 ## 2. The standard loop (A, B, C)
 
 ```
-branch → write files → (optional) run logic locally without SAP
-       → create_object / set_source_from_file
-       → activate_objects · run_unit_tests · run_atc_check
-           ↺ on errors: fix the file and write again
-       → export_package → diff against the branch
-       → commit → pull request → human review → merge → tag
-       → deliver (section 4)
+branch
+  → edit in SAP through ADT: create_object, get_source,
+    patch_source / set_source_from_file
+  → activate_objects · run_unit_tests · run_atc_check   ↺ until green
+  → export_package into the branch → git diff shows the change
+  → commit → pull request → human review → merge → tag
+  → deliver (section 4)
 ```
 
-- Files in git, in abapGit layout, are the working copy. ADT writes them into
-  SAP and runs the checks there.
-- `export_package` writes a package in abapGit layout to disk, without abapGit
-  online and without an internet connection on the SAP side. It needs the
-  companion package named in its tool description installed on the system.
-- A fix made directly in SAP (for example during a debugging session) is
-  allowed, but export and commit it right away, otherwise SAP and git drift
-  apart.
+- **SAP is the working copy, git is the record.** Edit through ADT; SAP does
+  the serialization, so nobody hand-writes abapGit XML. `export_package`
+  writes the package in abapGit layout into the branch, and `git diff` then
+  shows exactly what changed. It needs no abapGit online and no internet
+  connection on the SAP side, but the companion package named in its tool
+  description must be installed on the system.
+- **Optional: files first for isolated logic.** Logic that does not depend on
+  the system can be written and tested locally without SAP (unit tests with
+  test doubles, or a local ABAP interpreter), then written into SAP with
+  `set_source_from_file` to continue the loop. Faster for pure logic; it still
+  has to activate and pass in SAP.
+- **One working copy at a time.** Between two exports, edit an object either
+  locally or in SAP, not both: the export overwrites the local file.
+- **Export at every green state** and before ending a session, so SAP and git
+  do not drift apart. This includes fixes made during debugging.
 - Where abapGit is installed and the SAP system can reach the git host,
   `abapgit_pull` / `abapgit_push` are an alternative to the ADT write and the
   export. They need the companion endpoints named in their tool descriptions.
@@ -75,8 +82,9 @@ branch → write files → (optional) run logic locally without SAP
 
 **Must**
 
-1. **git is the source of truth.** A human reviews the change in a pull
-   request before it is delivered.
+1. **What is delivered is a reviewed git commit.** git is the source of
+   truth for every delivery: a human reviews the change in a pull request
+   first. SAP is where the work happens, git is what counts.
 2. **Compatibility with the lowest target release is checked before
    delivery.** How is up to you: develop on that release, activate there, or
    at least run a static check configured for its syntax version (for
@@ -87,7 +95,8 @@ branch → write files → (optional) run logic locally without SAP
 **Should**
 
 4. **Compare SAP with git before a release or delivery**: export, diff, and
-   expect no differences. Fully possible in A and C. In B only for the objects
+   expect no differences, i.e. nothing changed in SAP since the reviewed
+   commit. Fully possible in A and C. In B only for the objects
    of your own request (others may have changed the same objects). In D only
    by inspection. In E not at all.
 5. **A commit is the checkpoint**, not a transport release. Use
