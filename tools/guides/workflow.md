@@ -121,10 +121,11 @@ dependencies, release differences), exactly as with manual delivery.
 - **`rollback_transport`**: restores the version before the transport for
   source objects (PROG, CLAS, INTF, FUGR) only; other types are skipped.
   Objects the transport *created* are reported as failed and left in place
-  (#603).
+  ([#603](https://github.com/Hochfrequenz/aibap.mcp/issues/603)).
 - **Transport of copies**: `create_transport` can create one (category `T`),
-  but no tool can fill it yet (#602).
+  but no tool can fill it yet ([#602](https://github.com/Hochfrequenz/aibap.mcp/issues/602)).
 - **`create_object`**: DDIC and CDS types (TABL, DTEL, DOMA, DDLS) only on
-  S/4HANA.
-- **`export_package` / `export_packages`** export whole packages. There is no export of the objects
-  of a single transport request yet, which limits the comparison in B.
+  S/4HANA, unless your build includes a fallback (TABL, DTEL, DOMA).
+- **`export_package` / `export_packages`** export whole packages. There is no
+  export of the objects of a single transport request yet, which limits the
+  comparison in B.

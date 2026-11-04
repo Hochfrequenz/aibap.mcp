@@ -173,6 +173,7 @@ func TestConsentFlagReachesTheToolList(t *testing.T) {
 // must serve that text under tools.WorkflowGuideURI. Without the variable, the
 // public default is served (#604).
 func TestWorkflowGuideVariableReachesTheResource(t *testing.T) {
+	// Not parallel: it mutates the package-level workflowGuide.
 	read := func(s *server.MCPServer) string {
 		t.Helper()
 		req := `{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"` + tools.WorkflowGuideURI + `"}}`
