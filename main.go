@@ -28,6 +28,11 @@ var version = "dev"
 // nil means no fallback — the server works fine without it.
 var blackMagic tools.BlackMagicClient
 
+// workflowGuide replaces the text of the workflow guide resource
+// (tools.WorkflowGuideURI) when a build-tagged file sets it in init().
+// Empty means the public default guide. See #604.
+var workflowGuide string
+
 func main() {
 	// Override the default token path so existing users keep their tokens at
 	// the old aibap.mcp location. The auth package now defaults to the
@@ -195,7 +200,10 @@ func buildServer(
 	s := server.NewMCPServer("SAP ADT MCP Server", version,
 		server.WithInstructions(instructions),
 	)
-	opts := append([]tools.RegisterOption{tools.WithConsentMode(consent)}, extra...)
+	// The workflow guide override is read here rather than in run() so a test
+	// of buildServer covers the package-level variable a downstream build
+	// sets (#604).
+	opts := append([]tools.RegisterOption{tools.WithConsentMode(consent), tools.WithWorkflowGuide(workflowGuide)}, extra...)
 	tools.RegisterAllWithLockMap(s, client, selector, adt.NewLockMap(), enabledGroups, fallback, opts...)
 	return s
 }
@@ -235,6 +243,9 @@ BEST FOR:
 - Executing ABAP (run_class: runs a global, active class implementing IF_OO_ADT_CLASSRUN and returns its console output — use it to verify generated code produces the expected result. General-purpose, not just for classes that already exist for their own sake: wrap any ABAP logic, e.g. a report's SUBMIT, in a throwaway classrun class to run it when no dedicated tool exists. Runs arbitrary ABAP with real side effects — see APPROVAL below.)
 - Code completion, pretty printing, refactoring
 - DDIC lookups (get_object_info, get_ddic_info)%s
+
+WORKFLOW:
+Before starting a development project, read the resource `+tools.WorkflowGuideURI+`: where the source of truth lives, how code gets into SAP and back into git, how it is delivered, and the tool limits that matter.
 
 APPROVAL:
 This server does not ask for confirmation itself. Approving a call is the MCP client's job, and what the client asks depends on its own permission settings. Eight tools carry a marking that asks the client to require approval on every call, because nothing here can undo them: delete_object, delete_transport, release_transport, rollback_transport, run_class, update_customizing, abapgit_pull and abapgit_push. The marking is a request, not a guarantee — whether a client honours it, and some do not, is outside this server's control. A call that never reaches SAP was refused by the client, not by SAP — repeating it unchanged will not help.

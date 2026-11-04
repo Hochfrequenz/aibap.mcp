@@ -579,6 +579,8 @@ You: Run the unit tests for this class
 Claude: [calls run_unit_tests] 5 tests passed, 0 failed.
 ```
 
+For a whole project rather than a single change, the server exposes the resource `sap-adt://guides/workflow` ([source](tools/guides/workflow.md)) in every session: a decision tree (self-contained or embedded change; ADT, SAP GUI or no access to the target), the loop from files through ADT and back into git, delivery routes, and the tool limits that matter. A custom build can replace its text under the same URI: set the package-level `var workflowGuide string` in `main.go` from a build-tagged `init()`, the same way as `blackMagic`; an empty value keeps the public guide.
+
 ## Logging
 
 Logs go to stderr by default (text format). Configure via environment variables:

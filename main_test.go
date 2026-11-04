@@ -168,6 +168,46 @@ func TestConsentFlagReachesTheToolList(t *testing.T) {
 	}
 }
 
+// TestWorkflowGuideVariableReachesTheResource covers the hook a downstream
+// build uses: a build-tagged file sets workflowGuide in init(), and buildServer
+// must serve that text under tools.WorkflowGuideURI. Without the variable, the
+// public default is served (#604).
+func TestWorkflowGuideVariableReachesTheResource(t *testing.T) {
+	read := func(s *server.MCPServer) string {
+		t.Helper()
+		req := `{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"` + tools.WorkflowGuideURI + `"}}`
+		raw, err := json.Marshal(s.HandleMessage(t.Context(), []byte(req)))
+		if err != nil {
+			t.Fatalf("marshal resources/read response: %v", err)
+		}
+		var envelope struct {
+			Result struct {
+				Contents []struct {
+					Text string `json:"text"`
+				} `json:"contents"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(raw, &envelope); err != nil || len(envelope.Result.Contents) != 1 {
+			t.Fatalf("resources/read %s: err=%v, response %s", tools.WorkflowGuideURI, err, raw)
+		}
+		return envelope.Result.Contents[0].Text
+	}
+
+	defaultText := read(buildServer(nil, nil, tools.DefaultGroups(), nil, tools.ConsentStrict, ""))
+	if defaultText == "" {
+		t.Fatal("without an override the workflow guide must serve the public default, got an empty text")
+	}
+
+	const override = "# Downstream workflow\n"
+	old := workflowGuide
+	workflowGuide = override
+	t.Cleanup(func() { workflowGuide = old })
+
+	if got := read(buildServer(nil, nil, tools.DefaultGroups(), nil, tools.ConsentStrict, "")); got != override {
+		t.Errorf("with workflowGuide set, resources/read returned %q, want %q", got, override)
+	}
+}
+
 // TestApprovalSectionNamesEveryAnnotatedTool keeps the APPROVAL paragraph in
 // the server instructions from drifting away from the tools actually annotated.
 // The paragraph is what the model reads before choosing a tool, so a name
@@ -464,6 +504,10 @@ func TestServerInstructions_AlwaysPresentContent(t *testing.T) {
 			"the restriction follows the data being touched, not the tool used to touch it",
 			"AVAILABLE SYSTEMS: SYS_A, SYS_B (default: \"SYS_A\")",
 			"Use select_system to switch between systems.",
+			// The workflow guide is registered in every session, so the
+			// pointer to it is unconditional (#604).
+			"WORKFLOW:",
+			tools.WorkflowGuideURI,
 		} {
 			if !strings.Contains(got, want) {
 				t.Errorf("debug=%v: instructions missing %q", debug, want)
