@@ -106,6 +106,8 @@ type registerSettings struct {
 	systemUser func(system string) string
 	// shutdown receives the hooks to run when the process ends (#558).
 	shutdown *Shutdown
+	// workflowGuide is the text served as WorkflowGuideURI (#604).
+	workflowGuide string
 }
 
 // WithConsentMode selects how the client's permission system is asked to treat
@@ -211,7 +213,7 @@ func getStringOrSlice(args map[string]any, key string) (string, []string) {
 // is expressed through the annotation ConsentMode applies; this server no
 // longer asks a second time of its own accord. See ConsentMode and #507.
 func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector SystemSelector, lockMap *adt.LockMap, enabledGroups map[string]bool, fallback BlackMagicClient, opts ...RegisterOption) {
-	settings := registerSettings{consent: ConsentStrict}
+	settings := registerSettings{consent: ConsentStrict, workflowGuide: defaultWorkflowGuide}
 	for _, opt := range opts {
 		// A nil option is skipped rather than called. This parameter replaced
 		// an Elicitor that callers passed as a literal nil, and such a call
@@ -299,4 +301,8 @@ func RegisterAllWithLockMap(s *server.MCPServer, client adt.Client, selector Sys
 			g.register()
 		}
 	}
+
+	// The workflow guide spans all groups and the server instructions point
+	// to it unconditionally, so it is registered in every session (#604).
+	registerWorkflowGuide(s, settings.workflowGuide)
 }
