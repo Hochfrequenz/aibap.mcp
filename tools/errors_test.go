@@ -19,6 +19,7 @@ func TestMatchHint_ADTError(t *testing.T) {
 		{"423 lock", &adt.ADTError{StatusCode: 423, Message: "User SMITH is editing Z_REPORT"}, "unlock_object"},
 		{"404 not found", &adt.ADTError{StatusCode: 404, Message: "Object not found"}, "search_objects"},
 		{"403 forbidden", &adt.ADTError{StatusCode: 403, Message: "Forbidden"}, "S_DEVELOP"},
+		{"401 unauthorized", &adt.ADTError{StatusCode: 401, Message: "Unauthorized"}, "Do not retry"},
 		{"400 transport", &adt.ADTError{StatusCode: 400, Message: "transport required for package ZDEV"}, "create_transport"},
 		{"400 catch-all (no type, no transport)", &adt.ADTError{StatusCode: 400, Message: "invalid parameter"}, "Bad request"},
 		{"409 lock conflict fallback (no type)", &adt.ADTError{StatusCode: 409, Message: "resource already exists"}, "Save conflict"},

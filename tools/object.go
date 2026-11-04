@@ -134,7 +134,8 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 		transportLayer := req.GetString("transport_layer", "")
 		transport := req.GetString("transport", "")
 
-		if err := client.CreatePackage(ctx, name, desc, responsible, softwareComponent, transportLayer, transport); err != nil {
+		// "" keeps the package's language version unset, as before adtler v0.11.0; choosing one is #596.
+		if err := client.CreatePackage(ctx, name, desc, responsible, softwareComponent, transportLayer, "", transport); err != nil {
 			return errorResult(err), nil
 		}
 		// adtler upper-cases the name before sending it, so report what SAP holds.

@@ -255,11 +255,17 @@ func (m *mockClient) CreateObject(ctx context.Context, objectType, name, pkg, de
 func (m *mockClient) CreateFunctionModule(context.Context, string, string, string, string, string) error {
 	return nil
 }
-func (m *mockClient) CreatePackage(ctx context.Context, name, desc, responsible, softwareComponent, transportLayer, transport string) error {
+func (m *mockClient) CreatePackage(ctx context.Context, name, desc, responsible, softwareComponent, transportLayer, _, transport string) error {
 	if m.createPackageFn != nil {
 		return m.createPackageFn(ctx, name, desc, responsible, softwareComponent, transportLayer, transport)
 	}
 	return nil
+}
+func (m *mockClient) CreateHTTPService(context.Context, string, string, string, string, string) error {
+	return nil
+}
+func (m *mockClient) GetHTTPService(context.Context, string) (*adt.HTTPService, error) {
+	return nil, nil
 }
 func (m *mockClient) DeleteObject(ctx context.Context, uri, lockHandle, transport string) error {
 	if m.deleteObjectFn != nil {
