@@ -24,14 +24,14 @@ Answer these before anything else. The rest of the workflow depends on them.
 
 | | ADT access | SAP GUI only | No access |
 |---|---|---|---|
-| **Self-contained** | **A**: standard loop against the target system | **C**: standard loop on another system with ADT, deliver by transport | **C** |
-| **Embedded** | **B**: standard loop in the existing system, git tracks the change set | **D**: AI-assisted manual work | **E**: no workable route |
+| **Self-contained** | **A**: loop (section 2) against the target system | **C**: loop (section 2) on another system with ADT, deliver by transport | **C** |
+| **Embedded** | **B**: loop (section 2) in the existing system, git tracks the change set | **D**: AI-assisted manual work | **E**: no workable route |
 
-- **A**: develop in the target system's development system through ADT, as in
+- **A**: develop in the target system's development system through ADT, with the loop in
   section 2. Deliver through that system's own transport landscape.
 - **B**: like A, but start from what is in the system: export or read the
-  current state into git first (`export_package`, `get_source`); from then on
-  git is authoritative for the change. The unit of change is the transport
+  current state into git first (`export_package`, or `get_source` without
+  the export companion) so the diff shows only your change. The unit of change is the transport
   request, not the package, because changes usually touch objects in several
   packages that other people also work on. Code that depends heavily on the
   existing system cannot be meaningfully tested outside it.
@@ -47,36 +47,81 @@ Answer these before anything else. The rest of the workflow depends on them.
 - **E**: code that depends on a system nobody can reach cannot be built or
   tested with confidence. Say so instead of guessing.
 
-## 2. The standard loop (A, B, C)
+## 2. The loop (A, B, C)
+
+Two variants of the same loop. Both end the same way: commit, pull request,
+review, deliver. Pick one per change with the table below.
+
+**SAP-first**: SAP is the working copy, git is the record.
 
 ```
-branch → write files → (optional) run logic locally without SAP
+branch → edit in SAP through ADT: create_object, get_source,
+         patch_source / set_source_from_file
+       → activate_objects · run_unit_tests · run_atc_check   ↺ until green
+       → export_package into the branch → git diff shows the change
+       → commit → pull request → human review → merge → tag → deliver
+```
+
+**Files-first**: the files are the working copy, SAP runs the checks.
+
+```
+branch → write files → test locally without SAP (unit tests with test
+         doubles, or a local ABAP interpreter)
        → create_object / set_source_from_file
        → activate_objects · run_unit_tests · run_atc_check
            ↺ on errors: fix the file and write again
-       → export_package → diff against the branch
-       → commit → pull request → human review → merge → tag
-       → deliver (section 4)
+       → export_package → diff against the branch (if available)
+       → commit → pull request → human review → merge → tag → deliver
 ```
 
-- Files in git, in abapGit layout, are the working copy. ADT writes them into
-  SAP and runs the checks there.
-- `export_package` writes a package in abapGit layout to disk, without abapGit
-  online and without an internet connection on the SAP side. It needs the
-  companion package named in its tool description installed on the system.
-- A fix made directly in SAP (for example during a debugging session) is
-  allowed, but export and commit it right away, otherwise SAP and git drift
-  apart.
-- Where abapGit is installed and the SAP system can reach the git host,
-  `abapgit_pull` / `abapgit_push` are an alternative to the ADT write and the
-  export. They need the companion endpoints named in their tool descriptions.
+**Which variant**
+
+Decide in two steps. Step 1 can force a variant for the whole change; if it
+does not, step 2 decides object by object, and the first matching row wins.
+
+*Step 1: the whole change*
+
+| Situation | Variant | Why |
+|---|---|---|
+| The export companion (see `export_package`) is not installed on the development system and cannot be | Files-first | Without the export, code reaches git only from files; git then holds the sources, not SAP's full serialization. |
+| Several branches touch the same objects in parallel | Files-first for the branch work | SAP holds one state per object; write into SAP one branch at a time. |
+
+*Step 2: each object*
+
+| Object | Variant | Why |
+|---|---|---|
+| Logic that can be isolated and tested without SAP, even inside an embedded change (e.g. a new helper class) | Files-first | Fast local loop; SAP only for the final checks. |
+| DDIC object | SAP-first | DDIC is created in SAP (on ECC see section 5); the export serializes it. |
+| Code that depends on the existing system (case B) | SAP-first | It can only be tested in the system anyway, and the export captures exactly what SAP has. |
+| Anything else | SAP-first | Fewer sync steps, and SAP does the serialization. |
+
+Both variants can be mixed within one change, object by object, with two
+rules:
+
+- **One working copy per object at a time.** Between two exports, edit an
+  object either locally or in SAP, not both. An export overwrites the local
+  file, and writing a file overwrites SAP.
+- **In SAP-first, export at every green state** and before ending a
+  session, including after fixes made while debugging.
+
+Before relying on SAP-first, check once on the system that an export without
+changes produces an empty `git diff`. Otherwise every export shows noise
+that hides the real change.
+
+`export_package` needs no abapGit online and no internet connection on the
+SAP side, but the companion package named in its tool description must be
+installed. Where abapGit is installed and the SAP system can reach the git
+host, `abapgit_pull` / `abapgit_push` are an alternative to the ADT write and
+the export; they need the companion endpoints named in their tool
+descriptions.
 
 ## 3. Rules
 
 **Must**
 
-1. **git is the source of truth.** A human reviews the change in a pull
-   request before it is delivered.
+1. **What is delivered is a reviewed git commit.** git is the source of
+   truth for every delivery: a human reviews the change in a pull request
+   first, whichever loop variant produced it.
 2. **Compatibility with the lowest target release is checked before
    delivery.** How is up to you: develop on that release, activate there, or
    at least run a static check configured for its syntax version (for
@@ -87,14 +132,14 @@ branch → write files → (optional) run logic locally without SAP
 **Should**
 
 4. **Compare SAP with git before a release or delivery**: export, diff, and
-   expect no differences. Fully possible in A and C. In B only for the objects
-   of your own request (others may have changed the same objects). In D only
-   by inspection. In E not at all.
+   expect no differences, i.e. nothing changed in SAP since the reviewed
+   commit. Needs the export companion. Fully possible in A and C. In B only
+   for the objects of your own request (others may have changed the same
+   objects). In D only by inspection. In E not at all.
 5. **A commit is the checkpoint**, not a transport release. Use
    `rollback_transport` as a last resort (see its limits below).
-6. **Run the inner loop without SAP where possible**: unit tests with test
-   doubles, or a local ABAP interpreter. Results from there do not replace the
-   checks in SAP.
+6. **Use local tests for isolated logic** (section 2). They do not replace
+   the checks in SAP.
 7. **One workbench request per feature.** For self-contained work, one
    package per repository.
 
@@ -105,7 +150,7 @@ system owner, not of the tooling.
 
 | Situation | Route |
 |---|---|
-| Target has ADT access | Write the tagged state into its development system through ADT, then use its transport landscape. |
+| Target has ADT access | SAP-first: the tagged state should already be in its development system. Files-first: write it there through ADT. Compare (rule 4), then use its transport landscape. |
 | Target has no ADT access | Build a transport from the tagged state on your own system (compare first, rule 4), release it, hand over the files. Or apply by hand. |
 
 A transport built from a reviewed and compared git state is as trustworthy as
