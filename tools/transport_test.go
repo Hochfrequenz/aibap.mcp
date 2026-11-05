@@ -144,7 +144,7 @@ func TestCreateTransport_NotSupported_UsesFallback(t *testing.T) {
 	result := callTool(t, newTestServerWithFallback(client, fb), "create_transport", map[string]interface{}{
 		"category":    "t",
 		"description": "Copies",
-		"target":      "dum",
+		"target":      " dum ",
 	})
 	if result.IsError {
 		t.Fatalf("expected success via fallback, got: %v", result.Content)
@@ -156,6 +156,24 @@ func TestCreateTransport_NotSupported_UsesFallback(t *testing.T) {
 	_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
 	if out.TransportNumber != testTransportNumber || !out.ViaFallback {
 		t.Errorf("got %+v, want %s via fallback", out, testTransportNumber)
+	}
+}
+
+func TestCreateTransport_FallbackReturnsNoNumber_IsError(t *testing.T) {
+	client := &mockClient{
+		createTransportFn: func(context.Context, adt.CreateTransportOptions) (string, error) {
+			return "", notSupported()
+		},
+	}
+	fb := &mockBlackMagic{createTransportFn: func(context.Context, string, string, string, string) (string, error) {
+		return "", nil
+	}}
+	result := callTool(t, newTestServerWithFallback(client, fb), "create_transport", map[string]interface{}{
+		"category":    "T",
+		"description": "Copies",
+	})
+	if !result.IsError {
+		t.Fatal("a fallback that returns no request number must be reported as an error")
 	}
 }
 

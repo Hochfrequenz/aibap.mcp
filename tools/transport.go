@@ -120,10 +120,10 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 			return errRes, nil
 		}
 		opts := adt.CreateTransportOptions{
-			Type:        adt.TransportType(strings.ToUpper(cat)),
+			Type:        adt.TransportType(strings.ToUpper(strings.TrimSpace(cat))),
 			Description: desc,
 			Package:     req.GetString("package", ""),
-			Target:      strings.ToUpper(req.GetString("target", "")),
+			Target:      strings.ToUpper(strings.TrimSpace(req.GetString("target", ""))),
 		}
 		switch opts.Type {
 		case adt.TransportTypeWorkbench, adt.TransportTypeCustomizing, adt.TransportTypeCopies:
@@ -142,6 +142,9 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				return errorResult(fmt.Errorf("%w — no fallback is configured: create the request in SE09 via the sapgui.mcp server", err)), nil
 			}
 			number, fbErr := fallback.CreateTransportFallback(ctx, string(opts.Type), opts.Target, desc, opts.Package)
+			if fbErr == nil && number == "" {
+				fbErr = errors.New("the fallback returned no request number")
+			}
 			if fbErr != nil {
 				return errorResult(fmt.Errorf("ADT cannot create this request here and the fallback failed: %w (ADT: %v)", fbErr, err)), nil
 			}
