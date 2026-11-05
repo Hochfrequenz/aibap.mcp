@@ -31,48 +31,50 @@ const (
 
 // mockClient is a test double for adt.Client.
 type mockClient struct {
-	getSourceFn            func(ctx context.Context, uri string) (*adt.SourceResult, error)
-	setSourceFn            func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
-	activateObjectsFn      func(ctx context.Context, uris []string) (*adt.ActivationResult, error)
-	searchFn               func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
-	whereUsedFn            func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
-	browsePackageFn        func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
-	getObjectFn            func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
-	syntaxCheckFn          func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
-	verifySourceFn         func(ctx context.Context, source string) (bool, []adt.SyntaxMessage, error)
-	getObjectDepsFn        func(ctx context.Context, objType, objName string, maxResults, maxDepth int) (*adt.DependencyResult, error)
-	runTestsFn             func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
-	getTransportFn         func(ctx context.Context, opts adt.TransportListOptions) (*adt.TransportRequestPage, error)
-	addTransportFn         func(ctx context.Context, pgmID, objectType, objectName, transport string) error
-	lockObjectFn           func(ctx context.Context, uri string) (string, error)
-	unlockObjectFn         func(ctx context.Context, uri, lockHandle string) error
-	prettyPrintFn          func(ctx context.Context, source string) (string, error)
-	createObjectFn         func(ctx context.Context, objectType, name, pkg, desc, transport string) error
-	createPackageFn        func(ctx context.Context, name, desc, responsible, softwareComponent, transportLayer, transport string) error
-	deleteObjectFn         func(ctx context.Context, uri, lockHandle, transport string) error
-	getCompletionsFn       func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
-	createTransportFn      func(ctx context.Context, opts adt.CreateTransportOptions) (string, error)
-	deleteTransportFn      func(ctx context.Context, transport string) error
-	releaseTransportFn     func(ctx context.Context, transport string) error
-	renameFn               func(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error)
-	removeFromTransportFn  func(ctx context.Context, taskNr, parentTr, pgmid, objType, objName, wbType, position string) error
-	getTransportObjectsFn  func(ctx context.Context, transport string) ([]adt.TransportObject, error)
-	getTransportInfoFn     func(ctx context.Context, transport string) (*adt.TransportRequest, error)
-	rollbackTransportFn    func(ctx context.Context, transport string) (*adt.RollbackResult, error)
-	runQueryFn             func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
-	setTextElementsFn      func(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error
-	createTestIncludeFn    func(ctx context.Context, uri, lockHandle, transport string) error
-	setIncludeSourceFn     func(ctx context.Context, uri, include, source, lockHandle, transport, etag string) (string, error)
-	runClassFn             func(ctx context.Context, className string) (*adt.ClassRunResult, error)
-	logoutFn               func(ctx context.Context) error
-	systemFlavorFn         func(ctx context.Context) (adt.SystemFlavor, error)
-	getMessageClassFn      func(ctx context.Context, name string) (*adt.MessageClassInfo, error)
-	searchMessagesFn       func(ctx context.Context, query string, maxResults int) ([]adt.MessageSearchResult, error)
-	setMessagesFn          func(ctx context.Context, name, etag string, messages []adt.Message) error
-	navigateToDefinitionFn func(ctx context.Context, uri, source string) (string, error)
-	listAbapGitReposFn     func(ctx context.Context) (*adt.AbapGitRepoList, error)
-	pullAbapGitRepoFn      func(ctx context.Context, req adt.AbapGitPullRequest) (*adt.AbapGitPullResult, error)
-	pushAbapGitRepoFn      func(ctx context.Context, req adt.AbapGitPushRequest) (*adt.AbapGitPushResult, error)
+	getSourceFn             func(ctx context.Context, uri string) (*adt.SourceResult, error)
+	setSourceFn             func(ctx context.Context, uri, source, lockHandle, transport, etag string) (string, error)
+	activateObjectsFn       func(ctx context.Context, uris []string) (*adt.ActivationResult, error)
+	searchFn                func(ctx context.Context, q, t string, n int) ([]adt.ObjectInfo, error)
+	whereUsedFn             func(ctx context.Context, uri string) ([]adt.ObjectInfo, error)
+	browsePackageFn         func(ctx context.Context, pkg string) ([]adt.ObjectInfo, error)
+	getObjectFn             func(ctx context.Context, uri string) (*adt.ObjectInfo, error)
+	syntaxCheckFn           func(ctx context.Context, uri string) ([]adt.SyntaxMessage, error)
+	verifySourceFn          func(ctx context.Context, source string) (bool, []adt.SyntaxMessage, error)
+	getObjectDepsFn         func(ctx context.Context, objType, objName string, maxResults, maxDepth int) (*adt.DependencyResult, error)
+	runTestsFn              func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
+	getTransportFn          func(ctx context.Context, opts adt.TransportListOptions) (*adt.TransportRequestPage, error)
+	addTransportFn          func(ctx context.Context, pgmID, objectType, objectName, transport string) error
+	copyTransportObjectsFn  func(ctx context.Context, source, target string, withDocumentation bool) error
+	addPackageToTransportFn func(ctx context.Context, pkg, target string, includeSubpackages bool) error
+	lockObjectFn            func(ctx context.Context, uri string) (string, error)
+	unlockObjectFn          func(ctx context.Context, uri, lockHandle string) error
+	prettyPrintFn           func(ctx context.Context, source string) (string, error)
+	createObjectFn          func(ctx context.Context, objectType, name, pkg, desc, transport string) error
+	createPackageFn         func(ctx context.Context, name, desc, responsible, softwareComponent, transportLayer, transport string) error
+	deleteObjectFn          func(ctx context.Context, uri, lockHandle, transport string) error
+	getCompletionsFn        func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
+	createTransportFn       func(ctx context.Context, opts adt.CreateTransportOptions) (string, error)
+	deleteTransportFn       func(ctx context.Context, transport string) error
+	releaseTransportFn      func(ctx context.Context, transport string) error
+	renameFn                func(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error)
+	removeFromTransportFn   func(ctx context.Context, taskNr, parentTr, pgmid, objType, objName, wbType, position string) error
+	getTransportObjectsFn   func(ctx context.Context, transport string) ([]adt.TransportObject, error)
+	getTransportInfoFn      func(ctx context.Context, transport string) (*adt.TransportRequest, error)
+	rollbackTransportFn     func(ctx context.Context, transport string) (*adt.RollbackResult, error)
+	runQueryFn              func(ctx context.Context, sql string, maxRows int) (*adt.QueryResult, error)
+	setTextElementsFn       func(ctx context.Context, uri string, symbols []adt.TextSymbol, selections []adt.SelectionText, lockHandle, transport string) error
+	createTestIncludeFn     func(ctx context.Context, uri, lockHandle, transport string) error
+	setIncludeSourceFn      func(ctx context.Context, uri, include, source, lockHandle, transport, etag string) (string, error)
+	runClassFn              func(ctx context.Context, className string) (*adt.ClassRunResult, error)
+	logoutFn                func(ctx context.Context) error
+	systemFlavorFn          func(ctx context.Context) (adt.SystemFlavor, error)
+	getMessageClassFn       func(ctx context.Context, name string) (*adt.MessageClassInfo, error)
+	searchMessagesFn        func(ctx context.Context, query string, maxResults int) ([]adt.MessageSearchResult, error)
+	setMessagesFn           func(ctx context.Context, name, etag string, messages []adt.Message) error
+	navigateToDefinitionFn  func(ctx context.Context, uri, source string) (string, error)
+	listAbapGitReposFn      func(ctx context.Context) (*adt.AbapGitRepoList, error)
+	pullAbapGitRepoFn       func(ctx context.Context, req adt.AbapGitPullRequest) (*adt.AbapGitPullResult, error)
+	pushAbapGitRepoFn       func(ctx context.Context, req adt.AbapGitPushRequest) (*adt.AbapGitPushResult, error)
 }
 
 func (m *mockClient) GetSource(ctx context.Context, uri string) (*adt.SourceResult, error) {
@@ -214,8 +216,18 @@ func (m *mockClient) AddToTransport(ctx context.Context, pgmID, objectType, obje
 	}
 	return nil
 }
-func (m *mockClient) AddPackageToTransport(context.Context, string, string, bool) error { return nil }
-func (m *mockClient) CopyTransportObjects(context.Context, string, string, bool) error  { return nil }
+func (m *mockClient) AddPackageToTransport(ctx context.Context, pkg, target string, includeSubpackages bool) error {
+	if m.addPackageToTransportFn != nil {
+		return m.addPackageToTransportFn(ctx, pkg, target, includeSubpackages)
+	}
+	return nil
+}
+func (m *mockClient) CopyTransportObjects(ctx context.Context, source, target string, withDocumentation bool) error {
+	if m.copyTransportObjectsFn != nil {
+		return m.copyTransportObjectsFn(ctx, source, target, withDocumentation)
+	}
+	return nil
+}
 func (m *mockClient) RollbackTransportWithOptions(ctx context.Context, transport string, _ adt.RollbackOptions) (*adt.RollbackResult, error) {
 	return m.RollbackTransport(ctx, transport)
 }

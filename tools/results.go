@@ -556,3 +556,23 @@ type TransportObjectsResult struct {
 	Count     int                   `json:"count"`
 	Objects   []adt.TransportObject `json:"objects"`
 }
+
+// CopyTransportObjectsResult reports copy_transport_objects (#602). Copied
+// means SAP accepted the copy; SAP also answers success when it could not
+// lock the target, so read the target back with get_transport_objects.
+type CopyTransportObjectsResult struct {
+	SourceRequest string `json:"source_request"`
+	TargetRequest string `json:"target_request"`
+	Copied        bool   `json:"copied"`
+	ViaFallback   bool   `json:"via_fallback,omitempty"`
+}
+
+// AddPackageToTransportResult reports add_package_to_transport (#602). Added
+// has the same limit as CopyTransportObjectsResult.Copied.
+type AddPackageToTransportResult struct {
+	Package            string `json:"package"`
+	TargetRequest      string `json:"target_request"`
+	IncludeSubpackages bool   `json:"include_subpackages"`
+	Added              bool   `json:"added"`
+	ViaFallback        bool   `json:"via_fallback,omitempty"`
+}

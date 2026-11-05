@@ -124,12 +124,15 @@ dependencies, release differences), exactly as with manual delivery.
   ([#603](https://github.com/Hochfrequenz/aibap.mcp/issues/603)).
 - **Transport of copies and customizing requests**: `create_transport`
   creates them (category `T` or `W`) over ADT on S/4HANA. On ECC it does so
-  only if your build includes a fallback; otherwise create them in SE09. No
-  tool can fill a transport of copies yet
-  ([#602](https://github.com/Hochfrequenz/aibap.mcp/issues/602)).
+  only if your build includes a fallback; otherwise create them in SE09.
+- **Filling a transport of copies**: `copy_transport_objects` and
+  `add_package_to_transport` fill a request from another request or a
+  package. Both need ABAP Platform 2105 or later, or a build with a
+  fallback; otherwise use SE09.
 - **`add_to_transport` / `remove_from_transport`**: work over ADT on
-  S/4HANA (an add to a released request is refused there too). ECC has no add- or remove-object action in ADT; there they work
-  only if your build includes a fallback, otherwise use SE09.
+  S/4HANA (an add to a released request is refused there too). ECC has no
+  add- or remove-object action in ADT; there they work only if your build
+  includes a fallback, otherwise use SE09.
 - **`create_object`**: DDIC and CDS types (TABL, DTEL, DOMA, DDLS) only on
   S/4HANA, unless your build includes a fallback (TABL, DTEL, DOMA).
 - **`export_package` / `export_packages`** export whole packages. There is no

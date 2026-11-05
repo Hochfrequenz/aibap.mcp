@@ -49,4 +49,21 @@ type TransportEntryFallback interface {
 	// RemoveFromTransportFallback removes the object key from task, a task
 	// of parentTransport.
 	RemoveFromTransportFallback(ctx context.Context, task, parentTransport, pgmID, objectType, objectName string) error
+// TransportCopiesFallback is an optional extension of BlackMagicClient for
+// filling a request from another request or from a package where ADT cannot:
+// the transport organizer offers these actions from ABAP Platform 2105, and
+// adtler refuses them with adt.ErrorNotSupported on older systems (#602). The
+// handlers detect it with a type assertion, so a BlackMagicClient without it
+// keeps compiling and the tools keep returning adtler's error.
+//
+// adtler v0.12.0 also reports a released target as ErrorNotSupported
+// (adtler#288), so both methods must fail with a clear message for a
+// released target rather than assume the system lacks the action.
+type TransportCopiesFallback interface {
+	// CopyTransportObjectsFallback copies the object entries of source into
+	// target, as SE09's "include objects" does.
+	CopyTransportObjectsFallback(ctx context.Context, source, target string, withDocumentation bool) error
+	// AddPackageToTransportFallback adds the objects of pkg (and, with
+	// includeSubpackages, of its subpackages) to target.
+	AddPackageToTransportFallback(ctx context.Context, pkg, target string, includeSubpackages bool) error
 }
