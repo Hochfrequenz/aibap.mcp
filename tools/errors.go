@@ -57,9 +57,13 @@ const (
 	// even with the key known. See #490.
 	systemNotModifiableHint = "The SAP system is closed for changes (system change option is 'not modifiable'). This is a system-wide setting, not an authorization or lock problem: writes to repository objects will fail until an administrator reopens it in SE06 -> System Change Option. Read-only tools are unaffected."
 	badRequestHint          = "Bad request — the server rejected the request. Check the syntax, required parameters, or the CSRF token."
-	serverErrorHint         = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
-	transportHint           = "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."
-	inactiveHint            = "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."
+	// verifyLeftoverHintFmt: verify_source failed AND could not remove its
+	// temporary program. Every retry creates another program, so the generic
+	// "retry once" guidance must not attach. %s is the program name.
+	verifyLeftoverHintFmt = "verify_source failed and its temporary program `%s` was left in $TMP. Do not call verify_source again to retry: every call creates a new temporary program. Tell the user the program has to be deleted."
+	serverErrorHint       = "SAP server error. Retry once — if it persists, check SM21 (system log) or ST22 (short dumps)."
+	transportHint         = "A transport request may be required. Use `create_transport` or `get_transport_requests` to find one."
+	inactiveHint          = "An object is inactive — activate it with `activate_objects` (including its dependencies) before releasing the transport or retrying."
 	// objectLockedInTransportHint names the blocking request (parsed by adtler
 	// from the 409 message — see adt.ADTError.LockingTransport) so the caller
 	// can act on it directly. The %[1]s verb is the request ID, reused twice.
@@ -243,6 +247,19 @@ func matchHint(err error) string {
 		return hint
 	}
 	kind := adt.ClassifyError(err)
+
+	// A failed verify_source check that also left its temporary program
+	// behind: the leftover beats every kind-based hint (a 500 would otherwise
+	// say "retry once"). A 401 keeps its no-retry logon warning on top.
+	var cleanupErr *adt.VerifyCleanupError
+	if errors.As(err, &cleanupErr) {
+		hint := fmt.Sprintf(verifyLeftoverHintFmt, cleanupErr.Program)
+		if kind == adt.ErrorUnauthorized {
+			hint += " " + unauthorizedHint
+		}
+		return hint
+	}
+
 	errText := strings.ToLower(err.Error())
 	adtErr, isADTErr := asADTError(err)
 

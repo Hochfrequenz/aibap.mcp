@@ -544,3 +544,30 @@ func TestErrorResult_PinsWireContract(t *testing.T) {
 		})
 	}
 }
+
+// A failed verify_source check that also leaked its temporary program must
+// never get the generic "retry once" hint: every retry leaks another program.
+func TestMatchHint_VerifyLeftover(t *testing.T) {
+	leak := &adt.VerifyCleanupError{Program: "Z_ADTLER_VERIFY_000003", Err: errors.New("delete failed")}
+	tests := []struct {
+		name     string
+		checkErr error
+		want     []string
+	}{
+		{"500 check", &adt.ADTError{StatusCode: 500, Message: "dump"}, []string{"Z_ADTLER_VERIFY_000003", "Do not call verify_source again"}},
+		{"401 check keeps logon warning", &adt.ADTError{StatusCode: 401, Message: "unauthorized"}, []string{"Z_ADTLER_VERIFY_000003", "can lock the SAP user"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hint := matchHint(fmt.Errorf("VerifySource: %w; additionally: %w", tt.checkErr, leak))
+			for _, w := range tt.want {
+				if !strings.Contains(hint, w) {
+					t.Errorf("hint should contain %q, got: %s", w, hint)
+				}
+			}
+			if strings.Contains(hint, "Retry once") {
+				t.Errorf("hint must not suggest a retry, got: %s", hint)
+			}
+		})
+	}
+}

@@ -82,12 +82,20 @@ func TestVerifySourceTool(t *testing.T) {
 		mock := &mockClient{
 			verifySourceFn: func(_ context.Context, _ string) (bool, []adt.SyntaxMessage, error) {
 				leak := &adt.VerifyCleanupError{Program: "Z_ADTLER_VERIFY_000002", Err: errors.New("delete failed")}
-				return false, nil, fmt.Errorf("VerifySource: set source: %w; additionally: %w", errors.New("boom"), leak)
+				checkErr := &adt.ADTError{StatusCode: 500, Message: "internal server error"}
+				return false, nil, fmt.Errorf("VerifySource: set source: %w; additionally: %w", checkErr, leak)
 			},
 		}
 		result := callTool(t, newTestServer(mock), "verify_source", map[string]interface{}{"source": "REPORT zx."})
 		if !result.IsError {
 			t.Fatalf("want a tool error, got %v", result.Content)
+		}
+		text := result.Content[0].(mcp.TextContent).Text
+		if strings.Contains(text, "Retry once") {
+			t.Errorf("a leaked temporary program must not get a retry hint, got: %s", text)
+		}
+		if !strings.Contains(text, "Z_ADTLER_VERIFY_000002") || !strings.Contains(text, "Do not call verify_source again") {
+			t.Errorf("want the leftover program named with no-retry guidance, got: %s", text)
 		}
 	})
 
