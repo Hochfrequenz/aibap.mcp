@@ -48,15 +48,16 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"CTS transport request or task; SAP locks the entry for that transport, as SE09 does. "+
 				"Use get_transport_requests to find a transport. "+
 				"Requires the transport organizer's add-object action, which SAP_BASIS 7.50 (ECC) does not offer: "+
-				"there, and for a released request, the call is refused without reaching SAP — record the object "+
-				"in SE09 via the sapgui.mcp server instead.",
+				"there, and for a released request, the call is refused without reaching SAP. Where the system lacks "+
+				"the action, the entry goes through the configured fallback if it supports transport entries "+
+				"(via_fallback=true); otherwise record the object in SE09 via the sapgui.mcp server instead.",
 		),
 		mcp.WithString("pgmid", mcp.Description("Program ID of the E071 key: R3TR (default) or LIMU")),
 		mcp.WithString("object_type", mcp.Required(), mcp.Description("Object type of the E071 key, e.g. PROG, CLAS, TABL, FUNC")),
 		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name of the E071 key, e.g. ZFOO; sent as given")),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number, e.g. DEVK900123")),
 		mcp.WithOutputSchema[AddToTransportResult](),
-	), addToTransportHandler(client))
+	), addToTransportHandler(client, fallback))
 
 	s.AddTool(mcp.NewTool("create_transport_task",
 		mcp.WithTitleAnnotation("Create Transport Task"),
@@ -270,7 +271,9 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"transport to find which task owns it). The parent_transport is the request number. "+
 				"Requires AS ABAP 7.53 SP00 (ABAP Platform 1809) or later: older systems, including "+
 				"ECC on SAP_BASIS 7.50, have no remove-object operation in ADT at all, and this tool "+
-				"cannot work there — remove the entry in SE09 via the sapgui.mcp server instead.",
+				"cannot remove it over ADT there. Once that is detected, the entry is removed through the configured "+
+				"fallback if it supports transport entries (via_fallback=true); otherwise remove it in SE09 via the "+
+				"sapgui.mcp server instead.",
 		),
 		mcp.WithString("task_number", mcp.Required(), mcp.Description("Task number that holds the object, e.g. DEVK900124")),
 		mcp.WithString("parent_transport", mcp.Required(), mcp.Description("Parent transport request number, e.g. DEVK900123")),
@@ -287,19 +290,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"get_transport_objects call made just before this one, not a cached one.",
 		)),
 		mcp.WithOutputSchema[RemoveFromTransportResult](),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		taskNr := req.GetString("task_number", "")
-		parentTr := req.GetString("parent_transport", "")
-		pgmid := req.GetString("pgmid", "")
-		objType := req.GetString("object_type", "")
-		objName := req.GetString("object_name", "")
-		wbType := req.GetString("wb_type", "")
-		position := req.GetString("position", "")
-		if err := client.RemoveFromTransport(ctx, taskNr, parentTr, pgmid, objType, objName, wbType, position); err != nil {
-			return errorResult(err), nil
-		}
-		return mcp.NewToolResultJSON(RemoveFromTransportResult{TaskNumber: taskNr, ObjectName: objName, Removed: true})
-	})
+	), removeFromTransportHandler(client, fallback))
 
 	s.AddTool(mcp.NewTool("get_transport_objects",
 		mcp.WithTitleAnnotation("Get Transport Objects"),
@@ -387,7 +378,7 @@ func getTransportRequestsHandler(client adt.TransportClient) server.ToolHandlerF
 	}
 }
 
-func addToTransportHandler(client adt.TransportClient) server.ToolHandlerFunc {
+func addToTransportHandler(client adt.TransportClient, fallback BlackMagicClient) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		objType, errRes := requireString(req, "object_type")
 		if errRes != nil {
@@ -403,11 +394,54 @@ func addToTransportHandler(client adt.TransportClient) server.ToolHandlerFunc {
 		}
 		pgmid := strings.ToUpper(req.GetString("pgmid", "R3TR"))
 		objType = strings.ToUpper(objType)
-		if err := client.AddToTransport(ctx, pgmid, objType, objName, transport); err != nil {
+		res := AddToTransportResult{PgmID: pgmid, ObjectType: objType, ObjectName: objName, Transport: transport, Added: true}
+		err := client.AddToTransport(ctx, pgmid, objType, objName, transport)
+		if fb, ok := entryFallbackFor(err, fallback); ok {
+			if fbErr := fb.AddToTransportFallback(ctx, pgmid, objType, objName, transport); fbErr != nil {
+				return errorResult(fmt.Errorf("ADT cannot record this entry here and the fallback failed: %w (ADT: %v)", fbErr, err)), nil
+			}
+			res.ViaFallback = true
+			return mcp.NewToolResultJSON(res)
+		}
+		if err != nil {
 			return errorResult(err), nil
 		}
-		return mcp.NewToolResultJSON(AddToTransportResult{
-			PgmID: pgmid, ObjectType: objType, ObjectName: objName, Transport: transport, Added: true,
-		})
+		return mcp.NewToolResultJSON(res)
 	}
+}
+
+func removeFromTransportHandler(client adt.TransportClient, fallback BlackMagicClient) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		taskNr := req.GetString("task_number", "")
+		parentTr := req.GetString("parent_transport", "")
+		pgmid := req.GetString("pgmid", "")
+		objType := req.GetString("object_type", "")
+		objName := req.GetString("object_name", "")
+		wbType := req.GetString("wb_type", "")
+		position := req.GetString("position", "")
+		res := RemoveFromTransportResult{TaskNumber: taskNr, ObjectName: objName, Removed: true}
+		err := client.RemoveFromTransport(ctx, taskNr, parentTr, pgmid, objType, objName, wbType, position)
+		if fb, ok := entryFallbackFor(err, fallback); ok {
+			if fbErr := fb.RemoveFromTransportFallback(ctx, taskNr, parentTr, pgmid, objType, objName); fbErr != nil {
+				return errorResult(fmt.Errorf("ADT cannot remove this entry here and the fallback failed: %w (ADT: %v)", fbErr, err)), nil
+			}
+			res.ViaFallback = true
+			return mcp.NewToolResultJSON(res)
+		}
+		if err != nil {
+			return errorResult(err), nil
+		}
+		return mcp.NewToolResultJSON(res)
+	}
+}
+
+// entryFallbackFor returns the configured TransportEntryFallback when err is
+// adtler's ErrorNotSupported, the only case the fallback is for: an error
+// SAP returned is reported as is (#616).
+func entryFallbackFor(err error, fallback BlackMagicClient) (TransportEntryFallback, bool) {
+	if err == nil || adt.ClassifyError(err) != adt.ErrorNotSupported {
+		return nil, false
+	}
+	fb, ok := fallback.(TransportEntryFallback)
+	return fb, ok
 }

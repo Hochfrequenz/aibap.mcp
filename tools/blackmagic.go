@@ -31,3 +31,22 @@ type CustomizingEntry struct {
 	Values map[string]string `json:"values,omitempty"`
 	Op     string            `json:"op,omitempty"` // "" or "upsert" → upsert; "delete" → delete
 }
+
+// TransportEntryFallback is an optional extension of BlackMagicClient for
+// recording and removing transport entries where ADT cannot: on SAP_BASIS
+// 7.50 the transport organizer has neither action, and adtler refuses both
+// calls with adt.ErrorNotSupported (#616). The handlers detect it with a type
+// assertion, so a BlackMagicClient without it keeps compiling and the tools
+// keep returning adtler's error.
+//
+// adtler v0.12.0 also reports a released request as ErrorNotSupported for an
+// add (adtler#288), so AddToTransportFallback must fail with a clear message
+// for a released request rather than assume the system lacks the action.
+type TransportEntryFallback interface {
+	// AddToTransportFallback records the object key pgmID/objectType/
+	// objectName (as in table E071) in transport, a modifiable request or task.
+	AddToTransportFallback(ctx context.Context, pgmID, objectType, objectName, transport string) error
+	// RemoveFromTransportFallback removes the object key from task, a task
+	// of parentTransport.
+	RemoveFromTransportFallback(ctx context.Context, task, parentTransport, pgmID, objectType, objectName string) error
+}
