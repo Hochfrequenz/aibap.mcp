@@ -160,12 +160,12 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 
 | Tool | Description |
 |------|-------------|
-| `get_transport_requests` | List open or released transport requests |
+| `get_transport_requests` | List one page of transport requests (by owner, filtered by state) |
 | `get_transport_objects` | List all objects recorded in a transport (deduplicated) |
 | `create_transport` | Create a new transport request |
 | `create_transport_task` | Create a task under an existing transport request |
 | `release_transport` | Release a transport request or task |
-| `add_to_transport` | Assign an object to a transport request |
+| `add_to_transport` | Record an object entry (E071 key) in a transport; S/4 only |
 | `remove_from_transport` | Remove an object entry from a transport task |
 | `delete_transport` | Delete a transport request or task |
 | `rollback_transport` | Restore all source objects to their pre-transport version |

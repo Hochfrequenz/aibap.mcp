@@ -101,9 +101,11 @@ type ForceUnlockResult struct {
 }
 
 type AddToTransportResult struct {
-	ObjectURI string `json:"object_uri"`
-	Transport string `json:"transport"`
-	Added     bool   `json:"added"`
+	PgmID      string `json:"pgmid"`
+	ObjectType string `json:"object_type"`
+	ObjectName string `json:"object_name"`
+	Transport  string `json:"transport"`
+	Added      bool   `json:"added"`
 }
 
 type RemoveFromTransportResult struct {
@@ -123,9 +125,14 @@ type CreateTransportTaskResult struct {
 	Description     string `json:"description"`
 }
 
+// ReleaseTransportResult reports a release. State and RawStatus come from
+// adtler's post-release status read (adt.ReleaseResult); they are empty for a
+// release made through the fallback, which reads no status.
 type ReleaseTransportResult struct {
 	Transport   string `json:"transport"`
 	Released    bool   `json:"released"`
+	State       string `json:"state,omitempty"`
+	RawStatus   string `json:"raw_status,omitempty"`
 	ViaFallback bool   `json:"via_fallback,omitempty"`
 }
 
@@ -513,9 +520,28 @@ type VersionHistoryResult struct {
 	Versions []adt.VersionInfo `json:"versions"`
 }
 
+// TransportRequestsResult is one page of get_transport_requests. Next is the
+// cursor for the following page ("" on the last one); Warning is set when
+// adtler returned a partial page (adt.ErrTransportListPartial).
 type TransportRequestsResult struct {
 	Count      int                    `json:"count"`
-	Transports []adt.TransportRequest `json:"transports"`
+	Transports []TransportRequestInfo `json:"transports"`
+	Next       string                 `json:"next,omitempty"`
+	Warning    string                 `json:"warning,omitempty"`
+}
+
+// TransportRequestInfo is adt.TransportRequest on the wire. It exists only
+// because adt.TransportState is an int that marshals as text ("modifiable"):
+// the schema generated from adt.TransportRequest declares State an integer,
+// so the string value on the wire would violate the tool's outputSchema.
+type TransportRequestInfo struct {
+	Number      string `json:"number"`
+	Owner       string `json:"owner"`
+	Description string `json:"description"`
+	// State is adt.TransportState.String(): modifiable, release_in_progress,
+	// released or unknown.
+	State     string `json:"state"`
+	RawStatus string `json:"raw_status"`
 }
 
 type TransportObjectsResult struct {

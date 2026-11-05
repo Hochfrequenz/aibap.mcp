@@ -2,11 +2,13 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 func registerTransportTools(s toolAdder, client adt.TransportClient, fallback BlackMagicClient) {
@@ -16,19 +18,24 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("List CTS transport requests on the configured SAP system. Status: D=modifiable, L=released."),
-		mcp.WithString("user", mcp.Description("Filter by owner username")),
-		mcp.WithString("status", mcp.Description("Filter by status: D (modifiable) or L (released)")),
+		mcp.WithDescription(
+			"List one page of the top-level CTS transport requests on the configured SAP system, most recently "+
+				"changed first. Each request carries a state (modifiable, release_in_progress, released or unknown) "+
+				"and SAP's raw TRSTATUS letter. Page through the list by passing the returned next cursor as after. "+
+				"Reads E070 through the data preview, so the user needs data preview authorization.",
+		),
+		mcp.WithString("user", mcp.Description(
+			"Owner of the requests (E070-AS4USER), e.g. MMUSTERMANN. Omit for the logged-on user; pass * for every user's requests. "+
+				"Requests in which the user only owns a task are not listed.")),
+		mcp.WithString("status", mcp.Enum("all", "modifiable", "released"), mcp.Description(
+			"Filter by state: all (default), modifiable or released. A request whose release is in progress, "+
+				"or whose status is unknown, appears under all only.")),
+		mcp.WithNumber("limit", mcp.Description(fmt.Sprintf(
+			"Page size, default %d, at most %d.", adt.DefaultTransportPageSize, adt.MaxTransportPageSize))),
+		mcp.WithString("after", mcp.Description(
+			"The next cursor of the previous page; omit for the first page. Valid only with the user and status that produced it.")),
 		mcp.WithOutputSchema[TransportRequestsResult](),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		user := req.GetString("user", "")
-		status := req.GetString("status", "")
-		transports, err := client.GetTransportRequests(ctx, user, status)
-		if err != nil {
-			return errorResult(err), nil
-		}
-		return mcp.NewToolResultJSON(TransportRequestsResult{Count: len(transports), Transports: transports})
-	})
+	), getTransportRequestsHandler(client))
 
 	s.AddTool(mcp.NewTool("add_to_transport",
 		mcp.WithTitleAnnotation("Add to Transport"),
@@ -36,18 +43,20 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Record an ABAP object into a CTS transport task. The transport parameter should be a task number (not the parent transport). Use get_transport_requests to find available transports."),
-		mcp.WithString(paramObjectURI, mcp.Required(), mcp.Description(descADTObjectURI)),
-		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request number, e.g. DEVK900123")),
+		mcp.WithDescription(
+			"Record an object entry (an E071 key such as R3TR PROG ZFOO or LIMU FUNC Z_FOO) in a modifiable "+
+				"CTS transport request or task; SAP locks the entry for that transport, as SE09 does. "+
+				"Use get_transport_requests to find a transport. "+
+				"Requires the transport organizer's add-object action, which SAP_BASIS 7.50 (ECC) does not offer: "+
+				"there, and for a released request, the call is refused without reaching SAP — record the object "+
+				"in SE09 via the sapgui.mcp server instead.",
+		),
+		mcp.WithString("pgmid", mcp.Description("Program ID of the E071 key: R3TR (default) or LIMU")),
+		mcp.WithString("object_type", mcp.Required(), mcp.Description("Object type of the E071 key, e.g. PROG, CLAS, TABL, FUNC")),
+		mcp.WithString("object_name", mcp.Required(), mcp.Description("Object name of the E071 key, e.g. ZFOO; sent as given")),
+		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number, e.g. DEVK900123")),
 		mcp.WithOutputSchema[AddToTransportResult](),
-	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		uri := req.GetString(paramObjectURI, "")
-		transport := req.GetString("transport", "")
-		if err := client.AddToTransport(ctx, uri, transport); err != nil {
-			return errorResult(err), nil
-		}
-		return mcp.NewToolResultJSON(AddToTransportResult{ObjectURI: uri, Transport: transport, Added: true})
-	})
+	), addToTransportHandler(client))
 
 	s.AddTool(mcp.NewTool("create_transport_task",
 		mcp.WithTitleAnnotation("Create Transport Task"),
@@ -130,7 +139,14 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 					"the transport manually in SAP GUI (SE09/SE10)")), nil
 		}
 
-		number, err := client.CreateTransport(ctx, cat, target, desc, pkg)
+		// adtler v0.12.0 (adtler#137) refuses inputs SAP would ignore: Package
+		// for W/T, Target for K. Tool description and ECC handling: #610.
+		number, err := client.CreateTransport(ctx, adt.CreateTransportOptions{
+			Type:        adt.TransportType(strings.ToUpper(cat)),
+			Description: desc,
+			Package:     pkg,
+			Target:      target,
+		})
 		if err != nil {
 			return errorResult(err), nil
 		}
@@ -154,7 +170,10 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"NOTE: On ECC systems, release via ADT may silently fail (returns 200 but status stays modifiable). "+
 				"This tool detects the silent fail via a follow-up status check; when a fallback is "+
 				"configured it routes the release through that path automatically. Without a fallback, "+
-				"use the sap-desktop MCP server to release via SE09 instead.",
+				"use the sap-desktop MCP server to release via SE09 instead. "+
+				"The result reports the state read back after the release: released, or — with released=false — "+
+				"release_in_progress (SAP is still releasing; re-read later, do not release again) or unknown "+
+				"(the status read failed or returned an unknown letter; check before releasing again).",
 		),
 		mcp.WithString("transport", mcp.Required(), mcp.Description("Transport request or task number to release")),
 		mcp.WithBoolean("include_tasks", mcp.Description("If true, automatically release all tasks before releasing the request (default: false)")),
@@ -168,11 +187,13 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 
 		// ReleaseTransport/ReleaseTransportWithTasks release and confirm via a
 		// post-release status read: ADT (notably on ECC) can return 200 while
-		// leaving the transport modifiable. Released=false with a nil error is
-		// that "silent failure". (adtler v0.5.5 folded the old
-		// ReleaseTransportVerified wrapper directly into these two methods —
-		// see adtler#171 — so this branches on include_tasks instead of
-		// passing it as a parameter.)
+		// leaving the transport modifiable. State=Modifiable with a nil error
+		// is that "silent failure", and only that state warrants the fallback:
+		// ReleaseInProgress and Unknown mean the release may well have gone
+		// through, so releasing again would be wrong (adtler#273, #275).
+		// (adtler v0.5.5 folded the old ReleaseTransportVerified wrapper
+		// directly into these two methods — see adtler#171 — so this branches
+		// on include_tasks instead of passing it as a parameter.)
 		var res *adt.ReleaseResult
 		var releaseErr error
 		if includeTasks {
@@ -180,7 +201,10 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		} else {
 			res, releaseErr = client.ReleaseTransport(ctx, transport)
 		}
-		silentFail := releaseErr == nil && res != nil && !res.Released
+		if releaseErr == nil && res == nil {
+			res = &adt.ReleaseResult{Transport: transport}
+		}
+		silentFail := releaseErr == nil && res.State == adt.TransportStateModifiable
 
 		if (releaseErr != nil || silentFail) && fallback != nil {
 			if fbErr := fallback.ReleaseTransportFallback(ctx, transport); fbErr != nil {
@@ -198,7 +222,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		if silentFail {
 			return errorResult(fmt.Errorf("transport %s released via ADT (returned 200) but status remained modifiable; configure a fallback or release via SE09 in the sap-desktop MCP", transport)), nil
 		}
-		return mcp.NewToolResultJSON(ReleaseTransportResult{Transport: transport, Released: true})
+		return mcp.NewToolResultJSON(releaseTransportResultOf(transport, res))
 	})
 
 	s.AddTool(mcp.NewTool("delete_transport",
@@ -301,4 +325,86 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 			Objects:   objects,
 		})
 	})
+}
+
+// transportRequestsResultOf wraps an adtler page into the tool result. The
+// transports slice is never nil, so the wire shape is always an array.
+func transportRequestsResultOf(page *adt.TransportRequestPage) TransportRequestsResult {
+	res := TransportRequestsResult{Transports: []TransportRequestInfo{}}
+	if page != nil {
+		for _, r := range page.Requests {
+			res.Transports = append(res.Transports, TransportRequestInfo{
+				Number:      r.Number,
+				Owner:       r.Owner,
+				Description: r.Description,
+				State:       r.State.String(),
+				RawStatus:   r.RawStatus,
+			})
+		}
+		res.Next = page.Next
+	}
+	res.Count = len(res.Transports)
+	return res
+}
+
+// releaseTransportResultOf reports the state adtler read back after a release
+// that was neither an error nor a silent failure: released, release in
+// progress, or unknown.
+func releaseTransportResultOf(transport string, res *adt.ReleaseResult) ReleaseTransportResult {
+	return ReleaseTransportResult{
+		Transport: transport,
+		Released:  res.State == adt.TransportStateReleased,
+		State:     res.State.String(),
+		RawStatus: res.RawStatus,
+	}
+}
+
+func getTransportRequestsHandler(client adt.TransportClient) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		opts := adt.TransportListOptions{
+			User:  req.GetString("user", ""),
+			Limit: req.GetInt("limit", 0),
+			After: req.GetString("after", ""),
+		}
+		if status := req.GetString("status", ""); status != "" {
+			if err := opts.Filter.UnmarshalText([]byte(strings.ToLower(status))); err != nil {
+				return errorResult(err), nil
+			}
+		}
+		page, err := client.GetTransportRequests(ctx, opts)
+		partial := err != nil && errors.Is(err, adt.ErrTransportListPartial) && page != nil
+		if err != nil && !partial {
+			return errorResult(err), nil
+		}
+		res := transportRequestsResultOf(page)
+		if partial {
+			res.Warning = err.Error()
+		}
+		return mcp.NewToolResultJSON(res)
+	}
+}
+
+func addToTransportHandler(client adt.TransportClient) server.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		objType, errRes := requireString(req, "object_type")
+		if errRes != nil {
+			return errRes, nil
+		}
+		objName, errRes := requireString(req, "object_name")
+		if errRes != nil {
+			return errRes, nil
+		}
+		transport, errRes := requireString(req, "transport")
+		if errRes != nil {
+			return errRes, nil
+		}
+		pgmid := strings.ToUpper(req.GetString("pgmid", "R3TR"))
+		objType = strings.ToUpper(objType)
+		if err := client.AddToTransport(ctx, pgmid, objType, objName, transport); err != nil {
+			return errorResult(err), nil
+		}
+		return mcp.NewToolResultJSON(AddToTransportResult{
+			PgmID: pgmid, ObjectType: objType, ObjectName: objName, Transport: transport, Added: true,
+		})
+	}
 }
