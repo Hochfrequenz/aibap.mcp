@@ -49,6 +49,8 @@ type TransportEntryFallback interface {
 	// RemoveFromTransportFallback removes the object key from task, a task
 	// of parentTransport.
 	RemoveFromTransportFallback(ctx context.Context, task, parentTransport, pgmID, objectType, objectName string) error
+}
+
 // TransportCopiesFallback is an optional extension of BlackMagicClient for
 // filling a request from another request or from a package where ADT cannot:
 // the transport organizer offers these actions from ABAP Platform 2105, and
