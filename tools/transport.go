@@ -271,7 +271,7 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 				"transport to find which task owns it). The parent_transport is the request number. "+
 				"Requires AS ABAP 7.53 SP00 (ABAP Platform 1809) or later: older systems, including "+
 				"ECC on SAP_BASIS 7.50, have no remove-object operation in ADT at all, and this tool "+
-				"cannot remove it over ADT there. Once that is detected, the entry is removed through the configured "+
+				"cannot remove it over ADT there. Where the system is detected as lacking the action, the entry is removed through the configured "+
 				"fallback if it supports transport entries (via_fallback=true); otherwise remove it in SE09 via the "+
 				"sapgui.mcp server instead.",
 		),

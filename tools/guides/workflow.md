@@ -128,7 +128,7 @@ dependencies, release differences), exactly as with manual delivery.
   tool can fill a transport of copies yet
   ([#602](https://github.com/Hochfrequenz/aibap.mcp/issues/602)).
 - **`add_to_transport` / `remove_from_transport`**: work over ADT on
-  S/4HANA. ECC has no add- or remove-object action in ADT; there they work
+  S/4HANA (an add to a released request is refused there too). ECC has no add- or remove-object action in ADT; there they work
   only if your build includes a fallback, otherwise use SE09.
 - **`create_object`**: DDIC and CDS types (TABL, DTEL, DOMA, DDLS) only on
   S/4HANA, unless your build includes a fallback (TABL, DTEL, DOMA).
