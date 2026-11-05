@@ -12,6 +12,11 @@ import "context"
 // Pass nil to reject the dark arts entirely.
 type BlackMagicClient interface {
 	ReleaseTransportFallback(ctx context.Context, transportNumber string) error
+	// CreateTransportFallback creates a request where ADT cannot: today a
+	// customizing request (W) or transport of copies (T) on SAP_BASIS 7.50.
+	// It must create exactly the requested category with the given target
+	// (empty: SAP's default), or fail — never a request of another type.
+	// devClass is set only for a workbench request (K).
 	CreateTransportFallback(ctx context.Context, category, target, description, devClass string) (string, error)
 	UpdateCustomizing(ctx context.Context, table string, entries []CustomizingEntry, transport string) error
 	CreateObjectFallback(ctx context.Context, objectType, name, pkg, description, transport string) error

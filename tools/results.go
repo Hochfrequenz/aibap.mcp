@@ -117,6 +117,7 @@ type RemoveFromTransportResult struct {
 type CreateTransportResult struct {
 	TransportNumber string `json:"transport_number"`
 	Description     string `json:"description"`
+	ViaFallback     bool   `json:"via_fallback,omitempty"`
 }
 
 type CreateTransportTaskResult struct {

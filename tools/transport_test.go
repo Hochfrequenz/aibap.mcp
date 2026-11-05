@@ -83,71 +83,141 @@ func TestCreateTransport_MissingRequiredParams(t *testing.T) {
 	}
 }
 
-func TestCreateTransport_CategoryW_NoFallback_ReturnsError(t *testing.T) {
-	s := newTestServer(&mockClient{})
-	result := callTool(t, s, "create_transport", map[string]interface{}{
+// notSupported is the error adtler returns, without sending anything, when
+// the system cannot create a request of the given type over ADT (ECC, #610).
+func notSupported() error {
+	return &adt.ADTError{
+		Type:    adt.ExceptionTypeCreateRequestUnsupported,
+		Message: "CreateTransport: this system cannot create a request of type T over ADT; create it in SE09 instead",
+	}
+}
+
+// W and T now reach adtler: S/4 creates them over ADT (adtler#137).
+func TestCreateTransport_CategoryW_UsesADT(t *testing.T) {
+	var got adt.CreateTransportOptions
+	fbCalled := false
+	client := &mockClient{
+		createTransportFn: func(_ context.Context, opts adt.CreateTransportOptions) (string, error) {
+			got = opts
+			return testTransportNum, nil
+		},
+	}
+	fb := &mockBlackMagic{createTransportFn: func(context.Context, string, string, string, string) (string, error) {
+		fbCalled = true
+		return testTransportNumber, nil
+	}}
+	result := callTool(t, newTestServerWithFallback(client, fb), "create_transport", map[string]interface{}{
 		"category":    "W",
 		"description": "Test customizing",
 	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %v", result.Content)
+	}
+	if got.Type != adt.TransportTypeCustomizing {
+		t.Errorf("adtler got type %q, want W", got.Type)
+	}
+	if fbCalled {
+		t.Error("the fallback must not run when ADT succeeds")
+	}
+	var out tools.CreateTransportResult
+	_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
+	if out.TransportNumber != testTransportNum || out.ViaFallback {
+		t.Errorf("got %+v, want ADT-created %s", out, testTransportNum)
+	}
+}
+
+// On ECC adtler refuses W/T with ErrorNotSupported; the fallback then
+// creates the request with the same category, target and description.
+func TestCreateTransport_NotSupported_UsesFallback(t *testing.T) {
+	var gotCat, gotTarget, gotDesc, gotPkg string
+	client := &mockClient{
+		createTransportFn: func(context.Context, adt.CreateTransportOptions) (string, error) {
+			return "", notSupported()
+		},
+	}
+	fb := &mockBlackMagic{
+		createTransportFn: func(_ context.Context, category, target, description, devClass string) (string, error) {
+			gotCat, gotTarget, gotDesc, gotPkg = category, target, description, devClass
+			return testTransportNumber, nil
+		},
+	}
+	result := callTool(t, newTestServerWithFallback(client, fb), "create_transport", map[string]interface{}{
+		"category":    "t",
+		"description": "Copies",
+		"target":      "dum",
+	})
+	if result.IsError {
+		t.Fatalf("expected success via fallback, got: %v", result.Content)
+	}
+	if gotCat != "T" || gotTarget != "DUM" || gotDesc != "Copies" || gotPkg != "" {
+		t.Errorf("fallback got (%q, %q, %q, %q), want (T, DUM, Copies, \"\")", gotCat, gotTarget, gotDesc, gotPkg)
+	}
+	var out tools.CreateTransportResult
+	_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
+	if out.TransportNumber != testTransportNumber || !out.ViaFallback {
+		t.Errorf("got %+v, want %s via fallback", out, testTransportNumber)
+	}
+}
+
+func TestCreateTransport_NotSupported_NoFallback_PointsToSE09(t *testing.T) {
+	client := &mockClient{
+		createTransportFn: func(context.Context, adt.CreateTransportOptions) (string, error) {
+			return "", notSupported()
+		},
+	}
+	result := callTool(t, newTestServerWithFallback(client, nil), "create_transport", map[string]interface{}{
+		"category":    "T",
+		"description": "Copies",
+	})
 	if !result.IsError {
-		t.Fatal("expected error for category W without fallback")
+		t.Fatal("expected an error without a fallback")
 	}
 	text := result.Content[0].(mcp.TextContent).Text
-	for _, want := range []string{"category W", "SAP limitation", "SE09"} {
+	for _, want := range []string{"cannot create a request of type T", "SE09", "sapgui.mcp"} {
 		if !strings.Contains(text, want) {
-			t.Errorf("error message should contain %q, got: %s", want, text)
+			t.Errorf("error should contain %q, got: %s", want, text)
 		}
 	}
 }
 
-func TestCreateTransport_CategoryW_WithFallback_UsesFallback(t *testing.T) {
-	called := false
-	fb := &mockBlackMagic{
-		createTransportFn: func(_ context.Context, category, _, _, _ string) (string, error) {
-			called = true
-			if category != "W" {
-				t.Errorf("expected category W, got %s", category)
-			}
-			return testTransportNumber, nil
+// Any other ADT error is reported as is: the fallback is for operations the
+// system cannot do over ADT, not for requests SAP rejected.
+func TestCreateTransport_OtherError_NoFallback(t *testing.T) {
+	fbCalled := false
+	client := &mockClient{
+		createTransportFn: func(context.Context, adt.CreateTransportOptions) (string, error) {
+			return "", &adt.ADTError{StatusCode: 400, Message: "Target DUX does not exist"}
 		},
 	}
-	s := newTestServerWithFallback(&mockClient{}, fb)
-	result := callTool(t, s, "create_transport", map[string]interface{}{
-		"category":    "W",
-		"description": "Test customizing",
+	fb := &mockBlackMagic{createTransportFn: func(context.Context, string, string, string, string) (string, error) {
+		fbCalled = true
+		return testTransportNumber, nil
+	}}
+	result := callTool(t, newTestServerWithFallback(client, fb), "create_transport", map[string]interface{}{
+		"category":    "T",
+		"description": "Copies",
+		"target":      "DUX",
 	})
-	if result.IsError {
-		t.Fatalf("unexpected error: %v", result.Content)
+	if !result.IsError {
+		t.Fatal("expected the ADT error")
 	}
-	if !called {
-		t.Fatal("expected BlackMagic fallback to be called")
-	}
-	var out map[string]string
-	_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
-	if out["transport_number"] != testTransportNumber {
-		t.Errorf("expected HFQK900001, got %s", out["transport_number"])
+	if fbCalled {
+		t.Error("the fallback must not run for an ordinary ADT error")
 	}
 }
 
-func TestCreateTransport_CategoryW_Force_UsesADT(t *testing.T) {
-	adtCalled := false
-	client := &mockClient{
-		createTransportFn: func(context.Context, adt.CreateTransportOptions) (string, error) {
-			adtCalled = true
-			return testTransportNum, nil
-		},
-	}
-	s := newTestServer(client)
-	result := callTool(t, s, "create_transport", map[string]interface{}{
-		"category":    "W",
-		"description": "Test forced",
-		"force":       true,
+func TestCreateTransport_RejectsUnknownCategory(t *testing.T) {
+	called := false
+	client := &mockClient{createTransportFn: func(context.Context, adt.CreateTransportOptions) (string, error) {
+		called = true
+		return testTransportNum, nil
+	}}
+	result := callTool(t, newTestServer(client), "create_transport", map[string]interface{}{
+		"category":    "C",
+		"description": "Relocation",
 	})
-	if result.IsError {
-		t.Fatalf("unexpected error: %v", result.Content)
-	}
-	if !adtCalled {
-		t.Fatal("expected ADT client to be called with force=true")
+	if !result.IsError || called {
+		t.Errorf("category C: IsError=%v, reached adtler=%v; want a local rejection", result.IsError, called)
 	}
 }
 
@@ -163,6 +233,7 @@ func TestCreateTransport_CategoryK_UsesADT(t *testing.T) {
 	result := callTool(t, s, "create_transport", map[string]interface{}{
 		"category":    "K",
 		"description": "Workbench transport",
+		"package":     "ZPKG",
 	})
 	if result.IsError {
 		t.Fatalf("unexpected error: %v", result.Content)

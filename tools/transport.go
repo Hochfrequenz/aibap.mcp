@@ -96,18 +96,19 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithDescription(
-			"Create a new CTS transport request. Returns the transport number. "+
-				"Categories: K=workbench (development objects), W=customizing, T=transport of copies, "+
-				"C=relocation without package change, O=relocation with package change, E=relocation of complete package. "+
-				"Package and target are optional — omit them to create an unassigned request. "+
-				"To find the correct target, query: SELECT SYSNAME, TRANSLAYER FROM TCESYST WHERE VERSION = '0002'. "+
-				"To find a package's transport layer: SELECT DEVCLASS, PDEVCLASS FROM TDEVC WHERE DEVCLASS = 'Z_MY_PKG'.",
+			"Create a new CTS transport request and return its number. Categories: "+
+				"K = workbench request: package required; SAP takes the target from the package's transport layer, so target is refused. "+
+				"W = customizing request and T = transport of copies: package refused; target optional "+
+				"(empty: a customizing request gets the client's default target, a transport of copies none). "+
+				"SAP_BASIS 7.50 (ECC) cannot create W or T over ADT; there the request goes through the "+
+				"configured fallback (via_fallback=true), or, without one, the call fails and the request has to be "+
+				"created in SE09 via the sapgui.mcp server. "+
+				"To list transport targets: SELECT SYSNAME FROM TCESYST WHERE VERSION = '0002'.",
 		),
-		mcp.WithString("category", mcp.Required(), mcp.Description("Transport category: K (workbench), W (customizing), T (transport of copies)")),
-		mcp.WithString("description", mcp.Required(), mcp.Description("Short description for the transport")),
-		mcp.WithString("target", mcp.Description("Target system (e.g. DUM, PRD). Query TCESYST to find available targets.")),
-		mcp.WithString("package", mcp.Description("Development class / package name. Optional — omit for unassigned requests.")),
-		mcp.WithBoolean("force", mcp.Description("Force ADT request even for unsupported categories. By default, category W (customizing) is intercepted because ADT cannot create customizing transports.")),
+		mcp.WithString("category", mcp.Required(), mcp.Enum("K", "W", "T"), mcp.Description("Request type: K (workbench), W (customizing) or T (transport of copies)")),
+		mcp.WithString("description", mcp.Required(), mcp.Description("Short description for the transport (at most 60 characters)")),
+		mcp.WithString("target", mcp.Description("Transport target for W or T, e.g. DUM, a virtual system or <SID>.<client>. Refused for K.")),
+		mcp.WithString("package", mcp.Description("Package for K (required there). Refused for W and T.")),
 		mcp.WithOutputSchema[CreateTransportResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		cat, errRes := requireString(req, "category")
@@ -118,35 +119,34 @@ func registerTransportTools(s toolAdder, client adt.TransportClient, fallback Bl
 		if errRes != nil {
 			return errRes, nil
 		}
-		target := req.GetString("target", "")
-		pkg := req.GetString("package", "")
-		force := req.GetBool("force", false)
-
-		if strings.ToUpper(cat) == "W" && !force {
-			if fallback != nil {
-				number, err := fallback.CreateTransportFallback(ctx, cat, target, desc, pkg)
-				if err != nil {
-					return errorResult(err), nil
-				}
-				return mcp.NewToolResultJSON(CreateTransportResult{
-					TransportNumber: number,
-					Description:     desc,
-				})
-			}
-			return errorResult(fmt.Errorf(
-				"customizing transports (category W) cannot be created via the ADT REST API — " +
-					"this is a known SAP limitation. Configure a BlackMagic fallback or create " +
-					"the transport manually in SAP GUI (SE09/SE10)")), nil
-		}
-
-		// adtler v0.12.0 (adtler#137) refuses inputs SAP would ignore: Package
-		// for W/T, Target for K. Tool description and ECC handling: #610.
-		number, err := client.CreateTransport(ctx, adt.CreateTransportOptions{
+		opts := adt.CreateTransportOptions{
 			Type:        adt.TransportType(strings.ToUpper(cat)),
 			Description: desc,
-			Package:     pkg,
-			Target:      target,
-		})
+			Package:     req.GetString("package", ""),
+			Target:      strings.ToUpper(req.GetString("target", "")),
+		}
+		switch opts.Type {
+		case adt.TransportTypeWorkbench, adt.TransportTypeCustomizing, adt.TransportTypeCopies:
+		default:
+			return errorResult(fmt.Errorf("unknown category %q: use K (workbench), W (customizing) or T (transport of copies)", cat)), nil
+		}
+
+		// adtler refuses inputs SAP would ignore (package for W/T, target
+		// for K) and answers ErrorNotSupported, without sending anything,
+		// where the system cannot create W/T over ADT (ECC, adtler#137).
+		// Only that case goes to the fallback; an error SAP returned is
+		// reported as is.
+		number, err := client.CreateTransport(ctx, opts)
+		if err != nil && adt.ClassifyError(err) == adt.ErrorNotSupported {
+			if fallback == nil {
+				return errorResult(fmt.Errorf("%w — no fallback is configured: create the request in SE09 via the sapgui.mcp server", err)), nil
+			}
+			number, fbErr := fallback.CreateTransportFallback(ctx, string(opts.Type), opts.Target, desc, opts.Package)
+			if fbErr != nil {
+				return errorResult(fmt.Errorf("ADT cannot create this request here and the fallback failed: %w (ADT: %v)", fbErr, err)), nil
+			}
+			return mcp.NewToolResultJSON(CreateTransportResult{TransportNumber: number, Description: desc, ViaFallback: true})
+		}
 		if err != nil {
 			return errorResult(err), nil
 		}
