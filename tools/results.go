@@ -106,12 +106,18 @@ type AddToTransportResult struct {
 	ObjectName string `json:"object_name"`
 	Transport  string `json:"transport"`
 	Added      bool   `json:"added"`
+	// ViaFallback is set when ADT could not record the entry and the
+	// configured fallback did (#616).
+	ViaFallback bool `json:"via_fallback,omitempty"`
 }
 
 type RemoveFromTransportResult struct {
 	TaskNumber string `json:"task_number"`
 	ObjectName string `json:"object_name"`
 	Removed    bool   `json:"removed"`
+	// ViaFallback is set when ADT could not remove the entry and the
+	// configured fallback did (#616).
+	ViaFallback bool `json:"via_fallback,omitempty"`
 }
 
 type CreateTransportResult struct {
