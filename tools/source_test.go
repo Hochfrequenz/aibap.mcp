@@ -42,8 +42,8 @@ type mockClient struct {
 	verifySourceFn         func(ctx context.Context, source string) (bool, []adt.SyntaxMessage, error)
 	getObjectDepsFn        func(ctx context.Context, objType, objName string, maxResults, maxDepth int) (*adt.DependencyResult, error)
 	runTestsFn             func(ctx context.Context, uri string, timeout int) (*adt.TestResult, error)
-	getTransportFn         func(ctx context.Context, user, status string) ([]adt.TransportRequest, error)
-	addTransportFn         func(ctx context.Context, uri, transport string) error
+	getTransportFn         func(ctx context.Context, opts adt.TransportListOptions) (*adt.TransportRequestPage, error)
+	addTransportFn         func(ctx context.Context, pgmID, objectType, objectName, transport string) error
 	lockObjectFn           func(ctx context.Context, uri string) (string, error)
 	unlockObjectFn         func(ctx context.Context, uri, lockHandle string) error
 	prettyPrintFn          func(ctx context.Context, source string) (string, error)
@@ -51,7 +51,7 @@ type mockClient struct {
 	createPackageFn        func(ctx context.Context, name, desc, responsible, softwareComponent, transportLayer, transport string) error
 	deleteObjectFn         func(ctx context.Context, uri, lockHandle, transport string) error
 	getCompletionsFn       func(ctx context.Context, uri, source string, line, column int) ([]adt.CompletionItem, error)
-	createTransportFn      func(ctx context.Context, category, target, description, devClass string) (string, error)
+	createTransportFn      func(ctx context.Context, opts adt.CreateTransportOptions) (string, error)
 	deleteTransportFn      func(ctx context.Context, transport string) error
 	releaseTransportFn     func(ctx context.Context, transport string) error
 	renameFn               func(ctx context.Context, uri, newName, transport string) (*adt.RenameResult, error)
@@ -183,9 +183,9 @@ func (m *mockClient) RunUnitTests(ctx context.Context, uri string, timeout int) 
 func (m *mockClient) CheckTransport(context.Context, string, string, string) (*adt.TransportCheckResult, error) {
 	return &adt.TransportCheckResult{}, nil
 }
-func (m *mockClient) CreateTransport(ctx context.Context, category, target, description, devClass string) (string, error) {
+func (m *mockClient) CreateTransport(ctx context.Context, opts adt.CreateTransportOptions) (string, error) {
 	if m.createTransportFn != nil {
-		return m.createTransportFn(ctx, category, target, description, devClass)
+		return m.createTransportFn(ctx, opts)
 	}
 	return "DEVK999999", nil
 }
@@ -198,17 +198,26 @@ func (m *mockClient) DeleteTransport(ctx context.Context, transport string) erro
 	}
 	return nil
 }
-func (m *mockClient) GetTransportRequests(ctx context.Context, user, status string) ([]adt.TransportRequest, error) {
+func (m *mockClient) GetTransportRequests(ctx context.Context, opts adt.TransportListOptions) (*adt.TransportRequestPage, error) {
 	if m.getTransportFn != nil {
-		return m.getTransportFn(ctx, user, status)
+		return m.getTransportFn(ctx, opts)
 	}
-	return nil, nil
+	// One populated request by default, so structured_content_shape_test
+	// validates a real State value against the declared outputSchema.
+	return &adt.TransportRequestPage{Requests: []adt.TransportRequest{
+		{Number: "DEVK900001", State: adt.TransportStateModifiable, RawStatus: adt.TransportStatusModifiable},
+	}}, nil
 }
-func (m *mockClient) AddToTransport(ctx context.Context, uri, transport string) error {
+func (m *mockClient) AddToTransport(ctx context.Context, pgmID, objectType, objectName, transport string) error {
 	if m.addTransportFn != nil {
-		return m.addTransportFn(ctx, uri, transport)
+		return m.addTransportFn(ctx, pgmID, objectType, objectName, transport)
 	}
 	return nil
+}
+func (m *mockClient) AddPackageToTransport(context.Context, string, string, bool) error { return nil }
+func (m *mockClient) CopyTransportObjects(context.Context, string, string, bool) error  { return nil }
+func (m *mockClient) RollbackTransportWithOptions(ctx context.Context, transport string, _ adt.RollbackOptions) (*adt.RollbackResult, error) {
+	return m.RollbackTransport(ctx, transport)
 }
 func (m *mockClient) RemoveFromTransport(ctx context.Context, taskNr, parentTr, pgmid, objType, objName, wbType, position string) error {
 	if m.removeFromTransportFn != nil {
@@ -326,10 +335,14 @@ func (m *mockClient) ReleaseTransport(ctx context.Context, transport string) (*a
 	if err != nil {
 		return nil, err
 	}
-	if info, infoErr := m.GetTransportInfo(ctx, transport); infoErr == nil && info != nil && info.Status == "D" {
-		return &adt.ReleaseResult{Transport: transport, Released: false}, nil
+	if m.getTransportInfoFn == nil {
+		return &adt.ReleaseResult{Transport: transport, State: adt.TransportStateReleased, RawStatus: adt.TransportStatusReleased}, nil
 	}
-	return &adt.ReleaseResult{Transport: transport, Released: true}, nil
+	info, infoErr := m.GetTransportInfo(ctx, transport)
+	if infoErr != nil || info == nil {
+		return &adt.ReleaseResult{Transport: transport, State: adt.TransportStateUnknown}, nil
+	}
+	return &adt.ReleaseResult{Transport: transport, State: info.State, RawStatus: info.RawStatus}, nil
 }
 
 // ReleaseTransportWithTasks is a stub: no existing test exercises
@@ -337,7 +350,7 @@ func (m *mockClient) ReleaseTransport(ctx context.Context, transport string) (*a
 // pre-#171 behavior of ignoring releaseTransportFn/getTransportInfoFn for
 // this path.
 func (m *mockClient) ReleaseTransportWithTasks(ctx context.Context, transport string) (*adt.ReleaseResult, error) {
-	return &adt.ReleaseResult{Transport: transport, Released: true}, nil
+	return &adt.ReleaseResult{Transport: transport, State: adt.TransportStateReleased, RawStatus: adt.TransportStatusReleased}, nil
 }
 func (m *mockClient) RollbackTransport(ctx context.Context, transport string) (*adt.RollbackResult, error) {
 	if m.rollbackTransportFn != nil {
@@ -753,25 +766,92 @@ func TestSearchObjectsToolWithType(t *testing.T) {
 
 func TestGetTransportRequestsTool(t *testing.T) {
 	mock := &mockClient{
-		getTransportFn: func(ctx context.Context, user, status string) ([]adt.TransportRequest, error) {
-			if status != "D" {
-				t.Errorf("unexpected status: %q", status)
+		getTransportFn: func(ctx context.Context, opts adt.TransportListOptions) (*adt.TransportRequestPage, error) {
+			if opts.Filter != adt.TransportFilterModifiable {
+				t.Errorf("filter: got %v, want modifiable", opts.Filter)
 			}
-			return []adt.TransportRequest{{Number: testTransportNum, Status: "D"}}, nil
+			if opts.User != "*" || opts.Limit != 10 || opts.After != "cursor1" {
+				t.Errorf("options not passed through: %+v", opts)
+			}
+			return &adt.TransportRequestPage{
+				Requests: []adt.TransportRequest{{Number: testTransportNum, State: adt.TransportStateModifiable, RawStatus: "D"}},
+				Next:     "cursor2",
+			}, nil
 		},
 	}
 	s := newTestServer(mock)
 	result := callTool(t, s, "get_transport_requests", map[string]interface{}{
-		"status": "D",
+		"status": "modifiable",
+		"user":   "*",
+		"limit":  10,
+		"after":  "cursor1",
 	})
 	if result.IsError {
-		t.Fatalf("unexpected error result")
+		t.Fatalf("unexpected error result: %v", result.Content)
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	for _, want := range []string{`"count":1`, `"next":"cursor2"`, `"state":"modifiable"`, `"raw_status":"D"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("result should contain %s, got: %s", want, text)
+		}
+	}
+}
+
+// The old D/L letters are not accepted: L meant "released" in the old tool
+// description but is SAP's modifiable-protected status, so mapping it would
+// silently invert the filter.
+func TestGetTransportRequestsTool_RejectsUnknownStatus(t *testing.T) {
+	called := false
+	mock := &mockClient{
+		getTransportFn: func(context.Context, adt.TransportListOptions) (*adt.TransportRequestPage, error) {
+			called = true
+			return &adt.TransportRequestPage{}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_transport_requests", map[string]interface{}{"status": "L"})
+	if !result.IsError {
+		t.Fatal("expected IsError=true for status L")
+	}
+	if called {
+		t.Error("an unknown status must not reach adtler")
+	}
+}
+
+func TestGetTransportRequestsTool_PartialPageCarriesWarning(t *testing.T) {
+	mock := &mockClient{
+		getTransportFn: func(context.Context, adt.TransportListOptions) (*adt.TransportRequestPage, error) {
+			return &adt.TransportRequestPage{Requests: []adt.TransportRequest{{Number: testTransportNum}}},
+				fmt.Errorf("descriptions missing: %w", adt.ErrTransportListPartial)
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_transport_requests", map[string]interface{}{})
+	if result.IsError {
+		t.Fatalf("a partial page should be returned, got error: %v", result.Content)
+	}
+	text := result.Content[0].(mcp.TextContent).Text
+	if !strings.Contains(text, `"warning":"descriptions missing`) || !strings.Contains(text, testTransportNum) {
+		t.Errorf("expected the page plus a warning, got: %s", text)
+	}
+}
+
+func TestGetTransportRequestsTool_EmptyPageIsArray(t *testing.T) {
+	mock := &mockClient{
+		getTransportFn: func(context.Context, adt.TransportListOptions) (*adt.TransportRequestPage, error) {
+			return &adt.TransportRequestPage{}, nil
+		},
+	}
+	s := newTestServer(mock)
+	result := callTool(t, s, "get_transport_requests", map[string]interface{}{})
+	if text := result.Content[0].(mcp.TextContent).Text; !strings.Contains(text, `"transports":[]`) {
+		t.Errorf("empty page should serialise transports as [], got: %s", text)
 	}
 }
 
 func TestGetTransportRequestsToolError(t *testing.T) {
 	mock := &mockClient{
-		getTransportFn: func(ctx context.Context, user, status string) ([]adt.TransportRequest, error) {
+		getTransportFn: func(context.Context, adt.TransportListOptions) (*adt.TransportRequestPage, error) {
 			return nil, &adt.ADTError{StatusCode: 403, Message: "Forbidden"}
 		},
 	}
@@ -943,26 +1023,42 @@ func TestRunUnitTestsBatch(t *testing.T) {
 }
 
 func TestAddToTransportTool(t *testing.T) {
-	var gotURI, gotTransport string
+	var got [4]string
 	mock := &mockClient{
-		addTransportFn: func(ctx context.Context, uri, transport string) error {
-			gotURI, gotTransport = uri, transport
+		addTransportFn: func(_ context.Context, pgmID, objectType, objectName, transport string) error {
+			got = [4]string{pgmID, objectType, objectName, transport}
 			return nil
 		},
 	}
 	s := newTestServer(mock)
 	result := callTool(t, s, "add_to_transport", map[string]interface{}{
-		"object_uri": testObjectURI,
-		"transport":  testTransportNum,
+		"object_type": "prog",
+		"object_name": "ZFOO",
+		"transport":   testTransportNum,
 	})
 	if result.IsError {
-		t.Fatalf("unexpected error result")
+		t.Fatalf("unexpected error result: %v", result.Content)
 	}
-	if gotURI != testObjectURI {
-		t.Errorf("object_uri: got %q", gotURI)
+	if want := [4]string{"R3TR", "PROG", "ZFOO", testTransportNum}; got != want {
+		t.Errorf("E071 key: got %v, want %v (pgmid defaults to R3TR, type is upper-cased)", got, want)
 	}
-	if gotTransport != testTransportNum {
-		t.Errorf("transport: got %q", gotTransport)
+}
+
+func TestAddToTransportTool_MissingKeyFieldsRejected(t *testing.T) {
+	for _, missing := range []string{"object_type", "object_name", "transport"} {
+		t.Run(missing, func(t *testing.T) {
+			called := false
+			mock := &mockClient{addTransportFn: func(context.Context, string, string, string, string) error {
+				called = true
+				return nil
+			}}
+			args := map[string]interface{}{"object_type": "PROG", "object_name": "ZFOO", "transport": testTransportNum}
+			delete(args, missing)
+			result := callTool(t, newTestServer(mock), "add_to_transport", args)
+			if !result.IsError || called {
+				t.Errorf("missing %s: IsError=%v, reached adtler=%v", missing, result.IsError, called)
+			}
+		})
 	}
 }
 

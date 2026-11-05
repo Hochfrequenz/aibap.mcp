@@ -749,14 +749,15 @@ func TestRunUnitTestsToolError(t *testing.T) {
 
 func TestAddToTransportToolError(t *testing.T) {
 	mock := &mockClient{
-		addTransportFn: func(ctx context.Context, uri, transport string) error {
+		addTransportFn: func(context.Context, string, string, string, string) error {
 			return &adt.ADTError{StatusCode: 500, Message: "transport error"}
 		},
 	}
 	s := newTestServer(mock)
 	result := callTool(t, s, "add_to_transport", map[string]interface{}{
-		"object_uri": testObjectURI,
-		"transport":  "DEVK900001",
+		"object_type": "PROG",
+		"object_name": "ZFOO",
+		"transport":   "DEVK900001",
 	})
 	if !result.IsError {
 		t.Fatal("expected IsError=true")

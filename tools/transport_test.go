@@ -60,7 +60,7 @@ func TestCreateTransport_MissingRequiredParams(t *testing.T) {
 		t.Run(missing, func(t *testing.T) {
 			called := false
 			client := &mockClient{
-				createTransportFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+				createTransportFn: func(context.Context, adt.CreateTransportOptions) (string, error) {
 					called = true
 					return testTransportNum, nil
 				},
@@ -132,7 +132,7 @@ func TestCreateTransport_CategoryW_WithFallback_UsesFallback(t *testing.T) {
 func TestCreateTransport_CategoryW_Force_UsesADT(t *testing.T) {
 	adtCalled := false
 	client := &mockClient{
-		createTransportFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+		createTransportFn: func(context.Context, adt.CreateTransportOptions) (string, error) {
 			adtCalled = true
 			return testTransportNum, nil
 		},
@@ -154,7 +154,7 @@ func TestCreateTransport_CategoryW_Force_UsesADT(t *testing.T) {
 func TestCreateTransport_CategoryK_UsesADT(t *testing.T) {
 	adtCalled := false
 	client := &mockClient{
-		createTransportFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+		createTransportFn: func(context.Context, adt.CreateTransportOptions) (string, error) {
 			adtCalled = true
 			return "DEVK900456", nil
 		},
@@ -234,7 +234,7 @@ func TestReleaseTransport_SilentFail_UsesFallback(t *testing.T) {
 			return nil // ADT "succeeds" silently
 		},
 		getTransportInfoFn: func(_ context.Context, transport string) (*adt.TransportRequest, error) {
-			return &adt.TransportRequest{Number: transport, Status: "D"}, nil
+			return &adt.TransportRequest{Number: transport, State: adt.TransportStateModifiable, RawStatus: "D"}, nil
 		},
 	}
 	fb := &mockBlackMagic{
@@ -273,7 +273,7 @@ func TestReleaseTransport_SilentFail_NoFallback(t *testing.T) {
 	mock := &mockClient{
 		releaseTransportFn: func(_ context.Context, _ string) error { return nil },
 		getTransportInfoFn: func(_ context.Context, transport string) (*adt.TransportRequest, error) {
-			return &adt.TransportRequest{Number: transport, Status: "D"}, nil
+			return &adt.TransportRequest{Number: transport, State: adt.TransportStateModifiable, RawStatus: "D"}, nil
 		},
 	}
 	s := newTestServerWithFallback(mock, nil)
@@ -330,7 +330,7 @@ func TestReleaseTransport_ADTSuccess_NoFallback(t *testing.T) {
 	mock := &mockClient{
 		releaseTransportFn: func(_ context.Context, _ string) error { return nil },
 		getTransportInfoFn: func(_ context.Context, transport string) (*adt.TransportRequest, error) {
-			return &adt.TransportRequest{Number: transport, Status: "L"}, nil
+			return &adt.TransportRequest{Number: transport, State: adt.TransportStateReleased, RawStatus: "R"}, nil
 		},
 	}
 	fb := &mockBlackMagic{
@@ -347,12 +347,82 @@ func TestReleaseTransport_ADTSuccess_NoFallback(t *testing.T) {
 		t.Fatalf("unexpected error: %v", result.Content)
 	}
 	if fallbackCalled {
-		t.Error("fallback must NOT be called when ADT succeeds and status is L")
+		t.Error("fallback must NOT be called when ADT succeeds and status is R")
 	}
 	var out tools.ReleaseTransportResult
 	_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
 	if out.ViaFallback {
 		t.Error("expected via_fallback=false on ADT happy path")
+	}
+	if !out.Released || out.State != "released" || out.RawStatus != "R" {
+		t.Errorf("expected released/released/R, got %+v", out)
+	}
+}
+
+// TestReleaseTransport_NotConfirmed_NoFallback covers the two states adtler
+// added in v0.12.0 (adtler#273, #275): the release may have gone through, so
+// the fallback must not release again. The tool reports released=false with
+// the state instead of an error.
+func TestReleaseTransport_NotConfirmed_NoFallback(t *testing.T) {
+	for _, tc := range []struct {
+		raw   string
+		state adt.TransportState
+		want  string
+	}{
+		{"O", adt.TransportStateReleaseInProgress, "release_in_progress"},
+		{"X", adt.TransportStateUnknown, "unknown"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			fallbackCalled := false
+			mock := &mockClient{
+				releaseTransportFn: func(context.Context, string) error { return nil },
+				getTransportInfoFn: func(_ context.Context, transport string) (*adt.TransportRequest, error) {
+					return &adt.TransportRequest{Number: transport, State: tc.state, RawStatus: tc.raw}, nil
+				},
+			}
+			fb := &mockBlackMagic{releaseTransportFn: func(context.Context, string) error {
+				fallbackCalled = true
+				return nil
+			}}
+			result := callTool(t, newTestServerWithFallback(mock, fb), "release_transport", map[string]interface{}{
+				"transport": testTransportNum,
+			})
+			if result.IsError {
+				t.Fatalf("unexpected error: %v", result.Content)
+			}
+			if fallbackCalled {
+				t.Error("fallback must not release again when the state is not modifiable")
+			}
+			var out tools.ReleaseTransportResult
+			_ = json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &out)
+			if out.Released || out.State != tc.want || out.RawStatus != tc.raw {
+				t.Errorf("got %+v, want released=false state=%s raw=%s", out, tc.want, tc.raw)
+			}
+		})
+	}
+}
+
+// TestCreateTransport_MapsOptions pins the mapping of the tool parameters
+// onto adt.CreateTransportOptions (adtler v0.12.0, #610).
+func TestCreateTransport_MapsOptions(t *testing.T) {
+	var got adt.CreateTransportOptions
+	client := &mockClient{
+		createTransportFn: func(_ context.Context, opts adt.CreateTransportOptions) (string, error) {
+			got = opts
+			return testTransportNum, nil
+		},
+	}
+	result := callTool(t, newTestServer(client), "create_transport", map[string]interface{}{
+		"category":    "t",
+		"description": "Copies",
+		"target":      "DUM",
+	})
+	if result.IsError {
+		t.Fatalf("unexpected error: %v", result.Content)
+	}
+	want := adt.CreateTransportOptions{Type: adt.TransportTypeCopies, Description: "Copies", Target: "DUM"}
+	if got != want {
+		t.Errorf("options: got %+v, want %+v", got, want)
 	}
 }
 
