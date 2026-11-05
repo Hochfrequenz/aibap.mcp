@@ -13,6 +13,9 @@ import (
 type VerifyResult struct {
 	Valid    bool                `json:"valid"`
 	Messages []adt.SyntaxMessage `json:"messages"`
+	// CleanupError is set when the check ran but its temporary program could
+	// not be removed; it names the program left in $TMP.
+	CleanupError string `json:"cleanup_error,omitempty"`
 }
 
 func registerVerifyTools(s toolAdder, client adt.Client) {
@@ -25,7 +28,9 @@ func registerVerifyTools(s toolAdder, client adt.Client) {
 		mcp.WithDescription(
 			"Syntax-check ABAP source code without needing an existing object. "+
 				"Creates a temporary program in $TMP, checks the source, and cleans up. "+
-				"Returns {valid: true/false, messages: [...]}.",
+				"Returns {valid: true/false, messages: [...]}. "+
+				"If the temporary program could not be removed, the result is still valid and cleanup_error names the program left in $TMP: "+
+				"tell the user, and do not call verify_source again to retry, since every call creates a new program.",
 		),
 		mcp.WithString("source", mcp.Required(), mcp.Description("ABAP source code to check")),
 		mcp.WithOutputSchema[VerifyResult](),
@@ -43,6 +48,11 @@ func registerVerifyTools(s toolAdder, client adt.Client) {
 		}
 
 		valid, msgs, err := client.VerifySource(ctx, source)
+		// Only a bare *VerifyCleanupError means the check itself succeeded;
+		// a wrapped one comes with a failed check.
+		if cleanupErr, ok := err.(*adt.VerifyCleanupError); ok {
+			return mcp.NewToolResultJSON(VerifyResult{Valid: valid, Messages: msgs, CleanupError: cleanupErr.Error()})
+		}
 		if err != nil {
 			return errorResult(err), nil
 		}

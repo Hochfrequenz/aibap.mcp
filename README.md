@@ -282,11 +282,14 @@ Create `~/.config/sap-mcp/systems.json` (shared with [sapgui.mcp](https://github
       "user": "YOUR_USER",
       "password": "YOUR_PASSWORD",
       "client": "100",
+      "language": "EN",
       "tls_skip_verify": false
     }
   }
 }
 ```
+
+`language` is the logon language of every ADT request. New objects get it as their original language, so set `"language": "DE"` for objects that should be created in German. Without `language` the server logs on in English (`EN`), not in the SAP user's default language.
 
 > [!TIP]
 > **Keep the password out of the file.** A system's string fields — `connection_name`, `host`, `client`, `user`, `password`, `language`, `oauth2_client_id` — and the top-level `default_system` may reference an environment variable with `${env:VAR}`:
