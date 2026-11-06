@@ -69,3 +69,17 @@ type TransportCopiesFallback interface {
 	// includeSubpackages, of its subpackages) to target.
 	AddPackageToTransportFallback(ctx context.Context, pkg, target string, includeSubpackages bool) error
 }
+
+// PackageFallback is an optional extension of BlackMagicClient for creating a
+// package where ADT cannot: older systems such as ECC have no
+// /sap/bc/adt/packages endpoint. The create_package handler detects it with a
+// type assertion, so a BlackMagicClient without it keeps compiling and the
+// tool keeps returning adtler's error.
+type PackageFallback interface {
+	// CreatePackageFallback creates the top-level development package name
+	// (upper-cased) with the given attributes, as SE21 does. A name starting
+	// with '$' is a local package; softwareComponent, transportLayer and
+	// transport are then empty. It must fail, not overwrite, when the package
+	// already exists.
+	CreatePackageFallback(ctx context.Context, name, description, responsible, softwareComponent, transportLayer, transport string) error
+}
