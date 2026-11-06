@@ -133,6 +133,9 @@ dependencies, release differences), exactly as with manual delivery.
   S/4HANA (an add to a released request is refused there too). ECC has no
   add- or remove-object action in ADT; there they work only if your build
   includes a fallback, otherwise use SE09.
+- **`create_package`**: works over ADT on S/4HANA. ECC has no package
+  endpoint in ADT; there it works only if your build includes a fallback,
+  otherwise create the package in SE80 or SE21.
 - **`create_object`**: DDIC and CDS types (TABL, DTEL, DOMA, DDLS) only on
   S/4HANA, unless your build includes a fallback (TABL, DTEL, DOMA).
 - **`export_package` / `export_packages`** export whole packages. There is no

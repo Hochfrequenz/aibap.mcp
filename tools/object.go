@@ -94,7 +94,9 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 			"A name starting with '$' creates a local package: SAP files it under software component LOCAL and it needs no transport. "+
 			"A transportable package needs software_component (e.g. HOME), transport_layer and a transport request. "+
 			"Packages are always created top-level; creating one inside another (superPackage) is not supported. "+
-			"Requires S/4HANA or a recent ABAP Platform version — older ECC systems have no ADT package endpoint, so create the package in SE80 or SE21 there."),
+			"Requires S/4HANA or a recent ABAP Platform version — older ECC systems have no ADT package endpoint. "+
+			"There the package is created only if this build includes a fallback (the result then has via_fallback: true); "+
+			"otherwise create it in SE80 or SE21."),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Package name, e.g. $ZLOCAL_TEST for a local package or ZPACKAGE for a transportable one. Lower case is accepted; SAP stores the name upper-cased"),
@@ -116,7 +118,7 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 		mcp.WithString("transport",
 			mcp.Description("Transport request number; required for a transportable package"),
 		),
-		mcp.WithOutputSchema[ObjectCreateResult](),
+		mcp.WithOutputSchema[PackageCreateResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name, errRes := requireString(req, "name")
 		if errRes != nil {
@@ -134,12 +136,23 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 		transportLayer := req.GetString("transport_layer", "")
 		transport := req.GetString("transport", "")
 
+		// adtler upper-cases the name before sending it, so report what SAP holds.
+		res := PackageCreateResult{Name: strings.ToUpper(name), Created: true}
 		// "" keeps the package's language version unset, as before adtler v0.11.0; choosing one is #596.
-		if err := client.CreatePackage(ctx, name, desc, responsible, softwareComponent, transportLayer, "", transport); err != nil {
+		err := client.CreatePackage(ctx, name, desc, responsible, softwareComponent, transportLayer, "", transport)
+		if fb, ok := packageFallbackFor(err, fallback); ok {
+			// Hand the fallback the same upper-cased values adtler sends to ADT.
+			if fbErr := fb.CreatePackageFallback(ctx, res.Name, desc, strings.ToUpper(responsible),
+				softwareComponent, transportLayer, transport); fbErr != nil {
+				return errorResult(fbErr), nil
+			}
+			res.ViaFallback = true
+			return mcp.NewToolResultJSON(res)
+		}
+		if err != nil {
 			return errorResult(err), nil
 		}
-		// adtler upper-cases the name before sending it, so report what SAP holds.
-		return mcp.NewToolResultJSON(ObjectCreateResult{Name: strings.ToUpper(name), Created: true})
+		return mcp.NewToolResultJSON(res)
 	})
 
 	s.AddTool(mcp.NewTool("delete_object",
@@ -170,4 +183,25 @@ func registerObjectTools(s toolAdder, client adt.ObjectClient, fallback BlackMag
 		}
 		return mcp.NewToolResultJSON(ObjectDeleteResult{URI: uri, Deleted: true})
 	})
+}
+
+// packageEndpointMissingText identifies the error adtler v0.12.0 returns when
+// the system answers 404 on /sap/bc/adt/packages. It is a plain error, not an
+// *adt.ADTError, so ClassifyError cannot tell it apart; the text is the only
+// signal. tools/package_fallback_test.go runs the real adtler client against
+// a 404 so a change of that wording fails the tests.
+const packageEndpointMissingText = "/sap/bc/adt/packages endpoint is not available"
+
+// packageFallbackFor returns the configured PackageFallback when err says the
+// system has no ADT package endpoint, the only case the fallback is for: an
+// error SAP returned from an existing endpoint is reported as is.
+func packageFallbackFor(err error, fallback BlackMagicClient) (PackageFallback, bool) {
+	if err == nil {
+		return nil, false
+	}
+	if !strings.Contains(err.Error(), packageEndpointMissingText) && adt.ClassifyError(err) != adt.ErrorNotSupported {
+		return nil, false
+	}
+	fb, ok := fallback.(PackageFallback)
+	return fb, ok
 }
