@@ -14,7 +14,7 @@
 #
 # Required environment (set by .github/workflows/release.yml):
 #   JSIGN_JAR                path to the jsign jar, already hash-checked
-#   AZURE_SIGNING_ENDPOINT   e.g. https://neu.codesigning.azure.net/
+#   AZURE_SIGNING_ENDPOINT   e.g. https://<region>.codesigning.azure.net/
 #   AZURE_SIGNING_ACCOUNT    Trusted Signing account name
 #   AZURE_SIGNING_PROFILE    certificate profile name
 #
