@@ -194,7 +194,9 @@ const packageEndpointMissingText = "/sap/bc/adt/packages endpoint is not availab
 
 // packageFallbackFor returns the configured PackageFallback when err says the
 // system has no ADT package endpoint, the only case the fallback is for: an
-// error SAP returned from an existing endpoint is reported as is.
+// error SAP returned from an existing endpoint is reported as is. adtler maps
+// every 404 on the package POST to that text, so a 404 for another reason
+// would also reach the fallback; no such 404 has been seen on S/4HANA.
 func packageFallbackFor(err error, fallback BlackMagicClient) (PackageFallback, bool) {
 	if err == nil {
 		return nil, false
