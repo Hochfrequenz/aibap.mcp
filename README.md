@@ -271,6 +271,8 @@ Run `aibap.mcp --version` after extracting to confirm which flavour you have —
 
 Extract the archive. You'll get a single executable (`.exe` on Windows).
 
+Release binaries are code-signed: the Windows `.exe` with an Authenticode signature (Azure Trusted Signing, RFC 3161 timestamp), the macOS binaries with an Apple Developer ID certificate and notarized by Apple. Windows shows the publisher in the file's *Properties → Digital Signatures* tab, and `Get-AuthenticodeSignature .\aibap.mcp-*.exe` reports `Valid`. On macOS, `codesign -dv --verbose=2 ./aibap.mcp-*` names the Developer ID; Gatekeeper checks the notarization online on first launch, because a bare binary cannot carry a stapled ticket. Linux binaries and source builds are not signed — verify Linux downloads against `checksums.txt` from the release.
+
 ### 2. Create `systems.json`
 
 Create `~/.config/sap-mcp/systems.json` (shared with [sapgui.mcp](https://github.com/Hochfrequenz/sapgui.mcp) — configure once, use everywhere):
