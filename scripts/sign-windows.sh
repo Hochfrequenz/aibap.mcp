@@ -44,6 +44,9 @@ fi
 host="${AZURE_SIGNING_ENDPOINT#https://}"
 host="${host%%/*}"
 
+# Read from the Azure CLI's token cache, which release.yml fills right after
+# `azure/login`: the GitHub OIDC assertion behind that login is valid for only
+# about five minutes, too short to mint a new token after a long build.
 # Passed to jsign by variable name (`env:`), so the token never appears on a
 # command line or in the log.
 AZURE_SIGNING_TOKEN="$(az account get-access-token \

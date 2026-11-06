@@ -112,3 +112,6 @@ release:
     name: aibap.mcp
   # Published by release.yml only after it has verified the signatures.
   draft: true
+  # A rerun after a failed verification must not leave a second draft for the
+  # same tag behind; `gh release edit` would publish the first one it finds.
+  replace_existing_draft: true

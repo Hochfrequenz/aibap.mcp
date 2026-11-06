@@ -19,7 +19,9 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Notarization runs per binary, one after another, and each may wait up
+    # to the 20m set in .goreleaser.yaml.
+    timeout-minutes: 90
     # Holds the Azure identifiers, the signing account and the Apple
     # credentials. Its deployment policy keeps them unreachable from
     # arbitrary branches, and the Azure federated credential trusts exactly
@@ -29,20 +31,6 @@ jobs:
       contents: write   # create the GitHub release
       id-token: write   # OIDC token that azure/login exchanges
     env:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
-      AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
-      AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
-      # Apple Developer ID certificate (.p12, base64) and App Store Connect
-      # API key (.p8, base64), under the names GoReleaser's `notarize` block
-      # reads.
-      MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
-      MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
-      MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
-      MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
-      MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
       JSIGN_VERSION: '7.6'
       JSIGN_SHA256: 6cf58aa080e7ff82656f320cff8d4a3bff30408df8766806dcba3740dd839fa5
     steps:
@@ -50,6 +38,18 @@ jobs:
       # macOS Gatekeeper block it on download. Fail here, naming what is
       # missing, rather than letting the signing steps skip.
       - name: Require signing credentials
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
         run: |
           missing=()
           for v in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID \
@@ -71,11 +71,12 @@ jobs:
         with:
           go-version: '1.27.x'
 
+      # Runs before any signing credential enters the environment.
       - name: Run tests
         run: go test ./...
 
       # Windows: Azure Trusted Signing via jsign, from a GoReleaser build
-      # hook. macOS: GoReleaser's `notarize` block, from the MACOS_* env.
+      # hook (scripts/sign-windows.sh). macOS: GoReleaser's `notarize` block.
 
       - uses: actions/setup-java@v6
         with:
@@ -96,26 +97,62 @@ jobs:
       - name: Azure login
         uses: azure/login@v3
         with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # The GitHub OIDC assertion behind the login above expires after about
+      # five minutes, and the build hooks that sign run only after every
+      # target has compiled. Minting the code-signing token now puts it in
+      # the CLI's cache (valid for an hour or more), where the hooks find it.
+      - name: Fetch the code-signing token
+        run: az account get-access-token --resource https://codesigning.azure.net --output none
 
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
-          args: >-
-            release --clean
-            ${{ github.event_name == 'workflow_dispatch' && '--snapshot' || '' }}
+          install-only: true
+
+      # GoReleaser only logs a notarization that does not finish within its
+      # timeout and carries on, which would ship a signed but not notarized
+      # binary that Gatekeeper still blocks. The log check turns that into a
+      # failure.
+      - name: Build, sign, notarize and draft the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SNAPSHOT: ${{ github.event_name == 'workflow_dispatch' && '--snapshot' || '' }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ vars.AZURE_SIGNING_PROFILE }}
+          MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+          MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+          MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086 # SNAPSHOT is empty or one flag
+          goreleaser release --clean $SNAPSHOT 2>&1 | tee "$RUNNER_TEMP/goreleaser.log"
+          if grep -Ei 'notarize timeout|still pending' "$RUNNER_TEMP/goreleaser.log"; then
+            echo "::error::notarization did not finish within its timeout"
+            exit 1
+          fi
+          notarized="$(grep -c 'notarized' "$RUNNER_TEMP/goreleaser.log" || true)"
+          if [ "$notarized" -ne 4 ]; then
+            echo "::error::expected 4 notarized darwin binaries, the log reports ${notarized}"
+            exit 1
+          fi
 
       # Checks the binaries that went into the archives rather than trusting
-      # the steps above. GoReleaser creates the release as a draft (see
-      # `release.draft` in .goreleaser.yaml), so nothing is public until
-      # this passes and the last step publishes it.
+      # the steps above. It proves a signature is present, not that it chains
+      # to a trusted root; the dry run and the README's checks cover that.
+      # GoReleaser creates the release as a draft (see `release.draft` in
+      # .goreleaser.yaml), so nothing is public until this passes and the
+      # last step publishes it.
       - name: Verify signatures
         run: |
           set -euo pipefail
+          sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends osslsigncode > /dev/null
 
           mapfile -t exes < <(find dist -mindepth 2 -type f -path '*_windows_*' -name '*.exe')
@@ -143,11 +180,16 @@ jobs:
             echo "$f: Developer ID signature present"
           done
 
+      # A pre-release tag (`v1.2.3-rc1`) is not marked Latest, matching how
+      # docker.yml treats a `-` in the tag.
       - name: Publish the release
         if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+        run: |
+          latest=true
+          [[ "$GITHUB_REF_NAME" == *-* ]] && latest=false
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest="$latest"
 
       - name: Upload dry-run artifacts
         if: github.event_name == 'workflow_dispatch'
