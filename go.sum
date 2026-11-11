@@ -1,7 +1,7 @@
-github.com/Hochfrequenz/adtler v0.12.0 h1:r1LD4VHdPVyd1YWg3CknEzhhzkA/0cMIeSZH2raZNgE=
-github.com/Hochfrequenz/adtler v0.12.0/go.mod h1:q3hP+XXabCECd6nr0WjI1IS26R/OLkpj1EqvIz4kU1w=
-github.com/Hochfrequenz/sap-mcp-config v1.1.1 h1:FCpazy8/qaw+UNxQkRbMiQrEeiDHgw9aKchwLMFfnyo=
-github.com/Hochfrequenz/sap-mcp-config v1.1.1/go.mod h1:FYNXWpfH16558Ai3BxYbJeTnKelaOqwbxi4TiFeYWsY=
+github.com/Hochfrequenz/adtler v0.13.0 h1:Mckiu6PTInkd43t+i0+Ok7E7q/oGJOxm8rmRVIBDmF0=
+github.com/Hochfrequenz/adtler v0.13.0/go.mod h1:XkWRy9ZMkZyQEhoB5pRVJ0AY9cfD19unlOcg90vhjgU=
+github.com/Hochfrequenz/sap-mcp-config/v2 v2.0.0 h1:vv6GQ4sgvkZpM/+gISxqRwK6JgybeGhsflZ4kKtF4aU=
+github.com/Hochfrequenz/sap-mcp-config/v2 v2.0.0/go.mod h1:Zje5Y8lphBOtoip9Yjn4PMU2PcwnR7kz58BIrwKiqYc=
 github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxKI=
 github.com/dlclark/regexp2 v1.11.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
 github.com/dustin/go-humanize v1.1.0 h1:dbKTrvD0klcbBV/h4AWJdMuZogJACoMlvWIWZ5b2xWg=

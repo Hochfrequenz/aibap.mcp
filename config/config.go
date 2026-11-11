@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config/v2"
 )
 
 // SAPSystem is a type alias for the shared SAPSystem type, keeping backward
@@ -18,6 +18,10 @@ type AppConfig struct {
 	Tools []string `json:"tools"`
 }
 
+// SupportedLanguages lists the SAP logon languages this server supports. A
+// system in systems.json with any other language fails config loading.
+var SupportedLanguages = []string{"EN", "DE"}
+
 // Load reads config from the given JSON file and validates it.
 func Load(path string) (*AppConfig, error) {
 	data, err := os.ReadFile(path)
@@ -26,7 +30,7 @@ func Load(path string) (*AppConfig, error) {
 	}
 
 	// Parse the shared config portion (with validation).
-	sharedCfg, err := sapmcpconfig.Parse(data)
+	sharedCfg, err := sapmcpconfig.Parse(data, SupportedLanguages)
 	if err != nil {
 		return nil, err
 	}

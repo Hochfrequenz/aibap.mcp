@@ -3,8 +3,8 @@ module github.com/Hochfrequenz/aibap.mcp
 go 1.27
 
 require (
-	github.com/Hochfrequenz/adtler v0.12.0
-	github.com/Hochfrequenz/sap-mcp-config v1.1.1
+	github.com/Hochfrequenz/adtler v0.13.0
+	github.com/Hochfrequenz/sap-mcp-config/v2 v2.0.0
 	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v1.5.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3

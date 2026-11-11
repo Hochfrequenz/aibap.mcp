@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Hochfrequenz/aibap.mcp/config"
@@ -81,5 +82,51 @@ func TestLoadValidationFailure(t *testing.T) {
 	}
 	if _, err := config.Load(path); err == nil {
 		t.Fatal("expected error for empty systems")
+	}
+}
+
+func loadLanguage(t *testing.T, languageField string) (*config.AppConfig, error) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.json")
+	data := `{
+		"default_system": "dev",
+		"systems": {
+			"dev": {"host": "https://example.com", "user": "U", "password": "P", "client": "100"` + languageField + `}
+		}
+	}`
+	if err := os.WriteFile(path, []byte(data), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return config.Load(path)
+}
+
+func TestLoadRejectsUnsupportedLanguage(t *testing.T) {
+	_, err := loadLanguage(t, `, "language": "IT"`)
+	if err == nil {
+		t.Fatal("expected error for unsupported language")
+	}
+	want := `language must be one of "DE", "EN", got "IT"`
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("error %q does not contain %q", err, want)
+	}
+}
+
+func TestLoadAcceptsSupportedLanguageCaseInsensitive(t *testing.T) {
+	cfg, err := loadLanguage(t, `, "language": "de"`)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Systems["dev"].Language; got != "DE" {
+		t.Errorf("Language: got %q, want DE", got)
+	}
+}
+
+func TestLoadDefaultsLanguageToEnglish(t *testing.T) {
+	cfg, err := loadLanguage(t, ``)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := cfg.Systems["dev"].Language; got != "EN" {
+		t.Errorf("Language: got %q, want EN", got)
 	}
 }

@@ -16,7 +16,7 @@ import (
 
 	"github.com/Hochfrequenz/adtler/adt"
 	"github.com/Hochfrequenz/aibap.mcp/tools"
-	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config"
+	sapmcpconfig "github.com/Hochfrequenz/sap-mcp-config/v2"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
