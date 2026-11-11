@@ -10,8 +10,8 @@ import (
 
 // TestIntegrationRunClass executes the ZCL_ADT_MCP_CLASSRUN_TST fixture on
 // each configured system and asserts the known console output. Verified live
-// 2026-07-23: the console string CLASSRUN_OK is present on both HFQ and S4U,
-// but written differently (HFQ: out->write_text, S4U: out->write) — so the
+// 2026-07-23: the console string CLASSRUN_OK is present on both systems,
+// but written differently (ECC: out->write_text, S/4: out->write) — so the
 // assertion below MUST be a substring check, never string equality.
 func TestIntegrationRunClass(t *testing.T) {
 	const uri = "/sap/bc/adt/oo/classes/zcl_adt_mcp_classrun_tst"
@@ -63,8 +63,8 @@ func TestIntegrationRunClass(t *testing.T) {
 // rather than an assertion on the description string).
 //
 // Verified live 2026-08-05: the row values (and column header) are rendered
-// identically on both systems, but the `name` label is only rendered on S4U —
-// HFQ silently drops it. Mirrors the divergence pattern already documented in
+// identically on both systems, but the `name` label is only rendered on S/4 —
+// the ECC system silently drops it. Mirrors the divergence pattern already documented in
 // TestIntegrationRunClass_Error: assert what is common, document what isn't.
 func TestIntegrationRunClass_DataWrite(t *testing.T) {
 	const uri = "/sap/bc/adt/oo/classes/zcl_adt_mcp_classrun_data"
@@ -104,7 +104,7 @@ func TestIntegrationRunClass_DataWrite(t *testing.T) {
 			}
 
 			if strings.EqualFold(sys, "hfq") {
-				t.Logf("HFQ drops the out->write name= label; row-value check above is the coverage for this system")
+				t.Logf("the ECC system drops the out->write name= label; row-value check above is the coverage for this system")
 				return
 			}
 			if !strings.Contains(payload.ConsoleOutput, "ADT_MCP_CLASSRUN_DATA") {
@@ -115,12 +115,12 @@ func TestIntegrationRunClass_DataWrite(t *testing.T) {
 }
 
 // TestIntegrationRunClass_Error executes the throwing ZCL_ADT_MCP_CLASSRUN_ERR
-// fixture. Verified live 2026-07-23: this fixture diverges by system. On HFQ
+// fixture. Verified live 2026-07-23: this fixture diverges by system. On ECC
 // it raises cx_sy_zerodivide (uncaught -> adtler maps it to a *adt.ADTError
-// with status >= 500 -> run_class returns IsError=true). On S4U the class is
+// with status >= 500 -> run_class returns IsError=true). On S/4 the class is
 // an empty CREATE PRIVATE stub that does not implement IF_OO_ADT_CLASSRUN, so
 // it would not produce the same clean error signal. Per project-owner
-// decision, the error assertion runs on HFQ only; every other system skips.
+// decision, the error assertion runs on the ECC system only; every other system skips.
 func TestIntegrationRunClass_Error(t *testing.T) {
 	const uri = "/sap/bc/adt/oo/classes/zcl_adt_mcp_classrun_err"
 	const className = "ZCL_ADT_MCP_CLASSRUN_ERR"
@@ -132,7 +132,7 @@ func TestIntegrationRunClass_Error(t *testing.T) {
 			requireFixture(t, sharedServer, sys, uri)
 
 			if !strings.EqualFold(sys, "hfq") {
-				t.Skipf("ERR fixture only reliably throws on HFQ; %s fixture diverges", sys)
+				t.Skipf("ERR fixture only reliably throws on the ECC system; %s fixture diverges", sys)
 				return
 			}
 
@@ -140,10 +140,10 @@ func TestIntegrationRunClass_Error(t *testing.T) {
 				"class_name": className,
 			})
 			if !res.IsError {
-				t.Fatalf("run_class(%q) expected IsError=true on HFQ, got success: %s", className, textOf(res))
+				t.Fatalf("run_class(%q) expected IsError=true on the ECC system, got success: %s", className, textOf(res))
 			}
 			txt := textOf(res)
-			t.Logf("HFQ run_class(%q) error text: %s", className, txt)
+			t.Logf("run_class(%q) error text on the ECC system: %s", className, txt)
 
 			// IsError alone is not enough: the handler's own existence pre-check
 			// (GetObjectInfo) also yields IsError=true, with a "does not exist"
