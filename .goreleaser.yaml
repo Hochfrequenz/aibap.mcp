@@ -24,6 +24,12 @@ builds:
     goarch:
       - amd64
       - arm64
+    hooks:
+      post:
+        # Authenticode-signs the .exe in place; a no-op for other targets.
+        # See scripts/sign-windows.sh and the signing steps in release.yml.
+        - cmd: bash ./scripts/sign-windows.sh "{{ .Path }}" "{{ .Ext }}"
+          output: true
 
   # Opt-in telemetry build: Papertrail destination baked in. Users who
   # download this archive have consented to stream structured log events
@@ -46,6 +52,37 @@ builds:
     goarch:
       - amd64
       - arm64
+    hooks:
+      post:
+        # Authenticode-signs the .exe in place; a no-op for other targets.
+        # See scripts/sign-windows.sh and the signing steps in release.yml.
+        - cmd: bash ./scripts/sign-windows.sh "{{ .Path }}" "{{ .Ext }}"
+          output: true
+
+# Signs the darwin binaries with the Developer ID certificate and notarizes
+# them with Apple, cross-platform via quill, before they are archived. Bare
+# Mach-O binaries cannot be stapled, so Gatekeeper fetches the notarization
+# ticket online on first launch.
+#
+# `enabled` keys off the certificate so a local `goreleaser build --snapshot`
+# still works without Apple credentials. The release workflow refuses to run
+# without them and checks every darwin binary for the Developer ID signature
+# afterwards, so this cannot silently ship an unsigned binary.
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+      ids:
+        - aibap.mcp
+        - aibap.mcp-with-remote-logging
+      sign:
+        certificate: "{{.Env.MACOS_SIGN_P12}}"
+        password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+      notarize:
+        issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
+        key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
+        key: "{{.Env.MACOS_NOTARY_KEY}}"
+        wait: true
+        timeout: 20m
 
 archives:
   - id: default
@@ -73,3 +110,8 @@ release:
   github:
     owner: Hochfrequenz
     name: aibap.mcp
+  # Published by release.yml only after it has verified the signatures.
+  draft: true
+  # A rerun after a failed verification must not leave a second draft for the
+  # same tag behind; `gh release edit` would publish the first one it finds.
+  replace_existing_draft: true
