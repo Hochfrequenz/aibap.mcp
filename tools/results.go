@@ -59,6 +59,15 @@ type ObjectCreateResult struct {
 	Created bool   `json:"created"`
 }
 
+// PackageCreateResult is returned by create_package.
+type PackageCreateResult struct {
+	Name    string `json:"name"`
+	Created bool   `json:"created"`
+	// ViaFallback is set when the system has no ADT package endpoint and the
+	// configured BlackMagic fallback created the package.
+	ViaFallback bool `json:"via_fallback,omitempty"`
+}
+
 type ObjectDeleteResult struct {
 	URI     string `json:"uri"`
 	Deleted bool   `json:"deleted"`
