@@ -571,3 +571,24 @@ func TestMatchHint_VerifyLeftover(t *testing.T) {
 		})
 	}
 }
+
+// A failed OAuth token refresh classifies as unauthorized (adtler v0.14.0),
+// but must not get the Basic-auth "do not retry, the user can be locked"
+// warning: OAuth attempts count no failed logon.
+func TestMatchHint_TokenRefreshFailed(t *testing.T) {
+	err := fmt.Errorf("GetObjectInfo: %w", fmt.Errorf("%w: %w", adt.ErrTokenRefreshFailed, errors.New("token endpoint unavailable")))
+	if adt.ClassifyError(err) != adt.ErrorUnauthorized {
+		t.Fatalf("precondition: ClassifyError = %v, want ErrorUnauthorized", adt.ClassifyError(err))
+	}
+	hint := matchHint(err)
+	if hint != tokenRefreshFailedHint {
+		t.Errorf("hint %q, want the token refresh hint", hint)
+	}
+	if strings.Contains(hint, "lock the SAP user") {
+		t.Errorf("hint %q carries the Basic-auth lockout warning", hint)
+	}
+	// A plain 401 keeps the Basic-auth warning.
+	if got := matchHint(&adt.ADTError{StatusCode: 401}); got != unauthorizedHint {
+		t.Errorf("plain 401: hint %q, want unauthorizedHint", got)
+	}
+}
