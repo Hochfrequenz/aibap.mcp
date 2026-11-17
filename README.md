@@ -55,7 +55,7 @@ Tools are organized into groups. By default, all groups except `debug` are enabl
 | `get_source` | Read ABAP source code of any object (supports batch) |
 | `get_class_definition` | Read only the class definition (no implementations) — saves ~95% tokens on large classes |
 | `get_include_source` | Read class include source (testclasses, definitions, implementations, macros) |
-| `set_source_from_file` | Write ABAP source from a local file (auto-locks) |
+| `set_source_from_file` | Write ABAP source from a local file (auto-locks); also takes a class include URI (`.../includes/testclasses` etc.) |
 | `set_include_source` | Write class include source (requires lock on the class) |
 | `patch_source` | Apply line-based or search/replace edits to source code (auto-locks) |
 | `pretty_print` | Format ABAP source code using SAP Pretty Printer |

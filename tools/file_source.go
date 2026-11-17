@@ -21,7 +21,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Upload ABAP source code from a local file to SAP. Auto-locks if needed (lock is retained for subsequent operations)."),
+		mcp.WithDescription("Upload ABAP source code from a local file to SAP. Auto-locks if needed (lock is retained for subsequent operations). A class include URI (/sap/bc/adt/oo/classes/<class>/includes/<testclasses|definitions|implementations|macros>) writes that include under a lock on the class; the file is sent byte for byte, unlike set_include_source's inline argument."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
 			mcp.Description(descADTObjectURI),
@@ -42,7 +42,13 @@ func registerFileSourceTools(s toolAdder, client interface {
 		filePath := req.GetString("file_path", "")
 		transport := req.GetString("transport", "")
 		explicitHandle := req.GetString("lock_handle", "")
-		key := adt.LockKey(selector.ActiveName(), uri)
+		// A class include has no lock of its own: the class is locked (#621).
+		classURI, include, isInclude := classIncludeOf(uri)
+		lockURI := uri
+		if isInclude {
+			lockURI = classURI
+		}
+		key := adt.LockKey(selector.ActiveName(), lockURI)
 
 		// Read file
 		data, err := os.ReadFile(filePath)
@@ -56,9 +62,29 @@ func registerFileSourceTools(s toolAdder, client interface {
 		// Track whether this call acquired the concrete SAP lock handle it is
 		// about to use, so a later failure can roll back only that handle (#383)
 		// — never release a caller-owned or merely reused cached lock.
-		lockHandle, _, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, true)
+		lockHandle, _, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, lockURI, explicitHandle, true)
 		if err != nil {
 			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
+		}
+
+		if isInclude {
+			// No ETag: under a lock adtler's SetIncludeSource sends no
+			// If-Match (#436), and an include has no ETag endpoint of its own,
+			// which is why the generic path below answered 404 here (#621).
+			newETag, err := client.SetIncludeSource(ctx, classURI, include, source, lockHandle, transport, "")
+			if err != nil {
+				if releaseOnFailure {
+					releaseAutoLock(ctx, client, lockMap, tracker, key, lockURI, lockHandle)
+				}
+				return errorResult(err), nil
+			}
+			return mcp.NewToolResultJSON(SetSourceFromFileResult{
+				Success:    true,
+				Lines:      len(strings.Split(source, "\n")),
+				Locked:     true,
+				LockHandle: lockHandle,
+				ETag:       newETag,
+			})
 		}
 
 		// Get ETag if not in lock map.
@@ -89,4 +115,20 @@ func registerFileSourceTools(s toolAdder, client interface {
 			ETag:       newETag,
 		})
 	})
+}
+
+// classIncludeOf splits a class include URI
+// (/sap/bc/adt/oo/classes/<class>/includes/<include>) into the class URI and
+// the include name. adtler validates the name (testclasses, definitions,
+// implementations, macros).
+func classIncludeOf(uri string) (classURI, include string, ok bool) {
+	const classes, marker = "/sap/bc/adt/oo/classes/", "/includes/"
+	if !strings.HasPrefix(strings.ToLower(uri), classes) {
+		return "", "", false
+	}
+	class, include, found := strings.Cut(uri[len(classes):], marker)
+	if !found || class == "" || include == "" || strings.ContainsAny(class+include, "/?#") {
+		return "", "", false
+	}
+	return uri[:len(classes)] + class, strings.ToLower(include), true
 }
