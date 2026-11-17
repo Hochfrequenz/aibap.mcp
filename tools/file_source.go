@@ -43,12 +43,12 @@ func registerFileSourceTools(s toolAdder, client interface {
 		transport := req.GetString("transport", "")
 		explicitHandle := req.GetString("lock_handle", "")
 		// A class include has no lock of its own: the class is locked (#621).
-		classURI, include, isInclude := classIncludeOf(uri)
-		lockURI := uri
+		target := lockTargetURI(uri)
+		classURI, include, isInclude := classIncludeOf(target)
 		if isInclude {
-			lockURI = classURI
+			target = classURI
 		}
-		key := adt.LockKey(selector.ActiveName(), lockURI)
+		key, lockURI := lockKeyFor(selector.ActiveName(), target)
 
 		// Read file
 		data, err := os.ReadFile(filePath)
@@ -69,8 +69,9 @@ func registerFileSourceTools(s toolAdder, client interface {
 
 		if isInclude {
 			// No ETag: under a lock adtler's SetIncludeSource sends no
-			// If-Match (#436), and an include has no ETag endpoint of its own,
-			// which is why the generic path below answered 404 here (#621).
+			// If-Match, because the include's own ETag is not the one SAP
+			// checks on a write (#436). The generic path below fetched an ETag
+			// from "<include URI>/source/main", which does not exist (404, #621).
 			newETag, err := client.SetIncludeSource(ctx, classURI, include, source, lockHandle, transport, "")
 			if err != nil {
 				if releaseOnFailure {
@@ -91,7 +92,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		etag, err := lockMap.ResolveETag(ctx, client, key, uri)
 		if err != nil {
 			if releaseOnFailure {
-				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+				releaseAutoLock(ctx, client, lockMap, tracker, key, lockURI, lockHandle)
 			}
 			return errorResult(err), nil
 		}
@@ -100,7 +101,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		newETag, err := client.SetSource(ctx, uri, source, lockHandle, transport, etag)
 		if err != nil {
 			if releaseOnFailure {
-				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+				releaseAutoLock(ctx, client, lockMap, tracker, key, lockURI, lockHandle)
 			}
 			return errorResult(err), nil
 		}
@@ -126,8 +127,13 @@ func classIncludeOf(uri string) (classURI, include string, ok bool) {
 	if !strings.HasPrefix(strings.ToLower(uri), classes) {
 		return "", "", false
 	}
-	class, include, found := strings.Cut(uri[len(classes):], marker)
-	if !found || class == "" || include == "" || strings.ContainsAny(class+include, "/?#") {
+	rest := uri[len(classes):]
+	i := strings.Index(strings.ToLower(rest), marker)
+	if i < 0 {
+		return "", "", false
+	}
+	class, include := rest[:i], rest[i+len(marker):]
+	if class == "" || include == "" || strings.ContainsAny(class+include, "/?#") {
 		return "", "", false
 	}
 	return uri[:len(classes)] + class, strings.ToLower(include), true

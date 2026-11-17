@@ -23,11 +23,11 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 		mcp.WithOutputSchema[LockResult](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
-		handle, err := client.LockObject(ctx, uri)
+		key, lockURI := lockKeyFor(selector.ActiveName(), uri)
+		handle, err := client.LockObject(ctx, lockURI)
 		if err != nil {
 			return errorResult(err), nil
 		}
-		key := adt.LockKey(selector.ActiveName(), uri)
 		lockMap.Set(key, handle, "")
 		tracker.track(key)
 		return mcp.NewToolResultJSON(LockResult{Handle: handle})
@@ -39,7 +39,7 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
-		mcp.WithDescription("Unlock a previously locked ABAP object. Validates the supplied handle against the session lock map; rejects mismatched or untracked handles without contacting SAP."),
+		mcp.WithDescription("Unlock a previously locked ABAP object. Validates the supplied handle against the session lock map; rejects mismatched or untracked handles without contacting SAP. Locks are kept per object: an object's main-source URI (.../source/main) and the object URI name the same lock, whichever one the locking tool was called with, and list_locks reports the object URI."),
 		mcp.WithString(paramObjectURI,
 			mcp.Required(),
 			mcp.Description(descADTObjectURI),
@@ -51,7 +51,7 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		uri := req.GetString(paramObjectURI, "")
 		lockHandle := req.GetString("lock_handle", "")
-		key := adt.LockKey(selector.ActiveName(), uri)
+		key, lockURI := lockKeyFor(selector.ActiveName(), uri)
 		// SAP's UNLOCK endpoint returns 2xx regardless of whether the lock
 		// existed, the handle was valid, or the URI matched (see #383).
 		// Validate against the session lock map first so we never propagate
@@ -65,7 +65,7 @@ func registerLockTools(s toolAdder, client adt.LockClient, lockMap *adt.LockMap,
 		} else if lockHandle != state.LockHandle {
 			return errorResult(fmt.Errorf("lock_handle does not match the handle tracked for %s in this session", uri)), nil
 		}
-		if err := client.UnlockObject(ctx, uri, lockHandle); err != nil {
+		if err := client.UnlockObject(ctx, lockURI, lockHandle); err != nil {
 			return errorResult(err), nil
 		}
 		lockMap.Delete(key)
