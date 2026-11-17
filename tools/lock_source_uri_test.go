@@ -112,4 +112,7 @@ func TestLockObject_SourceMainURI_UnlockWithObjectURI(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unlock_object with the object URI: %s", firstText(result))
 	}
+	if len(rec.unlocked) != 1 || rec.unlocked[0] != classURI625 {
+		t.Errorf("unlocked %v, want the object URI %s", rec.unlocked, classURI625)
+	}
 }
