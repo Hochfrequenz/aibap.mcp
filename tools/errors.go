@@ -44,7 +44,13 @@ const (
 	notFoundHint       = "Object not found. Check the URI spelling or use `search_objects` to find it."
 	forbiddenHint      = "Authorization error. Check that the ADT user has the required S_DEVELOP authorizations."
 	// unauthorizedHint: every repeated call with a rejected credential counts as a failed SAP logon and can lock the user.
-	unauthorizedHint = "Logon rejected (401). Do not retry: each attempt counts as a failed logon and can lock the SAP user. Ask the user to check the credentials of this system in systems.json, or to log on again on an OAuth2 system."
+	// tokenRefreshFailedHint: SAP rejected the OAuth2 token (401) and the
+	// refresh failed too (adt.ErrTokenRefreshFailed). Unlike a Basic-auth 401
+	// a retry counts no failed logon, and the token endpoint may only have
+	// been unavailable for a moment, so the Basic-auth no-retry warning would
+	// mislead here.
+	tokenRefreshFailedHint = "OAuth2 token expired and could not be refreshed. Retrying is safe (OAuth2 attempts do not count as failed logons) and helps if the token endpoint was only briefly unavailable; otherwise ask the user to log on again with `aibap.mcp login <system>`."
+	unauthorizedHint       = "Logon rejected (401). Do not retry: each attempt counts as a failed logon and can lock the SAP user. Ask the user to check the credentials of this system in systems.json, or to log on again on an OAuth2 system."
 	// systemNotModifiableHint: a 403 ExceptionResourceNoAccess whose message
 	// says the system change option is "not modifiable" is a system-wide
 	// configuration state, not an authorization problem — no role or profile
@@ -159,9 +165,28 @@ var hintByKind = map[adt.ErrorKind]string{
 	adt.ErrorCreationFailed:    creationFailedHint,
 	adt.ErrorNotFound:          notFoundHint,
 	adt.ErrorForbidden:         forbiddenHint,
-	adt.ErrorUnauthorized:      unauthorizedHint,
 	adt.ErrorBadRequest:        badRequestHint,
 	adt.ErrorServerError:       serverErrorHint,
+}
+
+// unauthorizedHintFor returns the hint for an error classified as
+// adt.ErrorUnauthorized: the OAuth2 refresh hint when the token could not be
+// refreshed, the Basic-auth no-retry warning otherwise.
+func unauthorizedHintFor(err error) string {
+	if errors.Is(err, adt.ErrTokenRefreshFailed) {
+		return tokenRefreshFailedHint
+	}
+	return unauthorizedHint
+}
+
+// kindHint returns the static hint for an error kind (see hintByKind), with
+// the unauthorized hint chosen by unauthorizedHintFor.
+func kindHint(kind adt.ErrorKind, err error) (string, bool) {
+	if kind == adt.ErrorUnauthorized {
+		return unauthorizedHintFor(err), true
+	}
+	hint, ok := hintByKind[kind]
+	return hint, ok
 }
 
 // errorResult converts an error to an MCP error result with the SAP error
@@ -250,12 +275,12 @@ func matchHint(err error) string {
 
 	// A failed verify_source check that also left its temporary program
 	// behind: the leftover beats every kind-based hint (a 500 would otherwise
-	// say "retry once"). A 401 keeps its no-retry logon warning on top.
+	// say "retry once"). A rejected credential keeps its logon hint on top.
 	var cleanupErr *adt.VerifyCleanupError
 	if errors.As(err, &cleanupErr) {
 		hint := fmt.Sprintf(verifyLeftoverHintFmt, cleanupErr.Program)
 		if kind == adt.ErrorUnauthorized {
-			hint += " " + unauthorizedHint
+			hint += " " + unauthorizedHintFor(err)
 		}
 		return hint
 	}
@@ -361,7 +386,7 @@ func matchHint(err error) string {
 		return systemNotModifiableHint
 	}
 
-	if hint, ok := hintByKind[kind]; ok {
+	if hint, ok := kindHint(kind, err); ok {
 		return hint
 	}
 
