@@ -3,9 +3,38 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/Hochfrequenz/adtler/adt"
 )
+
+// lockTargetURI returns the URI a lock on uri is taken, tracked and released
+// under: the object URI. A caller may name an object by its main source
+// (".../source/main", which ADT itself hands out, with a "#start=…" fragment
+// in syntax messages); a lock taken and tracked under that URI is invisible to
+// unlock_object and activate_objects called with the object URI, so the lock
+// stays held and activation fails with 403 "currently editing" (#625).
+// Mirrors adtler's own reduction for source reads and writes (adtler#210):
+// query, fragment and trailing slash are dropped, then a trailing
+// "/source/main", case-insensitively.
+func lockTargetURI(uri string) string {
+	if i := strings.IndexAny(uri, "?#"); i >= 0 {
+		uri = uri[:i]
+	}
+	uri = strings.TrimRight(uri, "/")
+	const suffix = "/source/main"
+	if n := len(uri) - len(suffix); n >= 0 && strings.EqualFold(uri[n:], suffix) {
+		uri = uri[:n]
+	}
+	return uri
+}
+
+// lockKeyFor returns the lock map key and the lock target URI for uri on the
+// given system (see lockTargetURI).
+func lockKeyFor(systemName, uri string) (key, target string) {
+	target = lockTargetURI(uri)
+	return adt.LockKey(systemName, target), target
+}
 
 // writeLockClient is the subset of adt.Client needed to defend a write
 // against #377: ECC's ADT write handlers accept any lock_handle silently —

@@ -38,7 +38,8 @@ func registerSourceTools(s toolAdder, client interface {
 			if err != nil {
 				return errorResult(err), nil
 			}
-			lockMap.UpdateETag(adt.LockKey(selector.ActiveName(), single), result.ETag)
+			key, _ := lockKeyFor(selector.ActiveName(), single)
+			lockMap.UpdateETag(key, result.ETag)
 			return mcp.NewToolResultJSON(SourceResult{Source: result.Source, ETag: result.ETag})
 		}
 
@@ -58,7 +59,8 @@ func registerSourceTools(s toolAdder, client interface {
 				} else {
 					results[i].Source = res.Source
 					results[i].ETag = res.ETag
-					lockMap.UpdateETag(adt.LockKey(selector.ActiveName(), uri), res.ETag)
+					key, _ := lockKeyFor(selector.ActiveName(), uri)
+					lockMap.UpdateETag(key, res.ETag)
 				}
 			}(i, uri)
 		}
@@ -198,8 +200,8 @@ func registerSourceTools(s toolAdder, client interface {
 		// was tracked already. On S/4 the pre-existing behavior is unchanged —
 		// a cache miss is a caller error (allowAutoLock=false): reject early
 		// rather than letting SAP return an opaque error.
-		key := adt.LockKey(selector.ActiveName(), uri)
-		lh, _, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, false)
+		key, lockURI := lockKeyFor(selector.ActiveName(), uri)
+		lh, _, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, lockURI, explicitHandle, false)
 		if err != nil {
 			return errorResult(err), nil
 		}
@@ -210,7 +212,7 @@ func registerSourceTools(s toolAdder, client interface {
 			// the fresh relock resolveWriteLockHandle just took; on S/4 a cache
 			// miss is rejected above, so releaseOnFailure is false here.
 			if releaseOnFailure {
-				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lh)
+				releaseAutoLock(ctx, client, lockMap, tracker, key, lockURI, lh)
 			}
 			return errorResult(err), nil
 		}
@@ -240,7 +242,8 @@ func registerSourceTools(s toolAdder, client interface {
 		uri := req.GetString(paramObjectURI, "")
 		lh := req.GetString("lock_handle", "")
 		if lh == "" {
-			state, tracked := lockMap.Get(adt.LockKey(selector.ActiveName(), uri))
+			key, _ := lockKeyFor(selector.ActiveName(), uri)
+			state, tracked := lockMap.Get(key)
 			if !tracked || state.LockHandle == "" {
 				return errorResult(fmt.Errorf("no lock tracked for %s in this session — call lock_object first", uri)), nil
 			}
