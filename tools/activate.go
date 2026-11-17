@@ -17,9 +17,9 @@ func registerActivateTools(s toolAdder, client interface {
 	// block activation with 403 "User is currently editing". See #301.
 	unlockBeforeActivate := func(ctx context.Context, uris []string) {
 		for _, uri := range uris {
-			key := adt.LockKey(selector.ActiveName(), uri)
+			key, lockURI := lockKeyFor(selector.ActiveName(), uri)
 			if state, ok := lockMap.Get(key); ok && state.LockHandle != "" {
-				_ = client.UnlockObject(ctx, uri, state.LockHandle)
+				_ = client.UnlockObject(ctx, lockURI, state.LockHandle)
 				lockMap.Delete(key)
 				tracker.untrack(key)
 			}

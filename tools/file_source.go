@@ -42,7 +42,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		filePath := req.GetString("file_path", "")
 		transport := req.GetString("transport", "")
 		explicitHandle := req.GetString("lock_handle", "")
-		key := adt.LockKey(selector.ActiveName(), uri)
+		key, lockURI := lockKeyFor(selector.ActiveName(), uri)
 
 		// Read file
 		data, err := os.ReadFile(filePath)
@@ -56,7 +56,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		// Track whether this call acquired the concrete SAP lock handle it is
 		// about to use, so a later failure can roll back only that handle (#383)
 		// — never release a caller-owned or merely reused cached lock.
-		lockHandle, _, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, uri, explicitHandle, true)
+		lockHandle, _, releaseOnFailure, err := resolveWriteLockHandle(ctx, client, lockMap, tracker, key, lockURI, explicitHandle, true)
 		if err != nil {
 			return errorResult(fmt.Errorf("auto-lock failed: %w", err)), nil
 		}
@@ -65,7 +65,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		etag, err := lockMap.ResolveETag(ctx, client, key, uri)
 		if err != nil {
 			if releaseOnFailure {
-				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+				releaseAutoLock(ctx, client, lockMap, tracker, key, lockURI, lockHandle)
 			}
 			return errorResult(err), nil
 		}
@@ -74,7 +74,7 @@ func registerFileSourceTools(s toolAdder, client interface {
 		newETag, err := client.SetSource(ctx, uri, source, lockHandle, transport, etag)
 		if err != nil {
 			if releaseOnFailure {
-				releaseAutoLock(ctx, client, lockMap, tracker, key, uri, lockHandle)
+				releaseAutoLock(ctx, client, lockMap, tracker, key, lockURI, lockHandle)
 			}
 			return errorResult(err), nil
 		}
