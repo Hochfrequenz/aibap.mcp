@@ -165,7 +165,7 @@ Two traps:
   (`WS00400005`); the highest is taken, with a warning.
 
 `RETURNCODE`s, verified live against the same node ids of the `SWDS*` version: `8995` = true,
-`8994` = false, `_SAP_WFSYST_RC_OTHERS` = others; `0000` on non-event lines carries no label;
+`8994` = false, `_SAP_WFSYST_RC_OTHERS` = others; `0000` carries no label except on `R` (result) lines, where it stays raw;
 lines out of `Y` nodes are labelled `event <OTYPE>.<EVENT>`. Other codes stay raw.
 
 Runtime copy vs. pointer: the runtime copy can lag the activation pointer until the next start
@@ -191,7 +191,7 @@ pointer says so.
    (`version_source = "latest_numbered"`) and a warning that no activation pointer was found.
 5. The chosen version must exist in `SWDSHEADER`. If the task has **no** `SWDSHEADER` row at all,
    fall back to the legacy definition in `SWD_HEADER` (`EXETYP = 'S'`, by `TASK`, highest version,
-   `version_source = "legacy_client"`) and decode it with the `SWD_NODES` decoder. Only if that is
+   `version_source = "legacy_client"`) and decode it like `SWDS*` (from `SWD_MNODES`/`SWD_MLINES`, see above). Only if that is
    empty too → "not found", naming every table looked in.
 6. Independently, look up the runtime copy (`SWD_HEADER`, `EXETYP = 'E'`, by `TASK`) and report its
    version as `runtime_version` (empty if none).
