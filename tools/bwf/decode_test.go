@@ -348,3 +348,57 @@ func TestDecode_RejectsBadKeys(t *testing.T) {
 		t.Errorf("queries sent: %v", f.calls)
 	}
 }
+
+// textOnlyIn rewrites the fixture's SWDSTEXT so that only node 36 has ND text,
+// in language lang, plus any extra rows.
+func textOnlyIn(t *testing.T, lang string, extra ...Row) map[string][]Row {
+	t.Helper()
+	tables := loadFixture(t, "ws48900002")
+	tables["SWDSTEXT"] = append([]Row{{
+		"WFD_ID": "WS48900002", "VERSION": "0001", "NODEID": "0000000036", "LANGUAGE": lang,
+		"TEXTTYP": "ND", "TEXTNUMBER": "0000", "WFD_TEXT": "Déjà révisé ?",
+	}}, extra...)
+	return tables
+}
+
+func textQueries(f *fakeQuery) int {
+	n := 0
+	for _, sql := range f.calls {
+		if strings.Contains(sql, "swdstext") {
+			n++
+		}
+	}
+	return n
+}
+
+func TestDecode_TextFallbackAnyLanguage(t *testing.T) {
+	f := &fakeQuery{tables: textOnlyIn(t, "F")}
+	m, err := loadSWDS(context.Background(), f, "WS48900002", "0001", "E", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := textQueries(f); n != 2 {
+		t.Errorf("SWDSTEXT queries = %d, want 2", n)
+	}
+	nodes, _ := decodeNodes(m, "E")
+	if n := nodeByID(t, nodes, "36"); n.Label != "Déjà révisé ?" {
+		t.Errorf("node 36 label = %q, want the F text", n.Label)
+	}
+}
+
+func TestDecode_TextFallbackIgnoresOrphanND(t *testing.T) {
+	orphan := Row{"WFD_ID": "WS48900002", "VERSION": "0001", "NODEID": "0000000070", "LANGUAGE": "E",
+		"TEXTTYP": "ND", "TEXTNUMBER": "0000", "WFD_TEXT": "Subflow: Authorization"}
+	f := &fakeQuery{tables: textOnlyIn(t, "F", orphan)}
+	m, err := loadSWDS(context.Background(), f, "WS48900002", "0001", "E", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := textQueries(f); n != 2 {
+		t.Errorf("SWDSTEXT queries = %d, want 2 (orphan ND must not suppress the fallback)", n)
+	}
+	nodes, _ := decodeNodes(m, "E")
+	if n := nodeByID(t, nodes, "36"); n.Label != "Déjà révisé ?" {
+		t.Errorf("node 36 label = %q, want the F text", n.Label)
+	}
+}

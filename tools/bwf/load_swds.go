@@ -49,7 +49,7 @@ func loadSWDS(ctx context.Context, q adt.QueryClient, wfdID, version, language s
 	if m.Lines, err = l.lines(); err != nil {
 		return nil, err
 	}
-	if m.Texts, err = l.texts(language, m.MasterLanguage); err != nil {
+	if m.Texts, err = l.texts(language, m.MasterLanguage, m.Nodes); err != nil {
 		return nil, err
 	}
 	if m.Conds, err = l.rows("SELECT wfd_id, version, nodeid, line_id, line_typ, leftexpr, compop, rightexpr, logop, notflag FROM swdscondef"); err != nil {
@@ -145,8 +145,12 @@ func (l swdsLoader) lines() ([]rawLine, error) {
 }
 
 // texts reads SWDSTEXT in the requested and master language; if that yields no
-// node name (ND) at all, it reads every language.
-func (l swdsLoader) texts(language, master string) ([]Row, error) {
+// node name (ND) for any of the loaded nodes, it reads every language.
+func (l swdsLoader) texts(language, master string, nodes []rawNode) ([]Row, error) {
+	known := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		known[trimID(n.ID)] = true
+	}
 	langs := map[string]bool{language: true}
 	list := "'" + language + "'"
 	if languageRe.MatchString(master) && master != language {
@@ -163,7 +167,7 @@ func (l swdsLoader) texts(language, master string) ([]Row, error) {
 	for _, r := range rows {
 		if langs[r["LANGUAGE"]] {
 			filtered = append(filtered, r)
-			hasND = hasND || r["TEXTTYP"] == "ND"
+			hasND = hasND || (r["TEXTTYP"] == "ND" && r["WFD_TEXT"] != "" && known[trimID(r["NODEID"])])
 		}
 	}
 	if hasND {
