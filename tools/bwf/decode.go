@@ -26,6 +26,21 @@ var nodeKinds = map[string]string{
 	"MAIL": "mail",
 }
 
+// runtimeNodeTypes maps the 1-character NODETYPE of the SWD_NODES model to
+// the block-model type with the same meaning. Verified on WS48900002: the
+// runtime copy (version 0000) and the definition (version 0001) share node
+// ids, and S=FUNC, F=FORK, J=JOIN, I=IF/UNTL, C=CASE, P=OPRT, O=CTRL/STRT/END,
+// T=TRIG there. E (block end, e.g. ECAS/ENDI) and V (loop entry, UNJO) have no
+// kind of their own; X/Y are block markers. R (wait for event) is from the
+// design, not seen in the verified data.
+var runtimeNodeTypes = map[string]string{
+	"S": "FUNC", "F": "FORK", "J": "JOIN", "I": "IF", "C": "CASE",
+	"P": "OPRT", "O": "CTRL", "R": "WAIT", "T": "TRIG",
+}
+
+// blockMarkerTypes are SWD_NODES block markers, dropped unless raw output is requested.
+var blockMarkerTypes = map[string]bool{"X": true, "Y": true}
+
 // Container operation commands (CONT_CMD, domain SWD_CONTRL) and their operators.
 var arithmeticOps = map[string]string{"11": "+", "13": "-", "14": "*", "15": "/"}
 
@@ -64,6 +79,10 @@ func decodeNodes(m *rawModel, language string) ([]Node, []string) {
 	for _, n := range m.Nodes {
 		known[trimID(n.ID)] = true
 	}
+	incoming := map[string]bool{}
+	for _, l := range m.Lines {
+		incoming[trimID(l.To)] = true
+	}
 	orphans := 0
 	for id, rows := range texts {
 		if !known[id] {
@@ -72,16 +91,17 @@ func decodeNodes(m *rawModel, language string) ([]Node, []string) {
 	}
 	if orphans > 0 {
 		warnings = append(warnings, fmt.Sprintf(
-			"ignored %d SWDSTEXT text rows for node ids that do not exist in version %s", orphans, m.Version))
+			"ignored %d %s text rows for node ids that do not exist in version %s", orphans, textTable(m), m.Version))
 	}
 
 	nodes := make([]Node, 0, len(m.Nodes))
 	for _, rn := range m.Nodes {
 		id := trimID(rn.ID)
+		typ := semanticType(m, rn, incoming[id])
 		n := Node{
 			ID:            id,
 			Type:          rn.Type,
-			Kind:          kindOf(rn),
+			Kind:          kindOf(typ, rn.Task),
 			Task:          taskOf(rn.Task),
 			Event:         eventOf(rn),
 			BlockID:       trimID(rn.BlockID),
@@ -90,10 +110,17 @@ func decodeNodes(m *rawModel, language string) ([]Node, []string) {
 		}
 		ex := exprMap(exprs[id])
 		n.Agent = ex[exprAgent]
-		switch rn.Type {
+		switch typ {
 		case "CASE":
 			n.Condition = ex[exprCase]
+			if n.Condition == "" {
+				n.Condition = rn.CaseConte
+			}
 		case "OPRT":
+			if ex[exprResult] == "" && ex[exprOperand1] == "" && ex[exprOperand2] == "" {
+				// SWD_NODES keeps the operands in PARAMETER1 (result) and PARAMETER2/3.
+				ex[exprResult], ex[exprOperand1], ex[exprOperand2] = rn.Param1, rn.Param2, rn.Param3
+			}
 			op, warn := operationOf(rn.ContCmd, ex)
 			n.Operation = op
 			if warn != "" {
@@ -118,24 +145,56 @@ func decodeNodes(m *rawModel, language string) ([]Node, []string) {
 	return nodes, warnings
 }
 
-// rawEdges returns every line as an edge, ids without leading zeros.
+// rawEdges returns every line as an edge, ids without leading zeros. In the
+// SWD_NODES model the edge carries the outcome (see lineLabel).
 func rawEdges(m *rawModel) []Edge {
 	edges := make([]Edge, 0, len(m.Lines))
 	for _, l := range m.Lines {
-		edges = append(edges, Edge{From: trimID(l.From), To: trimID(l.To), Label: l.ReturnCode})
+		label := l.ReturnCode
+		if m.Model == "SWD" {
+			label = lineLabel(l)
+		}
+		edges = append(edges, Edge{From: trimID(l.From), To: trimID(l.To), Label: label})
 	}
 	return edges
 }
 
-func kindOf(n rawNode) string {
-	k, ok := nodeKinds[n.Type]
+// semanticType is the block-model NODETYPE a node behaves as. In the SWD_NODES
+// model an O node without a command is the start (no incoming line) or the
+// end node, otherwise process control.
+func semanticType(m *rawModel, rn rawNode, hasIncoming bool) string {
+	if m.Model != "SWD" {
+		return rn.Type
+	}
+	if rn.Type == "O" && (rn.ContCmd == "" || rn.ContCmd == "00") {
+		if hasIncoming {
+			return "END"
+		}
+		return "STRT"
+	}
+	if t, ok := runtimeNodeTypes[rn.Type]; ok {
+		return t
+	}
+	return rn.Type
+}
+
+func kindOf(typ, task string) string {
+	k, ok := nodeKinds[typ]
 	if !ok {
 		return "other"
 	}
-	if k == "step" && strings.HasPrefix(taskOf(n.Task), "WS") {
+	if k == "step" && strings.HasPrefix(taskOf(task), "WS") {
 		return "subworkflow"
 	}
 	return k
+}
+
+// textTable names the text table the model was read from.
+func textTable(m *rawModel) string {
+	if m.TablePrefix == "" {
+		return "SWDSTEXT"
+	}
+	return m.TablePrefix + "TEXT"
 }
 
 // eventOf renders a node's event as OTYPE.NAME; the name falls back to

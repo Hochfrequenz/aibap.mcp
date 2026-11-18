@@ -25,9 +25,6 @@ func Get(ctx context.Context, q adt.QueryClient, opts Options) (*Result, error) 
 		return nil, err
 	}
 	opts.Task = task
-	if opts.Source == "runtime" {
-		return nil, errors.New("source=runtime not implemented yet")
-	}
 	if opts.Language == "" {
 		opts.Language = "E"
 	}
@@ -105,20 +102,34 @@ func buildDefinition(ctx context.Context, q adt.QueryClient, opts Options, task 
 	if task == opts.Task {
 		requested = opts.Version
 	}
-	info, err := resolveVersion(ctx, q, task, requested, opts.Today)
+	var info versionInfo
+	var err error
+	if task == opts.Task && opts.Source == "runtime" {
+		info, err = runtimeVersion(ctx, q, task, requested)
+	} else {
+		info, err = resolveVersion(ctx, q, task, requested, opts.Today)
+	}
 	if err != nil {
 		return nil, err
 	}
-	if info.Tables != "SWDS" {
-		return nil, fmt.Errorf("%w: %s exists only as a legacy client definition (SWD_*), which is not supported yet", ErrUnsupported, task)
+	var m *rawModel
+	switch {
+	case info.Source == "runtime":
+		m, err = loadSWD(ctx, q, info.WfdID, info.Version, "E", opts.Language, opts.Container)
+	case info.Tables == "SWD":
+		m, err = loadSWD(ctx, q, info.WfdID, info.Version, "S", opts.Language, opts.Container)
+	default:
+		m, err = loadSWDS(ctx, q, info.WfdID, info.Version, opts.Language, opts.Container)
 	}
-	m, err := loadSWDS(ctx, q, info.WfdID, info.Version, opts.Language, opts.Container)
 	if err != nil {
 		return nil, err
 	}
 	nodes, warnings := decodeNodes(m, opts.Language)
 	edges := rawEdges(m)
-	if !opts.Raw {
+	switch {
+	case m.Model == "SWD":
+		nodes, edges = finishRuntime(m, nodes, edges, opts.Raw)
+	case !opts.Raw:
 		nodes, edges = collapse(m, nodes, edges)
 	}
 	nodes, unresolved, err := resolveConstants(ctx, q, m, nodes)
@@ -160,6 +171,25 @@ func buildDefinition(ctx context.Context, q adt.QueryClient, opts Options, task 
 		d.Mermaid = renderMermaid(d)
 	}
 	return d, nil
+}
+
+// runtimeVersion selects the runtime copy of task in the logon client
+// (SWD_HEADER, EXETYP 'E'). Only the root of a source=runtime read uses it;
+// called workflows follow the active version rule.
+func runtimeVersion(ctx context.Context, q adt.QueryClient, task, requested string) (versionInfo, error) {
+	var info versionInfo
+	wfdID, version, hasConfig, err := resolveRuntime(ctx, q, task)
+	if err != nil {
+		return info, err
+	}
+	if wfdID == "" {
+		return info, fmt.Errorf("%w: no runtime copy of %s in the logon client", ErrNotFound, task)
+	}
+	if requested != "" && requested != version {
+		return info, fmt.Errorf("the runtime copy of %s in the logon client is version %s, not %s", task, version, requested)
+	}
+	return versionInfo{WfdID: wfdID, Version: version, Source: "runtime", Tables: "SWD",
+		RuntimeWfdID: wfdID, RuntimeVersion: version, HasConfiguration: hasConfig}, nil
 }
 
 // workflowTitle reads the workflow's short text from HRS1000, else HRP1000.

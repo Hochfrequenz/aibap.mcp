@@ -193,14 +193,6 @@ func TestGet_DepthClamped(t *testing.T) {
 	}
 }
 
-func TestGet_Stage1Errors(t *testing.T) {
-	o := getOpts("WS48900002")
-	o.Source = "runtime"
-	if _, err := Get(t.Context(), getFake(t), o); err == nil || !strings.Contains(err.Error(), "source=runtime not implemented yet") {
-		t.Errorf("runtime err = %v", err)
-	}
-}
-
 func TestGet_EmptySlicesSerialiseAsArrays(t *testing.T) {
 	res := &Result{}
 	res.normalise()
@@ -286,10 +278,26 @@ func TestGet_InvalidCalleeID(t *testing.T) {
 }
 
 func TestGet_LegacyOnlyCallee(t *testing.T) {
-	f := withCallee(t, "WS99999999")
-	f.tables["SWD_HEADER"] = append(f.tables["SWD_HEADER"],
-		Row{"WFD_ID": "WS99999999", "TASK": "WS99999999", "VERSION": "0001", "EXETYP": "S"})
-	requireUnresolvedSub(t, f, "WS99999999")
+	f := withCallee(t, "WS00000024")
+	for k, v := range loadFixture(t, "legacy") {
+		f.tables[k] = append(f.tables[k], v...)
+	}
+	o := getOpts("WS48900002")
+	o.Depth = 1
+	res, err := Get(t.Context(), f, o)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(res.Subworkflows) != 1 {
+		t.Fatalf("Subworkflows = %+v", res.Subworkflows)
+	}
+	s := res.Subworkflows[0]
+	if s.WfdID != "WS00000024" || !s.Found || s.Definition == nil {
+		t.Fatalf("sub = %+v", s)
+	}
+	if s.Definition.VersionSource != "legacy_client" || s.Definition.SourceTables != "SWD" || len(s.Definition.Nodes) == 0 {
+		t.Errorf("sub definition = %+v", s.Definition)
+	}
 }
 
 type failingQuery struct {
@@ -310,5 +318,171 @@ func TestGet_SubFetchErrorIsFatal(t *testing.T) {
 	_, err := Get(t.Context(), failingQuery{getFake(t), "WS48900024"}, o)
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Errorf("err = %v, want fetch failure", err)
+	}
+}
+
+// runtimeFake holds the client-independent definition and the runtime copy.
+func runtimeFake(t *testing.T) *fakeQuery {
+	t.Helper()
+	f := getFake(t)
+	for k, v := range loadFixture(t, "ws48900002_runtime") {
+		f.tables[k] = append(f.tables[k], v...)
+	}
+	return f
+}
+
+func TestGet_SourceRuntime(t *testing.T) {
+	o := getOpts("WS48900002")
+	o.Source = "runtime"
+	f := runtimeFake(t)
+	res, err := Get(t.Context(), f, o)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if res.VersionSource != "runtime" || res.SourceTables != "SWD" || res.Version != "0000" ||
+		res.RuntimeVersion != "0000" || res.WfdID != "WS48900002" || res.Task != "WS48900002" {
+		t.Errorf("header = %+v", res.Definition)
+	}
+	if res.ActivatedOn != "2005-08-25" || res.Title != "Workflow for Testing the BPML Export" {
+		t.Errorf("activated=%q title=%q", res.ActivatedOn, res.Title)
+	}
+	if len(res.Nodes) != 26 || len(res.Container) != 4 {
+		t.Errorf("nodes=%d container=%d", len(res.Nodes), len(res.Container))
+	}
+	if got := edgeLabel(t, res.Edges, "36", "42"); got != "true" {
+		t.Errorf("36 -> 42 = %q", got)
+	}
+	for _, e := range res.Edges {
+		if e.To == "999502" {
+			t.Errorf("edge to a node that does not exist: %+v", e)
+		}
+	}
+	if j := nodeByID(t, res.Nodes, "56"); j.Label != "2 of 2" {
+		t.Errorf("join label = %q", j.Label)
+	}
+	if len(res.Calls) != 1 || res.Calls[0] != (Call{Node: "18", WfdID: "WS48900024"}) {
+		t.Errorf("calls = %+v", res.Calls)
+	}
+	for _, c := range f.calls {
+		lc := strings.ToLower(c)
+		if strings.Contains(lc, "swdsmnodes") || strings.Contains(lc, "swd_mnodes") {
+			t.Errorf("runtime read the block-model node table: %s", c)
+		}
+	}
+	o.Raw = true
+	res, err = Get(t.Context(), runtimeFake(t), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Edges) != 31 {
+		t.Errorf("raw edges = %d, want 31", len(res.Edges))
+	}
+}
+
+func TestGet_SourceRuntimeBlockMarkersDropped(t *testing.T) {
+	f := runtimeFake(t)
+	// Insert an X/Y block between nodes 4 and 6: 4 -> 5(X) -> 6.
+	f.tables["SWD_NODES"] = append(f.tables["SWD_NODES"], Row{"WFD_ID": "WS48900002", "VERSION": "0000",
+		"EXETYP": "E", "NODEID": "0000000005", "NODETYPE": "X"})
+	var lines []Row
+	for _, r := range f.tables["SWD_LINES"] {
+		if r["PRED_NODE"] == "0000000004" && r["SUCC_NODE"] == "0000000006" {
+			lines = append(lines,
+				Row{"WFD_ID": "WS48900002", "VERSION": "0000", "EXETYP": "E", "PRED_NODE": "0000000004", "SUCC_NODE": "0000000005", "LINE_TYPE": "A", "RETURNCODE": "0000"},
+				Row{"WFD_ID": "WS48900002", "VERSION": "0000", "EXETYP": "E", "PRED_NODE": "0000000005", "SUCC_NODE": "0000000006", "LINE_TYPE": "A", "RETURNCODE": "0000"})
+			continue
+		}
+		lines = append(lines, r)
+	}
+	f.tables["SWD_LINES"] = lines
+	o := getOpts("WS48900002")
+	o.Source = "runtime"
+	res, err := Get(t.Context(), f, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range res.Nodes {
+		if n.ID == "5" {
+			t.Errorf("block marker kept: %+v", n)
+		}
+	}
+	edgeLabel(t, res.Edges, "4", "6")
+	o.Raw = true
+	res, err = Get(t.Context(), f, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeByID(t, res.Nodes, "5")
+}
+
+func TestGet_SourceRuntimeMissing(t *testing.T) {
+	o := getOpts("WS48900002")
+	o.Source = "runtime"
+	_, err := Get(t.Context(), getFake(t), o)
+	if err == nil || !strings.Contains(err.Error(), "no runtime copy of WS48900002 in the logon client") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestGet_SourceRuntimeOtherVersionRequested(t *testing.T) {
+	o := getOpts("WS48900002")
+	o.Source = "runtime"
+	o.Version = "0001"
+	_, err := Get(t.Context(), runtimeFake(t), o)
+	if err == nil || !strings.Contains(err.Error(), "0000") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestGet_LegacyClient(t *testing.T) {
+	f := &fakeQuery{tables: loadFixture(t, "legacy")}
+	o := getOpts("WS00000024")
+	o.Depth = 1
+	res, err := Get(t.Context(), f, o)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if res.VersionSource != "legacy_client" || res.SourceTables != "SWD" || res.WfdID != "0000002303" ||
+		res.Task != "WS00000024" || res.Version != "0000" || len(res.Nodes) == 0 {
+		t.Errorf("header = %+v", res.Definition)
+	}
+	if n := nodeByID(t, res.Nodes, "4"); n.Kind != "loop_while" || n.Label != "Release DO" {
+		t.Errorf("node 4 = %+v", n)
+	}
+	if len(res.Calls) != 1 || res.Calls[0] != (Call{Node: "60", WfdID: "WS00000023"}) {
+		t.Errorf("calls = %+v", res.Calls)
+	}
+	if len(res.Subworkflows) != 1 || !res.Subworkflows[0].Found {
+		t.Errorf("subworkflows = %+v", res.Subworkflows)
+	}
+}
+
+func TestGet_RuntimeVersionReported(t *testing.T) {
+	res, err := Get(t.Context(), runtimeFake(t), getOpts("WS48900002"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Version != "0001" || res.VersionSource != "HRS1205" || res.SourceTables != "SWDS" || res.RuntimeVersion != "0000" {
+		t.Errorf("version=%q source=%q tables=%q runtime=%q", res.Version, res.VersionSource, res.SourceTables, res.RuntimeVersion)
+	}
+	if res.HasConfiguration {
+		t.Error("HasConfiguration set without a C row")
+	}
+}
+
+func TestGet_HasConfiguration(t *testing.T) {
+	f := runtimeFake(t)
+	f.tables["SWD_HEADER"] = append(f.tables["SWD_HEADER"],
+		Row{"WFD_ID": "WS48900002", "TASK": "WS48900002", "VERSION": "0000", "EXETYP": "C"})
+	for _, src := range []string{"definition", "runtime"} {
+		o := getOpts("WS48900002")
+		o.Source = src
+		res, err := Get(t.Context(), f, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !res.HasConfiguration {
+			t.Errorf("source %s: HasConfiguration = false", src)
+		}
 	}
 }

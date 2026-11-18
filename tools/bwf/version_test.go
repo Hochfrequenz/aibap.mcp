@@ -185,3 +185,20 @@ func TestResolveQueriesQualifyTask(t *testing.T) {
 		t.Error("no swd_header query recorded")
 	}
 }
+
+// Seen live: one legacy task with three SWD_HEADER rows of the same version
+// but different WFD_IDs. The highest WFD_ID is used, with a warning.
+func TestResolveVersion_LegacyDuplicateWfdIDs(t *testing.T) {
+	f := &fakeQuery{tables: map[string][]Row{"SWD_HEADER": {
+		{"WFD_ID": "0040000038", "TASK": "WS00400005", "EXETYP": "S", "VERSION": "0000"},
+		{"WFD_ID": "0040000039", "TASK": "WS00400005", "EXETYP": "S", "VERSION": "0000"},
+		{"WFD_ID": "0040000036", "TASK": "WS00400005", "EXETYP": "S", "VERSION": "0000"},
+	}}}
+	got, err := resolveVersion(context.Background(), f, "WS00400005", "", testToday)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.WfdID != "0040000039" || len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], "0040000036, 0040000038, 0040000039") {
+		t.Errorf("got %+v", got)
+	}
+}

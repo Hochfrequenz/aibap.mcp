@@ -141,7 +141,7 @@ func TestGetWorkflowDefinition_RuntimePassedThrough(t *testing.T) {
 	s := newTestServerWithFallback(bwfServer(t, loadBWFFixture(t), &calls), nil)
 	res := callTool(t, s, "get_workflow_definition", map[string]interface{}{"wfd_id": "WS48900002", "source": "runtime"})
 	if !res.IsError {
-		t.Fatal("expected tool error")
+		t.Fatal("expected tool error: the fixture has no runtime copy")
 	}
 	txt := ""
 	for _, c := range res.Content {
@@ -149,8 +149,33 @@ func TestGetWorkflowDefinition_RuntimePassedThrough(t *testing.T) {
 			txt += tc.Text
 		}
 	}
-	if !strings.Contains(txt, "not implemented yet") {
-		t.Errorf("error text %q lacks bwf's not-implemented message", txt)
+	if !strings.Contains(txt, "no runtime copy of WS48900002") {
+		t.Errorf("error text %q lacks bwf's no-runtime-copy message", txt)
+	}
+
+	tables := loadBWFFixture(t)
+	b, err := os.ReadFile(filepath.Join("bwf", "testdata", "ws48900002_runtime.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var runtime map[string][]map[string]string
+	if err := json.Unmarshal(b, &runtime); err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range runtime {
+		tables[k] = append(tables[k], v...)
+	}
+	s = newTestServerWithFallback(bwfServer(t, tables, &calls), nil)
+	res = callTool(t, s, "get_workflow_definition", map[string]interface{}{"wfd_id": "WS48900002", "source": "runtime"})
+	if res.IsError {
+		t.Fatalf("unexpected error: %+v", res.Content)
+	}
+	sc, ok := res.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structured content is %T, want object", res.StructuredContent)
+	}
+	if sc["version_source"] != "runtime" || sc["source_tables"] != "SWD" || sc["version"] != "0000" {
+		t.Errorf("version_source/source_tables/version = %v/%v/%v", sc["version_source"], sc["source_tables"], sc["version"])
 	}
 }
 

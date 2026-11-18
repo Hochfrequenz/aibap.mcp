@@ -21,71 +21,99 @@ var excludedExprTypes = map[string]bool{"037": true, "038": true, "039": true, "
 // loadSWDS reads one client-independent definition version from the SWDS* tables.
 // Bindings and container rows are only read when withContainer is set.
 func loadSWDS(ctx context.Context, q adt.QueryClient, wfdID, version, language string, withContainer bool) (*rawModel, error) {
-	if !validName(wfdID) {
-		return nil, fmt.Errorf("invalid workflow definition id %q", wfdID)
-	}
-	if !versionRe.MatchString(version) {
-		return nil, fmt.Errorf("invalid version %q", version)
-	}
-	if !languageRe.MatchString(language) {
-		return nil, fmt.Errorf("invalid language %q", language)
-	}
-	l := swdsLoader{ctx: ctx, q: q, wfdID: wfdID, version: version,
-		key: fmt.Sprintf("WHERE wfd_id = '%s' AND version = '%s' AND exetyp = 'S'", wfdID, version)}
-	m := &rawModel{Model: "SWDS", WfdID: wfdID, Version: version, Language: language}
-
-	hdr, err := l.rows("SELECT wfd_id, version, language, activat_on FROM swdsheader")
-	if err != nil {
+	if err := validateKeys(wfdID, version, language); err != nil {
 		return nil, err
 	}
-	if len(hdr) == 0 {
-		return nil, fmt.Errorf("%w: %s version %s in SWDSHEADER", ErrNotFound, wfdID, version)
-	}
-	m.MasterLanguage, m.ActivatedOn = hdr[0]["LANGUAGE"], hdr[0]["ACTIVAT_ON"]
-
-	if m.Nodes, err = l.nodes(); err != nil {
-		return nil, err
-	}
-	if m.Lines, err = l.lines(); err != nil {
-		return nil, err
-	}
-	if m.Texts, err = l.texts(language, m.MasterLanguage, m.Nodes); err != nil {
-		return nil, err
-	}
-	if m.Conds, err = l.rows("SELECT wfd_id, version, nodeid, line_id, line_typ, leftexpr, compop, rightexpr, logop, notflag FROM swdscondef"); err != nil {
-		return nil, err
-	}
-	if m.Exprs, err = l.exprs(); err != nil {
-		return nil, err
-	}
-	if withContainer {
-		if m.Bindings, err = l.rows("SELECT wfd_id, version, nodeid, bindtype, dataflow, element, expr FROM swdsbindef"); err != nil {
-			return nil, err
-		}
-		if m.CntIdx, err = l.rows("SELECT otype, objid, wfd_id, version, element, typeid, catid, typekind, typename FROM swdscntidx"); err != nil {
-			return nil, err
-		}
-		if m.ContXML, err = l.container(); err != nil {
-			return nil, err
-		}
-		if m.ElemTexts, err = l.elementTexts(language, m.MasterLanguage); err != nil {
-			return nil, err
-		}
-	}
-	if m.TaskTexts, err = loadTaskTexts(ctx, q, m.Nodes); err != nil {
+	l := newLoader(ctx, q, "swds", "S", wfdID, version)
+	m := &rawModel{Model: "SWDS", TablePrefix: "SWDS", WfdID: wfdID, Version: version, Language: language}
+	if err := l.load(m, withContainer, l.nodes, l.lines); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-type swdsLoader struct {
-	ctx            context.Context
-	q              adt.QueryClient
-	wfdID, version string
-	key            string // WHERE clause on the definition key
+// validateKeys checks the values that are embedded as SQL literals.
+func validateKeys(wfdID, version, language string) error {
+	if !validName(wfdID) {
+		return fmt.Errorf("invalid workflow definition id %q", wfdID)
+	}
+	if !versionRe.MatchString(version) {
+		return fmt.Errorf("invalid version %q", version)
+	}
+	if !languageRe.MatchString(language) {
+		return fmt.Errorf("invalid language %q", language)
+	}
+	return nil
 }
 
-// rows runs "<sel> <key> <extra>" and keeps only rows of this definition version.
+// swdsLoader reads the tables of one definition version. The same table
+// layout exists client-independently (prefix "swds") and per client (prefix
+// "swd_"); exetyp selects the execution type within the key.
+type swdsLoader struct {
+	ctx                    context.Context
+	q                      adt.QueryClient
+	prefix                 string // "swds" | "swd_"
+	wfdID, version, exetyp string
+	key                    string // WHERE clause on the definition key
+}
+
+func newLoader(ctx context.Context, q adt.QueryClient, prefix, exetyp, wfdID, version string) swdsLoader {
+	return swdsLoader{ctx: ctx, q: q, prefix: prefix, wfdID: wfdID, version: version, exetyp: exetyp,
+		key: fmt.Sprintf("WHERE wfd_id = '%s' AND version = '%s' AND exetyp = '%s'", wfdID, version, exetyp)}
+}
+
+// table returns the table name for a suffix: "text" → "swdstext" or "swd_text".
+func (l swdsLoader) table(suffix string) string { return l.prefix + suffix }
+
+// load reads the header, nodes, lines, texts, conditions, expressions and,
+// with withContainer, bindings and container rows into m. nodes and lines
+// read the node model of the definition.
+func (l swdsLoader) load(m *rawModel, withContainer bool, nodes func() ([]rawNode, error), lines func() ([]rawLine, error)) error {
+	language := m.Language
+	hdr, err := l.rows("SELECT wfd_id, version, language, activat_on FROM " + l.table("header"))
+	if err != nil {
+		return err
+	}
+	if len(hdr) == 0 {
+		return fmt.Errorf("%w: %s version %s in %s", ErrNotFound, l.wfdID, l.version, strings.ToUpper(l.table("header")))
+	}
+	m.MasterLanguage, m.ActivatedOn = hdr[0]["LANGUAGE"], hdr[0]["ACTIVAT_ON"]
+
+	if m.Nodes, err = nodes(); err != nil {
+		return err
+	}
+	if m.Lines, err = lines(); err != nil {
+		return err
+	}
+	if m.Texts, err = l.texts(language, m.MasterLanguage, m.Nodes); err != nil {
+		return err
+	}
+	if m.Conds, err = l.rows("SELECT wfd_id, version, nodeid, line_id, line_typ, leftexpr, compop, rightexpr, logop, notflag FROM " + l.table("condef")); err != nil {
+		return err
+	}
+	if m.Exprs, err = l.exprs(); err != nil {
+		return err
+	}
+	if withContainer {
+		if m.Bindings, err = l.rows("SELECT wfd_id, version, nodeid, bindtype, dataflow, element, expr FROM " + l.table("bindef")); err != nil {
+			return err
+		}
+		if m.CntIdx, err = l.rows("SELECT otype, objid, wfd_id, version, element, typeid, catid, typekind, typename FROM " + l.table("cntidx")); err != nil {
+			return err
+		}
+		if m.ContXML, err = l.container(); err != nil {
+			return err
+		}
+		if m.ElemTexts, err = l.elementTexts(language, m.MasterLanguage); err != nil {
+			return err
+		}
+	}
+	m.TaskTexts, err = loadTaskTexts(l.ctx, l.q, m.Nodes)
+	return err
+}
+
+// rows runs "<sel> <key> <extra>" and keeps only rows of this definition
+// version and execution type.
 func (l swdsLoader) rows(sel string, extra ...string) ([]Row, error) {
 	sql := sel + " " + l.key
 	if len(extra) > 0 {
@@ -97,6 +125,9 @@ func (l swdsLoader) rows(sel string, extra ...string) ([]Row, error) {
 	}
 	out := []Row{}
 	for _, r := range rows {
+		if e, ok := r["EXETYP"]; ok && e != l.exetyp {
+			continue
+		}
 		if r["WFD_ID"] == l.wfdID && r["VERSION"] == l.version {
 			out = append(out, r)
 		}
@@ -105,9 +136,10 @@ func (l swdsLoader) rows(sel string, extra ...string) ([]Row, error) {
 }
 
 func (l swdsLoader) nodes() ([]rawNode, error) {
-	rows, err := l.rows("SELECT wfd_id, version, nodeid, nodetype, swdsmnodes~task, blockid, par_blckid," +
+	t := l.table("mnodes")
+	rows, err := l.rows("SELECT wfd_id, version, nodeid, nodetype, " + t + "~task, blockid, par_blckid," +
 		" cont_cmd, return, returncode, exc_clsnam, min_tokens, exp_tokens, evt_name, evt_type, evt_otype, case_conte" +
-		" FROM swdsmnodes")
+		" FROM " + t)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +158,7 @@ func (l swdsLoader) nodes() ([]rawNode, error) {
 }
 
 func (l swdsLoader) lines() ([]rawLine, error) {
-	rows, err := l.rows("SELECT wfd_id, version, pred_node, succ_node FROM swdsmlines")
+	rows, err := l.rows("SELECT wfd_id, version, pred_node, succ_node FROM " + l.table("mlines"))
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +175,7 @@ func (l swdsLoader) lines() ([]rawLine, error) {
 	return lines, nil
 }
 
-// texts reads SWDSTEXT in the requested and master language; if that yields no
+// texts reads the text table (SWDSTEXT / SWD_TEXT) in the requested and master language; if that yields no
 // node name (ND) for any of the loaded nodes, it reads every language.
 func (l swdsLoader) texts(language, master string, nodes []rawNode) ([]Row, error) {
 	known := make(map[string]bool, len(nodes))
@@ -156,7 +188,7 @@ func (l swdsLoader) texts(language, master string, nodes []rawNode) ([]Row, erro
 		langs[master] = true
 		list += ", '" + master + "'"
 	}
-	const sel = "SELECT wfd_id, version, nodeid, language, texttyp, textnumber, wfd_text FROM swdstext"
+	sel := "SELECT wfd_id, version, nodeid, language, texttyp, textnumber, wfd_text FROM " + l.table("text")
 	rows, err := l.rows(sel, "AND language IN ("+list+")")
 	if err != nil {
 		return nil, err
@@ -176,7 +208,7 @@ func (l swdsLoader) texts(language, master string, nodes []rawNode) ([]Row, erro
 }
 
 func (l swdsLoader) exprs() ([]Row, error) {
-	rows, err := l.rows("SELECT wfd_id, version, nodeid, exprtype, expression FROM swdsexpr",
+	rows, err := l.rows("SELECT wfd_id, version, nodeid, exprtype, expression FROM "+l.table("expr"),
 		"AND exprtype NOT IN ('037', '038', '039', '040')")
 	if err != nil {
 		return nil, err
@@ -192,7 +224,7 @@ func (l swdsLoader) exprs() ([]Row, error) {
 
 // container reads the workflow container XML (node 0, empty CNT_TYPE) in TABIX order.
 func (l swdsLoader) container() ([]Row, error) {
-	rows, err := l.rows("SELECT wfd_id, version, nodeid, cnt_type, tabix, length, data FROM swdscont",
+	rows, err := l.rows("SELECT wfd_id, version, nodeid, cnt_type, tabix, length, data FROM "+l.table("cont"),
 		"AND nodeid = '0000000000' AND cnt_type = ' '")
 	if err != nil {
 		return nil, err
@@ -207,7 +239,7 @@ func (l swdsLoader) container() ([]Row, error) {
 	return out, nil
 }
 
-// elementTexts reads the workflow container element texts (SWDSWFCTXT, node 0,
+// elementTexts reads the workflow container element texts (SWDSWFCTXT / SWD_WFCTXT, node 0,
 // empty CNT_TYPE) in the requested and master language; if there are none, it
 // reads every language.
 func (l swdsLoader) elementTexts(language, master string) ([]Row, error) {
@@ -217,7 +249,7 @@ func (l swdsLoader) elementTexts(language, master string) ([]Row, error) {
 		langs[master] = true
 		list += ", '" + master + "'"
 	}
-	const sel = "SELECT wfd_id, version, nodeid, cnt_type, language, element, descript, shorttext FROM swdswfctxt"
+	sel := "SELECT wfd_id, version, nodeid, cnt_type, language, element, descript, shorttext FROM " + l.table("wfctxt")
 	const where = "AND nodeid = '0000000000' AND cnt_type = ' '"
 	keep := func(rows []Row, all bool) []Row {
 		out := []Row{}

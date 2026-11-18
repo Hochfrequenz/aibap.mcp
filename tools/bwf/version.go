@@ -78,11 +78,18 @@ func chooseLegacy(ctx context.Context, q adt.QueryClient, info *versionInfo, tas
 	} else {
 		info.Version = highestVersion(legacy, false)
 	}
+	var ids []string
 	for _, r := range legacy {
 		if r["VERSION"] == info.Version {
-			info.WfdID = r["WFD_ID"]
-			break
+			ids = append(ids, r["WFD_ID"])
 		}
+	}
+	sort.Strings(ids)
+	info.WfdID = ids[len(ids)-1]
+	if len(ids) > 1 {
+		info.Warnings = append(info.Warnings, fmt.Sprintf(
+			"SWD_HEADER has several legacy definitions of %s version %s (WFD_IDs %s); using the highest, %s",
+			task, info.Version, strings.Join(ids, ", "), info.WfdID))
 	}
 	return nil
 }
