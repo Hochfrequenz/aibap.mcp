@@ -118,10 +118,19 @@ No SAP-delivered workflow outside industry solutions uses class constants on eit
 | Description, import/export/mandatory, initial value | `SWDSCONT`, `NODEID = 0`, `CNT_TYPE = ''` (workflow container) | `DATA` is LRAW: data preview only returns it when `LENGTH` is selected too; it comes back hex-encoded, 1024 bytes per `TABIX`. Concatenate in `TABIX` order, trim trailing blanks, parse as asXML of `CL_SWF_CNT_CONTAINER`: one `SWFDELMDEFXML` per element with `NAME`, `TYPE` (`<objtype>:<catid>:<ddic>:<kind>:<len>:<dec>`, e.g. `FORMABSENC:BO::u:0:0`, `::WFSYST-RESULT:C:255:0`), `PROPS` (hex flag word), `VALUE`, `LTEXTS`. `CHGDTA` carries the last changer's logon ID — never returned. |
 | Step bindings | `SWDSBINDEF`, `BINDTYPE = 'WW'` (workflow → work item) | Plain columns. `DATAFLOW` (domain `SWA_DAFLOW`): `E` export workflow → step, `I` import step → workflow; `ELEMENT` = element in the step/task container, `EXPR` = workflow-side expression. Other `BINDTYPE`s (agent `WR`, event `EW`/`WE`, …) returned with their raw type. |
 
-*Builder call, to verify:* the bit meaning of `PROPS` (import / export / mandatory / multiline).
-Determine it from `CL_SWF_CNT_ELEMENT` (or its constants) on the system and pin it in a unit test
-with the three real values from `WS48900002`; if it cannot be determined, return `PROPS` raw and no
-flags rather than guessing.
+`PROPS` bits (verified from type pool `SWFCN`, bit numbering from the most significant bit as in
+`SWFUT`): bit 20 import, 21 export, 23 optional (mandatory = import and not optional). Live:
+elements with `PARAMKIND I` carry e.g. `0C921001`; in `WS48900002` none of the four elements is an
+import or export parameter (`ABSENCFORM` `0C920201` has only the optional bit).
+
+Element descriptions: `LTEXTS` is empty in all sampled workflows; the descriptions live in
+`SWDSWFCTXT` (per language), which is read with the same language fallback as node texts and
+preferred over `LTEXTS`.
+
+**Known gap:** on newer releases a workflow's import parameters can exist only in the task
+container (`HRSCONT`), e.g. an element bound from the triggering event, and then appear in neither
+`SWDSCNTIDX` nor `SWDSCONT`. `HRSCONT` is outside the table list of this version; such elements are
+missing from `container`. Follow-up.
 
 ### Client-dependent data (`SWD_*`)
 
