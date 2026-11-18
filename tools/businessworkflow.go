@@ -14,19 +14,21 @@ import (
 
 var workflowVersionRe = regexp.MustCompile(`^\d{4}$`)
 
-// workflowLanguage maps a caller language to SAP's 1-char key: EN/DE are
-// mapped to E/D, anything else to its upper-cased first character.
-func workflowLanguage(in string) string {
-	in = strings.ToUpper(strings.TrimSpace(in))
-	switch in {
-	case "":
-		return "E"
-	case "EN":
-		return "E"
-	case "DE":
-		return "D"
+// workflowLanguage maps a caller language to SAP's 1-character language key.
+// A single character is taken as the key (upper-cased), EN and DE map to E and
+// D, empty defaults to E. Other ISO codes are rejected: their first letter is
+// usually a different SAP language (ES is not E, DA is not D).
+func workflowLanguage(in string) (string, error) {
+	key := strings.ToUpper(strings.TrimSpace(in))
+	switch {
+	case key == "", key == "EN":
+		return "E", nil
+	case key == "DE":
+		return "D", nil
+	case len(key) == 1:
+		return key, nil
 	}
-	return in[:1]
+	return "", fmt.Errorf("invalid language %q: pass a 1-character SAP language key (e.g. E, D, F, S) or EN/DE", in)
 }
 
 func registerBusinessWorkflowTools(s toolAdder, client adt.QueryClient) {
@@ -43,12 +45,14 @@ func registerBusinessWorkflowTools(s toolAdder, client adt.QueryClient) {
 				"Not to be confused with the sap-adt://guides/workflow development-workflow guide. Client-dependent parts (such as sub-workflow "+
 				"resolution) reflect the logon client.",
 		),
-		mcp.WithString("wfd_id", mcp.Required(), mcp.Description("Workflow definition id: WS plus 8 digits (the 8 digits alone are accepted), e.g. WS48900002")),
+		mcp.WithString("wfd_id", mcp.Required(), mcp.Description("Workflow task ID: WS plus 8 digits (the 8 digits alone are accepted), e.g. WS48900002. "+
+			"The result's wfd_id is the internal definition ID (equal to the task ID except for legacy definitions, "+
+			"which have numeric IDs such as 0040000064); calls[].wfd_id and subworkflows[].wfd_id are task IDs of the called workflows.")),
 		mcp.WithString("version", mcp.Description("4-digit version (default: active version)")),
 		mcp.WithString("source", mcp.Description("definition (default): client-independent definition; runtime: the runtime copy in the logon client")),
 		mcp.WithBoolean("container", mcp.Description("Include the workflow container and per-step bindings (default: true)")),
 		mcp.WithNumber("depth", mcp.Description("Sub-workflow levels to resolve, capped at 5 (default: 0)")),
-		mcp.WithString("language", mcp.Description("Text language, e.g. EN or DE (default: EN)")),
+		mcp.WithString("language", mcp.Description("Text language: a 1-character SAP language key (e.g. E, D, F, S) or EN/DE (default: E)")),
 		mcp.WithBoolean("raw", mcp.Description("Return all nodes and edges un-collapsed (default: false)")),
 		mcp.WithBoolean("mermaid", mcp.Description("Add a Mermaid flowchart string (default: false)")),
 		mcp.WithOutputSchema[bwf.Result](),
@@ -69,13 +73,17 @@ func registerBusinessWorkflowTools(s toolAdder, client adt.QueryClient) {
 		if source != "definition" && source != "runtime" {
 			return errorResult(fmt.Errorf("invalid source %q: expected definition or runtime", source)), nil
 		}
+		language, err := workflowLanguage(req.GetString("language", ""))
+		if err != nil {
+			return errorResult(err), nil
+		}
 		depth := int(req.GetFloat("depth", 0))
 		result, err := bwf.Get(ctx, client, bwf.Options{
 			Task:      task,
 			Version:   version,
 			Source:    source,
 			Depth:     depth,
-			Language:  workflowLanguage(req.GetString("language", "")),
+			Language:  language,
 			Raw:       req.GetBool("raw", false),
 			Container: req.GetBool("container", true),
 			Mermaid:   req.GetBool("mermaid", false),

@@ -184,6 +184,7 @@ func TestGetWorkflowDefinition_LocalValidation(t *testing.T) {
 		"InvalidID":      {"wfd_id": "TS30000018"},
 		"InvalidVersion": {"wfd_id": "WS48900002", "version": "1"},
 		"InvalidSource":  {"wfd_id": "WS48900002", "source": "db"},
+		"ISOLanguage":    {"wfd_id": "WS48900002", "language": "ES"},
 	}
 	for name, args := range cases {
 		t.Run(name, func(t *testing.T) {
