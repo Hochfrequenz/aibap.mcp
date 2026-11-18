@@ -119,3 +119,41 @@ func TestResolveConstants_InvalidNameNotQueried(t *testing.T) {
 		t.Errorf("calls %v unres %v", f.calls, unres)
 	}
 }
+
+func hierarchyFake(rel []Row, comp []Row) (*fakeQuery, *rawModel) {
+	f := &fakeQuery{tables: map[string][]Row{"SEOMETAREL": rel, "SEOCOMPODF": comp}}
+	m := &rawModel{CntIdx: []Row{{"OTYPE": "WS", "ELEMENT": "C", "TYPEID": "ZCL", "CATID": "CL"}}}
+	return f, m
+}
+
+func TestResolveConstants_ViaComposedInterface(t *testing.T) {
+	f, m := hierarchyFake(
+		[]Row{
+			{"CLSNAME": "ZCL", "REFCLSNAME": "ZIF_A", "VERSION": "1", "RELTYPE": "1"},
+			{"CLSNAME": "ZIF_A", "REFCLSNAME": "ZIF_B", "VERSION": "1", "RELTYPE": "0"},
+		},
+		[]Row{{"CLSNAME": "ZIF_B", "CMPNAME": "GC_X", "VERSION": "1", "ATTDECLTYP": "2", "ATTVALUE": "'B'"}})
+	got, unres, err := resolveConstants(context.Background(), f, m, []Node{{ID: "1", Condition: "&C.GC_X&"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].ConditionResolved != "'B'" || len(unres) != 0 {
+		t.Errorf("got %q unres %v", got[0].ConditionResolved, unres)
+	}
+}
+
+func TestResolveConstants_SuperclassLevel2(t *testing.T) {
+	f, m := hierarchyFake(
+		[]Row{
+			{"CLSNAME": "ZCL", "REFCLSNAME": "ZSUPER", "VERSION": "1", "RELTYPE": "2"},
+			{"CLSNAME": "ZSUPER", "REFCLSNAME": "ZSUPER2", "VERSION": "1", "RELTYPE": "2"},
+		},
+		[]Row{{"CLSNAME": "ZSUPER2", "CMPNAME": "GC_X", "VERSION": "1", "ATTDECLTYP": "2", "ATTVALUE": "'S'"}})
+	got, unres, err := resolveConstants(context.Background(), f, m, []Node{{ID: "1", Condition: "&C.GC_X&"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].ConditionResolved != "'S'" || len(unres) != 0 {
+		t.Errorf("got %q unres %v", got[0].ConditionResolved, unres)
+	}
+}

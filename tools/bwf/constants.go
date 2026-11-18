@@ -188,13 +188,13 @@ func walkHierarchy(ctx context.Context, q adt.QueryClient, searches map[constKey
 func loadParents(ctx context.Context, q adt.QueryClient, classes map[string]bool) (map[string][]string, error) {
 	rel, err := fetch(ctx, q, "SELECT clsname, refclsname, version, reltype FROM seometarel\n"+
 		"WHERE clsname IN ("+sqlList(classes)+")\n"+
-		"AND version = '1' AND reltype IN ('1', '2')")
+		"AND version = '1' AND reltype IN ('0', '1', '2')")
 	if err != nil {
 		return nil, fmt.Errorf("resolve constants: %w", err)
 	}
 	parents := map[string][]string{}
 	for _, r := range rel {
-		if r["VERSION"] == "1" && (r["RELTYPE"] == "1" || r["RELTYPE"] == "2") && validName(r["REFCLSNAME"]) {
+		if r["VERSION"] == "1" && (r["RELTYPE"] == "0" || r["RELTYPE"] == "1" || r["RELTYPE"] == "2") && validName(r["REFCLSNAME"]) {
 			parents[r["CLSNAME"]] = append(parents[r["CLSNAME"]], r["REFCLSNAME"])
 		}
 	}
