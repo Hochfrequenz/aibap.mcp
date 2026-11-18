@@ -233,26 +233,49 @@ func TestIntegration_WorkflowDefinition_Runtime(t *testing.T) {
 			requireReachable(t, sys)
 			mustSelectSystem(t, sharedServer, sys)
 
-			res := callTool(t, sharedServer, "get_workflow_definition", map[string]interface{}{
-				"wfd_id": "WS48900002",
-				"source": "runtime",
-			})
-			if res.IsError {
-				if !strings.Contains(textOf(res), "no runtime copy") {
-					t.Fatalf("tool error without \"no runtime copy\": %s", textOf(res))
+			// Discover a workflow with a runtime copy (SWD_HEADER EXETYP 'E') in
+			// the logon client; the tool reads the highest runtime version.
+			runtime := map[string]string{}
+			for _, r := range workflowQueryRows(t, "SELECT h~task, h~version FROM swd_header AS h "+
+				"WHERE h~exetyp = 'E' AND h~task LIKE 'WS%'") {
+				if len(r) < 2 {
+					continue
 				}
-				t.Logf("WS48900002 has no runtime copy on this system (expected branch): %s", textOf(res))
-				return
+				task, version := strings.TrimSpace(r[0]), strings.TrimSpace(r[1])
+				if task != "" && version > runtime[task] {
+					runtime[task] = version
+				}
 			}
-			var d bwf.Result
-			if err := json.Unmarshal([]byte(textOf(res)), &d); err != nil {
-				t.Fatalf("unmarshal result: %v\nraw: %s", err, textOf(res))
+			tasks := make([]string, 0, len(runtime))
+			for task := range runtime {
+				tasks = append(tasks, task)
 			}
+			sort.Strings(tasks)
+			if len(tasks) == 0 {
+				t.Fatalf("no workflow task with a runtime copy (SWD_HEADER EXETYP 'E') in the logon client; runtime path unverified on %s", sys)
+			}
+			// Prefer the SAP-delivered example workflow when it has a runtime copy.
+			const preferred = "WS48900002"
+			task := tasks[0]
+			if _, ok := runtime[preferred]; ok {
+				task = preferred
+			}
+
+			d, _ := callWorkflowDefinition(t, map[string]interface{}{"wfd_id": task, "source": "runtime"})
 			if d.VersionSource != "runtime" {
-				t.Errorf("version_source: got %q, want runtime", d.VersionSource)
+				t.Errorf("%s version_source: got %q, want runtime", task, d.VersionSource)
+			}
+			if d.SourceTables != "SWD" {
+				t.Errorf("%s source_tables: got %q, want SWD", task, d.SourceTables)
+			}
+			if d.Version != runtime[task] {
+				t.Errorf("%s version: got %q, want %q", task, d.Version, runtime[task])
 			}
 			if len(d.Nodes) == 0 {
-				t.Errorf("runtime copy decoded with no nodes")
+				t.Errorf("%s runtime copy decoded with no nodes", task)
+			}
+			if len(d.Edges) == 0 {
+				t.Errorf("%s runtime copy decoded with no edges", task)
 			}
 		})
 	}
