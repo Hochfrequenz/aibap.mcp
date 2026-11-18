@@ -5,6 +5,7 @@ package tools_test
 import (
 	"encoding/json"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -210,8 +211,9 @@ func TestIntegration_WorkflowDefinition_Constants_ISU(t *testing.T) {
 func workflowQueryRows(t *testing.T, sql string) [][]string {
 	t.Helper()
 	q := callTool(t, sharedServer, "run_query", map[string]interface{}{
-		"sql":     sql,
-		"purpose": "development_metadata",
+		"sql":      sql,
+		"purpose":  "development_metadata",
+		"max_rows": 5000,
 	})
 	if q.IsError {
 		t.Fatalf("run_query failed: %s\nsql: %s", textOf(q), sql)
@@ -263,15 +265,45 @@ func TestIntegration_WorkflowDefinition_Legacy(t *testing.T) {
 			mustSelectSystem(t, sharedServer, sys)
 
 			// Legacy-only: a client-dependent SWD copy (EXETYP 'S') with no
-			// counterpart in SWDSHEADER.
-			rows := workflowQueryRows(t, "SELECT swd_header~task FROM swd_header "+
-				"WHERE swd_header~exetyp = 'S' AND NOT EXISTS "+
-				"( SELECT swdsheader~task FROM swdsheader WHERE swdsheader~task = swd_header~task ) "+
-				"ORDER BY swd_header~task")
-			if len(rows) == 0 || len(rows[0]) == 0 {
-				t.Fatalf("no legacy-only workflow task found (SWD_HEADER EXETYP 'S' not in SWDSHEADER); legacy path unverified on %s", sys)
+			// counterpart in SWDSHEADER. Two simple queries and a Go-side diff
+			// (no correlated subquery through data preview).
+			var candidates []string
+			for _, r := range workflowQueryRows(t, "SELECT h~task FROM swd_header AS h "+
+				"WHERE h~exetyp = 'S' AND h~task LIKE 'WS%'") {
+				if len(r) > 0 && strings.TrimSpace(r[0]) != "" {
+					candidates = append(candidates, strings.TrimSpace(r[0]))
+				}
 			}
-			task := strings.TrimSpace(rows[0][0])
+			sort.Strings(candidates)
+
+			inHeader := map[string]bool{}
+			const chunk = 40
+			for i := 0; i < len(candidates); i += chunk {
+				end := i + chunk
+				if end > len(candidates) {
+					end = len(candidates)
+				}
+				items := make([]string, 0, end-i)
+				for _, c := range candidates[i:end] {
+					items = append(items, "'"+c+"'")
+				}
+				for _, r := range workflowQueryRows(t, "SELECT swdsheader~task FROM swdsheader "+
+					"WHERE swdsheader~task IN ("+"\n"+strings.Join(items, ",\n")+"\n"+")") {
+					if len(r) > 0 {
+						inHeader[strings.TrimSpace(r[0])] = true
+					}
+				}
+			}
+			task := ""
+			for _, c := range candidates {
+				if !inHeader[c] {
+					task = c
+					break
+				}
+			}
+			if task == "" {
+				t.Fatalf("no legacy-only workflow task found among %d WS%% candidates with SWD_HEADER EXETYP 'S' absent from SWDSHEADER; legacy path unverified on %s", len(candidates), sys)
+			}
 
 			d, _ := callWorkflowDefinition(t, map[string]interface{}{"wfd_id": task})
 			if d.VersionSource != "legacy_client" {
