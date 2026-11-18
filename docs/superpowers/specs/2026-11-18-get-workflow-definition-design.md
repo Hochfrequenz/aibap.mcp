@@ -32,6 +32,14 @@ covers flexible workflows (`Scenarios`, `Workflows`, …), not SWDD templates.
   process-control commands, fork "n of m", step task + agent expression, event names.
 - Follow sub-workflow calls (`FUNC` nodes whose task is a `WS…`) up to a requested depth, flagging
   definitions that cannot be found.
+- **Constants:** resolve `&<ELEMENT>.<CONSTANT>&` references (conditions, container operations,
+  bindings) to their literal value when the container element is typed with an ABAP class or
+  interface, e.g. `&CONSTANTS.GC_ABAP_TRUE&` → `'X'`.
+- **Container:** return the workflow container (elements with type, description, import / export /
+  mandatory flags, initial value) and, per step, the data-flow bindings (workflow → step and back).
+- **Client-dependent data** (logon client): read the runtime copy the client actually executes
+  (`SWD_*`, `EXETYP = 'E'`), legacy definitions that exist only in `SWD_*`, and customer task
+  pointers in `HRP1205`.
 - Optional Mermaid rendering.
 - Integration test against an SAP-delivered workflow present on both integration systems.
 
@@ -40,13 +48,15 @@ covers flexible workflows (`Scenarios`, `Workflows`, …), not SWDD templates.
 - Modifying workflow definitions. ADT offers no write path; writing tables is out of scope.
 - Cross-workflow search ("which workflow evaluates field X / calls method Y"). Planned as a separate
   tool (`search_workflow_definitions`) in its own PR once this one has landed.
-- Container definitions and bindings (`SWDSCONT`, `SWDSBINDEF`; `DATA` is LRAW/XML).
-- Resolving constants such as `&CONSTANTS.GC_…&`. Returned verbatim.
+- Structured constants (`CONSTANTS: BEGIN OF …`), constants typed by reference to other constants,
+  and BOR-object attributes. Returned verbatim, marked unresolved.
+- Workflow configuration (`EXETYP = 'C'`/`'A'`, client-specific overrides of agents and deadlines):
+  two rows on each integration system, not worth a decoder yet. The tool reports that a
+  configuration exists.
+- Reading another client than the logon client. Data preview runs in the logon client; the result
+  says that client-dependent parts reflect the logon client.
 - Runtime data: work items (`SWWWIHEAD`…), instances, logs. That is business/runtime data and stays
   outside the scope guardrail.
-- Reading the client-dependent definition/runtime copies in `SWD_*`. v1 reads the
-  client-independent `SWDS*` family only; if `SWDSHEADER` has no row, the tool reports
-  "not found" and says which table it looked in.
 
 ## Anti-goals
 
@@ -54,8 +64,10 @@ covers flexible workflows (`Scenarios`, `Workflows`, …), not SWDD templates.
   `SWDSHEADER`/`HRS1205` carry `CREATED_BY`/`UNAME`. None of these columns is selected or returned.
 - A graph that "looks complete" but silently dropped nodes because a query hit its row limit. Every
   query must detect truncation and fail loudly rather than return a partial graph.
-- A tool that becomes a generic table reader. It only ever queries the fixed table list below with
-  a validated `WS\d{8}` ID.
+- A tool that becomes a generic table reader. It only ever queries the fixed table list below
+  (`SWDS*`, `SWD_*`, `HRS1205`/`HRP1205`, `HRS1000`/`HRP1000`, `SEOCOMPODF`, `SEOMETAREL`) with
+  a validated `WS\d{8}` ID or with class/constant names taken from the workflow's own container
+  and expressions.
 
 ## Data model (verified on both systems, SAP code where noted)
 
@@ -74,6 +86,76 @@ All `SWDS*` tables are client-independent and keyed by `WFD_ID`, `VERSION`, `EXE
 | Expressions | `SWDSEXPR` (`EXPRTYPE`, domain `SWD_EXPTYP`) | `031` result, `032` operand 1, `033` operand 2 of a container operation; `035` multiple-condition expression; `013` agent; `003`–`010` deadlines. `037`–`040` appear on almost every node — exclude in SQL. |
 | Task texts | `HRS1000` / `HRP1000` (`STEXT`) | Short text of `TS…`/`WS…` tasks for step labels when the node has no `ND` text. |
 
+### Constants
+
+Container element types live in `SWDSCNTIDX` (plain columns, no XML): `OTYPE`/`OBJID` (owner,
+`WS` = workflow container), `ELEMENT`, `TYPEID`, `CATID` (`CL` = ABAP class/interface, `BO` = BOR
+object), `TYPEKIND` (domain `SWFDTKIND`), `TYPENAME` (DDIC type).
+
+Resolution of `&E.C&`, verified on the SAP-delivered IS-U workflow `WS00288801` on the ECC system
+(element `CONSTANTS`, `CATID = 'CL'`, class `/IDXGC/CL_PD_WF_DOCUMENT`; the constant is not on the
+class but on the interface `/IDXGC/IF_PD_WF_CONSTANTS` it implements):
+
+1. `SWDSCNTIDX` row for element `E` with `CATID = 'CL'` → class/interface name.
+2. `SEOCOMPODF` with `CLSNAME` = that name, `CMPNAME = C`, `VERSION = '1'`, `ATTDECLTYP = '2'`
+   (constant) → `ATTVALUE` (ABAP literal, e.g. `'X'`, `'WFSND'`).
+3. Not found or `ATTVALUE` empty → follow `SEOMETAREL` (`VERSION = '1'`; `RELTYPE = '1'`
+   implemented interface, `'2'` superclass) breadth-first, depth-limited, and repeat step 2.
+4. Still nothing → leave the expression verbatim and add it to `unresolved_constants`.
+
+Output keeps both forms: `"condition": "&LV_FLAG& = &CONSTANTS.GC_ABAP_TRUE&"` and
+`"condition_resolved": "&LV_FLAG& = 'X'"`, so the agent sees where the value came from. Same for
+operation and binding expressions.
+
+No SAP-delivered workflow outside industry solutions uses class constants on either system
+(checked: conditions referencing a `CATID = 'CL'` element). The S/4 system has none at all.
+
+### Container and bindings
+
+| Concern | Source | Notes |
+|---|---|---|
+| Element list + type | `SWDSCNTIDX`, `OTYPE = 'WS'` | Always present. |
+| Description, import/export/mandatory, initial value | `SWDSCONT`, `NODEID = 0`, `CNT_TYPE = ''` (workflow container) | `DATA` is LRAW: data preview only returns it when `LENGTH` is selected too; it comes back hex-encoded, 1024 bytes per `TABIX`. Concatenate in `TABIX` order, trim trailing blanks, parse as asXML of `CL_SWF_CNT_CONTAINER`: one `SWFDELMDEFXML` per element with `NAME`, `TYPE` (`<objtype>:<catid>:<ddic>:<kind>:<len>:<dec>`, e.g. `FORMABSENC:BO::u:0:0`, `::WFSYST-RESULT:C:255:0`), `PROPS` (hex flag word), `VALUE`, `LTEXTS`. `CHGDTA` carries the last changer's logon ID — never returned. |
+| Step bindings | `SWDSBINDEF`, `BINDTYPE = 'WW'` (workflow → work item) | Plain columns. `DATAFLOW` (domain `SWA_DAFLOW`): `E` export workflow → step, `I` import step → workflow; `ELEMENT` = element in the step/task container, `EXPR` = workflow-side expression. Other `BINDTYPE`s (agent `WR`, event `EW`/`WE`, …) returned with their raw type. |
+
+*Builder call, to verify:* the bit meaning of `PROPS` (import / export / mandatory / multiline).
+Determine it from `CL_SWF_CNT_ELEMENT` (or its constants) on the system and pin it in a unit test
+with the three real values from `WS48900002`; if it cannot be determined, return `PROPS` raw and no
+flags rather than guessing.
+
+### Client-dependent data (`SWD_*`)
+
+Verified on both systems (logon client):
+
+| `SWD_HEADER.EXETYP` | Content | Count (≈, both systems) |
+|---|---|---|
+| `E` | runtime copy, created/refreshed when a workflow starts | ~620 rows / ~590 tasks |
+| `S` | legacy definitions (1995/96); ~20 tasks exist **only** here | ~90 rows |
+| `C` | configuration | 2 |
+
+Two traps:
+
+- **Key by `TASK`, not `WFD_ID`.** Legacy definitions use numeric `WFD_ID`s (`0040000064` for task
+  `WS00400012`). `SWD_GET_LATEST_WF_VERSION` also selects by `TASK`. Even `SWDSHEADER` has two rows
+  where `WFD_ID <> TASK`. All header lookups go through `TASK`; node/line/text queries then use the
+  `WFD_ID` found.
+- **Different node model.** The runtime copy and legacy definitions fill `SWD_NODES`/`SWD_LINES`
+  (1-char `NODETYPE`: `S` step, `F` fork, `J` join, `I` condition, `C` multiple condition,
+  `P` container operation, `O` process control, `X`/`Y` block, `R` wait for event; outcome on the
+  edge in `SWD_LINES.RETURNCODE`, e.g. `8995`/`8994`), **not** `SWD_MNODES`/`SWD_MLINES`. For
+  `WS48900002` version `0000`, the runtime copy on the ECC system has 26 `SWD_NODES`, 31
+  `SWD_LINES` and 0 `SWD_MNODES`. So the tool needs a second decoder for this model; it emits the
+  same output shape. Conditions, expressions and texts come from `SWD_CONDEF`, `SWD_EXPR`,
+  `SWD_TEXT` with the same layout as their `SWDS*` counterparts plus `CLIENT`.
+
+`8995`/`8994` and other `RETURNCODE`s: *builder call, to verify* against the same workflow's
+`SWDS*` version, where the outcome is known from `IFRS.RETURN` — map only codes that are confirmed
+this way, keep others raw.
+
+Runtime copy vs. pointer: the runtime copy can lag the activation pointer until the next start
+(`WS48900002`: pointer `0001`, runtime copy `0000` on the ECC system; `WS20000263`: pointer `0007`,
+runtime copy `0003` on the S/4 system). The tool reports both versions whenever both exist.
+
 ### Active version rule
 
 Verified on the ECC system: `HRS1205` holds one row per task for most tasks, but ~20 old tasks have
@@ -89,10 +171,14 @@ pointer says so.
    *Builder call, unverified:* `HRP1205` is empty in the integration clients of both systems
    (no customer workflow tasks there), so this branch is covered by unit tests only. Reading the
    active plan variant from `T77S0` is deliberately not done to keep the table list fixed.
-4. Neither → highest `SWDSHEADER.VERSION` ≠ `9999` (`version_source = "latest_numbered"`) and a
-   warning that no activation pointer was found.
-5. The chosen version must exist in `SWDSHEADER`; otherwise "not found", naming the version and
-   where it came from.
+4. Neither → highest `SWDSHEADER.VERSION` ≠ `9999` for that `TASK`
+   (`version_source = "latest_numbered"`) and a warning that no activation pointer was found.
+5. The chosen version must exist in `SWDSHEADER`. If the task has **no** `SWDSHEADER` row at all,
+   fall back to the legacy definition in `SWD_HEADER` (`EXETYP = 'S'`, by `TASK`, highest version,
+   `version_source = "legacy_client"`) and decode it with the `SWD_NODES` decoder. Only if that is
+   empty too → "not found", naming every table looked in.
+6. Independently, look up the runtime copy (`SWD_HEADER`, `EXETYP = 'E'`, by `TASK`) and report its
+   version as `runtime_version` (empty if none).
 
 Sub-workflows are resolved with the same rule, each at its own active version.
 
@@ -139,6 +225,8 @@ Inputs:
 |---|---|---|---|
 | `wfd_id` | string, required | — | `WS` + 8 digits; also accepts the 8 digits alone. Validated before any query. |
 | `version` | string | active version | 4 digits. `9999` allowed explicitly. |
+| `source` | string | `definition` | `definition`: client-independent `SWDS*` (legacy `SWD_*` fallback, see version rule). `runtime`: the runtime copy in the logon client (`SWD_*`, `EXETYP = 'E'`) — what running instances in this client actually execute; error if none exists. |
+| `container` | boolean | `true` | Include the workflow container and per-step bindings. |
 | `depth` | number | `0` | Sub-workflow levels to resolve. Capped (e.g. 5). Cycles and repeats are resolved once. |
 | `language` | string | `E` | Text language; fallback to the workflow's master language, then any language present. |
 | `raw` | boolean | `false` | `true` returns all nodes/edges un-collapsed. |
@@ -151,16 +239,28 @@ Output (`WorkflowDefinitionResult`, named structs in `tools/results.go`, declare
 {
   "wfd_id": "WS48900002",
   "version": "0001",
-  "version_source": "HRS1205" | "HRP1205" | "latest_numbered" | "requested",
+  "version_source": "HRS1205" | "HRP1205" | "latest_numbered" | "legacy_client" | "requested" | "runtime",
+  "source_tables": "SWDS" | "SWD",
+  "runtime_version": "0000",
+  "has_configuration": false,
   "language": "E",
   "title": "...",
   "activated_on": "2002-01-22",
   "nodes": [ { "id": "36", "type": "IF", "kind": "condition",
                "label": "Already Revised Once?",
                "condition": "&COUNTER& > 1",
-               "task": "", "agent": "", "operation": "", "event": "",
+               "condition_resolved": "&COUNTER& > 1",
+               "task": "", "agent": "", "operation": "", "operation_resolved": "", "event": "",
+               "bindings": [ { "direction": "export", "step_element": "_WI_OBJECT_ID",
+                               "expression": "&ABSENCFORM&", "expression_resolved": "&ABSENCFORM&",
+                               "bind_type": "WW" } ],
                "block_id": "36", "parent_block_id": "23" } ],
   "edges": [ { "from": "36", "to": "42", "label": "true" } ],
+  "container": [ { "name": "ABSENCFORM", "description": "...", "type": "FORMABSENC",
+                   "category": "BO", "type_kind": "u", "ddic_type": "",
+                   "import": true, "export": false, "mandatory": false,
+                   "initial_value": "" } ],
+  "unresolved_constants": [ "&CONSTANTS.GC_STRUCTURED-FIELD&" ],
   "calls": [ { "node": "18", "wfd_id": "WS48900024" } ],
   "warnings": [ "..." ],
   "mermaid": "flowchart TD ...",
@@ -234,7 +334,25 @@ of absence"), identical on both systems, active version `0001` via `HRS1205`. As
 - Process control "complete workflow".
 - Fork with join `2 of 2`.
 - With `depth = 1`: sub-workflow `WS48900024` present and `found = true`.
-- No SAP user name from the condition change-info rows appears anywhere in the JSON.
+- Container: elements `ABSENCFORM` (BOR `FORMABSENC`), `COUNTER`, `FLAG`, `RESULT`; binding of
+  step 18 exports `&ABSENCFORM&` to `FORMABSENC` and imports `RESULT` into `&RESULT&`.
+- No SAP user name from the condition change-info rows or the container `CHGDTA` appears anywhere
+  in the JSON.
+- `source = "runtime"`: if the logon client has a runtime copy, it decodes to a non-empty graph via
+  the `SWD_NODES` decoder and `version_source = "runtime"`; if not, the call returns a "no runtime
+  copy" error. Both outcomes are asserted explicitly per branch (runtime copies appear and disappear
+  with workflow starts, so the test cannot pin which one).
+- Legacy fallback: a task that exists only in `SWD_HEADER` (`EXETYP = 'S'`), found at test time by
+  query, decodes with `version_source = "legacy_client"`. The test fails loudly — not skips — if no
+  such task exists.
+- Constants: SAP-delivered IS-U workflow `WS00288801` (active version `0002`; container element
+  `CONSTANTS` typed with `/IDXGC/CL_PD_WF_DOCUMENT`, constants defined on the implemented interface
+  `/IDXGC/IF_PD_WF_CONSTANTS`). Asserts `&CONSTANTS.GC_ABAP_TRUE&` → `'X'` and
+  `&CONSTANTS.GC_PROC_VAL_UTILMD&` → `'UTILMD'` in `condition_resolved`. The test checks for the
+  workflow first (`SWDSHEADER` by `TASK`) and calls `t.Skip` with an explicit message
+  ("WS00288801 not present — system has no IS-U common layer; constant resolution via workflow not
+  verified on <system>") on systems without it. Constant resolution is additionally covered by unit
+  tests with fixture rows from this workflow.
 
 ## Left to the builder
 
@@ -244,3 +362,5 @@ of absence"), identical on both systems, active version `0001` via `HRS1205`. As
 - The precise list of node types per `kind`, beyond those listed above (51 types exist; unknown ones
   map to `other` with the raw `type`).
 - Wording of warnings (orphan text rows ignored, unknown `CONT_CMD`, sub-workflow not found, etc.).
+- Exact asXML parsing of `SWDSCONT` (namespaces, heap references).
+- Mapping of the 1-char `SWD_NODES` types to `kind`.
