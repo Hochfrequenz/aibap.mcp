@@ -205,3 +205,81 @@ func TestIntegration_WorkflowDefinition_Constants_ISU(t *testing.T) {
 		})
 	}
 }
+
+// workflowQueryRows runs a development-metadata query and returns the rows.
+func workflowQueryRows(t *testing.T, sql string) [][]string {
+	t.Helper()
+	q := callTool(t, sharedServer, "run_query", map[string]interface{}{
+		"sql":     sql,
+		"purpose": "development_metadata",
+	})
+	if q.IsError {
+		t.Fatalf("run_query failed: %s\nsql: %s", textOf(q), sql)
+	}
+	var qr struct {
+		Rows [][]string `json:"rows"`
+	}
+	if err := json.Unmarshal([]byte(textOf(q)), &qr); err != nil {
+		t.Fatalf("unmarshal run_query result: %v\nraw: %s", err, textOf(q))
+	}
+	return qr.Rows
+}
+
+func TestIntegration_WorkflowDefinition_Runtime(t *testing.T) {
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+
+			res := callTool(t, sharedServer, "get_workflow_definition", map[string]interface{}{
+				"wfd_id": "WS48900002",
+				"source": "runtime",
+			})
+			if res.IsError {
+				if !strings.Contains(textOf(res), "no runtime copy") {
+					t.Fatalf("tool error without \"no runtime copy\": %s", textOf(res))
+				}
+				t.Logf("WS48900002 has no runtime copy on this system (expected branch): %s", textOf(res))
+				return
+			}
+			var d bwf.Result
+			if err := json.Unmarshal([]byte(textOf(res)), &d); err != nil {
+				t.Fatalf("unmarshal result: %v\nraw: %s", err, textOf(res))
+			}
+			if d.VersionSource != "runtime" {
+				t.Errorf("version_source: got %q, want runtime", d.VersionSource)
+			}
+			if len(d.Nodes) == 0 {
+				t.Errorf("runtime copy decoded with no nodes")
+			}
+		})
+	}
+}
+
+func TestIntegration_WorkflowDefinition_Legacy(t *testing.T) {
+	for _, sys := range integrationSystems {
+		t.Run(sys, func(t *testing.T) {
+			requireReachable(t, sys)
+			mustSelectSystem(t, sharedServer, sys)
+
+			// Legacy-only: a client-dependent SWD copy (EXETYP 'S') with no
+			// counterpart in SWDSHEADER.
+			rows := workflowQueryRows(t, "SELECT swd_header~task FROM swd_header "+
+				"WHERE swd_header~exetyp = 'S' AND NOT EXISTS "+
+				"( SELECT swdsheader~task FROM swdsheader WHERE swdsheader~task = swd_header~task ) "+
+				"ORDER BY swd_header~task")
+			if len(rows) == 0 || len(rows[0]) == 0 {
+				t.Fatalf("no legacy-only workflow task found (SWD_HEADER EXETYP 'S' not in SWDSHEADER); legacy path unverified on %s", sys)
+			}
+			task := strings.TrimSpace(rows[0][0])
+
+			d, _ := callWorkflowDefinition(t, map[string]interface{}{"wfd_id": task})
+			if d.VersionSource != "legacy_client" {
+				t.Errorf("%s version_source: got %q, want legacy_client", task, d.VersionSource)
+			}
+			if len(d.Nodes) == 0 {
+				t.Errorf("%s decoded with no nodes", task)
+			}
+		})
+	}
+}

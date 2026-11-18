@@ -31,10 +31,10 @@ func loadSWD(ctx context.Context, q adt.QueryClient, wfdID, version, exetyp, lan
 	m := &rawModel{TablePrefix: "SWD_", WfdID: wfdID, Version: version, Language: language}
 	var err error
 	if exetyp == "E" {
-		m.Model = "SWD"
+		m.Model = modelSWD
 		err = l.load(m, withContainer, l.runtimeNodes, l.runtimeLines)
 	} else {
-		m.Model = "SWDS"
+		m.Model = modelSWDS
 		err = l.load(m, withContainer, l.nodes, l.lines)
 	}
 	if err != nil {

@@ -151,7 +151,7 @@ func rawEdges(m *rawModel) []Edge {
 	edges := make([]Edge, 0, len(m.Lines))
 	for _, l := range m.Lines {
 		label := l.ReturnCode
-		if m.Model == "SWD" {
+		if m.Model == modelSWD {
 			label = lineLabel(l)
 		}
 		edges = append(edges, Edge{From: trimID(l.From), To: trimID(l.To), Label: label})
@@ -163,7 +163,7 @@ func rawEdges(m *rawModel) []Edge {
 // model an O node without a command is the start (no incoming line) or the
 // end node, otherwise process control.
 func semanticType(m *rawModel, rn rawNode, hasIncoming bool) string {
-	if m.Model != "SWD" {
+	if m.Model != modelSWD {
 		return rn.Type
 	}
 	if rn.Type == "O" && (rn.ContCmd == "" || rn.ContCmd == "00") {

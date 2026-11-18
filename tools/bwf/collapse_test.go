@@ -24,7 +24,7 @@ func loadModelVersion(t *testing.T, tables map[string][]Row, wfdID, version stri
 
 func collapseWS48900002(t *testing.T) ([]Node, []Edge) {
 	t.Helper()
-	return collapseFixture(t, loadFixture(t, "ws48900002"), "WS48900002", "0001")
+	return collapseFixture(t, loadFixture(t, "ws48900002"), testWfdMain, "0001")
 }
 
 // collapseWhile uses WS00400012 version 0004 (the active version on the S/4 system).
@@ -130,7 +130,7 @@ func TestCollapse_TerminatingEvent(t *testing.T) {
 
 	tables := loadFixture(t, "ws48900002")
 	for i, r := range tables["SWDSMNODES"] {
-		if r["WFD_ID"] == "WS48900002" && r["NODEID"] == "0000000045" {
+		if r["WFD_ID"] == testWfdMain && r["NODEID"] == "0000000045" {
 			c := Row{}
 			for k, v := range r {
 				c[k] = v
@@ -139,14 +139,14 @@ func TestCollapse_TerminatingEvent(t *testing.T) {
 			tables["SWDSMNODES"][i] = c
 		}
 	}
-	_, edges = collapseFixture(t, tables, "WS48900002", "0001")
+	_, edges = collapseFixture(t, tables, testWfdMain, "0001")
 	requireEdge(t, edges, "42", "47", "event DELETED")
 }
 
 func TestCollapse_ExceptionLabel(t *testing.T) {
 	tables := loadFixture(t, "ws48900002")
 	for i, r := range tables["SWDSMNODES"] {
-		if r["WFD_ID"] == "WS48900002" && r["NODEID"] == "0000000053" {
+		if r["WFD_ID"] == testWfdMain && r["NODEID"] == "0000000053" {
 			c := Row{}
 			for k, v := range r {
 				c[k] = v
@@ -155,7 +155,7 @@ func TestCollapse_ExceptionLabel(t *testing.T) {
 			tables["SWDSMNODES"][i] = c
 		}
 	}
-	_, edges := collapseFixture(t, tables, "WS48900002", "0001")
+	_, edges := collapseFixture(t, tables, testWfdMain, "0001")
 	requireEdge(t, edges, "50", "10", "exception CX_EXAMPLE")
 }
 
@@ -181,7 +181,7 @@ func TestCollapse_WhileLoop(t *testing.T) {
 }
 
 func TestCollapse_RawModeUntouched(t *testing.T) {
-	m := loadModelVersion(t, loadFixture(t, "ws48900002"), "WS48900002", "0001")
+	m := loadModelVersion(t, loadFixture(t, "ws48900002"), testWfdMain, "0001")
 	nodes, _ := decodeNodes(m, "E")
 	edges := rawEdges(m)
 	wantNodes := append([]Node(nil), nodes...)

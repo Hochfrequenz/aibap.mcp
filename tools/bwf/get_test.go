@@ -22,20 +22,20 @@ func getFake(t *testing.T) *fakeQuery {
 }
 
 func TestGet_Root(t *testing.T) {
-	res, err := Get(t.Context(), getFake(t), getOpts("WS48900002"))
+	res, err := Get(t.Context(), getFake(t), getOpts(testWfdMain))
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if res.Version != "0001" || res.VersionSource != "HRS1205" || res.Title == "" {
+	if res.Version != "0001" || res.VersionSource != testSourceHRS || res.Title == "" {
 		t.Errorf("version=%q source=%q title=%q", res.Version, res.VersionSource, res.Title)
 	}
-	if res.Task != "WS48900002" || res.WfdID != "WS48900002" || res.SourceTables != "SWDS" || res.Language != "E" {
+	if res.Task != testWfdMain || res.WfdID != testWfdMain || res.SourceTables != modelSWDS || res.Language != "E" {
 		t.Errorf("header fields = %+v", res.Definition)
 	}
 	if res.ActivatedOn != "2002-01-22" {
 		t.Errorf("ActivatedOn = %q", res.ActivatedOn)
 	}
-	if len(res.Calls) != 1 || res.Calls[0] != (Call{Node: "18", WfdID: "WS48900024"}) {
+	if len(res.Calls) != 1 || res.Calls[0] != (Call{Node: "18", WfdID: testWfdSub}) {
 		t.Errorf("Calls = %+v", res.Calls)
 	}
 	if len(res.Subworkflows) != 0 {
@@ -47,7 +47,7 @@ func TestGet_Root(t *testing.T) {
 }
 
 func TestGet_Depth1(t *testing.T) {
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Depth = 1
 	res, err := Get(t.Context(), getFake(t), o)
 	if err != nil {
@@ -57,7 +57,7 @@ func TestGet_Depth1(t *testing.T) {
 		t.Fatalf("Subworkflows = %+v", res.Subworkflows)
 	}
 	s := res.Subworkflows[0]
-	if s.WfdID != "WS48900024" || !s.Found || s.Depth != 1 || strings.Join(s.CalledBy, ",") != "WS48900002" {
+	if s.WfdID != testWfdSub || !s.Found || s.Depth != 1 || strings.Join(s.CalledBy, ",") != testWfdMain {
 		t.Errorf("sub = %+v", s)
 	}
 	if s.Definition == nil || len(s.Definition.Nodes) == 0 {
@@ -74,8 +74,8 @@ func cyclicFake(t *testing.T) *fakeQuery {
 		for k, v := range r {
 			c[k] = v
 		}
-		if c["WFD_ID"] == "WS48900024" && c["NODEID"] == "0000000004" {
-			c["TASK"] = "WS48900002"
+		if c["WFD_ID"] == testWfdSub && c["NODEID"] == "0000000004" {
+			c["TASK"] = testWfdMain
 		}
 		rows[i] = c
 	}
@@ -84,7 +84,7 @@ func cyclicFake(t *testing.T) *fakeQuery {
 }
 
 func TestGet_Cycle(t *testing.T) {
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Depth = 5
 	res, err := Get(t.Context(), cyclicFake(t), o)
 	if err != nil {
@@ -93,23 +93,23 @@ func TestGet_Cycle(t *testing.T) {
 	if len(res.Subworkflows) != 1 {
 		t.Fatalf("Subworkflows = %d, want 1", len(res.Subworkflows))
 	}
-	if c := res.Subworkflows[0].Definition.Calls; len(c) != 1 || c[0].WfdID != "WS48900002" {
+	if c := res.Subworkflows[0].Definition.Calls; len(c) != 1 || c[0].WfdID != testWfdMain {
 		t.Errorf("sub calls = %+v, want call back to root", c)
 	}
 }
 
 func TestGet_MissingSub(t *testing.T) {
 	f := getFake(t)
-	for _, tbl := range []string{"SWDSHEADER", "HRS1205"} {
+	for _, tbl := range []string{"SWDSHEADER", testSourceHRS} {
 		var keep []Row
 		for _, r := range f.tables[tbl] {
-			if r["WFD_ID"] != "WS48900024" {
+			if r["WFD_ID"] != testWfdSub {
 				keep = append(keep, r)
 			}
 		}
 		f.tables[tbl] = keep
 	}
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Depth = 1
 	res, err := Get(t.Context(), f, o)
 	if err != nil {
@@ -120,7 +120,7 @@ func TestGet_MissingSub(t *testing.T) {
 	}
 	found := false
 	for _, w := range res.Warnings {
-		found = found || strings.Contains(w, "WS48900024")
+		found = found || strings.Contains(w, testWfdSub)
 	}
 	if !found {
 		t.Errorf("warnings = %v, want one naming WS48900024", res.Warnings)
@@ -128,7 +128,7 @@ func TestGet_MissingSub(t *testing.T) {
 }
 
 func TestGet_Raw(t *testing.T) {
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Raw = true
 	res, err := Get(t.Context(), getFake(t), o)
 	if err != nil {
@@ -140,7 +140,7 @@ func TestGet_Raw(t *testing.T) {
 }
 
 func TestGet_ContainerOff(t *testing.T) {
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Container = false
 	f := getFake(t)
 	res, err := Get(t.Context(), f, o)
@@ -158,7 +158,7 @@ func TestGet_ContainerOff(t *testing.T) {
 }
 
 func TestGet_Mermaid(t *testing.T) {
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Mermaid = true
 	res, err := Get(t.Context(), getFake(t), o)
 	if err != nil {
@@ -186,7 +186,7 @@ func TestRenderMermaid_Escapes(t *testing.T) {
 }
 
 func TestGet_DepthClamped(t *testing.T) {
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Depth = 99
 	if _, err := Get(t.Context(), getFake(t), o); err != nil {
 		t.Fatalf("Get: %v", err)
@@ -220,7 +220,7 @@ func TestGet_EmptySlicesSerialiseAsArrays(t *testing.T) {
 }
 
 func TestGet_RealResultHasNoNull(t *testing.T) {
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Depth = 1
 	res, err := Get(t.Context(), getFake(t), o)
 	if err != nil {
@@ -241,7 +241,7 @@ func withCallee(t *testing.T, task string) *fakeQuery {
 		for k, v := range r {
 			c[k] = v
 		}
-		if c["WFD_ID"] == "WS48900002" && c["NODEID"] == "0000000018" {
+		if c["WFD_ID"] == testWfdMain && c["NODEID"] == "0000000018" {
 			c["TASK"] = task
 		}
 		rows[i] = c
@@ -252,13 +252,13 @@ func withCallee(t *testing.T, task string) *fakeQuery {
 
 func requireUnresolvedSub(t *testing.T, f *fakeQuery, callee string) {
 	t.Helper()
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Depth = 1
 	res, err := Get(t.Context(), f, o)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if res.Task != "WS48900002" || len(res.Nodes) == 0 {
+	if res.Task != testWfdMain || len(res.Nodes) == 0 {
 		t.Errorf("root definition missing")
 	}
 	if len(res.Subworkflows) != 1 || res.Subworkflows[0].WfdID != callee || res.Subworkflows[0].Found {
@@ -282,7 +282,7 @@ func TestGet_LegacyOnlyCallee(t *testing.T) {
 	for k, v := range loadFixture(t, "legacy") {
 		f.tables[k] = append(f.tables[k], v...)
 	}
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Depth = 1
 	res, err := Get(t.Context(), f, o)
 	if err != nil {
@@ -295,7 +295,7 @@ func TestGet_LegacyOnlyCallee(t *testing.T) {
 	if s.WfdID != "WS00000024" || !s.Found || s.Definition == nil {
 		t.Fatalf("sub = %+v", s)
 	}
-	if s.Definition.VersionSource != "legacy_client" || s.Definition.SourceTables != "SWD" || len(s.Definition.Nodes) == 0 {
+	if s.Definition.VersionSource != sourceLegacy || s.Definition.SourceTables != modelSWD || len(s.Definition.Nodes) == 0 {
 		t.Errorf("sub definition = %+v", s.Definition)
 	}
 }
@@ -313,9 +313,9 @@ func (f failingQuery) RunQuery(ctx context.Context, sql string, n int) (*adt.Que
 }
 
 func TestGet_SubFetchErrorIsFatal(t *testing.T) {
-	o := getOpts("WS48900002")
+	o := getOpts(testWfdMain)
 	o.Depth = 1
-	_, err := Get(t.Context(), failingQuery{getFake(t), "WS48900024"}, o)
+	_, err := Get(t.Context(), failingQuery{getFake(t), testWfdSub}, o)
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Errorf("err = %v, want fetch failure", err)
 	}
@@ -332,15 +332,15 @@ func runtimeFake(t *testing.T) *fakeQuery {
 }
 
 func TestGet_SourceRuntime(t *testing.T) {
-	o := getOpts("WS48900002")
-	o.Source = "runtime"
+	o := getOpts(testWfdMain)
+	o.Source = sourceRuntime
 	f := runtimeFake(t)
 	res, err := Get(t.Context(), f, o)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if res.VersionSource != "runtime" || res.SourceTables != "SWD" || res.Version != "0000" ||
-		res.RuntimeVersion != "0000" || res.WfdID != "WS48900002" || res.Task != "WS48900002" {
+	if res.VersionSource != sourceRuntime || res.SourceTables != modelSWD || res.Version != "0000" ||
+		res.RuntimeVersion != "0000" || res.WfdID != testWfdMain || res.Task != testWfdMain {
 		t.Errorf("header = %+v", res.Definition)
 	}
 	if res.ActivatedOn != "2005-08-25" || res.Title != "Workflow for Testing the BPML Export" {
@@ -360,7 +360,7 @@ func TestGet_SourceRuntime(t *testing.T) {
 	if j := nodeByID(t, res.Nodes, "56"); j.Label != "2 of 2" {
 		t.Errorf("join label = %q", j.Label)
 	}
-	if len(res.Calls) != 1 || res.Calls[0] != (Call{Node: "18", WfdID: "WS48900024"}) {
+	if len(res.Calls) != 1 || res.Calls[0] != (Call{Node: "18", WfdID: testWfdSub}) {
 		t.Errorf("calls = %+v", res.Calls)
 	}
 	for _, c := range f.calls {
@@ -382,21 +382,21 @@ func TestGet_SourceRuntime(t *testing.T) {
 func TestGet_SourceRuntimeBlockMarkersDropped(t *testing.T) {
 	f := runtimeFake(t)
 	// Insert an X/Y block between nodes 4 and 6: 4 -> 5(X) -> 6.
-	f.tables["SWD_NODES"] = append(f.tables["SWD_NODES"], Row{"WFD_ID": "WS48900002", "VERSION": "0000",
+	f.tables["SWD_NODES"] = append(f.tables["SWD_NODES"], Row{"WFD_ID": testWfdMain, "VERSION": "0000",
 		"EXETYP": "E", "NODEID": "0000000005", "NODETYPE": "X"})
 	var lines []Row
 	for _, r := range f.tables["SWD_LINES"] {
 		if r["PRED_NODE"] == "0000000004" && r["SUCC_NODE"] == "0000000006" {
 			lines = append(lines,
-				Row{"WFD_ID": "WS48900002", "VERSION": "0000", "EXETYP": "E", "PRED_NODE": "0000000004", "SUCC_NODE": "0000000005", "LINE_TYPE": "A", "RETURNCODE": "0000"},
-				Row{"WFD_ID": "WS48900002", "VERSION": "0000", "EXETYP": "E", "PRED_NODE": "0000000005", "SUCC_NODE": "0000000006", "LINE_TYPE": "A", "RETURNCODE": "0000"})
+				Row{"WFD_ID": testWfdMain, "VERSION": "0000", "EXETYP": "E", "PRED_NODE": "0000000004", "SUCC_NODE": "0000000005", "LINE_TYPE": "A", "RETURNCODE": "0000"},
+				Row{"WFD_ID": testWfdMain, "VERSION": "0000", "EXETYP": "E", "PRED_NODE": "0000000005", "SUCC_NODE": "0000000006", "LINE_TYPE": "A", "RETURNCODE": "0000"})
 			continue
 		}
 		lines = append(lines, r)
 	}
 	f.tables["SWD_LINES"] = lines
-	o := getOpts("WS48900002")
-	o.Source = "runtime"
+	o := getOpts(testWfdMain)
+	o.Source = sourceRuntime
 	res, err := Get(t.Context(), f, o)
 	if err != nil {
 		t.Fatal(err)
@@ -416,8 +416,8 @@ func TestGet_SourceRuntimeBlockMarkersDropped(t *testing.T) {
 }
 
 func TestGet_SourceRuntimeMissing(t *testing.T) {
-	o := getOpts("WS48900002")
-	o.Source = "runtime"
+	o := getOpts(testWfdMain)
+	o.Source = sourceRuntime
 	_, err := Get(t.Context(), getFake(t), o)
 	if err == nil || !strings.Contains(err.Error(), "no runtime copy of WS48900002 in the logon client") {
 		t.Errorf("err = %v", err)
@@ -425,8 +425,8 @@ func TestGet_SourceRuntimeMissing(t *testing.T) {
 }
 
 func TestGet_SourceRuntimeOtherVersionRequested(t *testing.T) {
-	o := getOpts("WS48900002")
-	o.Source = "runtime"
+	o := getOpts(testWfdMain)
+	o.Source = sourceRuntime
 	o.Version = "0001"
 	_, err := Get(t.Context(), runtimeFake(t), o)
 	if err == nil || !strings.Contains(err.Error(), "0000") {
@@ -442,7 +442,7 @@ func TestGet_LegacyClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if res.VersionSource != "legacy_client" || res.SourceTables != "SWD" || res.WfdID != "0000002303" ||
+	if res.VersionSource != sourceLegacy || res.SourceTables != modelSWD || res.WfdID != "0000002303" ||
 		res.Task != "WS00000024" || res.Version != "0000" || len(res.Nodes) == 0 {
 		t.Errorf("header = %+v", res.Definition)
 	}
@@ -458,11 +458,11 @@ func TestGet_LegacyClient(t *testing.T) {
 }
 
 func TestGet_RuntimeVersionReported(t *testing.T) {
-	res, err := Get(t.Context(), runtimeFake(t), getOpts("WS48900002"))
+	res, err := Get(t.Context(), runtimeFake(t), getOpts(testWfdMain))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Version != "0001" || res.VersionSource != "HRS1205" || res.SourceTables != "SWDS" || res.RuntimeVersion != "0000" {
+	if res.Version != "0001" || res.VersionSource != testSourceHRS || res.SourceTables != modelSWDS || res.RuntimeVersion != "0000" {
 		t.Errorf("version=%q source=%q tables=%q runtime=%q", res.Version, res.VersionSource, res.SourceTables, res.RuntimeVersion)
 	}
 	if res.HasConfiguration {
@@ -473,9 +473,9 @@ func TestGet_RuntimeVersionReported(t *testing.T) {
 func TestGet_HasConfiguration(t *testing.T) {
 	f := runtimeFake(t)
 	f.tables["SWD_HEADER"] = append(f.tables["SWD_HEADER"],
-		Row{"WFD_ID": "WS48900002", "TASK": "WS48900002", "VERSION": "0000", "EXETYP": "C"})
-	for _, src := range []string{"definition", "runtime"} {
-		o := getOpts("WS48900002")
+		Row{"WFD_ID": testWfdMain, "TASK": testWfdMain, "VERSION": "0000", "EXETYP": "C"})
+	for _, src := range []string{"definition", sourceRuntime} {
+		o := getOpts(testWfdMain)
 		o.Source = src
 		res, err := Get(t.Context(), f, o)
 		if err != nil {

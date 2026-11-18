@@ -6,7 +6,7 @@ import "time"
 type Options struct {
 	Task      string // normalised WS…
 	Version   string // "" = active
-	Source    string // "definition" | "runtime"
+	Source    string // "definition" | sourceRuntime
 	Depth     int    // 0..5
 	Language  string // SAP 1-char, default "E"
 	Raw       bool

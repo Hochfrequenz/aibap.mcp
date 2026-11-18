@@ -7,7 +7,7 @@ import (
 
 func loadRuntime(t *testing.T, tables map[string][]Row) *rawModel {
 	t.Helper()
-	m, err := loadSWD(t.Context(), &fakeQuery{tables: tables}, "WS48900002", "0000", "E", "E", true)
+	m, err := loadSWD(t.Context(), &fakeQuery{tables: tables}, testWfdMain, "0000", "E", "E", true)
 	if err != nil {
 		t.Fatalf("loadSWD: %v", err)
 	}
@@ -27,7 +27,7 @@ func edgeLabel(t *testing.T, edges []Edge, from, to string) string {
 
 func TestLoadSWD_RuntimeCopy(t *testing.T) {
 	m := loadRuntime(t, loadFixture(t, "ws48900002_runtime"))
-	if m.Model != "SWD" || len(m.Nodes) != 26 || len(m.Lines) != 31 {
+	if m.Model != modelSWD || len(m.Nodes) != 26 || len(m.Lines) != 31 {
 		t.Fatalf("model=%q nodes=%d lines=%d, want SWD/26/31", m.Model, len(m.Nodes), len(m.Lines))
 	}
 	if m.MasterLanguage != "D" || m.ActivatedOn != "20050825" {
@@ -62,7 +62,7 @@ func TestLoadSWD_RuntimeCopy(t *testing.T) {
 			t.Errorf("node %s (%s) kind = %q, want %q", id, got.Type, got.Kind, want)
 		}
 	}
-	if got := nodeByID(t, nodes, "18"); got.Task != "WS48900024" {
+	if got := nodeByID(t, nodes, "18"); got.Task != testWfdSub {
 		t.Errorf("node 18 task = %q", got.Task)
 	}
 	if got := nodeByID(t, nodes, "4"); got.Task != "TS30200106" || got.Agent != "&_WF_INITIATOR&" || len(got.Bindings) != 1 {
@@ -99,7 +99,7 @@ func TestLoadSWD_ContainerOperationFromParameters(t *testing.T) {
 
 func TestLoadSWD_IgnoresOtherExecutionTypes(t *testing.T) {
 	tables := loadFixture(t, "ws48900002_runtime")
-	tables["SWD_NODES"] = append(tables["SWD_NODES"], Row{"WFD_ID": "WS48900002", "VERSION": "0000",
+	tables["SWD_NODES"] = append(tables["SWD_NODES"], Row{"WFD_ID": testWfdMain, "VERSION": "0000",
 		"EXETYP": "S", "NODEID": "0000000099", "NODETYPE": "S"})
 	if m := loadRuntime(t, tables); len(m.Nodes) != 26 {
 		t.Errorf("nodes = %d, want 26 (EXETYP S row must be ignored)", len(m.Nodes))
@@ -108,7 +108,7 @@ func TestLoadSWD_IgnoresOtherExecutionTypes(t *testing.T) {
 
 func TestLoadSWD_QueriesKeyByExecutionType(t *testing.T) {
 	f := &fakeQuery{tables: loadFixture(t, "ws48900002_runtime")}
-	if _, err := loadSWD(t.Context(), f, "WS48900002", "0000", "E", "E", true); err != nil {
+	if _, err := loadSWD(t.Context(), f, testWfdMain, "0000", "E", "E", true); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range f.calls {
@@ -133,7 +133,7 @@ func TestLoadSWD_Legacy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Model != "SWDS" || len(m.Nodes) != 26 || len(m.Lines) != 28 {
+	if m.Model != modelSWDS || len(m.Nodes) != 26 || len(m.Lines) != 28 {
 		t.Fatalf("model=%q nodes=%d lines=%d", m.Model, len(m.Nodes), len(m.Lines))
 	}
 	nodes, _ := decodeNodes(m, "E")
@@ -151,9 +151,9 @@ func TestLoadSWD_RejectsBadKeys(t *testing.T) {
 	f := &fakeQuery{}
 	for _, c := range [][4]string{
 		{"WS48900002'", "0000", "E", "E"},
-		{"WS48900002", "00", "E", "E"},
-		{"WS48900002", "0000", "C", "E"},
-		{"WS48900002", "0000", "E", "EN"},
+		{testWfdMain, "00", "E", "E"},
+		{testWfdMain, "0000", "C", "E"},
+		{testWfdMain, "0000", "E", "EN"},
 	} {
 		if _, err := loadSWD(t.Context(), f, c[0], c[1], c[2], c[3], true); err == nil {
 			t.Errorf("%v: expected error", c)

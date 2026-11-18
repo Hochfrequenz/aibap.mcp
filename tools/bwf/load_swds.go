@@ -25,7 +25,7 @@ func loadSWDS(ctx context.Context, q adt.QueryClient, wfdID, version, language s
 		return nil, err
 	}
 	l := newLoader(ctx, q, "swds", "S", wfdID, version)
-	m := &rawModel{Model: "SWDS", TablePrefix: "SWDS", WfdID: wfdID, Version: version, Language: language}
+	m := &rawModel{Model: modelSWDS, TablePrefix: modelSWDS, WfdID: wfdID, Version: version, Language: language}
 	if err := l.load(m, withContainer, l.nodes, l.lines); err != nil {
 		return nil, err
 	}

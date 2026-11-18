@@ -10,9 +10,9 @@ import (
 )
 
 func TestNormalizeTask(t *testing.T) {
-	for _, in := range []string{"WS48900002", "ws48900002", " 48900002 "} {
+	for _, in := range []string{testWfdMain, "ws48900002", " 48900002 "} {
 		got, err := NormalizeTask(in)
-		if err != nil || got != "WS48900002" {
+		if err != nil || got != testWfdMain {
 			t.Errorf("NormalizeTask(%q) = %q, %v", in, got, err)
 		}
 	}

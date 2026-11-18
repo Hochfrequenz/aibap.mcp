@@ -19,7 +19,7 @@ func loadModel(t *testing.T, tables map[string][]Row, wfdID, language string) *r
 
 func decodeFixture(t *testing.T, language string) ([]Node, []string) {
 	t.Helper()
-	return decodeNodes(loadModel(t, loadFixture(t, "ws48900002"), "WS48900002", language), language)
+	return decodeNodes(loadModel(t, loadFixture(t, "ws48900002"), testWfdMain, language), language)
 }
 
 func nodeByID(t *testing.T, nodes []Node, id string) Node {
@@ -34,7 +34,7 @@ func nodeByID(t *testing.T, nodes []Node, id string) Node {
 }
 
 func TestDecode_NodeCountRaw(t *testing.T) {
-	m := loadModel(t, loadFixture(t, "ws48900002"), "WS48900002", "E")
+	m := loadModel(t, loadFixture(t, "ws48900002"), testWfdMain, "E")
 	nodes, _ := decodeNodes(m, "E")
 	if len(nodes) != 53 {
 		t.Errorf("nodes = %d, want 53", len(nodes))
@@ -52,7 +52,7 @@ func TestDecode_NodeCountRaw(t *testing.T) {
 }
 
 func TestDecode_RawEdgeIDs(t *testing.T) {
-	m := loadModel(t, loadFixture(t, "ws48900002"), "WS48900002", "E")
+	m := loadModel(t, loadFixture(t, "ws48900002"), testWfdMain, "E")
 	found := false
 	for _, e := range rawEdges(m) {
 		if e.From == "36" && e.To == "37" {
@@ -112,7 +112,7 @@ func TestDecode_StepAndSubworkflow(t *testing.T) {
 		t.Errorf("node 4 = %+v", n)
 	}
 	n = nodeByID(t, nodes, "18")
-	if n.Kind != "subworkflow" || n.Task != "WS48900024" {
+	if n.Kind != "subworkflow" || n.Task != testWfdSub {
 		t.Errorf("node 18 = %+v", n)
 	}
 }
@@ -184,7 +184,7 @@ func TestDecode_LabelFallbacks(t *testing.T) {
 
 func decodeNodesOf(t *testing.T, tables map[string][]Row, language string) []Node {
 	t.Helper()
-	nodes, _ := decodeNodes(loadModel(t, tables, "WS48900002", language), language)
+	nodes, _ := decodeNodes(loadModel(t, tables, testWfdMain, language), language)
 	return nodes
 }
 
@@ -209,7 +209,7 @@ func TestDecode_LanguageFallback(t *testing.T) {
 
 func TestDecode_TextQueryRestrictsLanguage(t *testing.T) {
 	f := &fakeQuery{tables: loadFixture(t, "ws48900002")}
-	if _, err := loadSWDS(context.Background(), f, "WS48900002", "0001", "E", false); err != nil {
+	if _, err := loadSWDS(context.Background(), f, testWfdMain, "0001", "E", false); err != nil {
 		t.Fatal(err)
 	}
 	n := 0
@@ -258,11 +258,11 @@ func TestDecode_OrphanTextsIgnored(t *testing.T) {
 func TestDecode_UnknownContCmd(t *testing.T) {
 	tables := loadFixture(t, "ws48900002")
 	for _, r := range tables["SWDSMNODES"] {
-		if r["WFD_ID"] == "WS48900002" && r["NODEID"] == "0000000033" {
+		if r["WFD_ID"] == testWfdMain && r["NODEID"] == "0000000033" {
 			r["CONT_CMD"] = "99"
 		}
 	}
-	m := loadModel(t, tables, "WS48900002", "E")
+	m := loadModel(t, tables, testWfdMain, "E")
 	nodes, warnings := decodeNodes(m, "E")
 	if n := nodeByID(t, nodes, "33"); !strings.HasPrefix(n.Operation, "cmd 99") {
 		t.Errorf("node 33 operation = %q", n.Operation)
@@ -278,7 +278,7 @@ func TestDecode_UnknownContCmd(t *testing.T) {
 
 func TestDecode_ChangeInfoVariants(t *testing.T) {
 	m := &rawModel{
-		Model: "SWDS", WfdID: "WS1", Version: "0001", MasterLanguage: "E",
+		Model: modelSWDS, WfdID: "WS1", Version: "0001", MasterLanguage: "E",
 		Nodes: []rawNode{{ID: "0000000001", Type: "IF"}, {ID: "0000000002", Type: "IF"}},
 		Conds: []Row{
 			{"NODEID": "0000000001", "LINE_ID": "000", "LINE_TYP": "", "LEFTEXPR": "620 SAPUSER     20020122162144", "COMPOP": ""},
@@ -339,7 +339,7 @@ func TestDecode_GroupedCondition(t *testing.T) {
 
 func TestDecode_RejectsBadKeys(t *testing.T) {
 	f := &fakeQuery{tables: map[string][]Row{}}
-	for _, c := range [][3]string{{"WS1' OR '1", "0001", "E"}, {"WS48900002", "1", "E"}, {"WS48900002", "0001", "EN"}} {
+	for _, c := range [][3]string{{"WS1' OR '1", "0001", "E"}, {testWfdMain, "1", "E"}, {testWfdMain, "0001", "EN"}} {
 		if _, err := loadSWDS(context.Background(), f, c[0], c[1], c[2], false); err == nil {
 			t.Errorf("loadSWDS(%v) accepted bad input", c)
 		}
@@ -355,7 +355,7 @@ func textOnlyIn(t *testing.T, lang string, extra ...Row) map[string][]Row {
 	t.Helper()
 	tables := loadFixture(t, "ws48900002")
 	tables["SWDSTEXT"] = append([]Row{{
-		"WFD_ID": "WS48900002", "VERSION": "0001", "NODEID": "0000000036", "LANGUAGE": lang,
+		"WFD_ID": testWfdMain, "VERSION": "0001", "NODEID": "0000000036", "LANGUAGE": lang,
 		"TEXTTYP": "ND", "TEXTNUMBER": "0000", "WFD_TEXT": "Déjà révisé ?",
 	}}, extra...)
 	return tables
@@ -373,7 +373,7 @@ func textQueries(f *fakeQuery) int {
 
 func TestDecode_TextFallbackAnyLanguage(t *testing.T) {
 	f := &fakeQuery{tables: textOnlyIn(t, "F")}
-	m, err := loadSWDS(context.Background(), f, "WS48900002", "0001", "E", false)
+	m, err := loadSWDS(context.Background(), f, testWfdMain, "0001", "E", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,10 +387,10 @@ func TestDecode_TextFallbackAnyLanguage(t *testing.T) {
 }
 
 func TestDecode_TextFallbackIgnoresOrphanND(t *testing.T) {
-	orphan := Row{"WFD_ID": "WS48900002", "VERSION": "0001", "NODEID": "0000000070", "LANGUAGE": "E",
+	orphan := Row{"WFD_ID": testWfdMain, "VERSION": "0001", "NODEID": "0000000070", "LANGUAGE": "E",
 		"TEXTTYP": "ND", "TEXTNUMBER": "0000", "WFD_TEXT": "Subflow: Authorization"}
 	f := &fakeQuery{tables: textOnlyIn(t, "F", orphan)}
-	m, err := loadSWDS(context.Background(), f, "WS48900002", "0001", "E", false)
+	m, err := loadSWDS(context.Background(), f, testWfdMain, "0001", "E", false)
 	if err != nil {
 		t.Fatal(err)
 	}

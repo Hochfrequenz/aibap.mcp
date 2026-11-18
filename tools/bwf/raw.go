@@ -19,7 +19,7 @@ type rawModel struct {
 	// types (SWDSMNODES, SWD_MNODES); "SWD" is the runtime-copy model with
 	// 1-character node types (SWD_NODES) and outcomes on the lines.
 	Model                          string
-	TablePrefix                    string // "SWDS" | "SWD_": where the rows were read
+	TablePrefix                    string // modelSWDS | "SWD_": where the rows were read
 	WfdID, Version, MasterLanguage string
 	Language                       string // requested language
 	ActivatedOn                    string

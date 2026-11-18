@@ -18,7 +18,7 @@ var ErrNotFound = errors.New("workflow definition not found")
 var versionRe = regexp.MustCompile(`^\d{4}$`)
 
 type versionInfo struct {
-	WfdID, Version, Source, Tables string // Tables: "SWDS" | "SWD"
+	WfdID, Version, Source, Tables string // Tables: modelSWDS | modelSWD
 	RuntimeWfdID, RuntimeVersion   string
 	HasConfiguration               bool
 	Warnings                       []string
@@ -45,7 +45,7 @@ func resolveVersion(ctx context.Context, q adt.QueryClient, task, requested stri
 	hdr = filterTask(hdr, task)
 
 	if len(hdr) > 0 {
-		info.Tables = "SWDS"
+		info.Tables = modelSWDS
 		if err := chooseSWDS(ctx, q, &info, hdr, task, objid, requested, today); err != nil {
 			return info, err
 		}
@@ -67,8 +67,8 @@ func chooseLegacy(ctx context.Context, q adt.QueryClient, info *versionInfo, tas
 	if len(legacy) == 0 {
 		return fmt.Errorf("%w: no definition for %s in SWDSHEADER, SWD_HEADER", ErrNotFound, task)
 	}
-	info.Tables = "SWD"
-	info.Source = "legacy_client"
+	info.Tables = modelSWD
+	info.Source = sourceLegacy
 	if requested != "" {
 		if len(keepEq(legacy, "VERSION", requested)) == 0 {
 			return fmt.Errorf("version %s of %s not found (available: %s)", requested, task, versionList(legacy))
@@ -128,7 +128,7 @@ func activePointer(ctx context.Context, q adt.QueryClient, info *versionInfo, ob
 		return err
 	}
 	rows = keepEq(keepEq(rows, "OBJID", objid), "ACTIVE", "X")
-	src := "HRS1205"
+	src := srcHRS1205
 	if len(rows) == 0 {
 		rows, err = fetch(ctx, q, fmt.Sprintf(
 			"SELECT objid, wfd_id, version, active, begda, endda FROM hrp1205 WHERE otype = 'WS' AND objid = '%s' AND active = 'X'", objid))
@@ -229,3 +229,12 @@ func versionList(rows []Row) string {
 	sort.Strings(vs)
 	return strings.Join(vs, ", ")
 }
+
+// Names of the node models / table sets and version sources used across the package.
+const (
+	modelSWD      = "SWD"
+	modelSWDS     = "SWDS"
+	sourceRuntime = "runtime"
+	sourceLegacy  = "legacy_client"
+	srcHRS1205    = "HRS1205"
+)

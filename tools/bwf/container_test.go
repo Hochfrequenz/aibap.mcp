@@ -11,7 +11,7 @@ import (
 
 func containerFixture(t *testing.T) *rawModel {
 	t.Helper()
-	return loadModel(t, loadFixture(t, "ws48900002"), "WS48900002", "E")
+	return loadModel(t, loadFixture(t, "ws48900002"), testWfdMain, "E")
 }
 
 func elementByName(t *testing.T, els []ContainerElement, name string) ContainerElement {
@@ -202,7 +202,7 @@ func TestContainer_DescriptionFromWFCTXT(t *testing.T) {
 		{"E", "Form for Absence"},
 		{"D", "Formular zur Abwesenheit"},
 	} {
-		els, _, err := decodeContainer(loadModel(t, tables, "WS48900002", tc.lang))
+		els, _, err := decodeContainer(loadModel(t, tables, testWfdMain, tc.lang))
 		if err != nil {
 			t.Fatalf("decodeContainer(%s): %v", tc.lang, err)
 		}
@@ -215,7 +215,7 @@ func TestContainer_DescriptionFromWFCTXT(t *testing.T) {
 func TestContainer_DescriptionLanguageFallback(t *testing.T) {
 	tables := loadFixture(t, "ws48900002")
 	// No French texts: the master language (from SWDSHEADER) is used.
-	m := loadModel(t, tables, "WS48900002", "F")
+	m := loadModel(t, tables, testWfdMain, "F")
 	els, _, err := decodeContainer(m)
 	if err != nil {
 		t.Fatal(err)
@@ -243,7 +243,7 @@ func TestContainer_DescriptionLanguageFallback(t *testing.T) {
 		hdr = append(hdr, c)
 	}
 	tables["SWDSHEADER"] = hdr
-	els, _, err = decodeContainer(loadModel(t, tables, "WS48900002", "F"))
+	els, _, err = decodeContainer(loadModel(t, tables, testWfdMain, "F"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -29,22 +29,22 @@ func hrs(objid string, vs ...[2]string) []Row {
 
 func TestResolveVersion_HRS1205Active(t *testing.T) {
 	f := &fakeQuery{tables: map[string][]Row{
-		"HRS1205":    hrs("00400012", [2]string{"0003", "X"}),
-		"SWDSHEADER": hdrs("WS00400012", "0000", "0001", "0002", "0003", "9999"),
+		testSourceHRS: hrs("00400012", [2]string{"0003", "X"}),
+		"SWDSHEADER":  hdrs("WS00400012", "0000", "0001", "0002", "0003", "9999"),
 	}}
 	got, err := resolveVersion(context.Background(), f, "WS00400012", "", testToday)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Version != "0003" || got.Source != "HRS1205" || got.Tables != "SWDS" || len(got.Warnings) != 0 {
+	if got.Version != "0003" || got.Source != testSourceHRS || got.Tables != modelSWDS || len(got.Warnings) != 0 {
 		t.Errorf("got %+v", got)
 	}
 }
 
 func TestResolveVersion_HRS1205MultipleRowsOneActive(t *testing.T) {
 	f := &fakeQuery{tables: map[string][]Row{
-		"HRS1205":    hrs("00400012", [2]string{"0000", ""}, [2]string{"0001", ""}, [2]string{"0003", "X"}),
-		"SWDSHEADER": hdrs("WS00400012", "0000", "0001", "0003"),
+		testSourceHRS: hrs("00400012", [2]string{"0000", ""}, [2]string{"0001", ""}, [2]string{"0003", "X"}),
+		"SWDSHEADER":  hdrs("WS00400012", "0000", "0001", "0003"),
 	}}
 	got, err := resolveVersion(context.Background(), f, "WS00400012", "", testToday)
 	if err != nil || got.Version != "0003" {
@@ -54,8 +54,8 @@ func TestResolveVersion_HRS1205MultipleRowsOneActive(t *testing.T) {
 
 func TestResolveVersion_HRS1205TwoActive(t *testing.T) {
 	f := &fakeQuery{tables: map[string][]Row{
-		"HRS1205":    hrs("00400012", [2]string{"0001", "X"}, [2]string{"0002", "X"}),
-		"SWDSHEADER": hdrs("WS00400012", "0001", "0002"),
+		testSourceHRS: hrs("00400012", [2]string{"0001", "X"}, [2]string{"0002", "X"}),
+		"SWDSHEADER":  hdrs("WS00400012", "0001", "0002"),
 	}}
 	got, err := resolveVersion(context.Background(), f, "WS00400012", "", testToday)
 	if err != nil || got.Version != "0002" {
@@ -68,8 +68,8 @@ func TestResolveVersion_HRS1205TwoActive(t *testing.T) {
 
 func TestResolveVersion_Active9999(t *testing.T) {
 	f := &fakeQuery{tables: map[string][]Row{
-		"HRS1205":    hrs("00400012", [2]string{"9999", "X"}),
-		"SWDSHEADER": hdrs("WS00400012", "0000", "9999"),
+		testSourceHRS: hrs("00400012", [2]string{"9999", "X"}),
+		"SWDSHEADER":  hdrs("WS00400012", "0000", "9999"),
 	}}
 	got, err := resolveVersion(context.Background(), f, "WS00400012", "", testToday)
 	if err != nil || got.Version != "9999" {
@@ -120,7 +120,7 @@ func TestResolveVersion_LegacyClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.WfdID != "0040000064" || got.Tables != "SWD" || got.Source != "legacy_client" || got.Version != "0001" {
+	if got.WfdID != "0040000064" || got.Tables != modelSWD || got.Source != sourceLegacy || got.Version != "0001" {
 		t.Errorf("got %+v", got)
 	}
 }
@@ -138,14 +138,14 @@ func TestResolveVersion_NotFound(t *testing.T) {
 
 func TestResolveRuntime(t *testing.T) {
 	f := &fakeQuery{tables: map[string][]Row{"SWD_HEADER": {
-		{"WFD_ID": "WS48900002", "TASK": "WS48900002", "VERSION": "0000", "EXETYP": "E"},
+		{"WFD_ID": testWfdMain, "TASK": testWfdMain, "VERSION": "0000", "EXETYP": "E"},
 	}}}
-	id, v, cfg, err := resolveRuntime(context.Background(), f, "WS48900002")
-	if err != nil || id != "WS48900002" || v != "0000" || cfg {
+	id, v, cfg, err := resolveRuntime(context.Background(), f, testWfdMain)
+	if err != nil || id != testWfdMain || v != "0000" || cfg {
 		t.Errorf("got %q %q %v %v", id, v, cfg, err)
 	}
-	f.tables["SWD_HEADER"] = append(f.tables["SWD_HEADER"], Row{"WFD_ID": "WS48900002", "TASK": "WS48900002", "VERSION": "0000", "EXETYP": "C"})
-	_, _, cfg, err = resolveRuntime(context.Background(), f, "WS48900002")
+	f.tables["SWD_HEADER"] = append(f.tables["SWD_HEADER"], Row{"WFD_ID": testWfdMain, "TASK": testWfdMain, "VERSION": "0000", "EXETYP": "C"})
+	_, _, cfg, err = resolveRuntime(context.Background(), f, testWfdMain)
 	if err != nil || !cfg {
 		t.Errorf("hasConfig = %v, %v", cfg, err)
 	}

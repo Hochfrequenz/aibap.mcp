@@ -104,7 +104,7 @@ func buildDefinition(ctx context.Context, q adt.QueryClient, opts Options, task 
 	}
 	var info versionInfo
 	var err error
-	if task == opts.Task && opts.Source == "runtime" {
+	if task == opts.Task && opts.Source == sourceRuntime {
 		info, err = runtimeVersion(ctx, q, task, requested)
 	} else {
 		info, err = resolveVersion(ctx, q, task, requested, opts.Today)
@@ -114,9 +114,9 @@ func buildDefinition(ctx context.Context, q adt.QueryClient, opts Options, task 
 	}
 	var m *rawModel
 	switch {
-	case info.Source == "runtime":
+	case info.Source == sourceRuntime:
 		m, err = loadSWD(ctx, q, info.WfdID, info.Version, "E", opts.Language, opts.Container)
-	case info.Tables == "SWD":
+	case info.Tables == modelSWD:
 		m, err = loadSWD(ctx, q, info.WfdID, info.Version, "S", opts.Language, opts.Container)
 	default:
 		m, err = loadSWDS(ctx, q, info.WfdID, info.Version, opts.Language, opts.Container)
@@ -127,7 +127,7 @@ func buildDefinition(ctx context.Context, q adt.QueryClient, opts Options, task 
 	nodes, warnings := decodeNodes(m, opts.Language)
 	edges := rawEdges(m)
 	switch {
-	case m.Model == "SWD":
+	case m.Model == modelSWD:
 		nodes, edges = finishRuntime(m, nodes, edges, opts.Raw)
 	case !opts.Raw:
 		nodes, edges = collapse(m, nodes, edges)
@@ -188,7 +188,7 @@ func runtimeVersion(ctx context.Context, q adt.QueryClient, task, requested stri
 	if requested != "" && requested != version {
 		return info, fmt.Errorf("the runtime copy of %s in the logon client is version %s, not %s", task, version, requested)
 	}
-	return versionInfo{WfdID: wfdID, Version: version, Source: "runtime", Tables: "SWD",
+	return versionInfo{WfdID: wfdID, Version: version, Source: sourceRuntime, Tables: modelSWD,
 		RuntimeWfdID: wfdID, RuntimeVersion: version, HasConfiguration: hasConfig}, nil
 }
 
