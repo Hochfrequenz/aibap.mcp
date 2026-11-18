@@ -185,33 +185,46 @@ func operationOf(cmd string, ex map[string]string) (string, string) {
 	return op, "unknown container operation command " + cmd
 }
 
-// conditionOf renders the SWDSCONDEF lines of one node. The header line 000 and
-// change-info rows (empty COMPOP) are dropped; LOGOP of a line joins it to the
-// previous one.
+// conditionOf renders the SWDSCONDEF lines of one node. Only expression ('-')
+// and parenthesis ('(' / ')') lines count; the parse-tree line ('E') and the
+// change-info line ('') are dropped wherever they sit. A line's LOGOP joins it
+// to the next item; a ')' line carries the operator after its group, and the
+// RIGHTEXPR of a parenthesis line is a comment.
 func conditionOf(rows []Row) string {
 	var lines []Row
 	for _, r := range rows {
-		if r["LINE_ID"] == "000" || r["COMPOP"] == "" {
-			continue
+		switch r["LINE_TYP"] {
+		case "-", "(", ")":
+			lines = append(lines, r)
 		}
-		lines = append(lines, r)
 	}
 	sort.SliceStable(lines, func(i, j int) bool { return lines[i]["LINE_ID"] < lines[j]["LINE_ID"] })
-	var b strings.Builder
-	for i, r := range lines {
-		if i > 0 {
-			op := strings.ToUpper(r["LOGOP"])
-			if op == "" {
-				op = "AND"
-			}
-			b.WriteString(" " + op + " ")
-		}
+	var parts []string
+	pending := ""
+	for _, r := range lines {
+		not := ""
 		if r["NOTFLAG"] != "" {
-			b.WriteString("NOT ")
+			not = "NOT "
 		}
-		b.WriteString(comparison(r))
+		switch r["LINE_TYP"] {
+		case ")":
+			parts = append(parts, ")")
+		case "(":
+			if pending != "" {
+				parts = append(parts, pending)
+			}
+			parts = append(parts, not+"(")
+			pending = ""
+			continue
+		default:
+			if pending != "" {
+				parts = append(parts, pending)
+			}
+			parts = append(parts, not+comparison(r))
+		}
+		pending = strings.ToUpper(r["LOGOP"])
 	}
-	return b.String()
+	return strings.Join(parts, " ")
 }
 
 func comparison(r Row) string {

@@ -301,13 +301,39 @@ func TestDecode_ConditionJoin(t *testing.T) {
 	m := &rawModel{
 		Nodes: []rawNode{{ID: "0000000001", Type: "IF"}},
 		Conds: []Row{
-			{"NODEID": "0000000001", "LINE_ID": "002", "LINE_TYP": "-", "LEFTEXPR": "&B&", "COMPOP": "EX", "LOGOP": "or", "NOTFLAG": "X"},
-			{"NODEID": "0000000001", "LINE_ID": "001", "LINE_TYP": "-", "LEFTEXPR": "&A&", "COMPOP": "=", "RIGHTEXPR": "1", "LOGOP": "and"},
+			{"NODEID": "0000000001", "LINE_ID": "002", "LINE_TYP": "-", "LEFTEXPR": "&B&", "COMPOP": "EX", "LOGOP": "and", "NOTFLAG": "X"},
+			{"NODEID": "0000000001", "LINE_ID": "001", "LINE_TYP": "-", "LEFTEXPR": "&A&", "COMPOP": "=", "RIGHTEXPR": "1", "LOGOP": "or"},
 		},
 	}
 	nodes, _ := decodeNodes(m, "E")
 	if c := nodes[0].Condition; c != "&A& = 1 OR NOT &B& is filled" {
 		t.Errorf("condition = %q", c)
+	}
+}
+
+func TestDecode_GroupedCondition(t *testing.T) {
+	line := func(id, typ, left, op, right, logop string) Row {
+		return Row{"NODEID": "0000000007", "LINE_ID": id, "LINE_TYP": typ, "LEFTEXPR": left,
+			"COMPOP": op, "RIGHTEXPR": right, "LOGOP": logop}
+	}
+	m := &rawModel{
+		Nodes: []rawNode{{ID: "0000000007", Type: "IF"}},
+		Conds: []Row{
+			line("000", "", "702 SAPUSER     20200101120000702 SAPUSER     20200101120000E0001", "", "", ""),
+			line("001", "-", "&LOCK_ERROR&", "=", "'X'{TYPE=MDC_BOOLE_D}", "or"),
+			line("002", "-", "&PROCESS_ERROR&", "=", "'X'{TYPE=MDC_BOOLE_D}", "or"),
+			line("003", "(", "(", "", "Step finished", ""),
+			line("004", "-", "&STEP_STATUS&", "=", "'4'{TYPE=CHAR1}", "and"),
+			line("005", "-", "&FINALIZING_AT&", ">", "19000101000000", ""),
+			line("006", ")", ")", "", "comment", "or"),
+			line("007", "-", "&SPLIT_PROCESS&", "=", "'X'{TYPE=BOOLE_D}", ""),
+			line("008", "E", "001EXPE002EXPB001or E004EXP", "", "", ""),
+		},
+	}
+	nodes, _ := decodeNodes(m, "E")
+	want := "&LOCK_ERROR& = 'X' OR &PROCESS_ERROR& = 'X' OR ( &STEP_STATUS& = '4' AND &FINALIZING_AT& > 19000101000000 ) OR &SPLIT_PROCESS& = 'X'"
+	if c := nodes[0].Condition; c != want {
+		t.Errorf("condition = %q, want %q", c, want)
 	}
 }
 
