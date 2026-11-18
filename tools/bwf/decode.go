@@ -187,7 +187,7 @@ func operationOf(cmd string, ex map[string]string) (string, string) {
 
 // conditionOf renders the SWDSCONDEF lines of one node. Only expression ('-')
 // and parenthesis ('(' / ')') lines count; the parse-tree line ('E') and the
-// change-info line ('') are dropped wherever they sit. A line's LOGOP joins it
+// change-info line (empty LINE_TYP) are dropped wherever they sit. A line's LOGOP joins it
 // to the next item; a ')' line carries the operator after its group, and the
 // RIGHTEXPR of a parenthesis line is a comment.
 func conditionOf(rows []Row) string {
