@@ -19,7 +19,8 @@ var (
 var excludedExprTypes = map[string]bool{"037": true, "038": true, "039": true, "040": true}
 
 // loadSWDS reads one client-independent definition version from the SWDS* tables.
-// Bindings and container rows are only read when withContainer is set.
+// Bindings, container XML and element texts are only read when withContainer
+// is set; the container index (SWDSCNTIDX) is always read for constant resolution.
 func loadSWDS(ctx context.Context, q adt.QueryClient, wfdID, version, language string, withContainer bool) (*rawModel, error) {
 	if err := validateKeys(wfdID, version, language); err != nil {
 		return nil, err
@@ -65,9 +66,9 @@ func newLoader(ctx context.Context, q adt.QueryClient, prefix, exetyp, wfdID, ve
 // table returns the table name for a suffix: "text" → "swdstext" or "swd_text".
 func (l swdsLoader) table(suffix string) string { return l.prefix + suffix }
 
-// load reads the header, nodes, lines, texts, conditions, expressions and,
-// with withContainer, bindings and container rows into m. nodes and lines
-// read the node model of the definition.
+// load reads the header, nodes, lines, texts, conditions, expressions, the
+// container index and, with withContainer, bindings, container XML and
+// element texts into m. nodes and lines read the node model of the definition.
 func (l swdsLoader) load(m *rawModel, withContainer bool, nodes func() ([]rawNode, error), lines func() ([]rawLine, error)) error {
 	language := m.Language
 	hdr, err := l.rows("SELECT wfd_id, version, language, activat_on FROM " + l.table("header"))
@@ -94,11 +95,13 @@ func (l swdsLoader) load(m *rawModel, withContainer bool, nodes func() ([]rawNod
 	if m.Exprs, err = l.exprs(); err != nil {
 		return err
 	}
+	// The container index is read even without withContainer: constant
+	// resolution needs the class type of each container element.
+	if m.CntIdx, err = l.rows("SELECT otype, objid, wfd_id, version, element, typeid, catid, typekind, typename FROM " + l.table("cntidx")); err != nil {
+		return err
+	}
 	if withContainer {
 		if m.Bindings, err = l.rows("SELECT wfd_id, version, nodeid, bindtype, dataflow, element, expr FROM " + l.table("bindef")); err != nil {
-			return err
-		}
-		if m.CntIdx, err = l.rows("SELECT otype, objid, wfd_id, version, element, typeid, catid, typekind, typename FROM " + l.table("cntidx")); err != nil {
 			return err
 		}
 		if m.ContXML, err = l.container(); err != nil {

@@ -185,12 +185,76 @@ func TestRenderMermaid_Escapes(t *testing.T) {
 	}
 }
 
-func TestGet_DepthClamped(t *testing.T) {
+func TestClampDepth(t *testing.T) {
+	for in, want := range map[int]int{99: maxDepth, 6: maxDepth, 5: 5, 3: 3, 0: 0, -1: 0} {
+		if got := clampDepth(in); got != want {
+			t.Errorf("clampDepth(%d) = %d, want %d", in, got, want)
+		}
+	}
+}
+
+func TestGet_ContainerOffStillResolvesConstants(t *testing.T) {
+	f := getFake(t)
+	conds := make([]Row, 0, len(f.tables["SWDSCONDEF"]))
+	for _, r := range f.tables["SWDSCONDEF"] {
+		c := Row{}
+		for k, v := range r {
+			c[k] = v
+		}
+		if c["NODEID"] == "0000000010" && c["LINE_TYP"] == "-" {
+			c["RIGHTEXPR"] = "&CONSTANTS.GC_ABAP_TRUE&"
+		}
+		conds = append(conds, c)
+	}
+	f.tables["SWDSCONDEF"] = conds
+	f.tables["SWDSCNTIDX"] = append(f.tables["SWDSCNTIDX"], Row{"OTYPE": "WS", "OBJID": "48900002",
+		"WFD_ID": testWfdMain, "VERSION": "0001", "ELEMENT": "CONSTANTS", "TYPEID": "/ABC/CL_EXAMPLE",
+		"CATID": "CL", "TYPEKIND": "r", "TYPENAME": ""})
+	cls := loadFixture(t, "constants_class")
+	f.tables["SEOCOMPODF"], f.tables["SEOMETAREL"] = cls["SEOCOMPODF"], cls["SEOMETAREL"]
+
 	o := getOpts(testWfdMain)
-	o.Depth = 99
-	if _, err := Get(t.Context(), getFake(t), o); err != nil {
+	o.Container = false
+	o.Raw = true
+	res, err := Get(t.Context(), f, o)
+	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
+	var n *Node
+	for i := range res.Nodes {
+		if res.Nodes[i].ID == "10" {
+			n = &res.Nodes[i]
+		}
+	}
+	if n == nil {
+		t.Fatalf("node 10 missing")
+	}
+	if n.Condition != "&FLAG& = &CONSTANTS.GC_ABAP_TRUE&" || n.ConditionResolved != "&FLAG& = 'X'" {
+		t.Errorf("condition = %q, resolved = %q", n.Condition, n.ConditionResolved)
+	}
+	if len(res.UnresolvedConstants) != 0 {
+		t.Errorf("unresolved = %v", res.UnresolvedConstants)
+	}
+	if len(res.Container) != 0 {
+		t.Errorf("Container = %+v, want empty", res.Container)
+	}
+}
+
+func TestGet_CalleePointerToMissingVersion(t *testing.T) {
+	f := getFake(t)
+	ptr := make([]Row, 0, len(f.tables[testSourceHRS]))
+	for _, r := range f.tables[testSourceHRS] {
+		c := Row{}
+		for k, v := range r {
+			c[k] = v
+		}
+		if c["WFD_ID"] == testWfdSub {
+			c["VERSION"] = "0007"
+		}
+		ptr = append(ptr, c)
+	}
+	f.tables[testSourceHRS] = ptr
+	requireUnresolvedSub(t, f, testWfdSub)
 }
 
 func TestGet_EmptySlicesSerialiseAsArrays(t *testing.T) {

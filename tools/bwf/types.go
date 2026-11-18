@@ -4,9 +4,9 @@ import "time"
 
 // Options controls a workflow definition read.
 type Options struct {
-	Task      string // normalised WS…
+	Task      string // workflow task ID, normalised to WS + 8 digits
 	Version   string // "" = active
-	Source    string // "definition" | sourceRuntime
+	Source    string // "definition" | "runtime"
 	Depth     int    // 0..5
 	Language  string // SAP 1-char, default "E"
 	Raw       bool
@@ -21,7 +21,10 @@ type Result struct {
 	Subworkflows []Subworkflow `json:"subworkflows"`
 }
 
-// Definition is one decoded workflow definition.
+// Definition is one decoded workflow definition. WfdID is the internal
+// definition ID (SWDSHEADER/SWD_HEADER WFD_ID); it equals the task ID except
+// for legacy definitions, which have numeric IDs such as 0040000064. Task is
+// the workflow task ID (WS + 8 digits).
 type Definition struct {
 	WfdID               string             `json:"wfd_id"`
 	Task                string             `json:"task"`
@@ -91,13 +94,15 @@ type ContainerElement struct {
 	Props        string `json:"props"`
 }
 
-// Call is a subworkflow call from a node.
+// Call is a subworkflow call from a node. WfdID is the task ID (WS + 8
+// digits) of the called workflow, not its internal definition ID.
 type Call struct {
 	Node  string `json:"node"`
 	WfdID string `json:"wfd_id"`
 }
 
-// Subworkflow is a resolved called workflow.
+// Subworkflow is a resolved called workflow. WfdID is its task ID (WS + 8
+// digits); Definition.WfdID holds the internal definition ID.
 type Subworkflow struct {
 	WfdID      string      `json:"wfd_id"`
 	Found      bool        `json:"found"`

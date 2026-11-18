@@ -268,3 +268,38 @@ func TestContainer_DescriptionShortTextFallsBackToDescript(t *testing.T) {
 		t.Errorf("description = %q, want DESCRIPT", got)
 	}
 }
+
+func TestContainer_CorruptHexNamesClientTable(t *testing.T) {
+	m := &rawModel{TablePrefix: "SWD_", ContXML: []Row{{"TABIX": "000001", "LENGTH": "4", "DATA": "XYZ1"}}}
+	_, _, err := decodeContainer(m)
+	if err == nil || !strings.Contains(err.Error(), "SWD_CONT") {
+		t.Fatalf("err = %v, want error mentioning SWD_CONT", err)
+	}
+}
+
+func TestContainer_MissingXMLWarningNamesClientTable(t *testing.T) {
+	m := &rawModel{TablePrefix: "SWD_", CntIdx: []Row{{"OTYPE": "WS", "ELEMENT": "A"}}}
+	_, warnings, err := decodeContainer(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "SWD_CONT") {
+		t.Errorf("warnings = %v, want one naming SWD_CONT", warnings)
+	}
+}
+
+func TestContainer_XMLOnlyElementWithoutNameSkipped(t *testing.T) {
+	xml := `<?xml version="1.0" encoding="utf-8"?><asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">` +
+		`<asx:values><ELMT>` +
+		`<SWFDELMDEFXML><NAME>KEEP</NAME><TYPE>::SYST-INDEX:I:0:0</TYPE></SWFDELMDEFXML>` +
+		`<SWFDELMDEFXML><NAME></NAME><TYPE>::SYST-INDEX:I:0:0</TYPE></SWFDELMDEFXML>` +
+		`<SWFDELMDEFXML><TYPE>::SYST-INDEX:I:0:0</TYPE></SWFDELMDEFXML>` +
+		`</ELMT></asx:values></asx:abap>`
+	els, _, err := decodeContainer(&rawModel{ContXML: hexRows(xml, 100)})
+	if err != nil {
+		t.Fatalf("decodeContainer: %v", err)
+	}
+	if len(els) != 1 || els[0].Name != "KEEP" {
+		t.Errorf("elements = %+v, want only KEEP", els)
+	}
+}

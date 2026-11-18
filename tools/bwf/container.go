@@ -29,10 +29,12 @@ type xmlElement struct {
 }
 
 // decodeContainer builds the workflow container element list from the
-// SWDSCNTIDX rows (OTYPE 'WS'), enriched from the SWDSCONT container XML.
-// Elements only present in the XML are added. Missing XML yields the index
-// elements and a warning; undecodable hex DATA is an error.
+// container index rows (SWDSCNTIDX / SWD_CNTIDX, OTYPE 'WS'), enriched from the
+// container XML (SWDSCONT / SWD_CONT). Elements only present in the XML are
+// added unless their NAME is empty. Missing XML yields the index elements and
+// a warning; undecodable hex DATA is an error.
 func decodeContainer(m *rawModel) ([]ContainerElement, []string, error) {
+	cont := contTable(m)
 	warnings := []string{}
 	byName := map[string]*ContainerElement{}
 	for _, r := range m.CntIdx {
@@ -47,21 +49,24 @@ func decodeContainer(m *rawModel) ([]ContainerElement, []string, error) {
 
 	if len(m.ContXML) == 0 {
 		if len(byName) > 0 {
-			warnings = append(warnings, "container XML (SWDSCONT) not found: element descriptions, flags and initial values unavailable")
+			warnings = append(warnings, fmt.Sprintf("container XML (%s) not found: element descriptions, flags and initial values unavailable", cont))
 		}
 		return sortedElements(byName, m), warnings, nil
 	}
-	raw, err := concatContainerData(m.ContXML)
+	raw, err := concatContainerData(cont, m.ContXML)
 	if err != nil {
 		return nil, nil, err
 	}
 	xmlEls, err := parseContainerXML(raw)
 	if err != nil {
-		warnings = append(warnings, fmt.Sprintf("container XML (SWDSCONT) not parseable: %v", err))
+		warnings = append(warnings, fmt.Sprintf("container XML (%s) not parseable: %v", cont, err))
 		return sortedElements(byName, m), warnings, nil
 	}
 
 	for _, x := range xmlEls {
+		if x.Name == "" {
+			continue
+		}
 		e, ok := byName[x.Name]
 		if !ok {
 			e = elementFromType(x.Name, x.Type)
@@ -123,20 +128,29 @@ func sortedElements(byName map[string]*ContainerElement, m *rawModel) []Containe
 	return out
 }
 
+// contTable names the container XML table the model was read from.
+func contTable(m *rawModel) string {
+	if m.TablePrefix == "" {
+		return "SWDSCONT"
+	}
+	return m.TablePrefix + "CONT"
+}
+
 // concatContainerData hex-decodes each row's DATA, keeps its first LENGTH
 // bytes, concatenates the rows in TABIX order and trims trailing padding.
-func concatContainerData(rows []Row) ([]byte, error) {
+// table names the source table in errors.
+func concatContainerData(table string, rows []Row) ([]byte, error) {
 	sorted := append([]Row(nil), rows...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i]["TABIX"] < sorted[j]["TABIX"] })
 	var buf bytes.Buffer
 	for _, r := range sorted {
 		b, err := hex.DecodeString(r["DATA"])
 		if err != nil {
-			return nil, fmt.Errorf("SWDSCONT TABIX %s: invalid hex DATA: %w", r["TABIX"], err)
+			return nil, fmt.Errorf("%s TABIX %s: invalid hex DATA: %w", table, r["TABIX"], err)
 		}
 		n, err := strconv.Atoi(strings.TrimSpace(r["LENGTH"]))
 		if err != nil || n < 0 {
-			return nil, fmt.Errorf("SWDSCONT TABIX %s: invalid LENGTH %q", r["TABIX"], r["LENGTH"])
+			return nil, fmt.Errorf("%s TABIX %s: invalid LENGTH %q", table, r["TABIX"], r["LENGTH"])
 		}
 		if n > len(b) {
 			n = len(b)

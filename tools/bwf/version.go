@@ -17,9 +17,11 @@ var ErrNotFound = errors.New("workflow definition not found")
 
 var versionRe = regexp.MustCompile(`^\d{4}$`)
 
+// versionInfo is the outcome of version resolution. Tables is "SWDS" or
+// "SWD"; Source is one of the Definition.VersionSource values.
 type versionInfo struct {
-	WfdID, Version, Source, Tables string // Tables: modelSWDS | modelSWD
-	RuntimeWfdID, RuntimeVersion   string
+	WfdID, Version, Source, Tables string
+	RuntimeVersion                 string
 	HasConfiguration               bool
 	Warnings                       []string
 }
@@ -53,7 +55,7 @@ func resolveVersion(ctx context.Context, q adt.QueryClient, task, requested stri
 		return info, err
 	}
 
-	info.RuntimeWfdID, info.RuntimeVersion, info.HasConfiguration, err = resolveRuntime(ctx, q, task)
+	_, info.RuntimeVersion, info.HasConfiguration, err = resolveRuntime(ctx, q, task)
 	return info, err
 }
 
@@ -115,7 +117,7 @@ func chooseSWDS(ctx context.Context, q adt.QueryClient, info *versionInfo, hdr [
 			return nil
 		}
 	}
-	return fmt.Errorf("version %s of %s not found in SWDSHEADER (available: %s)", info.Version, task, versionList(hdr))
+	return fmt.Errorf("%w: version %s of %s not in SWDSHEADER (available: %s)", ErrNotFound, info.Version, task, versionList(hdr))
 }
 
 // activePointer fills info.Version/Source from HRS1205, else HRP1205. It leaves

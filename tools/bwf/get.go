@@ -14,9 +14,6 @@ const maxDepth = 5
 // ErrInvalidTask marks a called workflow whose id is not a valid WS task id.
 var ErrInvalidTask = errors.New("invalid workflow task id")
 
-// ErrUnsupported marks a definition that exists but cannot be read yet.
-var ErrUnsupported = errors.New("workflow definition not supported")
-
 // Get reads the workflow definition for opts.Task and, up to opts.Depth
 // levels, the sub-workflows it calls.
 func Get(ctx context.Context, q adt.QueryClient, opts Options) (*Result, error) {
@@ -31,7 +28,7 @@ func Get(ctx context.Context, q adt.QueryClient, opts Options) (*Result, error) 
 	if opts.Today.IsZero() {
 		opts.Today = time.Now()
 	}
-	opts.Depth = min(max(opts.Depth, 0), maxDepth)
+	opts.Depth = clampDepth(opts.Depth)
 
 	rootDef, err := buildDefinition(ctx, q, opts, task)
 	if err != nil {
@@ -66,7 +63,7 @@ func Get(ctx context.Context, q adt.QueryClient, opts Options) (*Result, error) 
 			order = append(order, s)
 			def, err := buildDefinition(ctx, q, opts, c.WfdID)
 			switch {
-			case errors.Is(err, ErrNotFound), errors.Is(err, ErrInvalidTask), errors.Is(err, ErrUnsupported):
+			case errors.Is(err, ErrNotFound), errors.Is(err, ErrInvalidTask):
 				root.Warnings = append(root.Warnings, fmt.Sprintf(
 					"called workflow %s (node %s of %s) could not be resolved: %v", c.WfdID, c.Node, cur.def.Task, err))
 			case err != nil:
@@ -83,6 +80,9 @@ func Get(ctx context.Context, q adt.QueryClient, opts Options) (*Result, error) 
 	res.normalise()
 	return res, nil
 }
+
+// clampDepth limits the requested sub-workflow depth to 0..maxDepth.
+func clampDepth(d int) int { return min(max(d, 0), maxDepth) }
 
 func appendUnique(list []string, v string) []string {
 	for _, x := range list {
@@ -189,7 +189,7 @@ func runtimeVersion(ctx context.Context, q adt.QueryClient, task, requested stri
 		return info, fmt.Errorf("the runtime copy of %s in the logon client is version %s, not %s", task, version, requested)
 	}
 	return versionInfo{WfdID: wfdID, Version: version, Source: sourceRuntime, Tables: modelSWD,
-		RuntimeWfdID: wfdID, RuntimeVersion: version, HasConfiguration: hasConfig}, nil
+		RuntimeVersion: version, HasConfiguration: hasConfig}, nil
 }
 
 // workflowTitle reads the workflow's short text from HRS1000, else HRP1000.

@@ -202,3 +202,17 @@ func TestResolveVersion_LegacyDuplicateWfdIDs(t *testing.T) {
 		t.Errorf("got %+v", got)
 	}
 }
+
+func TestResolveVersion_PointerToMissingVersionIsNotFound(t *testing.T) {
+	f := &fakeQuery{tables: map[string][]Row{
+		testSourceHRS: hrs("00400012", [2]string{"0007", "X"}),
+		"SWDSHEADER":  hdrs("WS00400012", "0001", "0002"),
+	}}
+	_, err := resolveVersion(context.Background(), f, "WS00400012", "", testToday)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+	if !strings.Contains(err.Error(), "0007") || !strings.Contains(err.Error(), "0001, 0002") {
+		t.Errorf("err = %v, want requested and available versions", err)
+	}
+}
