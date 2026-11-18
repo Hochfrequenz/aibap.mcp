@@ -330,5 +330,15 @@
   {"LANGUAGE": "E", "NODEID": "0000000115", "TEXTNUMBER": "0000", "TEXTTYP": "ND", "VERSION": "0001", "WFD_ID": "WS48900002", "WFD_TEXT": "Triggered"},
   {"LANGUAGE": "E", "NODEID": "0000000117", "TEXTNUMBER": "0000", "TEXTTYP": "ND", "VERSION": "0001", "WFD_ID": "WS48900002", "WFD_TEXT": "Delete Notification of Absence"},
   {"LANGUAGE": "E", "NODEID": "0000000120", "TEXTNUMBER": "0000", "TEXTTYP": "ND", "VERSION": "0001", "WFD_ID": "WS48900002", "WFD_TEXT": "Form deleted"}
+ ],
+ "SWDSWFCTXT": [
+  {"CNT_TYPE": "", "DESCRIPT": "Abwesenheit", "ELEMENT": "ABSENCFORM", "LANGUAGE": "D", "NODEID": "0000000000", "SHORTTEXT": "Formular zur Abwesenheit", "VERSION": "0001", "WFD_ID": "WS48900002"},
+  {"CNT_TYPE": "", "DESCRIPT": "Zähler", "ELEMENT": "COUNTER", "LANGUAGE": "D", "NODEID": "0000000000", "SHORTTEXT": "Schleifenzähler", "VERSION": "0001", "WFD_ID": "WS48900002"},
+  {"CNT_TYPE": "", "DESCRIPT": "Kennzeichen", "ELEMENT": "FLAG", "LANGUAGE": "D", "NODEID": "0000000000", "SHORTTEXT": "Kennzeichen Schleifenende", "VERSION": "0001", "WFD_ID": "WS48900002"},
+  {"CNT_TYPE": "", "DESCRIPT": "Ergebnis", "ELEMENT": "RESULT", "LANGUAGE": "D", "NODEID": "0000000000", "SHORTTEXT": "Ergebniselement", "VERSION": "0001", "WFD_ID": "WS48900002"},
+  {"CNT_TYPE": "", "DESCRIPT": "Absence", "ELEMENT": "ABSENCFORM", "LANGUAGE": "E", "NODEID": "0000000000", "SHORTTEXT": "Form for Absence", "VERSION": "0001", "WFD_ID": "WS48900002"},
+  {"CNT_TYPE": "", "DESCRIPT": "Counter", "ELEMENT": "COUNTER", "LANGUAGE": "E", "NODEID": "0000000000", "SHORTTEXT": "Loop Counter", "VERSION": "0001", "WFD_ID": "WS48900002"},
+  {"CNT_TYPE": "", "DESCRIPT": "Flag", "ELEMENT": "FLAG", "LANGUAGE": "E", "NODEID": "0000000000", "SHORTTEXT": "Indicator for End of Loop", "VERSION": "0001", "WFD_ID": "WS48900002"},
+  {"CNT_TYPE": "", "DESCRIPT": "Result", "ELEMENT": "RESULT", "LANGUAGE": "E", "NODEID": "0000000000", "SHORTTEXT": "Result Element", "VERSION": "0001", "WFD_ID": "WS48900002"}
  ]
 }

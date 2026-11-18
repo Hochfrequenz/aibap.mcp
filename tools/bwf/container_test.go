@@ -195,3 +195,76 @@ func TestContainer_EmptyModel(t *testing.T) {
 		t.Errorf("warnings = %v, want none for an empty container", warnings)
 	}
 }
+
+func TestContainer_DescriptionFromWFCTXT(t *testing.T) {
+	tables := loadFixture(t, "ws48900002")
+	for _, tc := range []struct{ lang, want string }{
+		{"E", "Form for Absence"},
+		{"D", "Formular zur Abwesenheit"},
+	} {
+		els, _, err := decodeContainer(loadModel(t, tables, "WS48900002", tc.lang))
+		if err != nil {
+			t.Fatalf("decodeContainer(%s): %v", tc.lang, err)
+		}
+		if got := elementByName(t, els, "ABSENCFORM").Description; got != tc.want {
+			t.Errorf("language %s: description = %q, want %q", tc.lang, got, tc.want)
+		}
+	}
+}
+
+func TestContainer_DescriptionLanguageFallback(t *testing.T) {
+	tables := loadFixture(t, "ws48900002")
+	// No French texts: the master language (from SWDSHEADER) is used.
+	m := loadModel(t, tables, "WS48900002", "F")
+	els, _, err := decodeContainer(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"D": "Formular zur Abwesenheit", "E": "Form for Absence"}[m.MasterLanguage]
+	if got := elementByName(t, els, "ABSENCFORM").Description; got != want {
+		t.Errorf("description = %q, want master-language text %q", got, want)
+	}
+
+	// Neither requested nor master language present: any language is used.
+	var onlyD []Row
+	for _, r := range tables["SWDSWFCTXT"] {
+		if r["LANGUAGE"] == "D" {
+			onlyD = append(onlyD, r)
+		}
+	}
+	tables["SWDSWFCTXT"] = onlyD
+	hdr := make([]Row, 0, len(tables["SWDSHEADER"]))
+	for _, r := range tables["SWDSHEADER"] {
+		c := Row{}
+		for k, v := range r {
+			c[k] = v
+		}
+		c["LANGUAGE"] = "E"
+		hdr = append(hdr, c)
+	}
+	tables["SWDSHEADER"] = hdr
+	els, _, err = decodeContainer(loadModel(t, tables, "WS48900002", "F"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := elementByName(t, els, "COUNTER").Description; got != "Schleifenzähler" {
+		t.Errorf("description = %q, want any-language text", got)
+	}
+}
+
+func TestContainer_DescriptionShortTextFallsBackToDescript(t *testing.T) {
+	m := &rawModel{
+		Language: "E",
+		CntIdx:   []Row{{"OTYPE": "WS", "ELEMENT": "FLAG"}},
+		ElemTexts: []Row{
+			{"LANGUAGE": "E", "ELEMENT": "FLAG", "DESCRIPT": "Flag", "SHORTTEXT": ""},
+		},
+	}
+	els, _, err := decodeContainer(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := els[0].Description; got != "Flag" {
+		t.Errorf("description = %q, want DESCRIPT", got)
+	}
+}

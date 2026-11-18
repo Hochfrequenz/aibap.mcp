@@ -49,7 +49,7 @@ func decodeContainer(m *rawModel) ([]ContainerElement, []string, error) {
 		if len(byName) > 0 {
 			warnings = append(warnings, "container XML (SWDSCONT) not found: element descriptions, flags and initial values unavailable")
 		}
-		return sortedElements(byName), warnings, nil
+		return sortedElements(byName, m), warnings, nil
 	}
 	raw, err := concatContainerData(m.ContXML)
 	if err != nil {
@@ -58,7 +58,7 @@ func decodeContainer(m *rawModel) ([]ContainerElement, []string, error) {
 	xmlEls, err := parseContainerXML(raw)
 	if err != nil {
 		warnings = append(warnings, fmt.Sprintf("container XML (SWDSCONT) not parseable: %v", err))
-		return sortedElements(byName), warnings, nil
+		return sortedElements(byName, m), warnings, nil
 	}
 
 	for _, x := range xmlEls {
@@ -76,10 +76,45 @@ func decodeContainer(m *rawModel) ([]ContainerElement, []string, error) {
 		}
 		e.Import, e.Export, e.Mandatory = imp, exp, man
 	}
-	return sortedElements(byName), warnings, nil
+	return sortedElements(byName, m), warnings, nil
 }
 
-func sortedElements(byName map[string]*ContainerElement) []ContainerElement {
+// applyElementTexts sets each element's description from SWDSWFCTXT, preferring
+// the requested language, then the master language, then any language (lowest
+// language key). SHORTTEXT is used, DESCRIPT when it is empty. It overrides LTEXTS.
+func applyElementTexts(byName map[string]*ContainerElement, m *rawModel) {
+	rank := func(lang string) int {
+		switch lang {
+		case m.Language:
+			return 0
+		case m.MasterLanguage:
+			return 1
+		}
+		return 2
+	}
+	best := map[string]Row{}
+	for _, r := range m.ElemTexts {
+		text := r["SHORTTEXT"]
+		if text == "" {
+			text = r["DESCRIPT"]
+		}
+		if text == "" || byName[r["ELEMENT"]] == nil {
+			continue
+		}
+		b, ok := best[r["ELEMENT"]]
+		if !ok || rank(r["LANGUAGE"]) < rank(b["LANGUAGE"]) ||
+			(rank(r["LANGUAGE"]) == rank(b["LANGUAGE"]) && r["LANGUAGE"] < b["LANGUAGE"]) {
+			best[r["ELEMENT"]] = Row{"LANGUAGE": r["LANGUAGE"], "TEXT": text}
+		}
+	}
+	for name, b := range best {
+		byName[name].Description = b["TEXT"]
+	}
+}
+
+// sortedElements applies the element texts and returns the elements by name.
+func sortedElements(byName map[string]*ContainerElement, m *rawModel) []ContainerElement {
+	applyElementTexts(byName, m)
 	out := make([]ContainerElement, 0, len(byName))
 	for _, e := range byName {
 		out = append(out, *e)

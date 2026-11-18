@@ -14,9 +14,11 @@ type rawLine struct{ From, To, ReturnCode string }
 type rawModel struct {
 	Model                          string // "SWDS" | "SWD"
 	WfdID, Version, MasterLanguage string
+	Language                       string // requested language
 	ActivatedOn                    string
 	Nodes                          []rawNode
 	Lines                          []rawLine
 	Texts, Conds, Exprs, Bindings  []Row
 	CntIdx, ContXML, TaskTexts     []Row
+	ElemTexts                      []Row // SWDSWFCTXT container element texts
 }

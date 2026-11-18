@@ -32,7 +32,7 @@ func loadSWDS(ctx context.Context, q adt.QueryClient, wfdID, version, language s
 	}
 	l := swdsLoader{ctx: ctx, q: q, wfdID: wfdID, version: version,
 		key: fmt.Sprintf("WHERE wfd_id = '%s' AND version = '%s' AND exetyp = 'S'", wfdID, version)}
-	m := &rawModel{Model: "SWDS", WfdID: wfdID, Version: version}
+	m := &rawModel{Model: "SWDS", WfdID: wfdID, Version: version, Language: language}
 
 	hdr, err := l.rows("SELECT wfd_id, version, language, activat_on FROM swdsheader")
 	if err != nil {
@@ -66,6 +66,9 @@ func loadSWDS(ctx context.Context, q adt.QueryClient, wfdID, version, language s
 			return nil, err
 		}
 		if m.ContXML, err = l.container(); err != nil {
+			return nil, err
+		}
+		if m.ElemTexts, err = l.elementTexts(language, m.MasterLanguage); err != nil {
 			return nil, err
 		}
 	}
@@ -202,6 +205,40 @@ func (l swdsLoader) container() ([]Row, error) {
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i]["TABIX"] < out[j]["TABIX"] })
 	return out, nil
+}
+
+// elementTexts reads the workflow container element texts (SWDSWFCTXT, node 0,
+// empty CNT_TYPE) in the requested and master language; if there are none, it
+// reads every language.
+func (l swdsLoader) elementTexts(language, master string) ([]Row, error) {
+	langs := map[string]bool{language: true}
+	list := "'" + language + "'"
+	if languageRe.MatchString(master) && master != language {
+		langs[master] = true
+		list += ", '" + master + "'"
+	}
+	const sel = "SELECT wfd_id, version, nodeid, cnt_type, language, element, descript, shorttext FROM swdswfctxt"
+	const where = "AND nodeid = '0000000000' AND cnt_type = ' '"
+	keep := func(rows []Row, all bool) []Row {
+		out := []Row{}
+		for _, r := range rows {
+			if trimID(r["NODEID"]) == "" && r["CNT_TYPE"] == "" && (all || langs[r["LANGUAGE"]]) {
+				out = append(out, r)
+			}
+		}
+		return out
+	}
+	rows, err := l.rows(sel, where, "AND language IN ("+list+")")
+	if err != nil {
+		return nil, err
+	}
+	if out := keep(rows, false); len(out) > 0 {
+		return out, nil
+	}
+	if rows, err = l.rows(sel, where); err != nil {
+		return nil, err
+	}
+	return keep(rows, true), nil
 }
 
 // loadTaskTexts reads the short texts of the tasks the nodes reference, from
