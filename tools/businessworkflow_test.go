@@ -96,6 +96,62 @@ func TestGetWorkflowDefinition_Success(t *testing.T) {
 	if sc["version"] != "0001" {
 		t.Errorf("version = %v, want 0001", sc["version"])
 	}
+	if sc["wfd_id"] != "WS48900002" || sc["task"] != "WS48900002" {
+		t.Errorf("wfd_id/task = %v/%v, want WS48900002", sc["wfd_id"], sc["task"])
+	}
+	if nodes, _ := sc["nodes"].([]any); len(nodes) == 0 {
+		t.Error("nodes is empty")
+	}
+	for _, k := range []string{"calls", "container", "warnings", "subworkflows"} {
+		if _, ok := sc[k].([]any); !ok {
+			t.Errorf("%s = %#v, want JSON array (not null)", k, sc[k])
+		}
+	}
+
+	var schema map[string]any
+	for _, tool := range listRegisteredTools(t, s) {
+		if tool.Name == "get_workflow_definition" {
+			schema = tool.OutputSchema
+		}
+	}
+	if schema == nil {
+		t.Fatal("no outputSchema declared")
+	}
+	rawSC, present := wireStructuredContent(t, s, "get_workflow_definition", map[string]any{"wfd_id": "WS48900002"})
+	if !present {
+		t.Fatal("no structuredContent on wire")
+	}
+	assertWireMatchesOutputSchema(t, "get_workflow_definition", rawSC, schema)
+}
+
+func TestGetWorkflowDefinition_DepthIsNotRejectedLocally(t *testing.T) {
+	var calls int32
+	s := newTestServerWithFallback(bwfServer(t, loadBWFFixture(t), &calls), nil)
+	res := callTool(t, s, "get_workflow_definition", map[string]interface{}{"wfd_id": "WS48900002", "depth": 99})
+	if res.IsError {
+		t.Fatalf("unexpected error: %+v", res.Content)
+	}
+	if atomic.LoadInt32(&calls) == 0 {
+		t.Error("RunQuery not called")
+	}
+}
+
+func TestGetWorkflowDefinition_RuntimePassedThrough(t *testing.T) {
+	var calls int32
+	s := newTestServerWithFallback(bwfServer(t, loadBWFFixture(t), &calls), nil)
+	res := callTool(t, s, "get_workflow_definition", map[string]interface{}{"wfd_id": "WS48900002", "source": "runtime"})
+	if !res.IsError {
+		t.Fatal("expected tool error")
+	}
+	txt := ""
+	for _, c := range res.Content {
+		if tc, ok := c.(mcp.TextContent); ok {
+			txt += tc.Text
+		}
+	}
+	if !strings.Contains(txt, "not implemented yet") {
+		t.Errorf("error text %q lacks bwf's not-implemented message", txt)
+	}
 }
 
 func TestGetWorkflowDefinition_LocalValidation(t *testing.T) {

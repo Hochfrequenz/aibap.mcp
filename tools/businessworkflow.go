@@ -40,14 +40,14 @@ func registerBusinessWorkflowTools(s toolAdder, client adt.QueryClient) {
 			"Read an SAP Business Workflow (SWDD) definition as a decoded graph: active version, "+
 				"steps and branches, container operations, resolved constants, workflow container "+
 				"and optionally sub-workflows and a Mermaid diagram. Read-only. "+
-				"Not the development workflow guide. Client-dependent parts (such as sub-workflow "+
+				"Not to be confused with the sap-adt://guides/workflow development-workflow guide. Client-dependent parts (such as sub-workflow "+
 				"resolution) reflect the logon client.",
 		),
 		mcp.WithString("wfd_id", mcp.Required(), mcp.Description("Workflow definition id: WS plus 8 digits (the 8 digits alone are accepted), e.g. WS48900002")),
 		mcp.WithString("version", mcp.Description("4-digit version (default: active version)")),
 		mcp.WithString("source", mcp.Description("definition (default): client-independent definition; runtime: the runtime copy in the logon client")),
 		mcp.WithBoolean("container", mcp.Description("Include the workflow container and per-step bindings (default: true)")),
-		mcp.WithNumber("depth", mcp.Description("Sub-workflow levels to resolve, 0-5 (default: 0)")),
+		mcp.WithNumber("depth", mcp.Description("Sub-workflow levels to resolve, capped at 5 (default: 0)")),
 		mcp.WithString("language", mcp.Description("Text language, e.g. EN or DE (default: EN)")),
 		mcp.WithBoolean("raw", mcp.Description("Return all nodes and edges un-collapsed (default: false)")),
 		mcp.WithBoolean("mermaid", mcp.Description("Add a Mermaid flowchart string (default: false)")),
@@ -70,9 +70,6 @@ func registerBusinessWorkflowTools(s toolAdder, client adt.QueryClient) {
 			return errorResult(fmt.Errorf("invalid source %q: expected definition or runtime", source)), nil
 		}
 		depth := int(req.GetFloat("depth", 0))
-		if depth < 0 || depth > 5 {
-			return errorResult(fmt.Errorf("invalid depth %d: expected 0-5", depth)), nil
-		}
 		result, err := bwf.Get(ctx, client, bwf.Options{
 			Task:      task,
 			Version:   version,
