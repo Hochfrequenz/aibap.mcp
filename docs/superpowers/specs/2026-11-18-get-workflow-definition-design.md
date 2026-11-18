@@ -148,18 +148,25 @@ Two traps:
   `WS00400012`). `SWD_GET_LATEST_WF_VERSION` also selects by `TASK`. Even `SWDSHEADER` has two rows
   where `WFD_ID <> TASK`. All header lookups go through `TASK`; node/line/text queries then use the
   `WFD_ID` found.
-- **Different node model.** The runtime copy and legacy definitions fill `SWD_NODES`/`SWD_LINES`
-  (1-char `NODETYPE`: `S` step, `F` fork, `J` join, `I` condition, `C` multiple condition,
-  `P` container operation, `O` process control, `X`/`Y` block, `R` wait for event; outcome on the
-  edge in `SWD_LINES.RETURNCODE`, e.g. `8995`/`8994`), **not** `SWD_MNODES`/`SWD_MLINES`. For
-  `WS48900002` version `0000`, the runtime copy on the ECC system has 26 `SWD_NODES`, 31
-  `SWD_LINES` and 0 `SWD_MNODES`. So the tool needs a second decoder for this model; it emits the
-  same output shape. Conditions, expressions and texts come from `SWD_CONDEF`, `SWD_EXPR`,
-  `SWD_TEXT` with the same layout as their `SWDS*` counterparts plus `CLIENT`.
+- **Different node model for the runtime copy.** The runtime copy (`EXETYP = 'E'`) fills
+  `SWD_NODES`/`SWD_LINES` (1-char `NODETYPE`: `S` step, `F` fork, `J` join, `I` condition — also
+  loop-until conditions, `C` multiple condition, `P` container operation, `O` process control
+  (`CONT_CMD 00` = start/end), `T` trigger event, `X`/`Y` block, `E` block end, `V` loop entry,
+  `R` wait for event; outcome on the edge in `SWD_LINES.RETURNCODE`), **not**
+  `SWD_MNODES`/`SWD_MLINES`. For `WS48900002` version `0000`, the runtime copy on the ECC system
+  has 26 `SWD_NODES`, 31 `SWD_LINES` and 0 `SWD_MNODES`. So the tool needs a second decoder for
+  this model; it emits the same output shape. Conditions, expressions and texts come from
+  `SWD_CONDEF`, `SWD_EXPR`, `SWD_TEXT` with the same layout as their `SWDS*` counterparts plus
+  `CLIENT`.
+- **Legacy definitions use the `SWDS*` layout.** Verified on both systems: `SWD_NODES` only holds
+  `EXETYP = 'E'` rows. Legacy definitions (`EXETYP = 'S'`) live in `SWD_MNODES`/`SWD_MLINES` with
+  the same 4-char layout as `SWDSMNODES` (`WS00000024`: 26 nodes / 28 lines) and are decoded and
+  collapsed like `SWDS*` definitions. Several legacy `WFD_ID`s for the same task version occur
+  (`WS00400005`); the highest is taken, with a warning.
 
-`8995`/`8994` and other `RETURNCODE`s: *builder call, to verify* against the same workflow's
-`SWDS*` version, where the outcome is known from `IFRS.RETURN` — map only codes that are confirmed
-this way, keep others raw.
+`RETURNCODE`s, verified live against the same node ids of the `SWDS*` version: `8995` = true,
+`8994` = false, `_SAP_WFSYST_RC_OTHERS` = others; `0000` on non-event lines carries no label;
+lines out of `Y` nodes are labelled `event <OTYPE>.<EVENT>`. Other codes stay raw.
 
 Runtime copy vs. pointer: the runtime copy can lag the activation pointer until the next start
 (`WS48900002`: pointer `0001`, runtime copy `0000` on the ECC system; `WS20000263`: pointer `0007`,
