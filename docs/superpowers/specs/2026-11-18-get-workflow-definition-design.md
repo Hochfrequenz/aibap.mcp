@@ -294,11 +294,12 @@ Loops (*builder call*, shape taken from `WS48900002` and `WS00400012`):
   point to the first body node. The `UNTL` node stays (`kind = loop_until`, `condition` from
   `SWDSCONDEF`) and gets two edges: `true` → the node after the loop (exit), `false` → the first
   body node (back-edge, repeat). The `UNRS` `RETURN` codes decide which is which.
-- **While** (`WHJO` entry, `WHIL` → `WHRS`/`WOTH` → body … back to `WHJO`, `EWHI` exit): `WHJO` is
-  collapsed into `WHIL` (`kind = loop_while`), which gets `true` → first body node and `false` →
-  node after the loop; the body's last node gets an edge back to `WHIL`. The builder verifies the
-  exact `WHRS`/`WOTH` → true/false mapping on `WS00400012` before coding it and records it in a
-  test fixture.
+- **While** (`WHJO` entry, `WHIL` → `WHRS` → body … → `EWHI` → back to `WHJO`; `WHIL` → `WOTH` →
+  exit): `WHJO` is collapsed into `WHIL` (`kind = loop_while`), which gets `true` → first body
+  node and `false` → node after the loop; the body's last node gets an edge back to `WHIL`.
+  Verified live on `WS00400012` version `0004`: `WHRS` leads into the body (`true`), `WOTH` to the
+  exit (`false`); `WHRS` carries no `RETURN`, so the mapping is by node type; `EWHI` is the
+  back-edge into `WHJO`, not the exit.
 - `raw: true` keeps every helper node, so the decoded shape can always be checked against the
   original.
 
