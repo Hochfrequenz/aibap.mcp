@@ -11,6 +11,12 @@ import (
 
 const maxDepth = 5
 
+// ErrInvalidTask marks a called workflow whose id is not a valid WS task id.
+var ErrInvalidTask = errors.New("invalid workflow task id")
+
+// ErrUnsupported marks a definition that exists but cannot be read yet.
+var ErrUnsupported = errors.New("workflow definition not supported")
+
 // Get reads the workflow definition for opts.Task and, up to opts.Depth
 // levels, the sub-workflows it calls.
 func Get(ctx context.Context, q adt.QueryClient, opts Options) (*Result, error) {
@@ -63,9 +69,9 @@ func Get(ctx context.Context, q adt.QueryClient, opts Options) (*Result, error) 
 			order = append(order, s)
 			def, err := buildDefinition(ctx, q, opts, c.WfdID)
 			switch {
-			case errors.Is(err, ErrNotFound):
+			case errors.Is(err, ErrNotFound), errors.Is(err, ErrInvalidTask), errors.Is(err, ErrUnsupported):
 				root.Warnings = append(root.Warnings, fmt.Sprintf(
-					"called workflow %s (node %s of %s) was not found", c.WfdID, c.Node, cur.def.Task))
+					"called workflow %s (node %s of %s) could not be resolved: %v", c.WfdID, c.Node, cur.def.Task, err))
 			case err != nil:
 				return nil, fmt.Errorf("sub-workflow %s: %w", c.WfdID, err)
 			default:
@@ -92,6 +98,9 @@ func appendUnique(list []string, v string) []string {
 
 // buildDefinition loads and decodes one workflow definition.
 func buildDefinition(ctx context.Context, q adt.QueryClient, opts Options, task string) (*Definition, error) {
+	if !taskRe.MatchString(task) {
+		return nil, fmt.Errorf("%w %q", ErrInvalidTask, task)
+	}
 	requested := ""
 	if task == opts.Task {
 		requested = opts.Version
@@ -101,7 +110,7 @@ func buildDefinition(ctx context.Context, q adt.QueryClient, opts Options, task 
 		return nil, err
 	}
 	if info.Tables != "SWDS" {
-		return nil, fmt.Errorf("%s exists only as a legacy client definition (SWD_*), which is not supported yet", task)
+		return nil, fmt.Errorf("%w: %s exists only as a legacy client definition (SWD_*), which is not supported yet", ErrUnsupported, task)
 	}
 	m, err := loadSWDS(ctx, q, info.WfdID, info.Version, opts.Language, opts.Container)
 	if err != nil {

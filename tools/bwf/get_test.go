@@ -1,10 +1,14 @@
 package bwf
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Hochfrequenz/adtler/adt"
 )
 
 func getOpts(task string) Options {
@@ -233,5 +237,78 @@ func TestGet_RealResultHasNoNull(t *testing.T) {
 	b, _ := json.Marshal(res)
 	if strings.Contains(string(b), "null") {
 		t.Errorf("null in output")
+	}
+}
+
+func withCallee(t *testing.T, task string) *fakeQuery {
+	t.Helper()
+	f := getFake(t)
+	rows := make([]Row, len(f.tables["SWDSMNODES"]))
+	for i, r := range f.tables["SWDSMNODES"] {
+		c := Row{}
+		for k, v := range r {
+			c[k] = v
+		}
+		if c["WFD_ID"] == "WS48900002" && c["NODEID"] == "0000000018" {
+			c["TASK"] = task
+		}
+		rows[i] = c
+	}
+	f.tables["SWDSMNODES"] = rows
+	return f
+}
+
+func requireUnresolvedSub(t *testing.T, f *fakeQuery, callee string) {
+	t.Helper()
+	o := getOpts("WS48900002")
+	o.Depth = 1
+	res, err := Get(t.Context(), f, o)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if res.Task != "WS48900002" || len(res.Nodes) == 0 {
+		t.Errorf("root definition missing")
+	}
+	if len(res.Subworkflows) != 1 || res.Subworkflows[0].WfdID != callee || res.Subworkflows[0].Found {
+		t.Fatalf("Subworkflows = %+v", res.Subworkflows)
+	}
+	ok := false
+	for _, w := range res.Warnings {
+		ok = ok || strings.Contains(w, callee)
+	}
+	if !ok {
+		t.Errorf("warnings = %v, want one naming %s", res.Warnings, callee)
+	}
+}
+
+func TestGet_InvalidCalleeID(t *testing.T) {
+	requireUnresolvedSub(t, withCallee(t, "WS123"), "WS123")
+}
+
+func TestGet_LegacyOnlyCallee(t *testing.T) {
+	f := withCallee(t, "WS99999999")
+	f.tables["SWD_HEADER"] = append(f.tables["SWD_HEADER"],
+		Row{"WFD_ID": "WS99999999", "TASK": "WS99999999", "VERSION": "0001", "EXETYP": "S"})
+	requireUnresolvedSub(t, f, "WS99999999")
+}
+
+type failingQuery struct {
+	*fakeQuery
+	on string
+}
+
+func (f failingQuery) RunQuery(ctx context.Context, sql string, n int) (*adt.QueryResult, error) {
+	if strings.Contains(sql, f.on) {
+		return nil, errors.New("boom")
+	}
+	return f.fakeQuery.RunQuery(ctx, sql, n)
+}
+
+func TestGet_SubFetchErrorIsFatal(t *testing.T) {
+	o := getOpts("WS48900002")
+	o.Depth = 1
+	_, err := Get(t.Context(), failingQuery{getFake(t), "WS48900024"}, o)
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("err = %v, want fetch failure", err)
 	}
 }
