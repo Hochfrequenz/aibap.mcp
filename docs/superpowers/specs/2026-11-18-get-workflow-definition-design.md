@@ -99,7 +99,7 @@ class but on the interface `/IDXGC/IF_PD_WF_CONSTANTS` it implements):
 1. `SWDSCNTIDX` row for element `E` with `CATID = 'CL'` → class/interface name.
 2. `SEOCOMPODF` with `CLSNAME` = that name, `CMPNAME = C`, `VERSION = '1'`, `ATTDECLTYP = '2'`
    (constant) → `ATTVALUE` (ABAP literal, e.g. `'X'`, `'WFSND'`).
-3. Not found or `ATTVALUE` empty → follow `SEOMETAREL` (`VERSION = '1'`; `RELTYPE = '1'`
+3. Not found or `ATTVALUE` empty → follow `SEOMETAREL` (`VERSION = '1'`; `RELTYPE = '0'` interface composition, `'1'`
    implemented interface, `'2'` superclass) breadth-first, depth-limited, and repeat step 2.
 4. Still nothing → leave the expression verbatim and add it to `unresolved_constants`.
 
