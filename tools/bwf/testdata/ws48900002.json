@@ -1,5 +1,7 @@
 {
  "HRS1000": [
+  {"LANGU": "D", "OBJID": "48900002", "OTYPE": "WS", "STEXT": "Workflow zum Testen des BPML Exports"},
+  {"LANGU": "E", "OBJID": "48900002", "OTYPE": "WS", "STEXT": "Workflow for Testing the BPML Export"},
   {"LANGU": "D", "OBJID": "30000017", "OTYPE": "TS", "STEXT": "Abwesenheitsmitteilung überarbeiten"},
   {"LANGU": "D", "OBJID": "30000018", "OTYPE": "TS", "STEXT": "Abwesenheitsmitteilung löschen"},
   {"LANGU": "D", "OBJID": "30200106", "OTYPE": "TS", "STEXT": "Abwesenheitsmitteilung anlegen"},
