@@ -393,8 +393,8 @@ func buildRunClassMessage(className string) string {
 > documents `out->write( data = lt_result name = 'RESULT' )` — the only
 > convenient way to return a table or structure from a classrun, and not
 > derivable from the `out->write( ... )` / `out->write_text( ... )` forms
-> alone. Verified live: the row values render on both HFQ and S4U, but HFQ
-> silently drops the `name=` label while S4U renders it.
+> alone. Verified live: the row values render on both systems, but the ECC system
+> silently drops the `name=` label while the S/4 system renders it.
 
 - [ ] **Step 4: Wire the tool into the `system` group**
 
@@ -447,15 +447,15 @@ Covers the MCP wrapper layer against a real system, per the repo's integration c
 - Consumes: the live fixture class `ZCL_ADT_MCP_CLASSRUN_TST` in package `Z_ADT_MCP_TEST` (the same fixture family adtler's classrun integration test uses).
 - Produces: nothing consumed downstream.
 
-**Verified live (2026-07-23, against HFQ + S4U):**
+**Verified live (2026-07-23, against the ECC and the S/4 system):**
 - CLAS URI `/sap/bc/adt/oo/classes/<lowercase-name>` resolves on both systems (existence check + source read succeed).
-- `ZCL_ADT_MCP_CLASSRUN_TST` **exists and is active on both HFQ and S4U** (`CLAS/OC`). The throwing fixture `ZCL_ADT_MCP_CLASSRUN_ERR` also exists on both.
+- `ZCL_ADT_MCP_CLASSRUN_TST` **exists and is active on both systems** (`CLAS/OC`). The throwing fixture `ZCL_ADT_MCP_CLASSRUN_ERR` also exists on both.
 - A non-existent class (`zcl_this_does_not_exist_xyz`) returns `exists:false` — the underlying `GetObjectInfo` errors, which is the handler's "missing" signal.
-- **Console string is `CLASSRUN_OK` on both systems, but written differently:** S4U uses `out->write( 'CLASSRUN_OK' )`, HFQ uses `out->write_text( 'CLASSRUN_OK' )`. `write` and `write_text` format the output differently, so the assertion MUST be a substring check (`strings.Contains(..., "CLASSRUN_OK")`), never string equality — an equality assert would pass on one system and fail on the other.
+- **Console string is `CLASSRUN_OK` on both systems, but written differently:** the S/4 system uses `out->write( 'CLASSRUN_OK' )`, the ECC system uses `out->write_text( 'CLASSRUN_OK' )`. `write` and `write_text` format the output differently, so the assertion MUST be a substring check (`strings.Contains(..., "CLASSRUN_OK")`), never string equality — an equality assert would pass on one system and fail on the other.
 
 - [ ] **Step 1: (already verified) fixture presence**
 
-The fixture is confirmed present on both `hfq` and `s4u` (see "Verified live" above). No action needed unless a system was reset since 2026-07-23 — re-check with `object_exists` on `/sap/bc/adt/oo/classes/zcl_adt_mcp_classrun_tst` if in doubt.
+The fixture is confirmed present on both systems (see "Verified live" above). No action needed unless a system was reset since 2026-07-23 — re-check with `object_exists` on `/sap/bc/adt/oo/classes/zcl_adt_mcp_classrun_tst` if in doubt.
 
 - [ ] **Step 2: Write the integration test**
 
@@ -476,21 +476,21 @@ package tools_test
 //   if res.IsError {
 //       t.Fatalf("%s: run_class failed: %v", sysName, res.Content)
 //   }
-//   // Substring, NOT equality: S4U uses out->write (formatted), HFQ uses
+//   // Substring, NOT equality: S/4 uses out->write (formatted), ECC uses
 //   // out->write_text (raw) — both contain CLASSRUN_OK but format differs.
 //   if !strings.Contains(res.Content[0].(mcp.TextContent).Text, "CLASSRUN_OK") {
 //       t.Errorf("%s: unexpected console output: %v", sysName, res.Content)
 //   }
 ```
 
-The expected substring is `CLASSRUN_OK` (verified live on both systems). Do not switch to string equality — the `write` vs `write_text` formatting difference across HFQ/S4U would break it.
+The expected substring is `CLASSRUN_OK` (verified live on both systems). Do not switch to string equality — the `write` vs `write_text` formatting difference between the two systems would break it.
 
 Optionally add a second case for the throwing fixture `ZCL_ADT_MCP_CLASSRUN_ERR`, asserting `res.IsError` (adtler maps the uncaught exception to a `*adt.ADTError`, status ≥ 500, which the handler forwards via `errorResult`).
 
 - [ ] **Step 3: Run the integration test**
 
 Run: `go test -tags integration -v -count=1 -run RunClass ./tools/...`
-Expected: PASS on the systems named by `MCP_INTEGRATION_SYSTEMS` (default `hfq,s4u`), or a clean `t.Skipf` where the fixture is absent.
+Expected: PASS on the systems named by `MCP_INTEGRATION_SYSTEMS` (default set: see README.md), or a clean `t.Skipf` where the fixture is absent.
 
 - [ ] **Step 4: Commit**
 
@@ -537,6 +537,6 @@ Expected: all required checks pass (unit tests, lint, coverage — `tools` has n
 ## Self-Review Notes
 
 - **Spec coverage:** motivation/scope (Tasks 2, wiring) ✓; `class_name` input + CLAS URI construction (Task 2 handler) ✓; `adt.ClassRunResult` wire type + `WithOutputSchema` (Task 2) ✓; `destructive=true` annotation (Task 2) ✓; confirmation via `ConfirmDestructive` + `buildRunClassMessage` (Task 2) ✓; class-exists pre-check, no interface check (Task 2 handler + comment) ✓; error handling incl. aborted / classrun failure / runtime exception (handler forwards `errorResult`, adtler maps exception → `ADTError`) ✓; structured-content guardrail, no opt-out (Task 2 Step 6) ✓; unit + integration tests (Tasks 2, 3) ✓; rollout/bump (Task 1) ✓; tracker reconciliation (Task 4) ✓.
-- **Placeholders:** none left. The Task 3 fixture string was resolved to `CLASSRUN_OK` by live verification against HFQ + S4U (2026-07-23). The `callRunClass` stub was removed after review.
+- **Placeholders:** none left. The Task 3 fixture string was resolved to `CLASSRUN_OK` by live verification against both systems (2026-07-23). The `callRunClass` stub was removed after review.
 - **Test helpers (verified):** `callTool` exists (`testhelper_test.go:16`); `mustText` does **not** — result text is read inline via `res.Content[0].(mcp.TextContent).Text`, matching the package convention. All snippets use the inline form.
 - **Type consistency:** `runClassFn` signature matches `RunClass` matches the `classRunClient` interface matches `adt.ClassRunClient`. `adt.ClassRunResult{ClassName, ConsoleOutput}` used identically in the mock stub, the handler return, and the output schema.
