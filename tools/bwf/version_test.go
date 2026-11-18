@@ -3,6 +3,7 @@ package bwf
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -157,5 +158,30 @@ func TestResolveVersion_WfdIDDiffersFromTask(t *testing.T) {
 	got, err := resolveVersion(context.Background(), f, "WS99999999", "", testToday)
 	if err != nil || got.WfdID != "WS00000001" || got.Version != "0002" {
 		t.Errorf("got %+v, %v", got, err)
+	}
+}
+
+var bareTaskRe = regexp.MustCompile(`(?i)(^|[^~\w])task\s*=`)
+
+func TestResolveQueriesQualifyTask(t *testing.T) {
+	f := &fakeQuery{tables: map[string][]Row{}}
+	_, _ = resolveVersion(context.Background(), f, "WS00400012", "", testToday)
+	f.tables["SWDSHEADER"] = hdrs("WS00400012", "0001")
+	_, _ = resolveVersion(context.Background(), f, "WS00400012", "", testToday)
+	_, _, _, _ = resolveRuntime(context.Background(), f, "WS00400012")
+	if len(f.calls) == 0 {
+		t.Fatal("no queries recorded")
+	}
+	sawHeader := false
+	for _, sql := range f.calls {
+		if strings.Contains(strings.ToLower(sql), "swd_header") {
+			sawHeader = true
+		}
+		if bareTaskRe.MatchString(sql) {
+			t.Errorf("unqualified task column in: %s", sql)
+		}
+	}
+	if !sawHeader {
+		t.Error("no swd_header query recorded")
 	}
 }

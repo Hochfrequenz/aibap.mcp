@@ -59,7 +59,7 @@ func resolveVersion(ctx context.Context, q adt.QueryClient, task, requested stri
 
 func chooseLegacy(ctx context.Context, q adt.QueryClient, info *versionInfo, task, requested string) error {
 	legacy, err := fetch(ctx, q, fmt.Sprintf(
-		"SELECT wfd_id, version, exetyp FROM swd_header WHERE task = '%s' AND exetyp = 'S'", task))
+		"SELECT wfd_id, version, exetyp FROM swd_header WHERE swd_header~task = '%s' AND exetyp = 'S'", task))
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func resolveRuntime(ctx context.Context, q adt.QueryClient, task string) (wfdID,
 	if !taskRe.MatchString(task) {
 		return "", "", false, fmt.Errorf("invalid workflow task %q", task)
 	}
-	rows, err := fetch(ctx, q, fmt.Sprintf("SELECT wfd_id, version, exetyp FROM swd_header WHERE task = '%s'", task))
+	rows, err := fetch(ctx, q, fmt.Sprintf("SELECT wfd_id, version, exetyp FROM swd_header WHERE swd_header~task = '%s'", task))
 	if err != nil {
 		return "", "", false, err
 	}
