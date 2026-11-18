@@ -170,7 +170,7 @@ lines out of `Y` nodes are labelled `event <OTYPE>.<EVENT>`. Other codes stay ra
 
 Runtime copy vs. pointer: the runtime copy can lag the activation pointer until the next start
 (`WS48900002`: pointer `0001`, runtime copy `0000` on the ECC system; `WS20000263`: pointer `0007`,
-runtime copy `0003` on the S/4 system). The tool reports both versions whenever both exist.
+runtime copy `0003` on the S/4 system). A definition read (`source = definition`) also reports the runtime copy's version in `runtime_version`; a `source = runtime` read reports the runtime version only.
 
 ### Active version rule
 
@@ -209,13 +209,13 @@ Outcome decoding:
 |---|---|
 | `IFRS` (condition), `UNRS` (loop "until") | `RETURN = '0001'` → condition true, `'0000'` → false |
 | `CRES` | `RETURNCODE` = case value; `COTH` = "others" (`_SAP_WFSYST_RC_OTHERS`) |
-| `DRES` | user decision outcome; label from `SWDSTEXT` `MD`/`ND` |
+| `DRES` | user decision outcome; label from the outcome node's `ND` text (`MD` not used yet; no user decision in the verified workflows) |
 | `EXCP` | `EXC_CLSNAM` set → exception exit, otherwise "step completed" |
 | `TEVT` | terminating event (`EVT_NAME`) |
 | `CEVT`, `EEVT`, `EVOI`, `WEVT`, `IEVT`, … | single outcome of a non-step node ("done") |
 
 `CONT_CMD` (domain `SWD_CONTRL`): `12` `:=`, `18` append, `11`/`13`/`14`/`15` `+ - * /`; on `CTRL`
-nodes `01` cancel work item (node in `PARAMETER1`), `02` cancel workflow, `04` set step obsolete,
+nodes `01` cancel work item (target node not shown yet — `PARAMETER1` is not read), `02` cancel workflow, `04` set step obsolete,
 `07` complete workflow. Unknown codes are returned as `cmd <nn>` — never guessed.
 
 ## Approaches considered
@@ -244,11 +244,11 @@ Inputs:
 | `source` | string | `definition` | `definition`: client-independent `SWDS*` (legacy `SWD_*` fallback, see version rule). `runtime`: the runtime copy in the logon client (`SWD_*`, `EXETYP = 'E'`) — what running instances in this client actually execute; error if none exists. |
 | `container` | boolean | `true` | Include the workflow container and per-step bindings. |
 | `depth` | number | `0` | Sub-workflow levels to resolve. Capped (e.g. 5). Cycles and repeats are resolved once. |
-| `language` | string | `E` | Text language; fallback to the workflow's master language, then any language present. |
+| `language` | string | `E` | 1-character SAP language key, or `EN`/`DE`; other input is rejected. Text fallback to the workflow's master language, then any language present. |
 | `raw` | boolean | `false` | `true` returns all nodes/edges un-collapsed. |
 | `mermaid` | boolean | `false` | Adds a Mermaid `flowchart` string. |
 
-Output (`WorkflowDefinitionResult`, named structs in `tools/results.go`, declared via
+Output (`bwf.Result`, named structs in `tools/bwf/types.go`, declared via
 `WithOutputSchema`):
 
 ```
