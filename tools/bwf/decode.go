@@ -138,12 +138,18 @@ func kindOf(n rawNode) string {
 	return k
 }
 
+// eventOf renders a node's event as OTYPE.NAME; the name falls back to
+// EVT_TYPE, where BOR events carry it when EVT_NAME is empty.
 func eventOf(n rawNode) string {
+	name := n.EvtName
+	if name == "" {
+		name = n.EvtType
+	}
 	switch {
-	case n.EvtOType != "" && n.EvtName != "":
-		return n.EvtOType + "." + n.EvtName
-	case n.EvtName != "":
-		return n.EvtName
+	case n.EvtOType != "" && name != "":
+		return n.EvtOType + "." + name
+	case name != "":
+		return name
 	default:
 		return n.EvtOType
 	}

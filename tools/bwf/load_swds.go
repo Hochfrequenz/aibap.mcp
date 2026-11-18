@@ -110,16 +110,12 @@ func (l swdsLoader) nodes() ([]rawNode, error) {
 	}
 	nodes := make([]rawNode, 0, len(rows))
 	for _, r := range rows {
-		evt := r["EVT_NAME"]
-		if evt == "" {
-			evt = r["EVT_TYPE"] // BOR events carry their name here
-		}
 		nodes = append(nodes, rawNode{
 			ID: r["NODEID"], Type: r["NODETYPE"], Task: r["TASK"],
 			BlockID: r["BLOCKID"], ParentBlockID: r["PAR_BLCKID"], ContCmd: r["CONT_CMD"],
 			Return: r["RETURN"], ReturnCode: r["RETURNCODE"], ExcClass: r["EXC_CLSNAM"],
-			MinTokens: r["MIN_TOKENS"], ExpTokens: r["EXP_TOKENS"], EvtName: evt,
-			EvtOType: r["EVT_OTYPE"], CaseConte: r["CASE_CONTE"],
+			MinTokens: r["MIN_TOKENS"], ExpTokens: r["EXP_TOKENS"], EvtName: r["EVT_NAME"],
+			EvtType: r["EVT_TYPE"], EvtOType: r["EVT_OTYPE"], CaseConte: r["CASE_CONTE"],
 		})
 	}
 	sort.SliceStable(nodes, func(i, j int) bool { return nodes[i].ID < nodes[j].ID })
